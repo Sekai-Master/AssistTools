@@ -4,16 +4,17 @@ body {
   font-weight: 400;
   font-style: normal;
   margin: 0px;
-  background-color: #f4f6ff;
+  background-color: #f0f0f0; /* トップページに合わせて背景色を修正 */
 }
 
 .container {
-  max-width: 700px;
-  margin: 20px auto;
-  background-color: rgba(255, 255, 255, 0.8);
+  max-width: 1000px; /* トップページに合わせて最大幅を修正 */
+  margin: 20px auto; /* 上下左右の中央に配置 */
+  background-color: #ffffff; /* トップページに合わせて背景色を修正 */
   padding: 20px;
   border-radius: 12px;
-  box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff;
+  box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff; /* トップページに合わせて影を変更 */
+  box-sizing: border-box;/*padding,borderを幅計算に含める */
 }
 
 /* 見出し */
@@ -29,8 +30,9 @@ h1 {
   font-size: clamp(1em, 6vw, 3em);
 }
 
-h1:before,
-h1:after {
+/* ヘッダー内のh1には適用しない */
+main h1:before,
+main h1:after {
   position: absolute;
   top: 0;
   content: '';
@@ -39,14 +41,14 @@ h1:after {
   display: inline-block;
 }
 
-h1:before {
+main h1:before {
   border-left: solid 1px black;
   border-top: solid 1px black;
   border-bottom: solid 1px black;
   left: 0;
 }
 
-h1:after {
+main h1:after {
   content: '';
   border-top: solid 1px black;
   border-right: solid 1px black;
@@ -202,7 +204,6 @@ h1:after {
   border-color: #90CAF9;
   color: black;
 }
-
 
 .button-group button:hover {
   background-color: #42A5F5;
