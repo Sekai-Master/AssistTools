@@ -3,55 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>404 エラー - ページが見つかりません</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            color: #333;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-        .container {
-            text-align: center;
-            padding: 20px;
-            background-color: white;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            border-radius: 10px;
-        }
-        h1 {
-            font-size: 48px;
-            color: #ff6347;
-            margin-bottom: 20px;
-        }
-        p {
-            font-size: 18px;
-            margin-bottom: 30px;
-        }
-        a {
-            display: inline-block;
-            padding: 10px 20px;
-            font-size: 16px;
-            color: white;
-            background-color: #ff6347;
-            text-decoration: none;
-            border-radius: 5px;
-            transition: background-color 0.3s;
-        }
-        a:hover {
-            background-color: #e5533d;
-        }
-    </style>
+    <title>プロジェクトセカイ ツール集</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <h1>404 エラー</h1>
-        <p>申し訳ありませんが、お探しのページが見つかりませんでした。</p>
-        <p>代わりに、以下のリンクからTwibotにアクセスしてください。</p>
-        <a href="twibot.html">Twibotページへ</a>
-    </div>
+    <header>
+        <div class="container">
+            <h1>プロジェクトセカイ ツール集</h1>
+            <nav>
+              <a href="#">トップ</a>
+              <a href="#">ツール一覧</a>
+              <a href="#">設定</a>
+            </nav>
+        </div>
+    </header>
+    <main>
+        <section class="hero">
+            <div class="container">
+                <h2>プロセカをより楽しむためのツール集</h2>
+                <p>このサイトでは、プロセカのゲーム体験を向上させるための様々なツールを提供しています。</p>
+                <img src="images/hero-image.png" alt="プロセカイメージ" />
+                <a href="#tools" class="btn">ツール一覧へ</a>
+            </div>
+        </section>
+        <section id="tools" class="tools">
+            <div class="container">
+                <h2>ツール一覧</h2>
+                <div class="tool-grid">
+                    <div class="tool-card">
+                        <img src="images/twibot-icon.png" alt="ツイボジェネレーターアイコン">
+                        <h3>ついぼジェネレーター</h3>
+                        <p>協力ライブ募集ツイートを簡単に作成できます。</p>
+                        <a href="tweet_generator.html" class="btn">使う</a>
+                    </div>
+                    <div class="tool-card">
+                        <img src="images/evc-icon.png" alt="実効値計算機アイコン">
+                        <h3>スキル実効値計算機</h3>
+                        <p>スキル効果の実効値を計算できます。</p>
+                        <a href="effective_value_calculator.html" class="btn">使う</a>
+                    </div>
+                   <div class="tool-card">
+                        <img src="images/simulator-icon.png" alt="シミュレーターアイコン">
+                        <h3>効率難易度検索</h3>
+                        <p>楽曲ごとの最高効率難易度を検索できます。</p>
+                        <a href="#" class="btn disabled">Coming soon</a>
+                   </div>
+                     <div class="tool-card">
+                        <img src="images/other-icon.png" alt="その他ツールアイコン">
+                         <h3>必要稼働時間計算</h3>
+                        <p>編成ボーナス・ライボ数などから稼働時間の計算をします。</p>
+                         <a href="#" class="btn disabled">Coming soon</a>
+                     </div>
+                    
+                </div>
+            </div>
+        </section>
+    </main>
+    <footer>
+        <div class="container">
+            <p>© 2024 @Noritake All Rights Reserved.</p>
+        </div>
+    </footer>
+    <script src="script.js"></script>
 </body>
 </html>
