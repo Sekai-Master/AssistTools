@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>プロジェクトセカイ ツール集</title>
+    <title>Sekai-Master</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,11 +13,16 @@
 <body>
     <header>
         <div class="container">
-            <h1>プロジェクトセカイ ツール集</h1>
+            <a href="#" class="logo">
+                <img src="images/icon.jpeg" alt="icon" class="logo-img">
+                <h1>Sekai-Master</h1>
+            </a>
             <nav>
-              <a href="#">トップ</a>
-              <a href="#">ツール一覧</a>
-              <a href="#">設定</a>
+                <button class="hamburger-menu" onclick="toggleMenu()">☰</button>
+                <div class="menu">
+                    <a href="#">ツール一覧</a>
+                    <a href="#">設定</a>
+                </div>
             </nav>
         </div>
     </header>
@@ -26,7 +31,7 @@
             <div class="container">
                 <h2>プロセカをより楽しむためのツール集</h2>
                 <p>このサイトでは、プロセカのゲーム体験を向上させるための様々なツールを提供しています。</p>
-                <img src="images/Banner3.jpeg" alt="プロセカイメージ" />
+                <img src="images/Banner3.jpeg" alt="プロセカイメージ" class="proseka-image">
                 <a href="#tools" class="btn">ツール一覧へ</a>
             </div>
         </section>

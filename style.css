@@ -1,7 +1,9 @@
 body {
-  font-family: 'M PLUS Rounded 1c', sans-serif;
+  font-family: "M PLUS Rounded 1c", sans-serif;
+  font-weight: 400;
+  font-style: normal;
   margin: 0;
-  background-color: #f0f0f0;
+  background-color: #f4f6ff;
   color: #333;
   line-height: 1.6;
   display: flex;
@@ -10,15 +12,22 @@ body {
 }
 
 .container {
-  max-width: 1000px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 0 20px;
   box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 header {
+  position: fixed;
+  top: 0;
+  width: 100%;
   background-color: #fff;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
   padding: 15px 0;
 }
 
@@ -39,17 +48,56 @@ header nav a {
   color: #333;
   font-weight: bold;
 }
+
+.logo {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  color: inherit;
+}
+
+.logo-img {
+  width: 40px;
+  height: 40px;
+  margin-right: 10px;
+}
+
+nav {
+  display: flex;
+  align-items: center;
+}
+
+.hamburger-menu {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.menu {
+  display: flex;
+  gap: 20px;
+}
+
+.menu a {
+  text-decoration: none;
+  color: #333;
+  font-weight: bold;
+}
+
 main {
-flex: 1; /* ヘッダーとフッターを除いたメインコンテンツを伸縮させる */
+  flex: 1; /* ヘッダーとフッターを除いたメインコンテンツを伸縮させる */
   padding: 20px 0;
 }
 
 .hero {
-background-color: #ffffff;
+  background-color: #ffffff;
   border-radius: 20px; /* 角を丸くする */
   box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff; /* ニューモーフィズム */
   text-align: center;
   padding: 40px 20px;
+  padding-top: 80px; /* ヘッダーの高さ分の余白を追加 */
   margin-bottom: 20px;
 }
 
@@ -69,8 +117,9 @@ background-color: #ffffff;
   border-radius: 10px;
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
+
 .hero .btn {
-display: inline-block;
+  display: inline-block;
   padding: 10px 20px;
   background-color: #2196F3;
   color: white;
@@ -81,9 +130,17 @@ display: inline-block;
 }
 
 .hero .btn:hover {
-   transform: translateY(-1px);
+  transform: translateY(-1px);
   box-shadow: 4px 4px 8px #bebebe, -4px -4px 8px #ffffff;
 }
+
+.proseka-image {
+  object-fit: cover;
+  object-position: center;
+  width: 100%;
+  height: calc(100% - 160px); /* 上下80pxずつ切り取る */
+}
+
 .tools {
   padding: 20px 0;
   text-align: center;
@@ -91,7 +148,7 @@ display: inline-block;
 
 .tools h2 {
   margin-bottom: 20px;
-   font-size: 1.8em;
+  font-size: 1.8em;
 }
 
 .tool-grid {
@@ -110,7 +167,7 @@ display: inline-block;
 }
 
 .tool-card:hover {
- transform: translateY(-2px);
+  transform: translateY(-2px);
   box-shadow: 6px 6px 12px #bebebe, -6px -6px 12px #ffffff;
 }
 
@@ -127,24 +184,25 @@ display: inline-block;
 
 .tool-card p {
   margin-bottom: 20px;
-   font-size: 0.9em;
+  font-size: 0.9em;
 }
 
 .tool-card .btn {
   display: inline-block;
   padding: 10px 15px;
-   background-color: #2196F3;
-   color: white;
-   text-decoration: none;
+  background-color: #2196F3;
+  color: white;
+  text-decoration: none;
   border-radius: 20px;
   box-shadow: 3px 3px 5px #bebebe, -3px -3px 5px #ffffff;
-   transition: all 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .tool-card .btn:hover {
   transform: translateY(-1px);
   box-shadow: 4px 4px 8px #bebebe, -4px -4px 8px #ffffff;
 }
+
 .tool-card .btn.disabled {
   background-color: #ccc;
   color: #666;
@@ -160,17 +218,18 @@ footer {
 }
 
 @media screen and (max-width: 768px) {
-.container {
-  padding: 0 10px;
-}
+  .container {
+    padding: 0 10px;
+  }
 
   header h1 {
     font-size: 1.3em;
   }
-   header nav a {
-      margin-left: 10px;
-      font-size: 0.9em;
-   }
+
+  header nav a {
+    margin-left: 10px;
+    font-size: 0.9em;
+  }
 
   .hero {
     padding: 30px 10px;
@@ -180,9 +239,11 @@ footer {
   .hero h2 {
     font-size: 1.8em;
   }
+
   .hero p {
     font-size: 0.9em;
   }
+
   .tools h2 {
     font-size: 1.5em;
   }
@@ -191,19 +252,41 @@ footer {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 10px;
   }
+
   .tool-card {
-     padding: 15px;
+    padding: 15px;
   }
+
   .tool-card img {
-      width: 60px;
-      height: 60px;
+    width: 60px;
+    height: 60px;
   }
 
   .tool-card h3 {
     font-size: 1em;
   }
-   .tool-card p {
+
+  .tool-card p {
     font-size: 0.8em;
   }
 
+  .hamburger-menu {
+    display: block;
+  }
+
+  .menu {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    position: absolute;
+    top: 60px;
+    right: 20px;
+    background-color: #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 10px;
+  }
+
+  .menu.open {
+    display: flex;
+  }
 }
