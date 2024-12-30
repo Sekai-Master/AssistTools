@@ -79,12 +79,14 @@ window.addEventListener('load', () => {
   document.getElementById('showStar4').addEventListener('change', updateTweetPreview);
   document.getElementById('showRecruitFreeDescription').addEventListener('change', updateTweetPreview);
 
-    // プレビューエリアの要素を取得
+   // プレビューエリアの要素を取得
     const tweetPreview = document.getElementById('tweetPreview');
     const previewArea = document.querySelector('.preview');
 
     // 「togglePreviewButton」の定義
-    const togglePreviewButton = document.getElementById('togglePreview'); // <-  定義をwindow.addEventListener内に移動
+    const togglePreviewButton = document.getElementById('togglePreview');
+     // closePreviewButton の定義
+     const closePreviewButton = document.getElementById('closePreview');
 
     // イベントリスナーは1つの togglePreviewButton に対して設定
     togglePreviewButton.addEventListener('click', () => {
@@ -93,16 +95,26 @@ window.addEventListener('load', () => {
 
         // previewArea の表示状態をトグル (PC表示時以外はdisplayを切り替え)
         if (windowWidth < 768) {  // 幅768px未満（モバイル版）の場合のみ
-            previewArea.style.display = previewArea.style.display === 'none' ? 'flex' : 'none';
+          previewArea.classList.toggle('show');
+          previewArea.classList.toggle('hidden');
+
 
             // ボタンのテキストを切り替え
-            if (previewArea.style.display === 'none') {
-                togglePreviewButton.textContent = 'プレビューを表示';
-            } else {
+            if (previewArea.classList.contains('show')) {
                 togglePreviewButton.textContent = 'プレビューを閉じる';
+            } else {
+                togglePreviewButton.textContent = 'プレビューを表示';
             }
         }
     });
+  // closePreviewButton のイベントリスナー
+    closePreviewButton.addEventListener('click', () => {
+      previewArea.classList.remove('show');
+      previewArea.classList.add('hidden');
+      togglePreviewButton.textContent = 'プレビューを表示';
+    });
+     // 初期状態を非表示に設定
+      previewArea.classList.add('hidden');
 });
 
 // スキル値/内部値の入力欄表示切り替え処理
@@ -153,6 +165,7 @@ function setupButtonGroup(buttonGroupId, inputId, initialValue = null) {
 // プレビューエリアの要素を取得
 const tweetPreview = document.getElementById('tweetPreview');
 const previewArea = document.querySelector('.preview');
+
 
 // 入力項目が変更されるたびにプレビューを更新する関数
 function updateTweetPreview() {
@@ -257,7 +270,7 @@ function generateTweetLink() {
   // updateTweetPreview() を呼び出して最新の tweetContent を取得
   updateTweetPreview();
 
-  const tweetUrl = `https://x.com/intent/post?text=${encodeURIComponent(tweetPreview.textContent)}`;
+  const tweetUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(tweetPreview.textContent)}`;
 
   // ツイートボタンを生成
   const tweetButton = document.createElement('a');
@@ -475,6 +488,7 @@ function updateButtonGroup(buttonGroupId, inputId, targetValue) {
 // 「togglePreviewButton」の定義
 const togglePreviewButton = document.getElementById('togglePreview');
 const closePreviewButton = document.getElementById('closePreview');
+
 
 // イベントリスナーは1つの togglePreviewButton に対して設定
 togglePreviewButton.addEventListener('click', () => {

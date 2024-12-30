@@ -10,11 +10,13 @@ body {
 .container {
   max-width: 1000px; /* トップページに合わせて最大幅を修正 */
   margin: 20px auto; /* 上下左右の中央に配置 */
-  background-color: #ffffff; /* トップページに合わせて背景色を修正 */
   padding: 20px;
   border-radius: 12px;
-  box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff; /* トップページに合わせて影を変更 */
   box-sizing: border-box;/*padding,borderを幅計算に含める */
+}
+
+main .container { 
+  box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff; /* トップページに合わせて影を変更 */
 }
 
 /* 見出し */
@@ -443,6 +445,29 @@ form {
   white-space: pre-wrap;
   display: flex;
   flex-direction: column;
+  position: fixed; /* 追従型にするためfixedに変更 */
+    bottom: 0;
+    left: 0;
+    width: 100%; /* 幅を100%にする */
+    background-color: rgba(255, 255, 255, 0.5); /* 半透明の背景 */
+    padding: 20px; /* 余白を追加 */
+    box-shadow: 0px -5px 10px rgba(0, 0, 0, 0.2); /* 下側に影を追加 */
+    transform: translateY(0); /* 初期位置を画面内に変更 */
+    transition: transform 0.3s ease-in-out;
+    z-index: 100; /* 他の要素よりも手前に表示 */
+    /* display: none;  <- JavaScriptで制御 */
+    animation: slideUp 0.3s ease-in-out; /* アニメーションを追加 */
+}
+.preview > h2 {
+    display: none; /*  "プレビュー"の見出しを非表示にする */
+}
+
+#closePreview {
+  display: none; /* closePreview ボタンを常に非表示に */
+}
+
+.preview.hidden {
+  display: none; /* 非表示状態 */
 }
 
 .preview > h2 {
@@ -450,13 +475,33 @@ form {
 }
 
 #tweetPreview {
-  background-color: #f4f4f4;
+  background-color: #fbfbfb;
   padding: 9px;
   border-radius: 4px;
   font-family: monospace;
   overflow-y: auto;
   position: sticky;
   top: 10px;
+}
+/* アニメーションの定義 */
+@keyframes slideUp {
+    0% {
+        transform: scale(0.8); /* 初期状態は少し小さく */
+        opacity: 0;            /* 初期状態は透明 */
+    }
+    100% {
+        transform: scale(1);   /* 最終的には元のサイズに */
+        opacity: 1;            /* 最終的には不透明に */
+    }
+}
+
+#togglePreview {
+  position: fixed;
+    padding: 5px 8px;
+    bottom: 20px;
+    border-radius: 20px;
+    right: 5px;
+    z-index: 100;
 }
 
 /* PC表示ではボタンを非表示 */
@@ -470,8 +515,18 @@ form {
       transform: none;
       box-shadow: none;
       display: flex;
-      padding: 5px;
+        padding: 5px;
     }
+    .preview > h2 {
+      display: block; /* PCではタイトルを表示 */
+    }
+   .preview.hidden {
+    display: block;
+   }
+   #togglePreview,
+   #closePreview {
+     display: none;
+   }
 }
 @media screen and (max-width: 768px) {
   .container {
