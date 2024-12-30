@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スキル実効値計算機</title>
+  <link rel="stylesheet" href="evc_style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kaisei+Tokumin&family=M+PLUS+Rounded+1c&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <h1>スキル実効値計算機</h1>
+    </div>
+    <div class="container">
+
+      <div class="mode-switch">
+        <input type="checkbox" id="mode-toggle" checked>
+        <label for="mode-toggle">
+          <span class="mode-label mode-label-left">〔先頭/内部値〕⇒〔実効値〕</span>
+          <span class="mode-label mode-label-right">〔実効値〕⇒〔先頭/内部値〕</span>
+        </label>
+      </div>
+
+      <div class="input-group" id="leader-skill-group">
+        <label for="leader-skill">先頭スキル値</label>
+        <div class="button-group skill-buttons">
+          <button type="button" data-value="150">150</button>
+          <button type="button" data-value="140">140</button>
+          <button type="button" data-value="130">130</button>
+          <button type="button" data-value="120">120</button>
+          <button type="button" data-value="110">110</button>
+          <button type="button" data-value="100">100</button>
+          <button type="button" data-value="bluefes">ブルフェス</button>
+        </div>
+        <div class="custom-input" id="custom-input-area">
+          <label for="leader-skill">任意の値を利用する▶</label>
+          <div class="input-wrapper">
+            <input type="number" id="leader-skill" value="" placeholder="先頭のスキル値を入力してください">
+            <div class="button-group">
+              <button type="button" id="leader-skill-up">▲</button>
+              <button type="button" id="leader-skill-down">▼</button>
+            </div>
+          </div>
+        </div>
+        <div class="input-group" id="training-selection" style="display: none;">
+          <div class="button-group">
+            <button type="button" data-value="before">特訓前</button>
+            <button type="button" data-value="after">特訓後</button>
+          </div>
+        </div>
+        <div class="custom-input" id="character-type-selection" style="display: none;">
+          <label for="character-type-selection">キャラクタータイプ</label>
+          <div class="button-group">
+            <button type="button" data-value="virtual-singer">バーチャル・シンガー</button>
+            <button type="button" data-value="original-character">オリジナルキャラクター</button>
+          </div>
+        </div>
+        
+        <div class="custom-input" id="character-rank-area" style="display: none;">  
+          <div class="input-wrapper">
+            <label for="character-rank">キャラクターランク▶</label>
+            <input type="number" id="character-rank" placeholder="CRを入力してください">
+          </div>
+          <div class="skill-level-and-skill-value-display">
+            <div class="input-wrapper">
+              <label for="skill-level">スキルレベル▶</label>
+              <select id="skill-level">
+                <option value="1">Lv.1</option>
+                <option value="2">Lv.2</option>
+                <option value="3">Lv.3</option>
+                <option value="4">Lv.4</option>
+              </select>
+            </div>
+            <span id="skill-value-display" >発動スキル値: <span id="calculated-skill-value"></span></span>
+          </div>
+        </div>
+      
+
+        <div class="custom-input" id="unit-selection" style="display: none;">
+          <label for="unit-selection">編成ユニット</label>
+          <div class="button-group unit-buttons">
+            <button type="button" data-unit="virtual_singer" class="active">
+              <img src="images/virtual_singer.png" alt="Virtual Singer" onerror="this.onerror=null; this.src=''; this.textContent='Virtual Singer';">
+            </button>
+            <button type="button" data-unit="leo_need">
+              <img src="images/leo_need.png" alt="Leo/need" onerror="this.onerror=null; this.src=''; this.textContent='Leo/need';">
+            </button>
+            <button type="button" data-unit="more_more_jump">
+              <img src="images/more_more_jump.png" alt="MORE MORE JUMP!" onerror="this.onerror=null; this.src=''; this.textContent='MORE MORE JUMP!';">
+            </button>
+            <button type="button" data-unit="vivid_bad_squad">
+              <img src="images/vivid_bad_squad.png" alt="Vivid BAD SQUAD" onerror="this.onerror=null; this.src=''; this.textContent='Vivid BAD SQUAD';">
+            </button>
+            <button type="button" data-unit="wonderlands_x_showtime">
+              <img src="images/wonderlands_x_showtime.png" alt="ワンダーランズ×ショウタイム" onerror="this.onerror=null; this.src=''; this.textContent='ワンダーランズ×ショウタイム';">
+            </button>
+            <button type="button" data-unit="25_ji_night_cord">
+              <img src="images/25_ji_night_cord.png" alt="25時、ナイトコードで。" onerror="this.onerror=null; this.src=''; this.textContent='25時、ナイトコードで。';">
+            </button>
+          </div>
+          <div class="skill-level-and-skill-value-display">
+            <div class="input-wrapper">
+              <label for="vs-skill-level">スキルレベル▶</label>
+              <select id="vs-skill-level">
+                <option value="1">Lv.1</option>
+                <option value="2">Lv.2</option>
+                <option value="3">Lv.3</option>
+                <option value="4">Lv.4</option>
+              </select>
+            </div>
+            <span id="vs-skill-value-display" >発動スキル値: <span id="calculated-vs-skill-value"></span></span>
+          </div>
+        </div>
+        
+        <div class="custom-input" id="oc-skill-level-area" style="display: none;">  
+          <div class="skill-level-and-skill-value-display">
+            <div class="input-wrapper">
+              <label for="oc-skill-level">スキルレベル▶</label>
+              <select id="oc-skill-level">
+                <option value="1">Lv.1</option>
+                <option value="2">Lv.2</option>
+                <option value="3">Lv.3</option>
+                <option value="4">Lv.4</option>
+              </select>
+            </div>
+            <span id="oc-skill-value-display" >発動スキル値: <span id="calculated-oc-skill-value"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-group" id="inner-value-group">
+        <label for="inner-value">内部値</label>
+        <div class="inner-values">
+          <div class="input-wrapper">
+            <input type="number" id="inner-value" value="" placeholder="編成の内部値を入力してください">
+            <div class="button-group">
+              <button type="button" id="inner-value-up">▲</button>
+              <button type="button" id="inner-value-down">▼</button>
+            </div>
+          </div>
+          <div class="detail-toggle-area">
+            スキル値を個別に入力する
+            <label class="switch" for="detail-toggle">
+              <input type="checkbox" id="detail-toggle">
+              <span class="slider round"></span>
+            </label>
+          </div>
+        </div>
+        <div id="detail-input-area" style="display: none;">
+          <div class="input-field-group">
+            <span class="field-label">2枠</span>
+            <input type="number" id="inner-value-2" placeholder="スキル値">
+          </div>
+          <div class="input-field-group">
+            <span class="field-label">3枠</span>
+            <input type="number" id="inner-value-3" placeholder="スキル値">
+          </div>
+          <div class="input-field-group">
+            <span class="field-label">4枠</span>
+            <input type="number" id="inner-value-4" placeholder="スキル値">
+          </div>
+          <div class="input-field-group">
+            <span class="field-label">5枠</span>
+            <input type="number" id="inner-value-5" placeholder="スキル値">
+          </div>
+        </div>
+      </div>
+
+      <div class="input-group" id="effective-value-group" style="display: none;">
+        <label for="effective-value">実効値</label>
+        <input type="number" id="effective-value" value="" placeholder="スキル実効値を入力してください">
+      </div>
+
+      <div class="input-group" id="op_leader-skill-group" style="display: none;">
+        <label for="op_leader-skill">※オプション：先頭スキル値を指定する</label>
+        <div class="input-wrapper">
+          <input type="number" id="op_leader-skill" value="" placeholder="先頭のスキル値を入力してください">
+          <div class="button-group">
+            <button type="button" id="op_leader-skill-up">▲</button>
+            <button type="button" id="op_leader-skill-down">▼</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="result"></div>
+
+    </div>
+    <footer class="footer">
+      <p>つくったひと：@Noritake https://x.com/YesNoritake ・All Rights Reserved.</p>
+    </footer>
+  <script src="evc_script.js"></script>
+</div>  
+</body>
+</html>

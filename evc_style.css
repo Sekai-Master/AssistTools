@@ -1,0 +1,692 @@
+body {
+  font-family: "Kaisei Tokumin", serif;
+  font-weight: 400;
+  font-style: normal;
+  margin: 0;
+  background-color: #f4f6ff;
+  background-image: url("images/stage15.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+.footer {
+  background-color: #f1f1f1;
+  text-align: center;
+  padding: 10px 0;
+  bottom: 0;
+  width: 100%;
+  position: absolute;
+  }
+
+  .wrapper{
+  min-height: 100vh;
+  position: relative;/*←相対位置*/
+  padding-bottom: 120px;/*←footerの高さ*/
+  box-sizing: border-box;/*←全て含めてmin-height:100vhに*/
+  }
+
+.container {
+  max-width: 700px;
+  margin: 20px auto;
+  background-color: rgba(136, 221, 68, 0.8);
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0px 4px 10px rgba(68, 85, 221, 0.1);
+}
+
+.header {
+  max-width: 700px;
+  margin: 20px auto;
+  background-color: rgba(136, 221, 68, 0.8);
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0px 4px 10px rgba(68, 85, 221, 0.1);
+}
+
+.header h1 {
+  margin: 0;
+}
+
+h1 {
+  color: #f0f0f0;
+  text-align: center;
+  margin-bottom: 20px;
+  margin-top: 5px;
+  position: relative;
+  line-height: 1.4;
+  padding: 0.25em 1em;
+  font-size: clamp(1em, 6vw, 3em);
+}
+
+h1:before,
+h1:after {
+  position: absolute;
+  top: 0;
+  content: '';
+  width: 8px;
+  height: 100%;
+  display: inline-block;
+}
+
+h1:before {
+  border-left: solid 1px black;
+  border-top: solid 1px black;
+  border-bottom: solid 1px black;
+  left: 0;
+}
+
+h1:after {
+  border-top: solid 1px black;
+  border-right: solid 1px black;
+  border-bottom: solid 1px black;
+  right: 0;
+}
+
+.input-group {
+  margin-bottom: 15px;
+}
+
+.input-group label {
+  background-color: rgba(248, 248, 248, 0.8);
+  margin-top: 10px;
+  font-weight: bold;
+  padding: 10px 10px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.input-group input,
+.input-group select {
+  width: 100%;
+  padding: 8px;
+  box-sizing: border-box;
+  border: 1px solid #90CAF9;
+  border-radius: 8px;
+  margin-top: 5px;
+  margin-bottom: 12px;
+}
+
+.input-group input::placeholder {
+  color: #aaa;
+  font-style: italic;
+  text-align: center;
+}
+
+.input-group input:focus {
+  outline: none;
+  border-color: #2196F3;
+}
+
+label[for="character-rank"],
+label[for="skill-level"] {
+  width: 160px;
+  text-align: justify;
+}
+
+label[for="character-rank"]::after,
+label[for="skill-level"]::after {
+  content: '';
+  display: inline-block;
+  width: 100%;
+}
+
+#character-rank-area input,
+#skill-level,
+#vs-skill-level {
+  width: 160px;
+  padding: 8px;
+  box-sizing: border-box;
+  border: 1px solid #90CAF9;
+  border-radius: 8px;
+  margin-top: 5px;
+  margin-bottom: 12px;
+}
+
+#character-rank-area .input-wrapper {
+  display: flex;
+  margin-bottom: 5px;
+  align-items: baseline;
+}
+
+#character-rank-area label {
+  white-space: nowrap; /* ラベルの折り返しを防ぐ */
+  margin-right: 10px;  /* ラベルとプルダウンの間に余白を追加 */
+}
+
+#skill-value-display,
+#vs-skill-value-display,
+#oc-skill-value-display{
+  font-size: clamp(16px, 4vw, 22px); /* 最小16px、最大22px、ビューポート幅に応じて可変 */
+  white-space: nowrap; 
+  color: white;
+  text-shadow: 2px 2px 4px black;
+  margin-left: 10px;
+}
+
+#calculated-skill-value,
+#calculated-vs-skill-value,
+#calculated-oc-skill-value{
+  font-weight: bold; 
+  background-color: #99EEDD; 
+  padding: 5px 10px; 
+  border-radius: 5px;
+}
+
+
+label[for="leader-skill"],
+label[for="op_leader-skill"],
+label[for="skill-level"], 
+label[for="character-type-selection"],
+label[for="character-rank"],
+label[for="unit-selection"],
+label[for="vs-skill-level"],
+label[for="oc-skill-level"]{
+  border-bottom: 4px solid #9cf;
+}
+
+label[for="inner-value"] {
+  border-bottom: 4px solid #FFAACC;
+}
+
+label[for="effective-value"] {
+  border-bottom: 4px solid #99EEDD;
+}
+
+.input-wrapper {
+  display: flex;
+  align-items: baseline;
+}
+
+.button-group {
+  display: flex;
+}
+
+.button-group button:hover {
+  background-color: #ddd;
+}
+
+.skill-buttons,
+#training-selection .button-group,
+#character-type-selection .button-group {
+  display: flex;
+  flex-wrap: wrap;
+  width: 100%;
+  margin-bottom: 10px;
+  margin-top: 10px;
+}
+
+.skill-buttons button,
+#training-selection button,
+#character-type-selection button {
+  background-color: #BBDD22;
+  border: 3px solid #88AA33;
+  color: white;
+  padding: 8px 16px;
+  font-size: 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+  flex: 1 0 auto;
+  margin-right: 5px;
+  margin-bottom: 5px;
+  text-align: center;
+}
+
+#training-selection button,
+#character-type-selection button {
+  flex: 1 0 0; 
+}
+
+.skill-buttons button:hover,
+#training-selection button:hover,
+#character-type-selection button:hover {
+  background-color: #AADD33;
+  transform: translateY(-1px);
+  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+.skill-buttons button.active,
+#training-selection button.active,
+#character-type-selection button.active {
+  background-color: #99CC33;
+  border-color: white;
+  color: white;
+}
+
+.skill-buttons button:not(.active),
+#training-selection button:not(.active),
+#character-type-selection button:not(.active) {
+  background-color: white;
+  border-color: #88AA33;
+  color: black;
+}
+
+.custom-input {
+  display: flex;
+  align-items: baseline;
+  margin-top: 5px;
+}
+
+#character-rank-area{
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.custom-input label{
+  white-space: nowrap;
+  margin-right: 15px;
+  margin-left: 15px;
+  font-weight: bold;
+  background-color: rgba(248, 248, 248, 0.8);
+  padding: 5px 8px;
+  border-radius: 5px;
+}
+
+.custom-input .input-wrapper {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.mode-switch {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.mode-switch input[type="checkbox"] {
+  display: none;
+}
+
+.mode-switch label {
+  display: inline-block;
+  position: relative;
+  width: 80%;
+  height: 70px;
+  cursor: pointer;
+  transition: background-color 0.4s ease;
+  border-radius: 15px;
+  background: #FFCCAA;
+  box-shadow: inset 5px 5px 5px #d9ad91,
+              inset -5px -5px 5px #ffebc4;
+}
+
+.mode-switch label:before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 45%;
+  height: 50px;
+  background-color: #fff;
+  border-radius: 15px;
+  transition: transform 0.4s ease;
+  box-shadow:  3px 3px 8px #c8c8c8,
+             -3px -3px 8px #ffffff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1;
+}
+
+.mode-switch label:before::after {
+  content: '';
+  width: 1px;
+  height: 30px;
+  background-color: rgba(0, 0, 0, 0.2);
+  z-index: 2;
+}
+
+.mode-switch input[type="checkbox"]:checked + label:before {
+  transform: translateX(calc(100% - -15%));
+}
+
+.mode-label {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  line-height: 1;
+  font-weight: bold;
+  transition: color 0.3s ease;
+  z-index: 1; 
+}
+
+.mode-label-left {
+  left: 25px;
+  color: #333;
+}
+
+.mode-label-right {
+  right: 25px;
+}
+
+.mode-switch input[type="checkbox"]:checked + label .mode-label-right {
+  color: #333;
+}
+
+#result {
+  text-align: center;
+  margin-top: 20px;
+  line-height: 1.8;
+}
+
+#detail-input-area {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+#detail-input-area input {
+  width: 100%;
+  padding: 8px;
+  box-sizing: border-box;
+  border: 1px solid #90CAF9;
+  border-radius: 8px;
+}
+
+.skill-level-and-skill-value-display{
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+}
+
+.inner-values{
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-around;
+  margin: 10px;
+}
+/* ... (other styles) ... */
+
+/* スライドスイッチのスタイル */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 52px;
+  height: 24px;
+  margin-left: 10px;
+}
+
+.detail-toggle-area label {
+  background-color: transparent; 
+  margin-top: 0; 
+  font-weight: normal;
+  padding: 0; 
+  border-radius: 0; 
+  display: inline-flex; 
+  align-items: center; 
+  justify-content: flex-start; 
+}
+
+.switch input { 
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 17px;
+  width: 17px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: #2196F3;
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px #2196F3;
+}
+
+input:checked + .slider:before {
+  -webkit-transform: translateX(26px);
+  -ms-transform: translateX(26px);
+  transform: translateX(26px);
+}
+
+/* Rounded sliders */
+.slider.round {
+  border-radius: 20px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+
+/* スキル値個別入力エリアのチェックボックスとラベルのスタイル */
+.detail-toggle-area {
+  display: flex;
+  align-items: flex-end;
+} 
+
+/* 個別入力欄のスタイル */
+#detail-input-area {
+  background-color: rgba(248, 248, 248, 0.8);
+  padding: 10px;
+  border: 1px solid #90CAF9;
+  border-radius: 8px;
+  margin-top: 10px; /* 上にマージンを追加 */
+}
+
+.input-field-group {
+  display: flex;
+  /* margin-bottom: 5px; */
+  border: 1px solid #90CAF9;
+  padding: 10px;
+  border-radius: 10px;
+  align-items: center;
+  flex-direction: column;
+}
+
+/* ユニット選択ボタンのスタイル */
+.unit-buttons {
+  display: flex;
+  flex-wrap: nowrap; /* 横並びにする */
+  justify-content: space-between; /* ボタン間を均等に配置 */
+  margin-top: 10px;
+}
+
+.unit-buttons button {
+  flex: 1; /* ボタンの幅を均等にする */
+  margin-bottom: 10px; /* ボタン間の垂直方向のマージン */
+  border: 3px solid #88AA33; /* ボタンの枠線 */
+  padding: 10px; /* ボタンの内側余白 */
+  border-radius: 8px; /* ボタンの角丸 */
+  background-color: white;
+  cursor: pointer;
+  transition: background-color 0.3s ease; /* ホバー時のトランジション */
+}
+
+.unit-buttons button:hover {
+  background-color: #f0f0f0; /* ホバー時の背景色 */
+}
+
+.unit-buttons button.active {
+  background-color: #BBDD22; /* 選択時の背景色 */
+  border-color: #88AA33; /* 選択時の枠線の色 */
+  color: white; /* 選択時のテキストの色 */
+}
+
+.unit-buttons button img {
+  max-width: 100%; /* 画像がボタンの幅を超えないように */
+  height: auto; /* アスペクト比を維持 */
+}
+
+#vs-skill-level-area {
+  margin-top: 10px;
+}
+
+#vs-skill-level-area .input-wrapper {
+  display: flex;
+  margin-bottom: 5px;
+  align-items: baseline;
+}
+
+#vs-skill-level-area label {
+  white-space: nowrap; /* ラベルの折り返しを防ぐ */
+  margin-right: 10px;  /* ラベルとプルダウンの間に余白を追加 */
+}
+
+
+
+@media screen and (max-width: 768px) {
+  body {
+    font-size: 16px;
+  }
+
+  .container {
+    max-width: 85%;
+    margin: 10px auto;
+    padding: 15px;
+  }
+
+  .header {
+    max-width: 85%;
+    margin: 10px auto;
+    padding: 15px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .input-group input {
+    font-size: 16px;
+  }
+
+  .button-group button,
+  .skill-buttons button {
+    font-size: 14px;
+    padding: 6px 12px;
+  }
+
+  .skill-buttons button {
+    flex: 1 0 48%;
+  }
+
+  .skill-buttons button:nth-child(2n) {
+    margin-right: 0;
+  }
+
+  .mode-switch label {
+    height: 65px;
+  }
+
+  .mode-switch label:before {
+    width: 45%;
+    height: 45px;
+  }
+
+  .mode-switch input[type="checkbox"]:checked + label:before {
+    transform: translateX(calc(80% - -30%));
+  }
+
+  .mode-label {
+    font-size: 14px;
+  }
+
+  .mode-label-right {
+    right: 15px;
+    max-width: 108px;
+  }
+
+  .mode-label-left {
+    left: 15px;
+    max-width: 108px;
+  }
+
+  #character-rank-area input{
+    width: 100%;
+    margin-bottom: 5px;
+  }
+
+  /* キャラクターランクとスキルレベルのラベル幅を揃える */
+  #character-rank-area label,
+  #skill-level-and-skill-value-display label { 
+    width: 160px; 
+  }
+
+  .skill-level-and-skill-value-display{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .inner-values{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .field-label {
+    width: auto; /* ラベルの幅を自動に */
+    margin-right: 0; /* 右マージンをリセット */
+    margin-bottom: 5px; /* 下マージンを追加 */
+  }
+
+  .custom-input label {
+    margin-right: 5px;
+    margin-left: 0;
+  }
+
+  .unit-buttons {
+    flex-wrap: wrap; /* 折り返しを許可 */
+    justify-content: flex-start; /* 左寄せ */
+  }
+
+  .unit-buttons button {
+    flex: 0 0 31%; /* 3列にする */
+    margin-right: 2%; /* ボタン間の水平方向のマージン */
+    margin-bottom: 5px; /* ボタン間の垂直方向のマージン */
+    padding: 5px; /* ボタンの内側余白を小さく */
+  }
+
+  /* 3列目(n+3)のボタンの右マージンを0にする */
+  .unit-buttons button:nth-child(3n) { 
+    margin-right: 0; 
+  }
+
+  .skill-level-and-skill-value-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  #vs-skill-level-area .input-wrapper {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  #vs-skill-level-area label {
+    margin-bottom: 5px;
+    margin-right: 0;
+  }
+  
+  #vs-skill-value-display {
+    margin-left: 0;
+    margin-top: 5px;
+  }
+
+}
