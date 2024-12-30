@@ -8,14 +8,17 @@ body {
 }
 
 .container {
-  max-width: 1000px; /* トップページに合わせて最大幅を修正 */
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+main .container { 
   margin: 20px auto; /* 上下左右の中央に配置 */
   padding: 20px;
   border-radius: 12px;
   box-sizing: border-box;/*padding,borderを幅計算に含める */
-}
-
-main .container { 
   box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff; /* トップページに合わせて影を変更 */
 }
 
