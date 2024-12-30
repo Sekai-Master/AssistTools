@@ -5,25 +5,20 @@ body {
   font-style: normal;
   margin: 0px;
   background-color: #f4f6ff;
-  background-image: url("images/starry_sky.jpg");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
 }
 
 .container {
   max-width: 700px;
   margin: 20px auto;
-  background-color: rgba(68, 85, 221, 0.8); 
+  background-color: rgba(255, 255, 255, 0.8);
   padding: 20px;
   border-radius: 12px;
-  box-shadow: 0px 4px 10px rgba(68, 85, 221, 0.1);
+  box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff;
 }
 
 /* 見出し */
 h1 {
-  color: #f0f0f0;
+  color: #333;
   text-align: center;
   margin-bottom: 20px;
   margin-top: 5px;
@@ -61,19 +56,19 @@ h1:after {
 
 /* 入力グループ */
 .input-group {
-  margin-bottom: 15px; 
+  margin-bottom: 15px;
 }
 
 /* --- 入力項目の見出し --- */
 .input-group label {
   background-color: rgba(248, 248, 248, 0.8);
   font-weight: bold;
-  padding: 10px 10px; 
+  padding: 10px 10px;
   border-radius: 5px;
   position: relative;
   display: flex;
   align-items: center;
-  z-index: 10; 
+  z-index: 10;
   justify-content: center;
   align-items: center;
 }
@@ -85,7 +80,7 @@ h1:after {
 .input-group label[for="remainingSlots"],
 .input-group label[for="roomIdSymbol"],
 .input-group label[for="roomId"] {
-  border-bottom: 4px solid #33AAEE; 
+  border-bottom: 4px solid #33AAEE;
 }
 
 .input-group label[for="showHostSkill"],
@@ -98,22 +93,22 @@ h1:after {
 .input-group label[for="showRequiredSkill"],
 .input-group label[for="showRequiredInnerValue"],
 #recruitRemarksHeader {
-  font-size: clamp(0.5rem, 3.2vw, 1rem); 
-  border-bottom: 4px solid #FF6666; 
+  font-size: clamp(0.5rem, 3.2vw, 1rem);
+  border-bottom: 4px solid #FF6666;
 }
 
 .input-group label[for="otherComments"] {
-  border-bottom: 4px solid #BBDD22; 
+  border-bottom: 4px solid #BBDD22;
 }
 
-.input-group label .switch { 
-  margin-left: auto; 
+.input-group label .switch {
+  margin-left: auto;
 }
 
-.input-group label .switch { 
-  background: none; 
+.input-group label .switch {
+  background: none;
   border: none;
-  padding: 0; 
+  padding: 0;
 }
 
 #hostRemarksHeader,
@@ -132,26 +127,26 @@ h1:after {
 }
 
 #hostRemarksHeader{
-  border-left: solid 5px #FFDD44; 
+  border-left: solid 5px #FFDD44;
 }
 #recruitRemarksHeader{
-  border-left: solid 5px #FF6666; 
+  border-left: solid 5px #FF6666;
 }
 
 #hostRemarksHeader .switch,
 #recruitRemarksHeader .switch {
   background: none;
-  border: none; 
-  padding: 0; 
+  border: none;
+  padding: 0;
 }
 
 #hostRemarksContainer .input-group label,
 #recruitRemarksContainer .input-group label {
-  background: none; 
-  border: none; 
-  padding: 0; 
+  background: none;
+  border: none;
+  padding: 0;
   color: initial;
-  font-weight: normal; 
+  font-weight: normal;
   font-weight: bold
 }
 
@@ -186,26 +181,26 @@ h1:after {
 .button-group button {
   padding: 10px 0px;
   font-size: 12px;
-  color: white; 
-  background-color: #2196F3; 
-  border: 3px solid #90CAF9; 
+  color: white;
+  background-color: #2196F3;
+  border: 3px solid #90CAF9;
   border-radius: 4px;
   cursor: pointer;
   box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
   transition: all 0.2s ease;
-  flex: 1; 
+  flex: 1;
 }
 
 .button-group button.active {
-  background-color: #33AAEE; 
-  border-color: white;  
-  color: white; 
+  background-color: #33AAEE;
+  border-color: white;
+  color: white;
 }
 
 .button-group button:not(.active) {
-  background-color: white; 
-  border-color: #90CAF9; 
-  color: black; 
+  background-color: white;
+  border-color: #90CAF9;
+  color: black;
 }
 
 
@@ -217,11 +212,11 @@ h1:after {
 
 .tweet-button {
   margin-top: 5px;
-  display: block; 
+  display: block;
   padding: 10px 20px;
   background-color: #45d;
   color: #fff;
-  border: 3px solid #fff; 
+  border: 3px solid #fff;
   text-decoration: none;
   border-radius: 4px;
   transition: background-color 0.3s ease;
@@ -234,19 +229,19 @@ h1:after {
 
 /* チェックボックスを非表示にする */
 input[type="checkbox"] {
-  display: none; 
+  display: none;
 }
 
 /* スライドスイッチのスタイル */
 .switch {
-  position: relative; 
+  position: relative;
   display: inline-block;
   width: 40px;
   height: 20px;
   vertical-align: middle;
 }
 
-.switch input { 
+.switch input {
   opacity: 0;
   width: 0;
   height: 0;
@@ -302,7 +297,7 @@ input:checked + .slider:before {
 }
 
 .switch-label {
-  margin-left: 10px; 
+  margin-left: 10px;
 }
 
 /* スキル値と内部値のグループ */
@@ -328,11 +323,11 @@ input:checked + .slider:before {
   padding: 10px;
   border-radius: 4px;
   background-color: #f9f9f9;
-  max-height: 1000px; 
+  max-height: 1000px;
 }
 
-#hostRemarksContainer:not(.open) { 
-  padding: 0 10px; 
+#hostRemarksContainer:not(.open) {
+  padding: 0 10px;
   max-height: 0;
 }
 
@@ -346,32 +341,32 @@ input:checked + .slider:before {
   padding: 10px;
   border-radius: 4px;
   background-color: #f9f9f9;
-  max-height: 1000px; 
+  max-height: 1000px;
 }
 
-#recruitRemarksContainer:not(.open) { 
-  padding: 0 10px; 
-  max-height: 0; 
+#recruitRemarksContainer:not(.open) {
+  padding: 0 10px;
+  max-height: 0;
 }
 
 /* 履歴コンテナ */
 #historyContainer {
   margin-bottom: 20px;
-  max-height: 0; 
-  overflow: hidden; 
-  transition: max-height 0.3s ease-in-out; 
-  border: 1px solid #ccc; 
-  border-radius: 6px; 
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-in-out;
+  border: 1px solid #ccc;
+  border-radius: 6px;
 }
 
 #historyContainer.open {
-  max-height: 500px; 
-  background-color: #f9f9f9; 
+  max-height: 500px;
+  background-color: #f9f9f9;
 }
 
 #historyList {
   list-style: none;
-  padding: 10px; 
+  padding: 10px;
   margin-bottom: 20px;
 }
 
@@ -413,7 +408,7 @@ input:checked + .slider:before {
 #clearAllHistoryButton {
   display: block;
   width: 100%;
-  margin-top: 10px; 
+  margin-top: 10px;
   background-color: #f0f0f0;
   border: none;
   padding: 8px 16px;
@@ -440,128 +435,58 @@ form {
 }
 
 .preview {
-  flex: 2; 
-  border: 3px solid #ccc;
+  flex: 2;
+  border: 1px solid #ccc;
   padding: 9px;
-  border-radius: 20px;
-  white-space: pre-wrap; 
+  border-radius: 4px;
+  white-space: pre-wrap;
   display: flex;
-  flex-direction: column; 
-  position: fixed; 
-  bottom: 0; 
-  left: 0;
-  width: 100%;
-  background-color: rgba(255, 255, 255, 0.5);
-  padding: 20px;
-  box-shadow: 0px -5px 10px rgba(0, 0, 0, 0.2); 
-  transform: translateY(0); /* 初期位置を画面内に変更 */
-  transition: transform 0.3s ease-in-out;
-  z-index: 100; /* 他の要素よりも手前に表示 */
-  /* display: none;  <- JavaScriptで制御 */
-  animation: slideUp 0.3s ease-in-out; /* アニメーションを追加 */
-}
-
-#closePreview {
-  display: none; /* closePreview ボタンを常に非表示に */
-}
-
-.preview.hidden {
-  display: none; /* 非表示状態 */
+  flex-direction: column;
 }
 
 .preview > h2 {
-  display: none; /*  "プレビュー"の見出しを非表示にする */
-}
-
-#togglePreview {
-  position: fixed;
-  padding: 5px 8px;
-  bottom: 20px;
-  border-radius: 20px;
-  right: 5px;
-  z-index: 100;
-}
-
-
-.preview > h2 {
-  flex-shrink: 0; 
+  flex-shrink: 0;
 }
 
 #tweetPreview {
   background-color: #f4f4f4;
-  padding: 7px;
-  border-radius: 20px;
+  padding: 9px;
+  border-radius: 4px;
   font-family: monospace;
-  overflow-y: auto; 
-  position: sticky; 
+  overflow-y: auto;
+  position: sticky;
   top: 10px;
 }
 
-/* アニメーションの定義 */
-@keyframes slideUp {
-  0% {
-    transform: scale(0.8); /* 初期状態は少し小さく */
-    opacity: 0;            /* 初期状態は透明 */
-  }
-  100% {
-    transform: scale(1);   /* 最終的には元のサイズに */
-    opacity: 1;            /* 最終的には不透明に */
-  }
-}
-
 /* PC表示ではボタンを非表示 */
-@media screen and (min-width: 768px) { 
-  #togglePreview {
-    display: none;
-  }
-  .preview {
-    /* display: none;  <- 削除 */ 
-    position: static; 
-    width: auto;
-    transform: none; 
-    box-shadow: none; 
-    display: flex; /* <- 追加 */
-    padding: 5px;
-  }
-
-  .preview > h2 {
-    display: block; /* PCではタイトルを表示 */
-  }
-
-  .preview.hidden {
-    display: block;
-  }
-
-  #togglePreview,
-  #closePreview {
-    display: none; 
-  }
+@media screen and (min-width: 768px) {
+    #togglePreview {
+      display: none;
+    }
+    .preview {
+      position: static;
+      width: auto;
+      transform: none;
+      box-shadow: none;
+      display: flex;
+      padding: 5px;
+    }
 }
 @media screen and (max-width: 768px) {
   .container {
-    max-width: 82%; 
+    max-width: 95%;
     margin: 10px auto;
   }
 
   .content {
-    flex-direction: column; 
+    flex-direction: column;
   }
 
   .preview {
-    width: 88%;
+    width: 95%;
   }
 
   .button-group {
-    flex-direction: row; 
-    flex-wrap: wrap; 
+    flex-direction: column;
   }
-
-  #historyList li button {
-    font-size: 10px; 
-  }
-
-  #historyList li button {
-    padding: 6px 10px; 
-  }
-
 }

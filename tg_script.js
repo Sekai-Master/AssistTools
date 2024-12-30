@@ -79,39 +79,30 @@ window.addEventListener('load', () => {
   document.getElementById('showStar4').addEventListener('change', updateTweetPreview);
   document.getElementById('showRecruitFreeDescription').addEventListener('change', updateTweetPreview);
 
-  // プレビューエリアの要素を取得
-  const tweetPreview = document.getElementById('tweetPreview');
-  const previewArea = document.querySelector('.preview');
+    // プレビューエリアの要素を取得
+    const tweetPreview = document.getElementById('tweetPreview');
+    const previewArea = document.querySelector('.preview');
 
-  // 「togglePreviewButton」の定義
-  const togglePreviewButton = document.getElementById('togglePreview'); // <-  定義をwindow.addEventListener内に移動
+    // 「togglePreviewButton」の定義
+    const togglePreviewButton = document.getElementById('togglePreview'); // <-  定義をwindow.addEventListener内に移動
 
-  // イベントリスナーは1つの togglePreviewButton に対して設定
-  togglePreviewButton.addEventListener('click', () => {
-    // 画面幅を取得
-    const windowWidth = window.innerWidth;
+    // イベントリスナーは1つの togglePreviewButton に対して設定
+    togglePreviewButton.addEventListener('click', () => {
+        // 画面幅を取得
+        const windowWidth = window.innerWidth;
 
-    // previewArea の表示状態をトグル (PC表示時以外はdisplayを切り替え)
-    if (windowWidth < 768) {  // 幅768px未満（モバイル版）の場合のみ
-      previewArea.style.display = previewArea.style.display === 'none' ? 'flex' : 'none';
+        // previewArea の表示状態をトグル (PC表示時以外はdisplayを切り替え)
+        if (windowWidth < 768) {  // 幅768px未満（モバイル版）の場合のみ
+            previewArea.style.display = previewArea.style.display === 'none' ? 'flex' : 'none';
 
-      // ボタンのテキストを切り替え
-      if (previewArea.style.display === 'none') {
-        togglePreviewButton.textContent = 'プレビューを表示';
-      } else {
-        togglePreviewButton.textContent = 'プレビューを閉じる';
-      }
-    }
-  });
-
-  // 初期状態を非表示に設定
-  //previewArea.style.display = 'none'; 
-
-  // closePreviewButton のイベントリスナー
-  closePreviewButton.addEventListener('click', () => {
-    previewArea.style.display = 'none';
-    togglePreviewButton.textContent = 'プレビューを表示';
-  });
+            // ボタンのテキストを切り替え
+            if (previewArea.style.display === 'none') {
+                togglePreviewButton.textContent = 'プレビューを表示';
+            } else {
+                togglePreviewButton.textContent = 'プレビューを閉じる';
+            }
+        }
+    });
 });
 
 // スキル値/内部値の入力欄表示切り替え処理
@@ -141,13 +132,13 @@ function setupButtonGroup(buttonGroupId, inputId, initialValue = null) {
   buttons.forEach(button => {
     if (initialValue !== null && button.getAttribute('data-value') === initialValue) {
       button.classList.add('active');
-      input.value = initialValue; 
+      input.value = initialValue;
     }
 
     button.addEventListener('click', () => {
       buttons.forEach(btn => btn.classList.remove('active'));
       button.classList.add('active');
-      input.value = button.getAttribute('data-value'); 
+      input.value = button.getAttribute('data-value');
       updateTweetPreview();
     });
   });
@@ -161,7 +152,7 @@ function setupButtonGroup(buttonGroupId, inputId, initialValue = null) {
 
 // プレビューエリアの要素を取得
 const tweetPreview = document.getElementById('tweetPreview');
-const previewArea = document.querySelector('.preview'); 
+const previewArea = document.querySelector('.preview');
 
 // 入力項目が変更されるたびにプレビューを更新する関数
 function updateTweetPreview() {
@@ -196,7 +187,7 @@ function updateTweetPreview() {
     roomIdDisplay = `：${roomId}`;
   }
 
-  // ツイート内容を生成 
+  // ツイート内容を生成
   let tweetContent = ''; // 初期化
 
   // TL放流有無が「なし」の場合のみ #No_TL を追加
@@ -344,7 +335,7 @@ function displayHistory() {
   history.forEach((item, index) => {
     const listItem = document.createElement('li');
     listItem.innerHTML = `
-        <span class="roomId">${item.roomId ? item.roomIdSymbol + item.roomId : 'ルームIDなし'}</span> 
+        <span class="roomId">${item.roomId ? item.roomIdSymbol + item.roomId : 'ルームIDなし'}</span>
         <span class="dateTime">${item.dateTime}</span>
         <button class="favorite-button ${item.favorite ? 'active' : ''}" data-index="${index}">★</button>
         <button class="reuse-button" data-index="${index}">再利用</button>
@@ -381,7 +372,7 @@ const historyContainer = document.getElementById('historyContainer');
 historyToggle.addEventListener('change', () => { // 'click' イベントを 'change' イベントに変更
 historyContainer.classList.toggle('open');
 
-displayHistory(); 
+displayHistory();
 });
 
 // 履歴削除処理
@@ -472,7 +463,7 @@ function updateButtonGroup(buttonGroupId, inputId, targetValue) {
 
   buttons.forEach(button => {
     const isActive = button.getAttribute('data-value') === targetValue;
-    button.classList.toggle('active', isActive); 
+    button.classList.toggle('active', isActive);
 
     // ボタンがアクティブになった際に、対応するinput要素に値を設定
     if (isActive) {
@@ -481,30 +472,29 @@ function updateButtonGroup(buttonGroupId, inputId, targetValue) {
   });
 }
 
-
-
 // 「togglePreviewButton」の定義
 const togglePreviewButton = document.getElementById('togglePreview');
 const closePreviewButton = document.getElementById('closePreview');
 
 // イベントリスナーは1つの togglePreviewButton に対して設定
 togglePreviewButton.addEventListener('click', () => {
-  previewArea.classList.toggle('show');
-  previewArea.classList.toggle('hidden');
+    previewArea.classList.toggle('show');
+    previewArea.classList.toggle('hidden');
 
-  if (previewArea.classList.contains('show')) {
-    togglePreviewButton.textContent = 'プレビューを閉じる';
-  } else {
-    togglePreviewButton.textContent = 'プレビューを表示';
-  }
+    if (previewArea.classList.contains('show')) {
+        togglePreviewButton.textContent = 'プレビューを閉じる';
+    } else {
+        togglePreviewButton.textContent = 'プレビューを表示';
+    }
 });
 
 // closePreviewButton のイベントリスナー
 closePreviewButton.addEventListener('click', () => {
-  previewArea.classList.remove('show');
-  previewArea.classList.add('hidden');
-  togglePreviewButton.textContent = 'プレビューを表示';
+    previewArea.classList.remove('show');
+    previewArea.classList.add('hidden');
+    togglePreviewButton.textContent = 'プレビューを表示';
 });
+
 
 // 履歴保存ボタンのイベントリスナー
 document.getElementById('saveHistoryButton').addEventListener('click', saveHistory);
@@ -519,8 +509,8 @@ document.getElementById('showConditionOutside').addEventListener('change', updat
 document.getElementById('conditionOutside').addEventListener('input', updateTweetPreview);
 document.getElementById('showSupporter').addEventListener('change', updateTweetPreview);
 document.getElementById('supporterCount').addEventListener('input', updateTweetPreview);
-document.getElementById('freeDescription').addEventListener('input', updateTweetPreview); 
-document.getElementById('recruitFreeDescription').addEventListener('input', updateTweetPreview); 
+document.getElementById('freeDescription').addEventListener('input', updateTweetPreview);
+document.getElementById('recruitFreeDescription').addEventListener('input', updateTweetPreview);
 document.getElementById('otherComments').addEventListener('input', updateTweetPreview);
 
 // ページ読み込み時にプレビューを更新
