@@ -613,7 +613,7 @@ input:checked + .slider:before {
   }
 
   .mode-label {
-    font-size: 3.5vw;
+    font-size: 3.3vw;
   }
 
   .mode-label-right {
