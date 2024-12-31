@@ -355,6 +355,7 @@ label[for="effective-value"] {
   top: 50%;
   transform: translateY(-50%);
   line-height: 1;
+  font-size: 1.5vw;
   font-weight: bold;
   transition: color 0.3s ease;
   z-index: 1; 
