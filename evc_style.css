@@ -1,20 +1,53 @@
-/* --- 全体的なフォント --- */
 body {
   font-family: "M PLUS Rounded 1c", sans-serif;
   font-weight: 400;
   font-style: normal;
   margin: 0px;
-  background-color: #f0f0f0;
+  background-color: #f0f0f0; /* トップページに合わせて背景色を修正 */
 }
 
-main .container {
+.container {
   max-width: 1000px;
-  margin: 20px auto;
-  background-color: #ffffff;
+  margin: 0 auto;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+main .container { 
+  margin: 20px auto; /* 上下左右の中央に配置 */
   padding: 20px;
   border-radius: 12px;
-  box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff;
-  box-sizing: border-box;
+  box-sizing: border-box;/*padding,borderを幅計算に含める */
+  box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff; /* トップページに合わせて影を変更 */
+}
+
+.footer {
+  background-color: #f1f1f1;
+  text-align: center;
+  padding: 10px 0;
+  bottom: 0;
+  width: 100%;
+  position: absolute;
+  }
+
+  .wrapper{
+  min-height: 100vh;
+  position: relative;/*←相対位置*/
+  padding-bottom: 120px;/*←footerの高さ*/
+  box-sizing: border-box;/*←全て含めてmin-height:100vhに*/
+  }
+
+.header {
+  max-width: 700px;
+  margin: 20px auto;
+  background-color: rgba(136, 221, 68, 0.8);
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0px 4px 10px rgba(68, 85, 221, 0.1);
+}
+
+.header h1 {
+  margin: 0;
 }
 
 /* 見出し */
@@ -56,193 +89,346 @@ main h1:after {
   right: 0;
 }
 
-/* 入力グループ */
+
 .input-group {
   margin-bottom: 15px;
 }
 
-/* --- 入力項目の見出し --- */
 .input-group label {
-    background-color: rgba(248, 248, 248, 0.8);
-    font-weight: bold;
-    padding: 10px 10px;
-    border-radius: 5px;
-    position: relative;
-    display: flex;
-    align-items: center;
-    z-index: 10;
-    justify-content: flex-start; /* 左寄せに変更 */
-    align-items: center;
-}
-
-.input-group label[for="tlFlow"],
-.input-group label[for="room"],
-.input-group label[for="song"],
-.input-group label[for="rounds"],
-.input-group label[for="remainingSlots"],
-.input-group label[for="roomIdSymbol"],
-.input-group label[for="roomId"] {
-    border-bottom: 4px solid #33AAEE;
-}
-
-.input-group label[for="showHostSkill"],
-.input-group label[for="showHostInnerValue"],
-#hostRemarksHeader {
-  font-size: clamp(0.5rem, 3.3vw, 1rem);
-  border-bottom: 4px solid #FFDD44;
-}
-
-.input-group label[for="showRequiredSkill"],
-.input-group label[for="showRequiredInnerValue"],
-#recruitRemarksHeader {
-  font-size: clamp(0.5rem, 3.2vw, 1rem);
-  border-bottom: 4px solid #FF6666;
-}
-
-.input-group label[for="otherComments"] {
-  border-bottom: 4px solid #BBDD22;
-}
-
-.input-group label .switch {
-  margin-left: auto;
-}
-
-.input-group label .switch {
-  background: none;
-  border: none;
-  padding: 0;
-}
-
-#hostRemarksHeader,
-#recruitRemarksHeader {
+  background-color: rgba(248, 248, 248, 0.8);
+  margin-top: 10px;
+  font-weight: bold;
+  padding: 10px 10px;
+  border-radius: 5px;
   display: flex;
   align-items: center;
-  font-weight: bold;
-  color: #494949;
-  background: #f4f4f4;
-  border-bottom: solid 3px #d7d7d7;
-  padding: 0.4em 0.5em;
-  justify-content: space-between;
-  font-size: 1em;
-  margin-bottom: 10px;
-  margin-top: 0;
+  justify-content: center;
 }
 
-#hostRemarksHeader{
-  border-left: solid 5px #FFDD44;
-}
-#recruitRemarksHeader{
-  border-left: solid 5px #FF6666;
-}
-
-#hostRemarksHeader .switch,
-#recruitRemarksHeader .switch {
-  background: none;
-  border: none;
-  padding: 0;
-}
-
-#hostRemarksContainer .input-group label,
-#recruitRemarksContainer .input-group label {
-  background: none;
-  border: none;
-  padding: 0;
-  color: initial;
-  font-weight: normal;
-  font-weight: bold
-}
-
-.input-group select,
 .input-group input,
-.input-group textarea {
+.input-group select {
   width: 100%;
   padding: 8px;
   box-sizing: border-box;
   border: 1px solid #90CAF9;
   border-radius: 8px;
-  margin-top: 5px
+  margin-top: 5px;
+  margin-bottom: 12px;
 }
 
-.input-group input:focus,
-.input-group textarea:focus {
+.input-group input::placeholder {
+  color: #aaa;
+  font-style: italic;
+  text-align: center;
+}
+
+.input-group input:focus {
   outline: none;
   border-color: #2196F3;
 }
 
-.hidden {
-  display: none;
+label[for="character-rank"],
+label[for="skill-level"] {
+  width: 160px;
+  text-align: justify;
 }
 
-/* ボタン */
+label[for="character-rank"]::after,
+label[for="skill-level"]::after {
+  content: '';
+  display: inline-block;
+  width: 100%;
+}
+
+#character-rank-area input,
+#skill-level,
+#vs-skill-level {
+  width: 160px;
+  padding: 8px;
+  box-sizing: border-box;
+  border: 1px solid #90CAF9;
+  border-radius: 8px;
+  margin-top: 5px;
+  margin-bottom: 12px;
+}
+
+#character-rank-area .input-wrapper {
+  display: flex;
+  margin-bottom: 5px;
+  align-items: baseline;
+}
+
+#character-rank-area label {
+  white-space: nowrap; /* ラベルの折り返しを防ぐ */
+  margin-right: 10px;  /* ラベルとプルダウンの間に余白を追加 */
+}
+
+#skill-value-display,
+#vs-skill-value-display,
+#oc-skill-value-display{
+  font-size: clamp(16px, 4vw, 22px); /* 最小16px、最大22px、ビューポート幅に応じて可変 */
+  white-space: nowrap; 
+  color: white;
+  text-shadow: 2px 2px 4px black;
+  margin-left: 10px;
+}
+
+#calculated-skill-value,
+#calculated-vs-skill-value,
+#calculated-oc-skill-value{
+  font-weight: bold; 
+  background-color: #99EEDD; 
+  padding: 5px 10px; 
+  border-radius: 5px;
+}
+
+
+label[for="leader-skill"],
+label[for="op_leader-skill"],
+label[for="skill-level"], 
+label[for="character-type-selection"],
+label[for="character-rank"],
+label[for="unit-selection"],
+label[for="vs-skill-level"],
+label[for="oc-skill-level"]{
+  border-bottom: 4px solid #9cf;
+}
+
+label[for="inner-value"] {
+  border-bottom: 4px solid #FFAACC;
+}
+
+label[for="effective-value"] {
+  border-bottom: 4px solid #99EEDD;
+}
+
+.input-wrapper {
+  display: flex;
+  align-items: baseline;
+}
+
 .button-group {
   display: flex;
-  gap: 5px;
+}
+
+.button-group button:hover {
+  background-color: #ddd;
+}
+
+.skill-buttons,
+#training-selection .button-group,
+#character-type-selection .button-group {
+  display: flex;
+  flex-wrap: wrap;
+  width: 100%;
+  margin-bottom: 10px;
   margin-top: 10px;
 }
 
-.button-group button {
-  padding: 10px 0px;
-  font-size: 12px;
+.skill-buttons button,
+#training-selection button,
+#character-type-selection button {
+  background-color: #BBDD22;
+  border: 3px solid #88AA33;
   color: white;
-  background-color: #2196F3;
-  border: 3px solid #90CAF9;
+  padding: 8px 16px;
+  font-size: 16px;
   border-radius: 4px;
   cursor: pointer;
   box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
   transition: all 0.2s ease;
-  flex: 1;
+  flex: 1 0 auto;
+  margin-right: 5px;
+  margin-bottom: 5px;
+  text-align: center;
 }
 
-.button-group button.active {
-  background-color: #33AAEE;
-  border-color: white;
-  color: white;
+#training-selection button,
+#character-type-selection button {
+  flex: 1 0 0; 
 }
 
-.button-group button:not(.active) {
-  background-color: white;
-  border-color: #90CAF9;
-  color: black;
-}
-
-.button-group button:hover {
-  background-color: #42A5F5;
+.skill-buttons button:hover,
+#training-selection button:hover,
+#character-type-selection button:hover {
+  background-color: #AADD33;
   transform: translateY(-1px);
   box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.3);
 }
 
-.tweet-button {
+.skill-buttons button.active,
+#training-selection button.active,
+#character-type-selection button.active {
+  background-color: #99CC33;
+  border-color: white;
+  color: white;
+}
+
+.skill-buttons button:not(.active),
+#training-selection button:not(.active),
+#character-type-selection button:not(.active) {
+  background-color: white;
+  border-color: #88AA33;
+  color: black;
+}
+
+.custom-input {
+  display: flex;
+  align-items: baseline;
   margin-top: 5px;
-  display: block;
-  padding: 10px 20px;
-  background-color: #45d;
-  color: #fff;
-  border: 3px solid #fff;
-  text-decoration: none;
-  border-radius: 4px;
-  transition: background-color 0.3s ease;
-  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.tweet-button:hover {
-  background-color: #0d8bd9;
+#character-rank-area{
+  display: flex;
+  flex-wrap: wrap;
 }
 
-/* チェックボックスを非表示にする */
-input[type="checkbox"] {
+.custom-input label{
+  white-space: nowrap;
+  margin-right: 15px;
+  margin-left: 15px;
+  font-weight: bold;
+  background-color: rgba(248, 248, 248, 0.8);
+  padding: 5px 8px;
+  border-radius: 5px;
+}
+
+.custom-input .input-wrapper {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.mode-switch {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.mode-switch input[type="checkbox"] {
   display: none;
 }
+
+.mode-switch label {
+  display: inline-block;
+  position: relative;
+  width: 50vw;
+  height: 70px;
+  cursor: pointer;
+  transition: background-color 0.4s ease;
+  border-radius: 15px;
+  background: #FFCCAA;
+  box-shadow: inset 5px 5px 5px #d9ad91,
+              inset -5px -5px 5px #ffebc4;
+}
+
+.mode-switch label:before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 22vw;
+  height: 50px;
+  background-color: #fff;
+  border-radius: 15px;
+  transition: transform 0.4s ease;
+  box-shadow:  3px 3px 8px #c8c8c8,
+             -3px -3px 8px #ffffff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1;
+}
+
+.mode-switch label:before::after {
+  content: '';
+  width: 1px;
+  height: 30px;
+  background-color: rgba(0, 0, 0, 0.2);
+  z-index: 2;
+}
+
+.mode-switch input[type="checkbox"]:checked + label:before {
+  transform: translateX(calc(100% - -15%));
+}
+
+.mode-label {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  line-height: 1;
+  font-weight: bold;
+  transition: color 0.3s ease;
+  z-index: 1; 
+}
+
+.mode-label-left {
+  left: 2vw;
+  color: #333;
+}
+
+.mode-label-right {
+  right: 2vw;
+}
+
+.mode-switch input[type="checkbox"]:checked + label .mode-label-right {
+  color: #333;
+}
+
+#result {
+  text-align: center;
+  margin-top: 20px;
+  line-height: 1.8;
+}
+
+#detail-input-area {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+#detail-input-area input {
+  width: 100%;
+  padding: 8px;
+  box-sizing: border-box;
+  border: 1px solid #90CAF9;
+  border-radius: 8px;
+}
+
+.skill-level-and-skill-value-display{
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+}
+
+.inner-values{
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-around;
+  margin: 10px;
+}
+/* ... (other styles) ... */
 
 /* スライドスイッチのスタイル */
 .switch {
   position: relative;
   display: inline-block;
-  width: 40px;
-  height: 20px;
-  vertical-align: middle;
+  width: 52px;
+  height: 24px;
+  margin-left: 10px;
 }
 
-.switch input {
+.detail-toggle-area label {
+  background-color: transparent; 
+  margin-top: 0; 
+  font-weight: normal;
+  padding: 0; 
+  border-radius: 0; 
+  display: inline-flex; 
+  align-items: center; 
+  justify-content: flex-start; 
+}
+
+.switch input { 
   opacity: 0;
   width: 0;
   height: 0;
@@ -258,20 +444,18 @@ input[type="checkbox"] {
   background-color: #ccc;
   -webkit-transition: .4s;
   transition: .4s;
-  border-radius: 34px;
 }
 
 .slider:before {
   position: absolute;
   content: "";
-  height: 16px;
-  width: 16px;
-  left: 2px;
-  bottom: 2px;
+  height: 17px;
+  width: 17px;
+  left: 4px;
+  bottom: 4px;
   background-color: white;
   -webkit-transition: .4s;
   transition: .4s;
-  border-radius: 50%;
 }
 
 input:checked + .slider {
@@ -283,277 +467,233 @@ input:focus + .slider {
 }
 
 input:checked + .slider:before {
-  -webkit-transform: translateX(20px);
-  -ms-transform: translateX(20px);
-  transform: translateX(20px);
+  -webkit-transform: translateX(26px);
+  -ms-transform: translateX(26px);
+  transform: translateX(26px);
 }
 
 /* Rounded sliders */
 .slider.round {
-  border-radius: 34px;
+  border-radius: 20px;
 }
 
 .slider.round:before {
   border-radius: 50%;
 }
 
-.switch-label {
-  margin-left: 10px;
-}
-
-/* スキル値と内部値のグループ */
-.skill-group {
+/* スキル値個別入力エリアのチェックボックスとラベルのスタイル */
+.detail-toggle-area {
   display: flex;
-  gap: 10px;
-  margin-top: 20px;
-  border-top: 1px solid #ccc;
-  padding-top: 10px;
-}
+  align-items: flex-end;
+} 
 
-.skill-group .input-group {
-  flex: 1;
-}
-
-/* 募集主備考コンテナ */
-#hostRemarksContainer {
-  margin-top: -10px;
-  margin-bottom: 20px;
-  overflow: hidden;
-  transition: max-height 0.3s ease-in-out;
-  border: 1px solid #ccc;
+/* 個別入力欄のスタイル */
+#detail-input-area {
+  background-color: rgba(248, 248, 248, 0.8);
   padding: 10px;
-  border-radius: 4px;
-  background-color: #f9f9f9;
-  max-height: 1000px;
+  border: 1px solid #90CAF9;
+  border-radius: 8px;
+  margin-top: 10px; /* 上にマージンを追加 */
 }
 
-#hostRemarksContainer:not(.open) {
-  padding: 0 10px;
-  max-height: 0;
-}
-
-/* 募集備考コンテナ */
-#recruitRemarksContainer {
-  margin-top: -10px;
-  margin-bottom: 20px;
-  overflow: hidden;
-  transition: max-height 0.3s ease-in-out;
-  border: 1px solid #ccc;
-  padding: 10px;
-  border-radius: 4px;
-  background-color: #f9f9f9;
-  max-height: 1000px;
-}
-
-#recruitRemarksContainer:not(.open) {
-  padding: 0 10px;
-  max-height: 0;
-}
-
-/* 履歴コンテナ */
-#historyContainer {
-  margin-bottom: 20px;
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease-in-out;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-}
-
-#historyContainer.open {
-  max-height: 500px;
-  background-color: #f9f9f9;
-}
-
-#historyList {
-  list-style: none;
-  padding: 10px;
-  margin-bottom: 20px;
-}
-
-#historyList li {
-  border: 1px solid #ccc;
-  padding: 10px;
-  margin-bottom: 5px;
-  border-radius: 4px;
+.input-field-group {
   display: flex;
+  /* margin-bottom: 5px; */
+  border: 1px solid #90CAF9;
+  padding: 10px;
+  border-radius: 10px;
   align-items: center;
-}
-
-#historyList .roomId {
-  margin-right: 10px;
-}
-
-#historyList .dateTime {
-  font-size: 0.8em;
-  color: #666;
-  margin-right: auto;
-}
-
-.favorite-button,
-.reuse-button,
-.delete-button {
-  background-color: #f0f0f0;
-  border: none;
-  padding: 8px 16px;
-  margin-left: 10px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.favorite-button.active {
-  background-color: #ffd700;
-}
-
-/* 全履歴削除ボタン */
-#clearAllHistoryButton {
-  display: block;
-  width: 100%;
-  margin-top: 10px;
-  background-color: #f0f0f0;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.footer {
-  background-color: #f1f1f1;
-  text-align: center;
-  padding: 10px 0;
-  bottom: 0;
-  width: 100%;
-}
-
-/* プレビュー実装*/
-.content {
-  display: flex;
-  gap: 20px;
-}
-
-form {
-  flex: 3;
-}
-
-.preview {
-  flex: 2;
-  border: 3px solid #ccc;
-  padding: 9px;
-  border-radius: 20px;
-  white-space: pre-wrap;
-  display: flex;
   flex-direction: column;
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  background-color: rgba(255, 255, 255, 0.5);
-  padding: 20px;
-  box-shadow: 0px -5px 10px rgba(0, 0, 0, 0.2);
-  transform: translateY(0);
-  transition: transform 0.3s ease-in-out;
-  z-index: 100;
-  /* display: none;  <- JavaScriptで制御 */
-  animation: slideUp 0.3s ease-in-out;
 }
 
-#closePreview {
-  display: none;
+/* ユニット選択ボタンのスタイル */
+.unit-buttons {
+  display: flex;
+  flex-wrap: nowrap; /* 横並びにする */
+  justify-content: space-between; /* ボタン間を均等に配置 */
+  margin-top: 10px;
 }
 
-.preview.hidden {
-  display: none;
+.unit-buttons button {
+  flex: 1; /* ボタンの幅を均等にする */
+  margin-bottom: 10px; /* ボタン間の垂直方向のマージン */
+  border: 3px solid #88AA33; /* ボタンの枠線 */
+  padding: 10px; /* ボタンの内側余白 */
+  border-radius: 8px; /* ボタンの角丸 */
+  background-color: white;
+  cursor: pointer;
+  transition: background-color 0.3s ease; /* ホバー時のトランジション */
 }
 
-.preview > h2 {
-  display: none;
+.unit-buttons button:hover {
+  background-color: #f0f0f0; /* ホバー時の背景色 */
 }
 
-#togglePreview {
-  position: fixed;
-  padding: 5px 8px;
-  bottom: 20px;
-  border-radius: 20px;
-  right: 5px;
-  z-index: 100;
+.unit-buttons button.active {
+  background-color: #BBDD22; /* 選択時の背景色 */
+  border-color: #88AA33; /* 選択時の枠線の色 */
+  color: white; /* 選択時のテキストの色 */
 }
 
-.preview > h2 {
-  flex-shrink: 0;
+.unit-buttons button img {
+  max-width: 100%; /* 画像がボタンの幅を超えないように */
+  height: auto; /* アスペクト比を維持 */
 }
 
-#tweetPreview {
-  background-color: #f4f4f4;
-  padding: 7px;
-  border-radius: 20px;
-  font-family: monospace;
-  overflow-y: auto;
-  position: sticky;
-  top: 10px;
+#vs-skill-level-area {
+  margin-top: 10px;
 }
 
-/* アニメーションの定義 */
-@keyframes slideUp {
-  0% {
-    transform: scale(0.8);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
+#vs-skill-level-area .input-wrapper {
+  display: flex;
+  margin-bottom: 5px;
+  align-items: baseline;
 }
 
-/* PC表示ではボタンを非表示 */
-@media screen and (min-width: 768px) {
-  #togglePreview {
-    display: none;
-  }
-  .preview {
-    /* display: none;  <- 削除 */
-    position: static;
-    width: auto;
-    transform: none;
-    box-shadow: none;
-    display: flex;
-      padding: 5px;
-  }
-  .preview > h2 {
-    display: block;
-  }
- .preview.hidden {
-   display: block;
- }
-   #togglePreview,
-   #closePreview {
-     display: none;
-  }
+#vs-skill-level-area label {
+  white-space: nowrap; /* ラベルの折り返しを防ぐ */
+  margin-right: 10px;  /* ラベルとプルダウンの間に余白を追加 */
 }
+
+
+
 @media screen and (max-width: 768px) {
+  body {
+    font-size: 16px;
+  }
+
   .container {
-    max-width: 82%;
+    max-width: 85%;
     margin: 10px auto;
+    padding: 15px;
   }
 
-  .content {
+  .header {
+    max-width: 85%;
+    margin: 10px auto;
+    padding: 15px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .input-group input {
+    font-size: 16px;
+  }
+
+  .button-group button,
+  .skill-buttons button {
+    font-size: 14px;
+    padding: 6px 12px;
+  }
+
+  .skill-buttons button {
+    flex: 1 0 48%;
+  }
+
+  .skill-buttons button:nth-child(2n) {
+    margin-right: 0;
+  }
+
+  .mode-switch label {
+    height: 65px;
+    width: 60vw;
+  }
+
+  .mode-switch label:before {
+    width: 45%;
+    height: 45px;
+  }
+
+  .mode-switch input[type="checkbox"]:checked + label:before {
+    transform: translateX(calc(80% - -25%));
+  }
+
+  .mode-label {
+    font-size: 3.5vw;
+  }
+
+  .mode-label-right {
+    right: 2vw;
+    max-width: 27vw;
+  }
+
+  .mode-label-left {
+    left: 2vw;
+    max-width: 27vw;
+  }
+
+  #character-rank-area input{
+    width: 100%;
+    margin-bottom: 5px;
+  }
+
+  /* キャラクターランクとスキルレベルのラベル幅を揃える */
+  #character-rank-area label,
+  #skill-level-and-skill-value-display label { 
+    width: 160px; 
+  }
+
+  .skill-level-and-skill-value-display{
+    display: flex;
     flex-direction: column;
+    align-items: center;
   }
 
-  .preview {
-    width: 88%;
+  .inner-values{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
 
-  .button-group {
-    flex-direction: row;
-    flex-wrap: wrap;
+  .field-label {
+    width: auto; /* ラベルの幅を自動に */
+    margin-right: 0; /* 右マージンをリセット */
+    margin-bottom: 5px; /* 下マージンを追加 */
   }
 
-  #historyList li button {
-    font-size: 10px;
+  .custom-input label {
+    margin-right: 5px;
+    margin-left: 0;
   }
 
-  #historyList li button {
-    padding: 6px 10px;
+  .unit-buttons {
+    flex-wrap: wrap; /* 折り返しを許可 */
+    justify-content: flex-start; /* 左寄せ */
+  }
+
+  .unit-buttons button {
+    flex: 0 0 31%; /* 3列にする */
+    margin-right: 2%; /* ボタン間の水平方向のマージン */
+    margin-bottom: 5px; /* ボタン間の垂直方向のマージン */
+    padding: 5px; /* ボタンの内側余白を小さく */
+  }
+
+  /* 3列目(n+3)のボタンの右マージンを0にする */
+  .unit-buttons button:nth-child(3n) { 
+    margin-right: 0; 
+  }
+
+  .skill-level-and-skill-value-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  #vs-skill-level-area .input-wrapper {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  #vs-skill-level-area label {
+    margin-bottom: 5px;
+    margin-right: 0;
+  }
+  
+  #vs-skill-value-display {
+    margin-left: 0;
+    margin-top: 5px;
   }
 
 }
