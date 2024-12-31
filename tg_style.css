@@ -69,6 +69,7 @@ main h1:after {
 /* --- 入力項目の見出し --- */
 .input-group label {
   background-color: rgba(248, 248, 248, 0.8);
+  box-shadow: 3px 3px 6px #bebebe, -3px -3px 6px #ffffff;
   font-weight: bold;
   padding: 10px 10px;
   border-radius: 5px;
@@ -78,6 +79,7 @@ main h1:after {
   z-index: 10;
   justify-content: center;
   align-items: center;
+
 }
 
 .input-group label[for="tlFlow"],

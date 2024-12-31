@@ -96,6 +96,7 @@ main h1:after {
 
 .input-group label {
   background-color: rgba(248, 248, 248, 0.8);
+  box-shadow: 3px 3px 6px #bebebe, -3px -3px 6px #ffffff;
   margin-top: 10px;
   font-weight: bold;
   padding: 10px 10px;
