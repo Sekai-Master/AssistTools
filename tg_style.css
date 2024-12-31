@@ -112,6 +112,7 @@ main h1:after {
 
 .input-group label .switch {
   margin-left: auto;
+  border-radius: 10px;
 }
 
 .input-group label .switch {
@@ -156,7 +157,8 @@ main h1:after {
   padding: 0;
   color: initial;
   font-weight: normal;
-  font-weight: bold
+  font-weight: bold;
+  box-shadow: none;
 }
 
 .input-group select,
@@ -188,8 +190,8 @@ main h1:after {
 }
 
 .button-group button {
-  padding: 10px 0px;
-  font-size: 12px;
+  padding: 10px 1vw;
+  font-size: 1.2vw;
   color: white;
   background-color: #2196F3;
   border: 3px solid #90CAF9;
@@ -548,11 +550,11 @@ form {
 @media screen and (max-width: 768px) {
   .container {
     max-width: 95%;
-    margin: 10px auto;
   }
 
   .content {
-    flex-direction: column;
+    /*flex-direction: column;*/
+    margin: 1.5vw 3vw;
   }
 
   .preview {
@@ -560,6 +562,11 @@ form {
   }
 
   .button-group {
-    flex-direction: column;
+    /*flex-direction: column;*/
+    margin: 1.5vw 3vw;
+  }
+
+  .button-group button{
+    font-size: 3.5vw;
   }
 }
