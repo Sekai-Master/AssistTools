@@ -79,42 +79,39 @@ window.addEventListener('load', () => {
   document.getElementById('showStar4').addEventListener('change', updateTweetPreview);
   document.getElementById('showRecruitFreeDescription').addEventListener('change', updateTweetPreview);
 
-   // プレビューエリアの要素を取得
-    const tweetPreview = document.getElementById('tweetPreview');
-    const previewArea = document.querySelector('.preview');
+  // プレビューエリアの要素を取得
+  const tweetPreview = document.getElementById('tweetPreview');
+  const previewArea = document.querySelector('.preview');
 
-    // 「togglePreviewButton」の定義
-    const togglePreviewButton = document.getElementById('togglePreview');
-     // closePreviewButton の定義
-     const closePreviewButton = document.getElementById('closePreview');
+  // 「togglePreviewButton」の定義
+  const togglePreviewButton = document.getElementById('togglePreview'); // <-  定義をwindow.addEventListener内に移動
 
-    // イベントリスナーは1つの togglePreviewButton に対して設定
-    togglePreviewButton.addEventListener('click', () => {
-        // 画面幅を取得
-        const windowWidth = window.innerWidth;
+  // イベントリスナーは1つの togglePreviewButton に対して設定
+  togglePreviewButton.addEventListener('click', () => {
+    // 画面幅を取得
+    const windowWidth = window.innerWidth;
 
-        // previewArea の表示状態をトグル (PC表示時以外はdisplayを切り替え)
-        if (windowWidth < 768) {  // 幅768px未満（モバイル版）の場合のみ
-          previewArea.classList.toggle('show');
-          previewArea.classList.toggle('hidden');
+    // previewArea の表示状態をトグル (PC表示時以外はdisplayを切り替え)
+    if (windowWidth < 768) {  // 幅768px未満（モバイル版）の場合のみ
+      previewArea.style.display = previewArea.style.display === 'none' ? 'flex' : 'none';
 
+      // ボタンのテキストを切り替え
+      if (previewArea.style.display === 'none') {
+        togglePreviewButton.textContent = 'プレビューを表示';
+      } else {
+        togglePreviewButton.textContent = 'プレビューを閉じる';
+      }
+    }
+  });
 
-            // ボタンのテキストを切り替え
-            if (previewArea.classList.contains('show')) {
-                togglePreviewButton.textContent = 'プレビューを閉じる';
-            } else {
-                togglePreviewButton.textContent = 'プレビューを表示';
-            }
-        }
-    });
+  // 初期状態を非表示に設定
+  //previewArea.style.display = 'none'; 
+
   // closePreviewButton のイベントリスナー
-    closePreviewButton.addEventListener('click', () => {
-      previewArea.classList.remove('show');
-      previewArea.classList.add('hidden');
-      togglePreviewButton.textContent = 'プレビューを表示';
-    });
-     // 初期状態を非表示に設定
-      previewArea.classList.add('hidden');
+  closePreviewButton.addEventListener('click', () => {
+    previewArea.style.display = 'none';
+    togglePreviewButton.textContent = 'プレビューを表示';
+  });
 });
 
 // スキル値/内部値の入力欄表示切り替え処理
