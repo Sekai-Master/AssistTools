@@ -498,6 +498,7 @@ input:checked + .slider:before {
 
 .input-field-group {
   display: flex;
+  width: 24%;
   /* margin-bottom: 5px; */
   border: 1px solid #90CAF9;
   padding: 10px;
@@ -559,7 +560,7 @@ input:checked + .slider:before {
 
 @media screen and (max-width: 768px) {
   body {
-    font-size: 16px;
+    font-size: 3.5vw;
   }
 
   .container {
@@ -579,13 +580,13 @@ input:checked + .slider:before {
   }
 
   .input-group input {
-    font-size: 16px;
+    font-size: 3.5vw;
   }
 
   .button-group button,
   .skill-buttons button {
-    font-size: 14px;
-    padding: 6px 12px;
+    font-size: 3.2vw;
+    padding: 6px 6px;
   }
 
   .skill-buttons button {
