@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ポイント調整アナライザー</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="header.css">
+     <link rel="stylesheet" href="analyzer_style.css">
+    <script src="header.js" defer></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c&display=swap" rel="stylesheet">
+     <link rel="icon" href="images/icon.jpeg" type="image/jpeg">
+</head>
+<body>
+    <main>
+        <div class="container">
+           <h1>ポイント調整アナライザー</h1>
+            <div class="input-group">
+                <label for="currentPoints">現在のイベントポイント</label>
+                <input type="number" id="currentPoints" placeholder="現在のイベントポイントを入力してください">
+            </div>
+            <div class="input-group">
+                <label for="targetPoints">目標イベントポイント</label>
+                <input type="number" id="targetPoints" placeholder="目標イベントポイントを入力してください">
+            </div>
+            <div class="button-group">
+              <button type="button" id="calculateButton">計算</button>
+            </div>
+             <div id="result"></div>
+          </div>
+    </main>
+     <footer class="footer">
+      <div class="container">
+          <p>© 2024 @Noritake All Rights Reserved.</p>
+        </div>
+    </footer>
+  <script src="analyzer_script.js"></script>
+</body>
+</html>
