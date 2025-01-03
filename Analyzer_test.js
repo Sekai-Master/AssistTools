@@ -1,5 +1,5 @@
 function calculateEventPoint(score, eventBonus, basePoint = 100, liveBonusIndex = 0) {
-  const liveBonusMultipliers = [1, 5, 10, 15, 19, 23, 26, 29]; //, 31, 33, 35
+  const liveBonusMultipliers = [1, 5, 10, 15, 19, 23, 26, 29, 31, 33, 35];
   const liveBonus = liveBonusMultipliers[liveBonusIndex];
   const scoreComponent = Math.floor(score / 20000);
   const eventBonusApplied = Math.floor((100 + scoreComponent) * (1 + eventBonus / 100) * 100) / 100;
@@ -8,9 +8,9 @@ function calculateEventPoint(score, eventBonus, basePoint = 100, liveBonusIndex 
   return totalPoint;
 }
 
-function generateScoreList(eventBonus, basePoint = 100, maxScore) {
+function generateScoreList(eventBonus, basePoint = 100) {
   const scoreList = [];
-  // maxScoreを参照し、3000000以下であればそのまま利用、3000000より大きい場合は3000000に設定
+  //maxScoreを参照し、3000000以下であればそのまま利用、3000000より大きい場合は3000000に設定
   if (maxScore > 3000000) {
     maxScore = 3000000;
   }
@@ -32,19 +32,14 @@ function generateScoreList(eventBonus, basePoint = 100, maxScore) {
   return scoreList;
 }
 
-function findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint = 100, maxScore = 1100000) {
+function findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint = 100) {
   const pointDifference = targetPoints - currentPoints;
-  
-  if (pointDifference < 0) {
-    return "目標ポイントは現在ポイントよりも大きな値を入力してください";
-  }
-
   if (pointDifference > 100000) {
     return "目標ポイントにもっと近くなってから利用してください";
   }
 
-  const scoreList = generateScoreList(eventBonus, basePoint, maxScore);
-  const liveBonusMultipliers = [1, 5, 10, 15, 19, 23, 26, 29];//, 31, 33, 35];
+  const scoreList = generateScoreList(eventBonus, basePoint);
+  const liveBonusMultipliers = [1, 5, 10, 15, 19, 23, 26, 29, 31, 33, 35];
 
   function canMakeSum(target, scoreList) {
     const dp = new Array(target + 1).fill(false);
@@ -80,14 +75,9 @@ function findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint 
     const adjustments = [-10, -15, -20];
     adjustments.forEach(adjustment => {
       const adjustedEventBonus = eventBonus + adjustment;
-      const adjustedScoreList = generateScoreList(adjustedEventBonus, basePoint, maxScore);
+      const adjustedScoreList = generateScoreList(adjustedEventBonus, basePoint);
       const adjustedResult = canMakeSum(pointDifference, adjustedScoreList);
-      resultText += `[${adjustedEventBonus}%]でのポイント調整は${adjustedResult ? '可能' : '不可能'}でした。`;
-      if (adjustedResult) {
-        resultText += ` <button onclick="updateEventBonus(${adjustedEventBonus})">選択</button>\n`;
-      } else {
-        resultText += `\n`;
-      }
+      resultText += `[${adjustedEventBonus}%]でのポイント調整は${adjustedResult ? '可能' : '不可能'}でした。\n`;
     });
     return resultText;
   }
@@ -106,47 +96,13 @@ function findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint 
   return resultText;
 }
 
-function updateEventBonus(newEventBonus) {
-  document.getElementById('eventBonus').value = newEventBonus;
-  calculate();
-}
+// テスト
+const currentPoints = 0;
+const targetPoints = 6163;
+const eventBonus = 300;
+const basePoint = 100;
+const maxScore = 1000000;
 
-function convertToHalfWidth(str) {
-  return str.replace(/[！-～]/g, function(s) {
-    return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
-  }).replace(/　/g, " ");
-}
+const result = findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint);
 
-function validateNumericInput(input) {
-  const value = input.value;
-  const halfWidthValue = convertToHalfWidth(value);
-  if (/[^0-9]/.test(halfWidthValue)) {
-    alert("数値は半角で入力してください");
-    input.value = "";
-  } else {
-    input.value = halfWidthValue;
-  }
-}
-
-function calculate() {
-  const currentPoints = parseInt(convertToHalfWidth(document.getElementById('currentPoints').value), 10);
-  const targetPoints = parseInt(convertToHalfWidth(document.getElementById('targetPoints').value), 10);
-  const eventBonus = parseInt(convertToHalfWidth(document.getElementById('eventBonus').value), 10);
-
-  if (isNaN(currentPoints) || isNaN(targetPoints) || isNaN(eventBonus)) {
-    document.getElementById('result').textContent = "数値を入力してください";
-    return;
-  }
-
-  const basePoint = 100;
-  const maxScore = 1100000;
-  const result = findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint, maxScore);
-  document.getElementById('result').innerHTML = result;
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('currentPoints').addEventListener('input', calculate);
-  document.getElementById('targetPoints').addEventListener('input', calculate);
-  document.getElementById('eventBonus').addEventListener('input', calculate);
-  calculate();
-});
+console.log(result);

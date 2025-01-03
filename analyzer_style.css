@@ -41,4 +41,5 @@ main .container {
     margin-top: 20px;
     font-size: 1.2em;
     line-height: 1.6;
+    white-space: pre-wrap;
 }
