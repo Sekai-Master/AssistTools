@@ -72,31 +72,54 @@ function findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint 
     const result = canMakeSum(pointDifference, scoreList);
     if (!result) {
       let resultText = `[${eventBonus}%]でのポイント調整は不可能でした。\n`;
-        const adjustments = [-10, -15, -20];
-       adjustments.forEach(adjustment => {
-         const adjustedEventBonus = eventBonus + adjustment;
-         const adjustedScoreList = generateScoreList(adjustedEventBonus, basePoint, maxScore);
-        const adjustedResult = canMakeSum(pointDifference, adjustedScoreList);
-            resultText += `[${adjustedEventBonus}%]でのポイント調整は${adjustedResult ? '可能' : '不可能'}でした。`;
+      resultText += `必要ポイント : [${pointDifference.toLocaleString()}Pt]\n\n`;
+      const adjustments = [-10, -15, -20, -30, -50, -60, -75, -80, -100, -120, -140, -150, -160, -180, -200, -220, -240, -250, -260, -280, -300];
+      let validAdjustments = [];
+      let currentBonus = eventBonus;
+  
+      for (let i = 0; i < adjustments.length; i++) {
+          currentBonus += adjustments[i];
+          if (currentBonus < 0) {
+              break;
+          }
+          const adjustedScoreList = generateScoreList(currentBonus, basePoint, maxScore);
+          const adjustedResult = canMakeSum(pointDifference, adjustedScoreList);
           if (adjustedResult) {
-            resultText += ` <button onclick="updateEventBonus(${adjustedEventBonus})">選択</button>\n`;
-            } else {
-              resultText += `\n`;
-           }
+              validAdjustments.push(currentBonus);
+              if (validAdjustments.length === 4) {
+                  break;
+              }
+          }
+      }
+  
+      if (validAdjustments.length > 0) {
+          resultText += "調整可能なイベントボーナス値:\n<div class='result-container'>";
+          validAdjustments.forEach(adjustment => {
+              resultText += `<div class="result-item"><span>[${adjustment}%]</span> <button onclick="updateEventBonus(${adjustment})">選択</button></div>`;
           });
-          return resultText;
-     }
-    let resultText = `目標ポイント : [${targetPoints}Pt]\n`;
-     resultText +=`必要ポイント : [${pointDifference}Pt]\n`;
-      resultText +=`イベントボーナス : [${eventBonus}%]\n\n`;
-   
-       for (let i = 0; i < result.length; i++) {
-            const step = result[i];
-          const liveBonusIndex = liveBonusMultipliers.indexOf(step.liveBonus);
-          const basePointApplied = step.point / step.liveBonus;
-            resultText += `${i + 1}, ${step.point}Pt : ${Math.floor(basePointApplied)}Pt [${step.scoreLower} ~ ${step.scoreUpper}] * ${step.liveBonus} (LB消費${liveBonusIndex})\n`;
-        }
-     return resultText;
+          resultText += "</div>";
+      } else {
+          resultText += "イベントボーナス値の変更、または[詳細設定]から[最大スコア]の変更を検討してください。\n";
+      }
+  
+      return resultText;
+  }
+  
+  let resultText = `目標ポイント : [${targetPoints.toLocaleString()}Pt]\n`;
+  resultText += `必要ポイント : [${pointDifference.toLocaleString()}Pt]\n`;
+  resultText += `イベントボーナス : [${eventBonus}%]\n\n`;
+  
+  resultText += `<table class="result-table"><thead><tr><th>#</th><th>ポイント</th><th>基礎ポイント</th><th>スコア範囲</th><th>ライブボーナス</th><th>LB消費</th></tr></thead><tbody>`;
+  
+  for (let i = 0; i < result.length; i++) {
+      const step = result[i];
+      const liveBonusIndex = liveBonusMultipliers.indexOf(step.liveBonus);
+      const basePointApplied = step.point / step.liveBonus;
+      resultText += `<tr><td>${i + 1}</td><td>${step.point}Pt</td><td>${Math.floor(basePointApplied)}Pt</td><td>[${step.scoreLower} ~ ${step.scoreUpper}]</td><td>${liveBonusIndex}個</td><td>${step.liveBonus}倍</td></tr>`;
+  }
+  
+  resultText += `</tbody></table>`;
+  return resultText;
 }
 function updateEventBonus(newEventBonus) {
   document.getElementById('eventBonus').value = newEventBonus;

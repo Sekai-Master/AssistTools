@@ -72,7 +72,7 @@ function findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint 
 
   if (!result) {
     let resultText = `[${eventBonus}%]でのポイント調整は不可能でした。\n`;
-    const adjustments = [-10, -15, -20];
+    const adjustments = [-10, -15, -20, -50];
     adjustments.forEach(adjustment => {
       const adjustedEventBonus = eventBonus + adjustment;
       const adjustedScoreList = generateScoreList(adjustedEventBonus, basePoint);
@@ -82,8 +82,8 @@ function findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint 
     return resultText;
   }
 
-  let resultText = `目標ポイント : [${targetPoints}Pt]\n`;
-  resultText += `必要ポイント : [${pointDifference}Pt]\n`;
+  let resultText = `目標ポイント : [${targetPoints.toLocaleString()}Pt]\n`;
+  resultText += `必要ポイント : [${pointDifference.toLocaleString()}Pt]\n`;
   resultText += `イベントボーナス : [${eventBonus}%]\n\n`;
 
   for (let i = 0; i < result.length; i++) {
