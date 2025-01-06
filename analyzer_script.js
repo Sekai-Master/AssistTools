@@ -51,85 +51,105 @@ function findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint 
 
         for (let i = 0; i <= target; i++) {
             if (dp[i]) {
-              for (let item of scoreList) {
+                for (let item of scoreList) {
                     const num = item.result;
                     if (i + num <= target) {
-                       if (!dp[i + num] || combination[i + num].length > combination[i].length + 1) {
+                        if (!dp[i + num] || combination[i + num].length > combination[i].length + 1) {
                             dp[i + num] = true;
                             combination[i + num] = [...combination[i], { point: num, scoreLower: item.scoreLower, scoreUpper: item.scoreUpper, liveBonus: liveBonusMultipliers[item.liveBonusIndex] }];
-                       }
-                   }
-             }
-          }
+                        }
+                    }
+                }
+            }
         }
         if (dp[target]) {
-           return combination[target];
-          } else {
-              return null;
+            return combination[target];
+        } else {
+            return null;
         }
-     }
+    }
 
     const result = canMakeSum(pointDifference, scoreList);
     if (!result) {
-      let resultText = `[${eventBonus}%]でのポイント調整は不可能でした。\n`;
-      resultText += `必要ポイント : [${pointDifference.toLocaleString()}Pt]\n\n`;
-      const adjustments = [-10, -15, -20, -30, -50, -60, -75, -80, -100, -120, -140, -150, -160, -180, -200, -220, -240, -250, -260, -280, -300];
-      let validAdjustments = [];
-      let currentBonus = eventBonus;
-  
-      for (let i = 0; i < adjustments.length; i++) {
-          currentBonus += adjustments[i];
-          if (currentBonus < 0) {
-              break;
-          }
-          const adjustedScoreList = generateScoreList(currentBonus, basePoint, maxScore);
-          const adjustedResult = canMakeSum(pointDifference, adjustedScoreList);
-          if (adjustedResult) {
-              validAdjustments.push(currentBonus);
-              if (validAdjustments.length === 4) {
-                  break;
-              }
-          }
-      }
-  
-      if (validAdjustments.length > 0) {
-          resultText += "調整可能なイベントボーナス値:\n<div class='result-container'>";
-          validAdjustments.forEach(adjustment => {
-              resultText += `<div class="result-item"><span>[${adjustment}%]</span> <button onclick="updateEventBonus(${adjustment})">選択</button></div>`;
-          });
-          resultText += "</div>";
-      } else {
-          resultText += "イベントボーナス値の変更、または[詳細設定]から[最大スコア]の変更を検討してください。\n";
-      }
-  
-      return resultText;
-  }
-  
-  let resultText = `目標ポイント : [${targetPoints.toLocaleString()}Pt]\n`;
-  resultText += `必要ポイント : [${pointDifference.toLocaleString()}Pt]\n`;
-  resultText += `イベントボーナス : [${eventBonus}%]\n\n`;
-  
-  resultText += `<table class="result-table"><thead><tr><th>#</th><th>ポイント</th><th>基礎ポイント</th><th>スコア範囲</th><th>ライブボーナス</th><th>LB消費</th></tr></thead><tbody>`;
-  
-  for (let i = 0; i < result.length; i++) {
-      const step = result[i];
-      const liveBonusIndex = liveBonusMultipliers.indexOf(step.liveBonus);
-      const basePointApplied = step.point / step.liveBonus;
-      resultText += `<tr><td>${i + 1}</td><td>${step.point}Pt</td><td>${Math.floor(basePointApplied)}Pt</td><td>[${step.scoreLower} ~ ${step.scoreUpper}]</td><td>${liveBonusIndex}個</td><td>${step.liveBonus}倍</td></tr>`;
-  }
-  
-  resultText += `</tbody></table>`;
-  return resultText;
+        let resultText = `[${eventBonus}%]でのポイント調整は不可能でした。\n`;
+        resultText += `必要ポイント : [${pointDifference.toLocaleString()}Pt]\n\n`;
+        const adjustments = [-10, -15, -20, -30, -50, -60, -75, -80, -100, -120, -140, -150, -160, -180, -200, -220, -240, -250, -260, -280, -300];
+        let validAdjustments = [];
+        let currentBonus = eventBonus;
+
+        for (let i = 0; i < adjustments.length; i++) {
+            currentBonus += adjustments[i];
+            if (currentBonus < 0) {
+                break;
+            }
+            const adjustedScoreList = generateScoreList(currentBonus, basePoint, maxScore);
+            const adjustedResult = canMakeSum(pointDifference, adjustedScoreList);
+            if (adjustedResult) {
+                validAdjustments.push(currentBonus);
+                if (validAdjustments.length === 4) {
+                    break;
+                }
+            }
+        }
+
+        if (validAdjustments.length > 0) {
+            resultText += "調整可能なイベントボーナス値:\n<div class='result-container'>";
+            validAdjustments.forEach(adjustment => {
+                resultText += `<div class="result-item"><span>[${adjustment}%]</span> <button onclick="updateEventBonus(${adjustment})">選択</button></div>`;
+            });
+            resultText += "</div>";
+        } else {
+            resultText += "イベントボーナス値の変更、または[詳細設定]から[最大スコア]の変更を検討してください。\n";
+        }
+
+        return resultText;
+    }
+
+    let resultText = `
+<div class="result-summary">
+    <div>
+        <span>目標ポイント</span>
+        <span id="targetPointsDisplay">${targetPoints.toLocaleString()} Pt</span>
+    </div>
+    <div>
+        <span>現在のポイント</span>
+        <span id="currentPointsDisplay">${currentPoints.toLocaleString()} Pt</span>
+    </div>
+    <div>
+        <span>目標までの残り</span>
+        <span id="pointDifferenceDisplay">${pointDifference.toLocaleString()} Pt</span>
+    </div>
+    <div>
+        <span>イベントボーナス</span>
+        <span>${eventBonus} %</span>
+    </div>
+</div>
+`;
+
+    resultText += `<table class="result-table"><thead><tr><th>✅</th><th>#</th><th>ポイント</th><th>基礎ポイント</th><th>スコア範囲</th><th><img src="images/LB.png" alt="LB" class="lb-icon">消費</th><th>LB効果</th></tr></thead><tbody>`;
+
+    for (let i = 0; i < result.length; i++) {
+        const step = result[i];
+        const liveBonusIndex = liveBonusMultipliers.indexOf(step.liveBonus);
+        const basePointApplied = step.point / step.liveBonus;
+        resultText += `<tr><td><input type="checkbox" class="play-checkbox" data-point="${step.point}"></td><td>${i + 1}</td><td>${step.point}Pt</td><td>${Math.floor(basePointApplied)}Pt</td><td>[${step.scoreLower} ~ ${step.scoreUpper}]</td><td>${liveBonusIndex}個</td><td>${step.liveBonus}倍</td></tr>`;
+    }
+
+    resultText += `</tbody></table>`;
+    return resultText;
 }
+
 function updateEventBonus(newEventBonus) {
-  document.getElementById('eventBonus').value = newEventBonus;
-   calculate();
+    document.getElementById('eventBonus').value = newEventBonus;
+    calculate();
 }
+
 function convertToHalfWidth(str) {
     return str.replace(/[！-～]/g, function(s) {
         return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
-   }).replace(/　/g, " ");
+    }).replace(/　/g, " ");
 }
+
 function validateNumericInput(input) {
     const value = input.value;
     const halfWidthValue = convertToHalfWidth(value);
@@ -138,9 +158,29 @@ function validateNumericInput(input) {
         input.value = "";
     } else {
         input.value = halfWidthValue;
-   }
+    }
 }
-    
+
+function updatePoints() {
+    const checkboxes = document.querySelectorAll('.play-checkbox');
+    let playedPoints = 0;
+    checkboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+            playedPoints += parseInt(checkbox.getAttribute('data-point'), 10);
+            checkbox.closest('tr').classList.add('played');
+        } else {
+            checkbox.closest('tr').classList.remove('played');
+        }
+    });
+
+    const currentPoints = parseInt(convertToHalfWidth(currentPointsInput.value), 10) + playedPoints;
+    const targetPoints = parseInt(convertToHalfWidth(targetPointsInput.value), 10);
+    const pointDifference = targetPoints - currentPoints;
+
+    document.getElementById('currentPointsDisplay').textContent = `${currentPoints.toLocaleString()} Pt`;
+    document.getElementById('pointDifferenceDisplay').textContent = `${pointDifference.toLocaleString()} Pt`;
+}
+
 const currentPointsInput = document.getElementById('currentPoints');
 const targetPointsInput = document.getElementById('targetPoints');
 const eventBonusInput = document.getElementById('eventBonus');
@@ -174,5 +214,12 @@ document.addEventListener('DOMContentLoaded', function() {
        validateNumericInput(eventBonusInput);
        calculate();
    });
+
+    document.addEventListener('change', function(event) {
+        if (event.target.classList.contains('play-checkbox')) {
+            updatePoints();
+        }
+    });
+
      calculate();
  });

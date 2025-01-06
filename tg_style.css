@@ -191,7 +191,7 @@ main h1:after {
 
 .button-group button {
   padding: 10px 1vw;
-  font-size: 1.2vw;
+  font-size: 1em;
   color: white;
   background-color: #2196F3;
   border: 3px solid #90CAF9;

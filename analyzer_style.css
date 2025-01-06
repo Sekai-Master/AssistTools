@@ -20,12 +20,12 @@ main .container {
 /* 項目名 */
 .input-group label {
     display: block;
-  font-weight: bold;
-  color: #494949;
-  background: #f4f4f4;
+    font-weight: bold;
+    color: #494949;
+    background: #f4f4f4;
     border-left: solid 5px #7db4e6;
     border-bottom: solid 3px #d7d7d7;
-  padding: 0.4em 0.5em;
+    padding: 0.4em 0.5em;
 }
 
 .input-group input {
@@ -36,12 +36,12 @@ main .container {
   border-radius: 8px;
   margin-top: 5px;
 }
+
 #result {
     text-align: center;
     margin-top: 20px;
     font-size: 1.2em;
     line-height: 1.6;
-    white-space: pre-wrap;
     background-color: #f9f9f9;
     padding: 20px;
     border-radius: 8px;
@@ -103,6 +103,98 @@ main .container {
   background-color: #f9f9f9;
 }
 
-.result-table tr:hover {
-  background-color: #f1f1f1;
+.result-table tr.played {
+  background-color: #d3ffd3; /* プレイ済みの行を緑色に */
+  text-decoration: line-through; /* テキストに取り消し線を追加 */
+}
+
+
+
+/* プレイ済み行のスタイル */
+.played {
+    background-color: #d3ffd3; /* プレイ済みの行を緑色に */
+    text-decoration: line-through; /* テキストに取り消し線を追加 */
+}
+
+.result-summary {
+    display: flex;
+    justify-content: space-around;
+    padding: 10px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.result-summary div {
+    text-align: center;
+}
+
+.result-summary span {
+    display: block;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 5px;
+}
+
+/* LBアイコンのスタイル */
+.lb-icon {
+  width: 28px; /* アイコンの幅を20pxに設定 */
+  height: auto; /* アスペクト比を維持 */
+  vertical-align: middle; /* テキストとアイコンを縦方向に中央揃え */
+  margin-right: 5px; /* アイコンとテキストの間に余白を追加 */
+}
+
+/* モバイル端末用のレイアウト */
+@media screen and (max-width: 768px) {
+    main .container {
+        padding: 10px;
+    }
+
+    .input-group label {
+        font-size: 0.9em;
+        padding: 0.3em 0.4em;
+    }
+
+    .input-group input {
+        padding: 6px;
+        font-size: 0.9em;
+    }
+
+    #result {
+        font-size: 1em;
+        padding: 15px;
+    }
+
+    .result-item {
+        width: 45%;
+        margin: 2.5%;
+        padding: 8px;
+    }
+
+    .result-item span {
+        font-size: 0.9em;
+    }
+
+    .result-item button {
+        padding: 4px 8px;
+        font-size: 0.9em;
+    }
+
+    .result-table th, .result-table td {
+        padding: 6px;
+        font-size: 0.9em;
+    }
+
+    .result-summary {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .result-summary div {
+        margin-bottom: 10px;
+    }
+
+    .result-summary span {
+        font-size: 0.9em;
+    }
 }

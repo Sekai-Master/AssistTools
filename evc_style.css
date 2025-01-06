@@ -311,7 +311,7 @@ label[for="effective-value"] {
 .mode-switch label {
   display: inline-block;
   position: relative;
-  width: 50vw;
+  width: 70%;
   height: 70px;
   cursor: pointer;
   transition: background-color 0.4s ease;
@@ -326,7 +326,7 @@ label[for="effective-value"] {
   position: absolute;
   top: 10px;
   left: 10px;
-  width: 22vw;
+  width: 44%;
   height: 50px;
   background-color: #fff;
   border-radius: 15px;
@@ -348,7 +348,7 @@ label[for="effective-value"] {
 }
 
 .mode-switch input[type="checkbox"]:checked + label:before {
-  transform: translateX(calc(100% - -15%));
+  transform: translateX(calc(100% - -19%));
 }
 
 .mode-label {
@@ -356,7 +356,7 @@ label[for="effective-value"] {
   top: 50%;
   transform: translateY(-50%);
   line-height: 1;
-  font-size: 1.5vw;
+  font-size: 1.2em;
   font-weight: bold;
   transition: color 0.3s ease;
   z-index: 1; 
@@ -613,7 +613,7 @@ input:checked + .slider:before {
   }
 
   .mode-label {
-    font-size: 3.3vw;
+    font-size: 3.4vw;
   }
 
   .mode-label-right {
