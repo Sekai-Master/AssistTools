@@ -14,27 +14,75 @@ main .container {
 }
 
 .input-group {
-  margin-bottom: 15px;
+    margin-bottom: 15px;
+    flex: 1;
+    min-width: 200px;
 }
 
 /* 項目名 */
-.input-group label {
+.input-group select {
+    padding: 0.7em;
+    margin-top: 5px;
+    border-radius: 0.5em;
+    width: 100%;
+}
+
+.miniLabel {
     display: block;
     font-weight: bold;
     color: #494949;
     background: #f4f4f4;
-    border-left: solid 5px #7db4e6;
     border-bottom: solid 3px #d7d7d7;
     padding: 0.4em 0.5em;
+    margin-bottom: 5px;
 }
 
+.miniLabel[for="targetPoints"],
+.miniLabel[for="currentPoints"] {
+    border-left: solid 5px #FF6699;
+}
+
+.miniLabel[for="eventBonus"],
+.miniLabel[for="modeToggle"],
+.miniLabel[for="finalPoints"] {
+    border-left: solid 5px #00BBDD;
+}
+
+.mainLabel {
+    background-color: rgba(248, 248, 248, 0.8);
+    box-shadow: 3px 3px 6px #bebebe, -3px -3px 6px #ffffff;
+    font-weight: bold;
+    padding: 10px 10px;
+    border-radius: 5px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    z-index: 10;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 1.2em;
+}
+
+/* ポイント入力関連の項目のボーダーカラー */
+.mainLabel[for="targetPoints"] {
+    border-bottom:4px solid #FF6699;
+}
+
+/* モード選択関連の項目のボーダーカラー */
+.mainLabel[for="modeToggle"] {
+    border-bottom:4px solid #00BBDD;
+}
+
+
 .input-group input {
-  width: 100%;
-  padding: 8px;
-  box-sizing: border-box;
-  border: 1px solid #90CAF9;
-  border-radius: 8px;
-  margin-top: 5px;
+    width: 100%;
+    padding: 0.8em;
+    box-sizing: border-box;
+    border: 1px solid #90CAF9;
+    border-radius: 0.5em;
+    margin-top: 5px;
+    font-size: 0.8em;
 }
 
 #result {
@@ -49,9 +97,10 @@ main .container {
 }
 
 .result-item {
-    display: inline-block;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     width: 20%;
-    margin: 1%;
     padding: 10px;
     background-color: #f9f9f9;
     border: 1px solid #ddd;
@@ -61,7 +110,6 @@ main .container {
 }
 
 .result-item span {
-    display: block;
     font-weight: bold;
     color: #333;
     margin-bottom: 5px;
@@ -83,24 +131,24 @@ main .container {
 
 /* テーブルのスタイル */
 .result-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 20px;
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
 }
 
 .result-table th, .result-table td {
-  border: 1px solid #ddd;
-  padding: 8px;
-  text-align: center;
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: center;
 }
 
 .result-table th {
-  background-color: #f2f2f2;
-  font-weight: bold;
+    background-color: #f2f2f2;
+    font-weight: bold;
 }
 
 .result-table tr:nth-child(even) {
-  background-color: #f9f9f9;
+    background-color: #f9f9f9;
 }
 
 .result-table tr.played {
@@ -144,6 +192,27 @@ main .container {
   margin-right: 5px; /* アイコンとテキストの間に余白を追加 */
 }
 
+.result-message {
+    font-size: 1.2em;
+    margin-top: 20px;
+    margin-bottom: 10px;
+    color: #d9534f; /* 赤色で強調 */
+}
+
+.result-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.input-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
 /* モバイル端末用のレイアウト */
 @media screen and (max-width: 768px) {
     main .container {
@@ -166,7 +235,7 @@ main .container {
     }
 
     .result-item {
-        width: 45%;
+        width: 35%;
         margin: 2.5%;
         padding: 8px;
     }
@@ -196,5 +265,9 @@ main .container {
 
     .result-summary span {
         font-size: 0.9em;
+    }
+
+    .input-row {
+        flex-direction: column;
     }
 }

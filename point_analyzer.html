@@ -18,16 +18,37 @@
         <div class="container">
             <h1>ポイント調整アナライザー</h1>
             <div class="input-group">
-                <label for="targetPoints">目標イベントポイント</label>
-                <input type="number" id="targetPoints" placeholder="目標イベントポイントを入力してください">
-            </div> 
-            <div class="input-group">
-                <label for="currentPoints">現在のイベントポイント</label>
-                <input type="number" id="currentPoints" placeholder="現在のイベントポイントを入力してください">
+                <label class="mainLabel" for="targetPoints">ポイント入力</label>
+                <div class="input-row">
+                    <div class="input-group">
+                        <label class="miniLabel" for="targetPoints">目標イベントポイント</label>
+                        <input type="number" id="targetPoints" placeholder="目標イベントポイントを入力してください">
+                    </div>
+                    <div class="input-group">
+                        <label class="miniLabel" for="currentPoints">現在のイベントポイント</label>
+                        <input type="number" id="currentPoints" placeholder="現在のイベントポイントを入力してください">
+                    </div>
+                </div>
             </div>
             <div class="input-group">
-                <label for="eventBonus">イベントボーナス</label>
-                <input type="number" id="eventBonus" placeholder="イベントボーナスを入力してください" value="350">
+                <label class="mainLabel" for="modeToggle">モード選択</label>
+                <div class="input-row">
+                    <div class="input-group">
+                        <label class="miniLabel" for="modeToggle">モード選択</label>
+                        <select id="modeToggle">
+                            <option value="eventBonus">イベントボーナス基軸</option>
+                            <option value="finalPoints">最終回獲得ポイント基軸(作成中・ご利用になれません)</option>
+                        </select>
+                    </div>
+                    <div class="input-group" id="eventBonusGroup">
+                        <label class="miniLabel" for="eventBonus">イベントボーナス</label>
+                        <input type="number" id="eventBonus" placeholder="イベントボーナスを入力してください" value="350">
+                    </div>
+                    <div class="input-group" id="finalPointsGroup" style="display: none;">
+                        <label class="miniLabel" for="finalPoints">最終回獲得ポイント</label>
+                        <input type="number" id="finalPoints" placeholder="最終回獲得ポイントを入力してください">
+                    </div>
+                </div>
             </div>
             <div id="result"></div>
         </div>
