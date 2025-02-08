@@ -39,29 +39,10 @@
                     <div class="input-row">
                         <div class="input-group">
                             <label class="miniLabel add-LeftLine-02">モード選択</label>
-                            <div class="cp_ipselect08">
-                                <ul class="selectbox">
-                                    <li>
-                                    <input class="selectbox_close" type="radio" name="awesomeness" id="close" value=""/>
-                                    <span class="selectbox_label selectbox_placeholder">Choose Mode</span>
-                                    </li>
-                                    <li class="selectbox_items">
-                                    <input class="selectbox_expand" type="radio" name="option08" id="opener"/>
-                                    <label class="selectbox_closeLabel" for="close"></label>
-                                    <ul class="selectbox_options">
-                                        <li>
-                                        <input class="selectbox_input" type="radio" name="option08" id="cat"/>
-                                        <label class="selectbox_label" for="cat">イベントボーナス基軸</label>
-                                        </li>
-                                        <li>
-                                        <input class="selectbox_input" type="radio" name="option08" id="dog"/>
-                                        <label class="selectbox_label" for="dog">最終回獲得ポイント基軸(作成中・ご利用になれません)</label>
-                                        </li>
-                                    </ul>
-                                    <label class="selectbox_expandLabel" for="opener"></label>
-                                    </li>
-                                </ul>
-                            </div>
+                            <select class="selectbox" id="modeToggle">
+                                <option value="eventBonus">イベントボーナス基軸</option>
+                                <option value="finalPoints">最終回獲得ポイント基軸(作成中・ご利用になれません)</option>
+                            </select>
                         </div>
                         <div class="input-group" id="eventBonusGroup">
                             <label class="miniLabel add-LeftLine-02">イベントボーナス</label>
