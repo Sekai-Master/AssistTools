@@ -1,64 +1,9 @@
-/* --- 全体的なフォント --- */
-body {
-  font-family: "M PLUS Rounded 1c", sans-serif;
-  font-weight: 400;
-  font-style: normal;
-  margin: 0px;
-  background-color: #f0f0f0; /* トップページに合わせて背景色を修正 */
-}
-
-.container {
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 0 20px;
-  box-sizing: border-box;
-}
-
-main .container { 
-  margin: 20px auto; /* 上下左右の中央に配置 */
-  padding: 20px;
-  border-radius: 12px;
-  box-sizing: border-box;/*padding,borderを幅計算に含める */
-  box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff; /* トップページに合わせて影を変更 */
-}
-
-/* 見出し */
-h1 {
-  color: #333;
-  text-align: center;
-  margin-bottom: 20px;
-  margin-top: 5px;
-  position: relative;
-  line-height: 1.4;
-  padding: 0.25em 1em;
-  top: 0;
-  font-size: clamp(1em, 6vw, 3em);
-}
-
-/* ヘッダー内のh1には適用しない */
-main h1:before,
-main h1:after {
-  position: absolute;
-  top: 0;
-  content: '';
-  width: 8px;
-  height: 100%;
-  display: inline-block;
-}
-
-main h1:before {
-  border-left: solid 1px black;
-  border-top: solid 1px black;
-  border-bottom: solid 1px black;
-  left: 0;
-}
-
-main h1:after {
-  content: '';
-  border-top: solid 1px black;
-  border-right: solid 1px black;
-  border-bottom: solid 1px black;
-  right: 0;
+:root {
+  --unit-corlor: var(--leo-need);
+  --member-color-01: var(--hoshino-ichika);
+  --member-color-02: var(--tenma-saki);
+  --member-color-03: var(--mochizuki-honami);
+  --member-color-04: var(--hinomori-shiho);
 }
 
 /* 入力グループ */
@@ -426,14 +371,6 @@ input:checked + .slider:before {
   cursor: pointer;
 }
 
-.footer {
-  background-color: #f1f1f1;
-  text-align: center;
-  padding: 10px 0;
-  bottom: 0;
-  width: 100%;
-}
-
 /* プレビュー実装*/
 .content {
   display: flex;
@@ -548,10 +485,6 @@ form {
    }
 }
 @media screen and (max-width: 768px) {
-  .container {
-    max-width: 95%;
-  }
-
   .content {
     /*flex-direction: column;*/
     margin: 1.5vw 3vw;

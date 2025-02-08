@@ -1,0 +1,430 @@
+/* root設定 */
+:root {
+    --unit-corlor: #555;
+    --member-color-01: #555;
+    --member-color-02: #555;
+    --member-color-03: #555;
+    --member-color-04: #555;
+
+    /* VIRTUAL SINGER */
+    --hatune-miku: #3CB;             /* 初音ミク */
+    --kagamine-rin: #FC1;            /* 鏡音リン */
+    --kagamine-len: #FE1;            /* 鏡音レン */
+    --megurine-luka: #fbc;           /* 巡音ルカ */
+    --meiko: #d44;                   /* MEIKO */
+    --kaito: #36c;                   /* KAITO */
+
+    /* Leo/need */
+    --leo-need: #45D;                /* Leo/need */
+    --hoshino-ichika: #3AE;          /* 星乃一歌 */
+    --tenma-saki: #FD4;              /* 天馬咲希 */
+    --mochizuki-honami: #F66;        /* 望月穂波 */
+    --hinomori-shiho: #BD2;          /* 日野森志歩 */
+
+    /* MORE MORE JUMP! */
+    --more-more-jump: #8d4;          /* MORE MORE JUMP! */
+    --hanasato-minori: #fca;         /* 花里みのり */
+    --kiritani-haruka: #9cf;         /* 桐谷遥 */
+    --momoi-airi: #fac;              /* 桃井愛莉 */
+    --hinomori-shizuku: #9ed;        /* 日野森雫 */
+
+    /* Vivid BAD SQUAD */
+    --vivid-bad-squad: #E16;         /* Vivid BAD SQUAD */
+    --azusawa-kohane: #F69;          /* 小豆沢こはね */
+    --shiraishi-anne: #0Bd;          /* 白石杏 */
+    --shinonome-akito: #F72;         /* 東雲彰人 */
+    --aoyagi-toya: #07D;             /* 青柳冬弥 */
+
+    /* ワンダーランズ×ショウタイム */
+    --wonderlands-showtime: #F90;    /* ワンダーランズ×ショウタイム */
+    --tenma-tsukasa: #FB0;           /* 天馬 司 */
+    --otori-emu: #F6B;               /* 鳳 えむ */
+    --kusunagi-nene: #3D9;           /* 草薙 寧々 */
+    --kamishiro-rui: #B8E;           /* 神代 類 */
+
+    /* 25時、ナイトコードで。 */
+    --nightcodede: #849;             /* 25時、ナイトコードで。 */
+    --yoisaki-kanade: #B68;          /* 宵崎奏 */
+    --asahina-mafuyu: #88C;          /* 朝比奈まふゆ */
+    --shinonome-ena: #CA8;           /* 東雲絵名 */
+    --akiyama-mizuki: #DAC;          /* 暁山瑞希 */
+
+
+}
+
+/* 共通設定 */
+body {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    margin: 0;
+    background-color: #f0f0f0;
+    color: #333;
+    line-height: 1.6;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    font-weight: 400;
+    font-style: normal;
+}
+
+/* fooderを最下部に配置するための仕掛け */
+.wrapper{
+    min-height: 94vh;
+    position: relative;/*←相対位置*/
+    padding-bottom: 20px;/*←footerの高さ*/
+    box-sizing: border-box;/*←全て含めてmin-height:100vhに*/
+    }
+
+/* H1の設定(要テーマカラー設定) */
+.title  {
+    display: flex;
+    justify-content: start;
+    align-items: center;
+    position: relative;
+    padding: .5em .7em;
+    overflow: hidden;
+    border: 2px solid var(--unit-corlor);
+    border-radius: 8px;
+    color: #333333;
+}
+
+.title:before {
+    position: absolute;
+    top: -20vw;
+    left: -37vw;
+    z-index: 0;
+    transform: rotate(25deg);
+    width: 40vw;
+    height: 80vw;
+    background-color: var(--unit-corlor);
+    content: '';
+}
+
+.title span {
+    margin-right: 10vw;
+    margin-left: 2vw;
+    color: #fff;
+    font-size: 1.1em;
+    z-index: 1;
+}
+
+/* コンテナのスタイル */
+.container {
+    max-width: 1000px;
+    margin: 20px auto;
+    padding: 20px;
+    background-color: #f0f0f0;
+    border-radius: 12px;
+    box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff;
+    box-sizing: border-box;
+}
+
+/* ラベルのスタイル */
+.mainLabel {
+    background-color: rgba(248, 248, 248, 0.8);
+    box-shadow: 3px 3px 6px #bebebe, -3px -3px 6px #ffffff;
+    font-weight: bold;
+    padding: 10px 10px;
+    border-radius: 5px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    z-index: 10;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 1.2em;
+}
+
+.add-Border-01 {
+    border-bottom:4px solid var(--member-color-01);
+}
+
+.add-Border-02 {
+    border-bottom:4px solid var(--member-color-02);
+}
+
+.add-Border-03 {
+    border-bottom:4px solid var(--member-color-03);
+}
+
+.add-Border-04 {
+    border-bottom:4px solid var(--member-color-04);
+}
+
+.miniLabel {
+    box-shadow: 3px 3px 6px #bebebe, -3px -3px 6px #ffffff;
+    display: block;
+    font-weight: bold;
+    color: #494949;
+    background: #f4f4f4;
+    padding: 0.4em 0.5em;
+    margin-bottom: 5px;
+    white-space: nowrap; /* ラベルの折り返しを防ぐ */
+}
+
+.miniLabel-width {
+    min-width: 160px;
+    max-width: 180px;
+    text-align: justify;
+}
+
+.add-LeftLine-01 {
+    border-left: 5px solid var(--member-color-01);
+}
+
+.add-LeftLine-02 {
+    border-left: 5px solid var(--member-color-02);
+}
+
+.add-LeftLine-03 {
+    border-left: 5px solid var(--member-color-03);
+}
+
+.add-LeftLine-04 {
+    border-left: 5px solid var(--member-color-04);
+}
+
+/* selectbox */
+.cp_ipselect08 * {
+    position: relative;
+    margin: 0;
+    padding: 0;
+}
+.selectbox {
+    display: block;
+    width: 100%;
+    margin-top: 5px;
+    border-radius: 0.5em;
+    cursor: pointer;
+}
+/*ラジオボタンの制御*/
+.cp_ipselect08 input {
+    margin: 0;
+    background: transparent;
+    outline: none;
+    border: none;
+    appearance: none;
+    display:none;
+}
+.selectbox_input,
+.selectbox_close {
+    display: none;
+}
+.cp_ipselect08 ul {
+    list-style: none;
+    padding: 0;
+}
+.selectbox_expand {
+    position: relative;
+    top: 0;
+    right: 0;
+    width: 0;
+    height: 40px;
+}
+/*プルダウンの三角を設定*/
+.selectbox_expandLabel,
+.selectbox_closeLabel {
+    width: 100%;
+    height: 40px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    cursor: pointer;
+}
+.selectbox_expandLabel {
+    display: block;
+}
+.selectbox_expandLabel::after {
+    position: absolute;
+    top: 1.2em;
+    right: 0.5em;
+    content: '';
+    width: 16px;
+    height: 8px;
+    background: #aaa;
+    clip-path: polygon(0 0, 100% 0, 50% 100%);
+    transition: all 250ms cubic-bezier(0.4,0.25,0.3,1);
+    z-index: 2;
+    opacity: 0.6;
+}
+.selectbox_closeLabel {
+    display: none;
+}
+.selectbox_closeLabel::after {
+    position: absolute;
+    top: 1.2em;
+    right: 0.5em;
+    content: '';
+    width: 16px;
+    height: 8px;
+    background: #aaa;
+    clip-path: polygon(0 100%, 100% 100%, 50% 0);
+    transition: all 250ms cubic-bezier(0.4,0.25,0.3,1);
+    z-index: 2;
+    opacity: 0.6;
+}
+/*選択肢部分*/
+.selectbox_items {
+    top: 0;
+    left: 0;
+    border: 2px solid var(--unit-corlor);
+    border-radius: 0.5em;
+    padding-top: 40px;
+}
+.selectbox_label {
+    display: flex;
+    align-items: center;
+    height: 0;
+    overflow: hidden;
+    padding-left: 20px;
+    color: #3e3e3e;
+    background-color: #ffffff;
+    cursor: pointer;
+    transition: all 250ms cubic-bezier(0.4,0.25,0.3,1);
+    border-radius: 0.5em;
+}
+.selectbox_placeholder {
+    height: 40px;
+    vertical-align: middle;
+    position: absolute;
+    top: 0;
+    left: 0;
+    opacity: 0.6;
+    background-color: transparent;
+}
+/*ラジオボタンにチェックが入った時の処理*/
+.selectbox_expand:checked + .selectbox_closeLabel {
+    display: block;
+}
+.selectbox_expand:checked + .selectbox_closeLabel + .selectbox_options .selectbox_label {
+    height: 40px;
+}
+.selectbox_expand:checked + .selectbox_closeLabel + .selectbox_options .selectbox_label:hover {
+    background-color: #f7f7f7;
+}
+.selectbox_expand:checked + .selectbox_closeLabel + .selectbox_options + .selectbox_expandLabel {
+    display: none;
+}
+.selectbox_input:checked + .selectbox_label {
+    height: 40px;
+    margin-top: -40px;
+}
+
+/* input */
+
+.input-group {
+    margin-bottom: 15px;
+}
+
+.input-group input,
+.input-group select {
+    width: 100%;
+    padding: 0.8em;
+    box-sizing: border-box;
+    border: 1px solid var(--unit-corlor);
+    border-radius: 0.5em;
+    margin-top: 5px;
+    font-size: 0.8em;
+}
+
+.input-group input:focus,
+.input-group select:focus {
+    outline: none;
+    border: 2px solid var(--unit-corlor);
+}
+
+.input-wrapper {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
+/* ボタンのスタイル */
+.button {
+    padding: 10px 1vw;
+    font-size: 1em;
+    color: white;
+    background-color: #2196F3;
+    border: 3px solid #90CAF9;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+}
+
+.button:hover {
+    background-color: #33AAEE;
+    border-color: white;
+}
+
+/* スイッチのスタイル */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 34px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: #2196F3;
+}
+
+input:checked + .slider:before {
+    transform: translateX(26px);
+}
+
+/* footerのスタイル */
+footer {
+    background-color: #fff;
+    text-align: center;
+    padding: 10px 0;
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    bottom: 0
+}
+
+
+@media screen and (max-width: 768px) {
+    body {
+    font-size: 3.5vw;
+    }
+
+    .title:before {
+        left: -26vw;
+    }
+
+    .container {
+    max-width: 85%;
+    padding: 15px;
+    }
+}

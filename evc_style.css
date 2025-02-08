@@ -1,120 +1,9 @@
-body {
-  font-family: "M PLUS Rounded 1c", sans-serif;
-  font-weight: 400;
-  font-style: normal;
-  margin: 0px;
-  background-color: #f0f0f0; /* トップページに合わせて背景色を修正 */
-}
-
-.container {
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 0 20px;
-  box-sizing: border-box;
-}
-
-main .container { 
-  margin: 20px auto; /* 上下左右の中央に配置 */
-  padding: 20px;
-  border-radius: 12px;
-  box-sizing: border-box;/*padding,borderを幅計算に含める */
-  box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff; /* トップページに合わせて影を変更 */
-}
-
-.footer {
-  background-color: #f1f1f1;
-  text-align: center;
-  padding: 10px 0;
-  bottom: 0;
-  width: 100%;
-  position: absolute;
-  }
-
-  .wrapper{
-  min-height: 100vh;
-  position: relative;/*←相対位置*/
-  padding-bottom: 120px;/*←footerの高さ*/
-  box-sizing: border-box;/*←全て含めてmin-height:100vhに*/
-  }
-
-.header {
-  max-width: 700px;
-  margin: 20px auto;
-  background-color: rgba(136, 221, 68, 0.8);
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0px 4px 10px rgba(68, 85, 221, 0.1);
-}
-
-.header h1 {
-  margin: 0;
-}
-
-/* 見出し */
-h1 {
-  color: #333;
-  text-align: center;
-  margin-bottom: 20px;
-  margin-top: 5px;
-  position: relative;
-  line-height: 1.4;
-  padding: 0.25em 1em;
-  top: 0;
-  font-size: clamp(1em, 6vw, 3em);
-}
-
-/* ヘッダー内のh1には適用しない */
-main h1:before,
-main h1:after {
-  position: absolute;
-  top: 0;
-  content: '';
-  width: 8px;
-  height: 100%;
-  display: inline-block;
-}
-
-main h1:before {
-  border-left: solid 1px black;
-  border-top: solid 1px black;
-  border-bottom: solid 1px black;
-  left: 0;
-}
-
-main h1:after {
-  content: '';
-  border-top: solid 1px black;
-  border-right: solid 1px black;
-  border-bottom: solid 1px black;
-  right: 0;
-}
-
-
-.input-group {
-  margin-bottom: 15px;
-}
-
-.input-group label {
-  background-color: rgba(248, 248, 248, 0.8);
-  box-shadow: 3px 3px 6px #bebebe, -3px -3px 6px #ffffff;
-  margin-top: 10px;
-  font-weight: bold;
-  padding: 10px 10px;
-  border-radius: 5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.input-group input,
-.input-group select {
-  width: 100%;
-  padding: 8px;
-  box-sizing: border-box;
-  border: 1px solid #90CAF9;
-  border-radius: 8px;
-  margin-top: 5px;
-  margin-bottom: 12px;
+:root {
+  --unit-corlor: var(--more-more-jump);
+  --member-color-01: var(--hanasato-minori);
+  --member-color-02: var(--kiritani-haruka);
+  --member-color-03: var(--momoi-airi);
+  --member-color-04: var(--hinomori-shizuku);
 }
 
 .input-group input::placeholder {
@@ -123,46 +12,6 @@ main h1:after {
   text-align: center;
 }
 
-.input-group input:focus {
-  outline: none;
-  border-color: #2196F3;
-}
-
-label[for="character-rank"],
-label[for="skill-level"] {
-  width: 160px;
-  text-align: justify;
-}
-
-label[for="character-rank"]::after,
-label[for="skill-level"]::after {
-  content: '';
-  display: inline-block;
-  width: 100%;
-}
-
-#character-rank-area input,
-#skill-level,
-#vs-skill-level {
-  width: 160px;
-  padding: 8px;
-  box-sizing: border-box;
-  border: 1px solid #90CAF9;
-  border-radius: 8px;
-  margin-top: 5px;
-  margin-bottom: 12px;
-}
-
-#character-rank-area .input-wrapper {
-  display: flex;
-  margin-bottom: 5px;
-  align-items: baseline;
-}
-
-#character-rank-area label {
-  white-space: nowrap; /* ラベルの折り返しを防ぐ */
-  margin-right: 10px;  /* ラベルとプルダウンの間に余白を追加 */
-}
 
 #skill-value-display,
 #vs-skill-value-display,
@@ -184,30 +33,6 @@ label[for="skill-level"]::after {
 }
 
 
-label[for="leader-skill"],
-label[for="op_leader-skill"],
-label[for="skill-level"], 
-label[for="character-type-selection"],
-label[for="character-rank"],
-label[for="unit-selection"],
-label[for="vs-skill-level"],
-label[for="oc-skill-level"]{
-  border-bottom: 4px solid #9cf;
-}
-
-label[for="inner-value"] {
-  border-bottom: 4px solid #FFAACC;
-}
-
-label[for="effective-value"] {
-  border-bottom: 4px solid #99EEDD;
-}
-
-.input-wrapper {
-  display: flex;
-  align-items: baseline;
-}
-
 .button-group {
   display: flex;
 }
@@ -224,13 +49,14 @@ label[for="effective-value"] {
   width: 100%;
   margin-bottom: 10px;
   margin-top: 10px;
+  gap: 5px;
 }
 
 .skill-buttons button,
 #training-selection button,
 #character-type-selection button {
-  background-color: #BBDD22;
-  border: 3px solid #88AA33;
+  background-color: var(--member-color-02);
+  border: 3px solid var(--member-color-02);
   color: white;
   padding: 8px 16px;
   font-size: 16px;
@@ -239,8 +65,6 @@ label[for="effective-value"] {
   box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
   transition: all 0.2s ease;
   flex: 1 0 auto;
-  margin-right: 5px;
-  margin-bottom: 5px;
   text-align: center;
 }
 
@@ -252,7 +76,7 @@ label[for="effective-value"] {
 .skill-buttons button:hover,
 #training-selection button:hover,
 #character-type-selection button:hover {
-  background-color: #AADD33;
+  background-color: var(--member-color-02);
   transform: translateY(-1px);
   box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.3);
 }
@@ -260,7 +84,7 @@ label[for="effective-value"] {
 .skill-buttons button.active,
 #training-selection button.active,
 #character-type-selection button.active {
-  background-color: #99CC33;
+  background-color: var(--member-color-02);
   border-color: white;
   color: white;
 }
@@ -269,34 +93,19 @@ label[for="effective-value"] {
 #training-selection button:not(.active),
 #character-type-selection button:not(.active) {
   background-color: white;
-  border-color: #88AA33;
+  border-color: var(--member-color-02);
   color: black;
 }
 
 .custom-input {
   display: flex;
   align-items: baseline;
-  margin-top: 5px;
+  gap: 10px;
 }
 
 #character-rank-area{
   display: flex;
   flex-wrap: wrap;
-}
-
-.custom-input label{
-  white-space: nowrap;
-  margin-right: 15px;
-  margin-left: 15px;
-  font-weight: bold;
-  background-color: rgba(248, 248, 248, 0.8);
-  padding: 5px 8px;
-  border-radius: 5px;
-}
-
-.custom-input .input-wrapper {
-  display: inline-flex;
-  align-items: baseline;
 }
 
 .mode-switch {
@@ -391,7 +200,7 @@ label[for="effective-value"] {
   width: 100%;
   padding: 8px;
   box-sizing: border-box;
-  border: 1px solid #90CAF9;
+  border: 1px solid var(--unit-corlor);
   border-radius: 8px;
 }
 
@@ -461,11 +270,11 @@ label[for="effective-value"] {
 }
 
 input:checked + .slider {
-  background-color: #2196F3;
+  background-color: var(--member-color-03);
 }
 
 input:focus + .slider {
-  box-shadow: 0 0 1px #2196F3;
+  box-shadow: 0 0 1px var(--member-color-03);
 }
 
 input:checked + .slider:before {
@@ -493,7 +302,7 @@ input:checked + .slider:before {
 #detail-input-area {
   background-color: rgba(248, 248, 248, 0.8);
   padding: 10px;
-  border: 1px solid #90CAF9;
+  border: 1px solid var(--unit-corlor);
   border-radius: 8px;
   margin-top: 10px; /* 上にマージンを追加 */
 }
@@ -502,7 +311,7 @@ input:checked + .slider:before {
   display: flex;
   width: 24%;
   /* margin-bottom: 5px; */
-  border: 1px solid #90CAF9;
+  border: 1px solid var(--unit-corlor);
   padding: 10px;
   border-radius: 10px;
   align-items: center;
@@ -515,12 +324,13 @@ input:checked + .slider:before {
   flex-wrap: nowrap; /* 横並びにする */
   justify-content: space-between; /* ボタン間を均等に配置 */
   margin-top: 10px;
+  gap:3px;
 }
 
 .unit-buttons button {
   flex: 1; /* ボタンの幅を均等にする */
   margin-bottom: 10px; /* ボタン間の垂直方向のマージン */
-  border: 3px solid #88AA33; /* ボタンの枠線 */
+  border: 3px solid #07D; /* ボタンの枠線 */
   padding: 10px; /* ボタンの内側余白 */
   border-radius: 8px; /* ボタンの角丸 */
   background-color: white;
@@ -533,8 +343,8 @@ input:checked + .slider:before {
 }
 
 .unit-buttons button.active {
-  background-color: #BBDD22; /* 選択時の背景色 */
-  border-color: #88AA33; /* 選択時の枠線の色 */
+  background-color: var(--member-color-02); /* 選択時の背景色 */
+  border-color: #07D; /* 選択時の枠線の色 */
   color: white; /* 選択時のテキストの色 */
 }
 
@@ -545,12 +355,6 @@ input:checked + .slider:before {
 
 #vs-skill-level-area {
   margin-top: 10px;
-}
-
-#vs-skill-level-area .input-wrapper {
-  display: flex;
-  margin-bottom: 5px;
-  align-items: baseline;
 }
 
 #vs-skill-level-area label {
@@ -634,7 +438,8 @@ input:checked + .slider:before {
   /* キャラクターランクとスキルレベルのラベル幅を揃える */
   #character-rank-area label,
   #skill-level-and-skill-value-display label { 
-    width: 160px; 
+    width: 10em; 
+    min-width: 10em;
   }
 
   .skill-level-and-skill-value-display{

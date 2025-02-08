@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ポイント調整アナライザー</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="common.css">
     <link rel="stylesheet" href="header.css">
     <link rel="stylesheet" href="analyzer_style.css">
     <script src="header.js" defer></script>
@@ -14,50 +14,75 @@
     <link rel="icon" href="images/icon.jpeg" type="image/jpeg">
 </head>
 <body>
-    <main>
-        <div class="container">
-            <h1>ポイント調整アナライザー</h1>
-            <div class="input-group">
-                <label class="mainLabel" for="targetPoints">ポイント入力</label>
-                <div class="input-row">
-                    <div class="input-group">
-                        <label class="miniLabel" for="targetPoints">目標イベントポイント</label>
-                        <input type="number" id="targetPoints" placeholder="目標イベントポイントを入力してください">
-                    </div>
-                    <div class="input-group">
-                        <label class="miniLabel" for="currentPoints">現在のイベントポイント</label>
-                        <input type="number" id="currentPoints" placeholder="現在のイベントポイントを入力してください">
-                    </div>
-                </div>
-            </div>
-            <div class="input-group">
-                <label class="mainLabel" for="modeToggle">モード選択</label>
-                <div class="input-row">
-                    <div class="input-group">
-                        <label class="miniLabel" for="modeToggle">モード選択</label>
-                        <select id="modeToggle">
-                            <option value="eventBonus">イベントボーナス基軸</option>
-                            <option value="finalPoints">最終回獲得ポイント基軸(作成中・ご利用になれません)</option>
-                        </select>
-                    </div>
-                    <div class="input-group" id="eventBonusGroup">
-                        <label class="miniLabel" for="eventBonus">イベントボーナス</label>
-                        <input type="number" id="eventBonus" placeholder="イベントボーナスを入力してください" value="350">
-                    </div>
-                    <div class="input-group" id="finalPointsGroup" style="display: none;">
-                        <label class="miniLabel" for="finalPoints">最終回獲得ポイント</label>
-                        <input type="number" id="finalPoints" placeholder="最終回獲得ポイントを入力してください">
+    <div class="wrapper">
+        <main>
+            <div class="container">
+                <h1 class="title">
+                    <span>03</span>
+                    ポイント調整アナライザー
+                </h1>
+                <div class="input-group">
+                    <label class="mainLabel add-Border-01">ポイント入力</label>
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label class="miniLabel add-LeftLine-01">目標イベントポイント</label>
+                            <input type="number" id="targetPoints" placeholder="目標イベントポイントを入力してください">
+                        </div>
+                        <div class="input-group">
+                            <label class="miniLabel add-LeftLine-01">現在のイベントポイント</label>
+                            <input type="number" id="currentPoints" placeholder="現在のイベントポイントを入力してください">
+                        </div>
                     </div>
                 </div>
+                <div class="input-group">
+                    <label class="mainLabel add-Border-02">モード選択</label>
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label class="miniLabel add-LeftLine-02">モード選択</label>
+                            <div class="cp_ipselect08">
+                                <ul class="selectbox">
+                                    <li>
+                                    <input class="selectbox_close" type="radio" name="awesomeness" id="close" value=""/>
+                                    <span class="selectbox_label selectbox_placeholder">Choose Mode</span>
+                                    </li>
+                                    <li class="selectbox_items">
+                                    <input class="selectbox_expand" type="radio" name="option08" id="opener"/>
+                                    <label class="selectbox_closeLabel" for="close"></label>
+                                    <ul class="selectbox_options">
+                                        <li>
+                                        <input class="selectbox_input" type="radio" name="option08" id="cat"/>
+                                        <label class="selectbox_label" for="cat">イベントボーナス基軸</label>
+                                        </li>
+                                        <li>
+                                        <input class="selectbox_input" type="radio" name="option08" id="dog"/>
+                                        <label class="selectbox_label" for="dog">最終回獲得ポイント基軸(作成中・ご利用になれません)</label>
+                                        </li>
+                                    </ul>
+                                    <label class="selectbox_expandLabel" for="opener"></label>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="input-group" id="eventBonusGroup">
+                            <label class="miniLabel add-LeftLine-02">イベントボーナス</label>
+                            <input type="number" id="eventBonus" placeholder="イベントボーナスを入力してください" value="350">
+                        </div>
+                        <div class="input-group" id="finalPointsGroup" style="display: none;">
+                            <label class="miniLabel add-LeftLine-02">最終回獲得ポイント</label>
+                            <input type="number" id="finalPoints" placeholder="最終回獲得ポイントを入力してください">
+                        </div>
+                    </div>
+                </div>
+                <div id="result"></div>
             </div>
-            <div id="result"></div>
-        </div>
-    </main>
+        </main>
+    </div>
+
     <footer class="footer">
-        <div class="container">
-            <p>© 2024 @Noritake All Rights Reserved.</p>
-        </div>
+        <p>© 2024 @Noritake All Rights Reserved.</p>
     </footer>
-    <script src="analyzer_script.js"></script>
+
+    <script src="analyzer_script.js"></script>  
+
 </body>
 </html>

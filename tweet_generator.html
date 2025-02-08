@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ついぼジェネレーター</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="common.css">
     <link rel="stylesheet" href="header.css">
     <link rel="stylesheet" href="tg_style.css">
     <script src="header.js" defer></script>
@@ -17,7 +17,10 @@
 <body>
     <main>
         <div class="container">
-            <h1>ついぼジェネレーター</h1>
+            <h1 class="title">
+              <span>01</span>
+              ついぼジェネレーター
+            </h1>
             <div class="content">
               <form id="recruitmentForm">
                 <div class="input-group">
@@ -161,7 +164,7 @@
                         <input type="checkbox" id="showRequiredSkill" checked> 
                         <span class="slider round"></span>
                       </label>
-                       </label>
+                    </label>
                     <input type="text" id="requiredSkill" maxlength="3" placeholder="スキル値を入力してください">
                   </div>
                   <div class="input-group">
@@ -185,7 +188,7 @@
                         <input type="checkbox" id="showStar4"> 
                         <span class="slider round"></span>
                       </label>
-                       </label>
+                    </label>
                   </div>
                   <div class="input-group">
                     <label for="showLongSession">
@@ -203,7 +206,7 @@
                         <input type="checkbox" id="showJudgementStrengthenDisabled"> 
                         <span class="slider round"></span>
                       </label>
-                       </label>
+                    </label>
                   </div>
                   <div class="input-group">
                     <label for="showJudgementAndRecoveryDisabled">
@@ -212,7 +215,7 @@
                         <input type="checkbox" id="showJudgementAndRecoveryDisabled"> 
                         <span class="slider round"></span>
                       </label>
-                        </label>
+                    </label>
                   </div>
                   <div class="input-group">
                     <label for="showRecruitFreeDescription">
@@ -221,7 +224,7 @@
                           <input type="checkbox" id="showRecruitFreeDescription"> 
                           <span class="slider round"></span>
                       </label>
-                       </label>
+                    </label>
                     <textarea id="recruitFreeDescription" class="hidden" placeholder="自由記述を入力"></textarea>
                   </div>
                 </div>
@@ -247,7 +250,7 @@
             <h2>
               履歴
               <label class="switch" for="historyToggle"> <input type="checkbox" id="historyToggle"> <span class="slider round"></span> </label>
-               </h2>
+              </h2>
             <div id="historyContainer">
                 <ul id="historyList"></ul> 
                 <button id="clearAllHistoryButton">全履歴削除</button> 
@@ -255,9 +258,7 @@
         </div>
     </main>
     <footer class="footer">
-        <div class="container">
-          <p>© 2024 @Noritake All Rights Reserved.</p>
-        </div>
+        <p>© 2024 @Noritake All Rights Reserved.</p>
     </footer>
   <script src="tg_script.js"></script>
 </body>

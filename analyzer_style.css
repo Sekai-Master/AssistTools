@@ -1,16 +1,10 @@
 /* analyzer_style.css */
-body {
-    background-color: #f0f0f0;
-}
-
-main .container {
-    max-width: 1000px;
-    margin: 20px auto;
-    padding: 20px;
-    background-color: #fff;
-    border-radius: 12px;
-    box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff;
-    box-sizing: border-box;
+:root {
+    --unit-corlor: var(--vivid-bad-squad);
+    --member-color-01: var(--azusawa-kohane);
+    --member-color-02: var(--shiraishi-anne);
+    --member-color-03: var(--shinonome-akito);
+    --member-color-04: var(--aoyagi-toya);
 }
 
 .input-group {
@@ -20,71 +14,6 @@ main .container {
 }
 
 /* 項目名 */
-.input-group select {
-    padding: 0.7em;
-    margin-top: 5px;
-    border-radius: 0.5em;
-    width: 100%;
-}
-
-.miniLabel {
-    display: block;
-    font-weight: bold;
-    color: #494949;
-    background: #f4f4f4;
-    border-bottom: solid 3px #d7d7d7;
-    padding: 0.4em 0.5em;
-    margin-bottom: 5px;
-}
-
-.miniLabel[for="targetPoints"],
-.miniLabel[for="currentPoints"] {
-    border-left: solid 5px #FF6699;
-}
-
-.miniLabel[for="eventBonus"],
-.miniLabel[for="modeToggle"],
-.miniLabel[for="finalPoints"] {
-    border-left: solid 5px #00BBDD;
-}
-
-.mainLabel {
-    background-color: rgba(248, 248, 248, 0.8);
-    box-shadow: 3px 3px 6px #bebebe, -3px -3px 6px #ffffff;
-    font-weight: bold;
-    padding: 10px 10px;
-    border-radius: 5px;
-    position: relative;
-    display: flex;
-    align-items: center;
-    z-index: 10;
-    justify-content: center;
-    align-items: center;
-    margin-bottom: 10px;
-    font-size: 1.2em;
-}
-
-/* ポイント入力関連の項目のボーダーカラー */
-.mainLabel[for="targetPoints"] {
-    border-bottom:4px solid #FF6699;
-}
-
-/* モード選択関連の項目のボーダーカラー */
-.mainLabel[for="modeToggle"] {
-    border-bottom:4px solid #00BBDD;
-}
-
-
-.input-group input {
-    width: 100%;
-    padding: 0.8em;
-    box-sizing: border-box;
-    border: 1px solid #90CAF9;
-    border-radius: 0.5em;
-    margin-top: 5px;
-    font-size: 0.8em;
-}
-
 #result {
     text-align: center;
     margin-top: 20px;
@@ -152,16 +81,8 @@ main .container {
 }
 
 .result-table tr.played {
-  background-color: #d3ffd3; /* プレイ済みの行を緑色に */
+  background-color: var(--member-color-04); /* プレイ済みの行を緑色に */
   text-decoration: line-through; /* テキストに取り消し線を追加 */
-}
-
-
-
-/* プレイ済み行のスタイル */
-.played {
-    background-color: #d3ffd3; /* プレイ済みの行を緑色に */
-    text-decoration: line-through; /* テキストに取り消し線を追加 */
 }
 
 .result-summary {
@@ -171,6 +92,7 @@ main .container {
     background-color: #f9f9f9;
     border-radius: 8px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--member-color-03);
 }
 
 .result-summary div {
@@ -221,7 +143,7 @@ main .container {
 
     .input-group label {
         font-size: 0.9em;
-        padding: 0.3em 0.4em;
+        /* padding: 0.3em 0.4em; */
     }
 
     .input-group input {
