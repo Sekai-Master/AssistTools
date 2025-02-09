@@ -78,12 +78,13 @@ background: #333;
     display: none;
     position: absolute;
     top: 100%;
-    left: 0;
+    left: -400%;
     background-color: #fff;
     border: 1px solid #eee;
     border-radius: 4px;
     padding-top: 5px;
     padding-bottom: 5px;
+    padding-right: 10px;
     min-width: 180px;
     white-space: nowrap; /* 折り返しを防ぐ */
     z-index: 100;

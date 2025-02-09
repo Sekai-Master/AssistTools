@@ -234,8 +234,10 @@ function updateEventBonus(newEventBonus) {
     const mode = modeToggle.value;
     if (mode === 'eventBonus') {
         document.getElementById('eventBonus').value = newEventBonus;
+        // イベントボーナス基軸モードの場合は再計算を呼び出す
+        calculate();
     } else if (mode === 'finalPoints') {
-        // 最終回獲得ポイント基軸モードの場合は選択したイベントボーナス値を保持
+        // 最終回獲得ポイント基軸モードの場合の処理
         selectedFinalPointsBonus = newEventBonus;
 
         // すでにresult-summary内にイベントボーナス表示があれば更新、なければ追加する
@@ -339,16 +341,28 @@ function convertToHalfWidth(str) {
 }
 
 function validateNumericInput(input) {
-    const value = input.value;
-    const halfWidthValue = convertToHalfWidth(value);
-    if (/[^0-9.]/.test(halfWidthValue) || (halfWidthValue.match(/\./g) || []).length > 1 || halfWidthValue.startsWith('.') || halfWidthValue.endsWith('.')) {
-        alert("数値は半角で入力してください");
-        input.value = "";
+    const id = input.id;
+    let value = input.value;
+    let halfWidthValue = convertToHalfWidth(value);
+
+    if (id === "eventBonus") {
+        // eventBonus の場合は小数点2桁まで許可
+        if (!/^\d+(\.\d{0,2})?$/.test(halfWidthValue)) {
+            alert("イベントボーナスは整数または小数点第2位まで入力してください");
+            input.value = "";
+        } else {
+            input.value = halfWidthValue;
+        }
     } else {
-        input.value = halfWidthValue;
+        // その他のフィールドは整数のみ許可
+        if (!/^\d+$/.test(halfWidthValue)) {
+            alert("数値は半角整数で入力してください");
+            input.value = "";
+        } else {
+            input.value = halfWidthValue;
+        }
     }
 }
-
 function updatePoints() {
     const checkboxes = document.querySelectorAll('.play-checkbox');
     let playedPoints = 0;
