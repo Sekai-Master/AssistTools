@@ -6,11 +6,6 @@
   --member-color-04: var(--hinomori-shiho);
 }
 
-/* 入力グループ */
-.input-group {
-  margin-bottom: 15px;
-}
-
 /* --- 入力項目の見出し --- */
 .input-group label {
   background-color: rgba(248, 248, 248, 0.8);
