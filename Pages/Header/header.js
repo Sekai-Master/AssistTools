@@ -1,6 +1,6 @@
 async function loadHeader() {
     try {
-        const path = window.location.pathname.includes('index.html') ? 'Pages/Header/header.html' : '../Header/header.html';
+        const path = '/AssistTools/Pages/Header/header.html';
         const response = await fetch(path);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
