@@ -8,7 +8,7 @@ async function loadHeader() {
       document.body.insertAdjacentHTML('afterbegin', headerHtml);
       setupHamburgerMenu();
       setupDropdownMenu(); // ドロップダウンメニューのイベントリスナーを設定
-setupAdvanceModeToggle(); // Advance Modeの設定を追加
+      setupAdvanceModeToggle(); // Advance Modeの設定を追加
   } catch (error) {
     console.error('ヘッダーの読み込みに失敗しました:', error);
   }
@@ -26,17 +26,14 @@ function setupHamburgerMenu() {
 }
 
 function setupDropdownMenu() {
-const dropdownToggle = document.querySelector('.dropdown-toggle');
-  const dropdownMenu = document.querySelector('.dropdown-menu');
-  const dropdown = document.querySelector('.dropdown');
-
-
-if (dropdownToggle && dropdownMenu) {
-    dropdownToggle.addEventListener('click', (event) => {
-    event.preventDefault(); // リンクのデフォルト動作をキャンセル
-          dropdown.classList.toggle('active');
+    const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
+    dropdownToggles.forEach(toggle => {
+        toggle.addEventListener('click', (event) => {
+            event.preventDefault(); // リンクのデフォルト動作をキャンセル
+            const dropdown = toggle.closest('.dropdown');
+            dropdown.classList.toggle('active');
+        });
     });
-  }
 }
 
 function setupAdvanceModeToggle() {
@@ -50,4 +47,4 @@ function setupAdvanceModeToggle() {
     }
 }
 
-  loadHeader();
+loadHeader();
