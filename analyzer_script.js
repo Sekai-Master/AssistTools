@@ -1,5 +1,7 @@
+// ② liveBonusMultipliersをグローバル変数として定義
+const liveBonusMultipliers = [1, 5, 10, 15, 19, 23, 26, 29, 31, 33, 35];
+
 function calculateEventPoint(score, eventBonus, basePoint = 100, liveBonusIndex = 0) {
-    const liveBonusMultipliers = [1, 5, 10, 15, 19, 23, 26, 29, 31, 33, 35];
     const liveBonus = liveBonusMultipliers[liveBonusIndex];
     const scoreComponent = Math.floor(score / 20000);
     const eventBonusApplied = Math.floor((100 + scoreComponent) * (1 + eventBonus / 100) * 100) / 100;
@@ -14,49 +16,49 @@ function generateScoreList(eventBonus, basePoint = 100, maxScore) {
         maxScore = 3000000;
     }
     for (let score = 0; score < maxScore; score += 20000) {
-    for (let liveBonusIndex = 0; liveBonusIndex < 11; liveBonusIndex++) {
-        const scoreUpper = score + 20000 - 1;
-        const lowerResult = calculateEventPoint(score, eventBonus, basePoint, liveBonusIndex);
-        const upperResult = calculateEventPoint(scoreUpper, eventBonus, basePoint, liveBonusIndex);
-        if (lowerResult === upperResult) {
+        for (let liveBonusIndex = 0; liveBonusIndex < liveBonusMultipliers.length; liveBonusIndex++) {
+            const scoreUpper = score + 20000 - 1;
+            const lowerResult = calculateEventPoint(score, eventBonus, basePoint, liveBonusIndex);
+            const upperResult = calculateEventPoint(scoreUpper, eventBonus, basePoint, liveBonusIndex);
+            if (lowerResult === upperResult) {
                 scoreList.push({
-                scoreLower: score,
-                scoreUpper: scoreUpper,
-                result: lowerResult,
-                liveBonusIndex: liveBonusIndex
-            });
+                    scoreLower: score,
+                    scoreUpper: scoreUpper,
+                    result: lowerResult,
+                    liveBonusIndex: liveBonusIndex
+                });
+            }
         }
     }
-}
-return scoreList;
+    return scoreList;
 }
 
 function canMakeSum(target, scoreList) {
-        const dp = new Array(target + 1).fill(false);
-        const combination = new Array(target + 1).fill(null);
-        dp[0] = true;
-        combination[0] = [];
+    const dp = new Array(target + 1).fill(false);
+    const combination = new Array(target + 1).fill(null);
+    dp[0] = true;
+    combination[0] = [];
 
-        for (let i = 0; i <= target; i++) {
-            if (dp[i]) {
-                for (let item of scoreList) {
-                    const num = item.result;
-                    if (i + num <= target) {
-                        if (!dp[i + num] || combination[i + num].length > combination[i].length + 1) {
-                            dp[i + num] = true;
-                            combination[i + num] = [...combination[i], { point: num, scoreLower: item.scoreLower, scoreUpper: item.scoreUpper, liveBonus: liveBonusMultipliers[item.liveBonusIndex] }];
-                        }
+    for (let i = 0; i <= target; i++) {
+        if (dp[i]) {
+            for (let item of scoreList) {
+                const num = item.result;
+                if (i + num <= target) {
+                    if (!dp[i + num] || combination[i + num].length > combination[i].length + 1) {
+                        dp[i + num] = true;
+                        combination[i + num] = [...combination[i], {
+                            point: num,
+                            scoreLower: item.scoreLower,
+                            scoreUpper: item.scoreUpper,
+                            liveBonus: liveBonusMultipliers[item.liveBonusIndex]
+                        }];
                     }
                 }
             }
         }
-        if (dp[target]) {
-            return combination[target];
-        } else {
-            return null;
-        }
+    }
+    return dp[target] ? combination[target] : null;
 }
-
 
 function findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint = 100, maxScore = 1100000) {
     const pointDifference = targetPoints - currentPoints;
@@ -68,9 +70,8 @@ function findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint 
     if (pointDifference > 100000) {
         return "目標ポイントにもっと近くなってから利用してください";
     }
-    const liveBonusMultipliers = [1, 5, 10, 15, 19, 23, 26, 29, 31, 33, 35];
-    const scoreList = generateScoreList(eventBonus, basePoint, maxScore);
 
+    const scoreList = generateScoreList(eventBonus, basePoint, maxScore);
     const result = canMakeSum(pointDifference, scoreList);
 
     let resultText = `
@@ -102,16 +103,12 @@ function findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint 
 
         for (let i = 0; i < adjustments.length; i++) {
             currentBonus += adjustments[i];
-            if (currentBonus < 0) {
-                break;
-            }
+            if (currentBonus < 0) break;
             const adjustedScoreList = generateScoreList(currentBonus, basePoint, maxScore);
             const adjustedResult = canMakeSum(pointDifference, adjustedScoreList);
             if (adjustedResult) {
                 validAdjustments.push(currentBonus);
-                if (validAdjustments.length === 4) {
-                    break;
-                }
+                if (validAdjustments.length === 4) break;
             }
         }
 
@@ -124,25 +121,43 @@ function findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint 
         } else {
             resultText += `<div class="result-message">イベントボーナス値の変更、または[詳細設定]から[最大スコア]の変更を検討してください。</div>`;
         }
-
         return resultText;
     }
 
-    resultText += `<table class="result-table"><thead><tr><th>✅</th><th>#</th><th>ポイント</th><th>基礎ポイント</th><th>スコア範囲</th><th><img src="images/LB.png" alt="LB" class="lb-icon">消費</th><th>LB効果</th></tr></thead><tbody>`;
+    resultText += `<table class="result-table">
+<thead>
+    <tr>
+        <th>✅</th>
+        <th>#</th>
+        <th>ポイント</th>
+        <th>基礎ポイント</th>
+        <th>スコア範囲</th>
+        <th><img src="images/LB.png" alt="LB" class="lb-icon">消費</th>
+        <th>LB効果</th>
+    </tr>
+</thead>
+<tbody>`;
 
-    for (let i = 0; i < result.length; i++) {
-        const step = result[i];
+    result.forEach((step, i) => {
         const liveBonusIndex = liveBonusMultipliers.indexOf(step.liveBonus);
         const basePointApplied = step.point / step.liveBonus;
-        resultText += `<tr><td><input type="checkbox" class="play-checkbox" data-point="${step.point}"></td><td>${i + 1}</td><td>${step.point}Pt</td><td>${Math.floor(basePointApplied)}Pt</td><td>[${step.scoreLower} ~ ${step.scoreUpper}]</td><td>${liveBonusIndex}個</td><td>${step.liveBonus}倍</td></tr>`;
-    }
+        resultText += `<tr>
+<td><input type="checkbox" class="play-checkbox" data-point="${step.point}"></td>
+<td>${i + 1}</td>
+<td>${step.point}Pt</td>
+<td>${Math.floor(basePointApplied)}Pt</td>
+<td>[${step.scoreLower} ~ ${step.scoreUpper}]</td>
+<td>${liveBonusIndex}個</td>
+<td>${step.liveBonus}倍</td>
+</tr>`;
+    });
 
     resultText += `</tbody></table>`;
     return resultText;
 }
 
 let additionalChecks = 0;
-let selectedFinalPointsBonus = 0; // 新しい変数を追加
+let selectedFinalPointsBonus = 0; // 最終回モード用の選択されたボーナス
 
 function findPointAdjustmentByFinalPoints(currentPoints, targetPoints, finalPoints, basePoint = 100, maxScore = 1100000, additionalChecks = 0) {
     const pointDifference = targetPoints - currentPoints;
@@ -150,29 +165,22 @@ function findPointAdjustmentByFinalPoints(currentPoints, targetPoints, finalPoin
     if (pointDifference < 0) {
         return "目標ポイントは現在ポイントよりも大きな値を入力してください";
     }
-
     if (pointDifference > 100000) {
         return "目標ポイントにもっと近くなってから利用してください";
     }
 
-    const liveBonusMultipliers = [1, 5, 10, 15, 19, 23, 26, 29, 31, 33, 35];
-
     let validAdjustments = [];
     let currentBonus = 435 - additionalChecks;
-
     while (validAdjustments.length < 8 + additionalChecks && currentBonus > 0) {
         const adjustedScoreList = generateScoreList(currentBonus, basePoint, maxScore);
         const finalPointResult = canMakeSum(finalPoints, adjustedScoreList);
-
         if (finalPointResult) {
             const remainingPoints = pointDifference - finalPoints;
             const adjustedResult = canMakeSum(remainingPoints, adjustedScoreList);
-
             if (adjustedResult) {
                 validAdjustments.push(currentBonus);
             }
         }
-
         currentBonus -= 1;
     }
 
@@ -227,21 +235,23 @@ function updateEventBonus(newEventBonus) {
     if (mode === 'eventBonus') {
         document.getElementById('eventBonus').value = newEventBonus;
     } else if (mode === 'finalPoints') {
-        // 最終回獲得ポイント基軸モードでは、選択したイベントボーナス値を保持する
+        // 最終回獲得ポイント基軸モードの場合は選択したイベントボーナス値を保持
         selectedFinalPointsBonus = newEventBonus;
 
-        // result-summaryにイベントボーナスを追加
+        // すでにresult-summary内にイベントボーナス表示があれば更新、なければ追加する
         const eventBonusDisplay = document.getElementById('eventBonusDisplay');
         if (eventBonusDisplay) {
             eventBonusDisplay.textContent = `${newEventBonus} %`;
         } else {
             const summaryDiv = document.querySelector('.result-summary');
-            const newDiv = document.createElement('div');
-            newDiv.innerHTML = `<span>イベントボーナス</span><span id="eventBonusDisplay">${newEventBonus} %</span>`;
-            summaryDiv.appendChild(newDiv);
+            if (summaryDiv) {
+                const newDiv = document.createElement('div');
+                newDiv.innerHTML = `<span>イベントボーナス</span><span id="eventBonusDisplay">${newEventBonus} %</span>`;
+                summaryDiv.appendChild(newDiv);
+            }
         }
 
-        // 調整内訳を示すテーブルを表示
+        // 調整内訳テーブルの表示
         const currentPoints = parseInt(convertToHalfWidth(currentPointsInput.value), 10);
         const targetPoints = parseInt(convertToHalfWidth(targetPointsInput.value), 10);
         const finalPoints = parseInt(convertToHalfWidth(finalPointsInput.value), 10);
@@ -250,14 +260,14 @@ function updateEventBonus(newEventBonus) {
         const pointDifference = targetPoints - currentPoints;
         const scoreList = generateScoreList(newEventBonus, basePoint, maxScore);
 
-        // 最初にfinalPointsを獲得するためのスコア範囲及びライブボーナス消費量を計算
+        // 最初にfinalPoints達成のためのプレイを算出
         const finalPointResult = canMakeSum(finalPoints, scoreList);
         if (!finalPointResult) {
             resultDiv.innerHTML = "最終回獲得ポイントを達成するためのプレイが見つかりませんでした。";
             return;
         }
 
-        // 残りのポイントをピッタリ0にするためのプレイの組み合わせを計算
+        // 残りのポイントを調整するプレイを算出
         const remainingPoints = pointDifference - finalPoints;
         const remainingResult = canMakeSum(remainingPoints, scoreList);
         if (!remainingResult) {
@@ -265,31 +275,61 @@ function updateEventBonus(newEventBonus) {
             return;
         }
 
-        // 結果を表示
-        let resultText = `<table class="result-table"><thead><tr><th>✅</th><th>#</th><th>ポイント</th><th>基礎ポイント</th><th>スコア範囲</th><th><img src="images/LB.png" alt="LB" class="lb-icon">消費</th><th>LB効果</th></tr></thead><tbody>`;
+        // 結果テーブルの生成
+        let resultText = `<table class="result-table">
+<thead>
+    <tr>
+        <th>✅</th>
+        <th>#</th>
+        <th>ポイント</th>
+        <th>基礎ポイント</th>
+        <th>スコア範囲</th>
+        <th><img src="images/LB.png" alt="LB" class="lb-icon">消費</th>
+        <th>LB効果</th>
+    </tr>
+</thead>
+<tbody>`;
 
-        // 最初にfinalPointsを獲得するためのプレイを追加
         finalPointResult.forEach((step, index) => {
             const liveBonusIndex = liveBonusMultipliers.indexOf(step.liveBonus);
             const basePointApplied = step.point / step.liveBonus;
-            resultText += `<tr><td><input type="checkbox" class="play-checkbox" data-point="${step.point}"></td><td>${index + 1}</td><td>${step.point}Pt</td><td>${Math.floor(basePointApplied)}Pt</td><td>[${step.scoreLower} ~ ${step.scoreUpper}]</td><td>${liveBonusIndex}個</td><td>${step.liveBonus}倍</td></tr>`;
+            resultText += `<tr>
+<td><input type="checkbox" class="play-checkbox" data-point="${step.point}"></td>
+<td>${index + 1}</td>
+<td>${step.point}Pt</td>
+<td>${Math.floor(basePointApplied)}Pt</td>
+<td>[${step.scoreLower} ~ ${step.scoreUpper}]</td>
+<td>${liveBonusIndex}個</td>
+<td>${step.liveBonus}倍</td>
+</tr>`;
         });
 
-        // 残りのポイントを獲得するためのプレイを追加
         remainingResult.forEach((step, index) => {
             const liveBonusIndex = liveBonusMultipliers.indexOf(step.liveBonus);
             const basePointApplied = step.point / step.liveBonus;
-            resultText += `<tr><td><input type="checkbox" class="play-checkbox" data-point="${step.point}"></td><td>${finalPointResult.length + index + 1}</td><td>${step.point}Pt</td><td>${Math.floor(basePointApplied)}Pt</td><td>[${step.scoreLower} ~ ${step.scoreUpper}]</td><td>${liveBonusIndex}個</td><td>${step.liveBonus}倍</td></tr>`;
+            resultText += `<tr>
+<td><input type="checkbox" class="play-checkbox" data-point="${step.point}"></td>
+<td>${finalPointResult.length + index + 1}</td>
+<td>${step.point}Pt</td>
+<td>${Math.floor(basePointApplied)}Pt</td>
+<td>[${step.scoreLower} ~ ${step.scoreUpper}]</td>
+<td>${liveBonusIndex}個</td>
+<td>${step.liveBonus}倍</td>
+</tr>`;
         });
 
         resultText += `</tbody></table>`;
 
-        // result-summaryとresult-messageの間にテーブルを挿入
+        // ③ 挿入位置をresult-summaryの直後に設定（resultDiv内の他コンテンツと競合しないよう注意）
         const resultSummary = document.querySelector('.result-summary');
-        const resultMessage = document.querySelector('.result-message');
-        resultSummary.insertAdjacentHTML('afterend', resultText);
+        if (resultSummary) {
+            resultSummary.insertAdjacentHTML('afterend', resultText);
+        } else {
+            resultDiv.innerHTML += resultText;
+        }
     }
-    calculate();
+    // ① calculate() の再呼び出しは削除（テーブル挿入後に上書きされないようにする）
+    // calculate();
 }
 
 function convertToHalfWidth(str) {
@@ -301,7 +341,7 @@ function convertToHalfWidth(str) {
 function validateNumericInput(input) {
     const value = input.value;
     const halfWidthValue = convertToHalfWidth(value);
-    if (/[^0-9]/.test(halfWidthValue)) {
+    if (/[^0-9.]/.test(halfWidthValue) || (halfWidthValue.match(/\./g) || []).length > 1 || halfWidthValue.startsWith('.') || halfWidthValue.endsWith('.')) {
         alert("数値は半角で入力してください");
         input.value = "";
     } else {
@@ -337,15 +377,17 @@ const modeToggle = document.getElementById('modeToggle');
 const resultDiv = document.getElementById('result');
 const eventBonusGroup = document.getElementById('eventBonusGroup');
 const finalPointsGroup = document.getElementById('finalPointsGroup');
-const liveBonusMultipliers = [1, 5, 10, 15, 19, 23, 26, 29, 31, 33, 35];
-const calculate = () => {
+
+function calculate() {
     const currentPoints = parseInt(convertToHalfWidth(currentPointsInput.value), 10);
     const targetPoints = parseInt(convertToHalfWidth(targetPointsInput.value), 10);
-    const eventBonus = parseInt(convertToHalfWidth(eventBonusInput.value), 10);
+    const eventBonus = parseFloat(convertToHalfWidth(eventBonusInput.value));
     const finalPoints = parseInt(convertToHalfWidth(finalPointsInput.value), 10);
     const mode = modeToggle.value;
 
-    if (isNaN(currentPoints) || isNaN(targetPoints) || (mode === 'eventBonus' && isNaN(eventBonus)) || (mode === 'finalPoints' && isNaN(finalPoints))) {
+    if (isNaN(currentPoints) || isNaN(targetPoints) || 
+        (mode === 'eventBonus' && (isNaN(eventBonus) || eventBonus < 0)) || 
+        (mode === 'finalPoints' && isNaN(finalPoints))) {
         resultDiv.textContent = "数値を入力してください";
         return;
     }
