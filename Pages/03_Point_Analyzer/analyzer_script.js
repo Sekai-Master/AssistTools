@@ -132,7 +132,7 @@ function findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint 
         <th>ポイント</th>
         <th>基礎ポイント</th>
         <th>スコア範囲</th>
-        <th><img src="images/LB.png" alt="LB" class="lb-icon">消費</th>
+        <th><img src="../../images/LB.png" alt="LB" class="lb-icon">消費</th>
         <th>LB効果</th>
     </tr>
 </thead>
@@ -284,7 +284,7 @@ function updateEventBonus(newEventBonus) {
         <th>ポイント</th>
         <th>基礎ポイント</th>
         <th>スコア範囲</th>
-        <th><img src="images/LB.png" alt="LB" class="lb-icon">消費</th>
+        <th><img src="../../images/LB.png" alt="LB" class="lb-icon">消費</th>
         <th>LB効果</th>
     </tr>
 </thead>
