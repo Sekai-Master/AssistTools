@@ -255,8 +255,8 @@ function updateEventBonus(newEventBonus) {
         const currentPoints = parseInt(convertToHalfWidth(currentPointsInput.value), 10);
         const targetPoints = parseInt(convertToHalfWidth(targetPointsInput.value), 10);
         const finalPoints = parseInt(convertToHalfWidth(finalPointsInput.value), 10);
-        const basePoint = 100;
-        const maxScore = 1100000;
+        const basePoint = parseInt(convertToHalfWidth(basePointsInput.value), 10) || 100;
+        const maxScore = parseInt(convertToHalfWidth(maxScoreInput.value), 10) || 1100000;
         const pointDifference = targetPoints - currentPoints;
         const scoreList = generateScoreList(newEventBonus, basePoint, maxScore);
 
@@ -377,13 +377,18 @@ const modeToggle = document.getElementById('modeToggle');
 const resultDiv = document.getElementById('result');
 const eventBonusGroup = document.getElementById('eventBonusGroup');
 const finalPointsGroup = document.getElementById('finalPointsGroup');
+const basePointsInput = document.getElementById('basePoints');
+const maxScoreInput = document.getElementById('maxScore');
 
 function calculate() {
     const currentPoints = parseInt(convertToHalfWidth(currentPointsInput.value), 10);
     const targetPoints = parseInt(convertToHalfWidth(targetPointsInput.value), 10);
     const eventBonus = parseFloat(convertToHalfWidth(eventBonusInput.value));
     const finalPoints = parseInt(convertToHalfWidth(finalPointsInput.value), 10);
+    const basePoint = parseInt(convertToHalfWidth(basePointsInput.value), 10) || 100;
+    const maxScore = parseInt(convertToHalfWidth(maxScoreInput.value), 10) || 1100000;
     const mode = modeToggle.value;
+
 
     if (isNaN(currentPoints) || isNaN(targetPoints) || 
         (mode === 'eventBonus' && (isNaN(eventBonus) || eventBonus < 0)) || 
@@ -392,8 +397,6 @@ function calculate() {
         return;
     }
 
-    const basePoint = 100;
-    const maxScore = 1100000;
     let result;
 
     if (mode === 'eventBonus') {
@@ -420,6 +423,14 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     finalPointsInput.addEventListener('input', () => {
         validateNumericInput(finalPointsInput);
+        calculate();
+    });
+    basePointsInput.addEventListener('input', () => {
+        validateNumericInput(basePointsInput);
+        calculate();
+    });
+    maxScoreInput.addEventListener('input', () => {
+        validateNumericInput(maxScoreInput);
         calculate();
     });
     modeToggle.addEventListener('change', () => {

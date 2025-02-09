@@ -37,14 +37,18 @@ function setupDropdownMenu() {
 }
 
 function setupAdvanceModeToggle() {
-    const advanceModeToggle = document.getElementById('advanceModeToggle');
-    if (advanceModeToggle) {
-        advanceModeToggle.addEventListener('change', () => {
-            const isChecked = advanceModeToggle.checked;
-            // ここでAdvance Modeの切り替え処理を実装
-            console.log(`Advance Mode: ${isChecked ? 'ON' : 'OFF'}`);
-        });
-    }
+  const advanceModeToggle = document.getElementById('advanceModeToggle');
+  if (advanceModeToggle) {
+      advanceModeToggle.addEventListener('change', () => {
+          const isChecked = advanceModeToggle.checked;
+          const advancedElements = document.querySelectorAll('.advanced');
+          advancedElements.forEach(element => {
+              element.style.display = isChecked ? 'block' : 'none';
+          });
+          // ここでAdvance Modeの切り替え処理を実装
+          console.log(`Advance Mode: ${isChecked ? 'ON' : 'OFF'}`);
+      });
+  }
 }
 
 loadHeader();
