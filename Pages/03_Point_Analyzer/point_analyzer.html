@@ -65,6 +65,17 @@
                             <label class="miniLabel add-LeftLine-03">Max Score</label>
                             <input type="number" id="maxScore" placeholder="スコアの最大値を入力してください" value="1100000">
                         </div>
+                        <div class="input-group">
+                            <label class="miniLabel add-LeftLine-03">LB最大消費量</label>
+                            <div class="range-slider">
+                                <span id="rs-bullet" class="rs-label">10</span>
+                                <input id="rs-range-line" class="rs-range" type="range" value="10" min="0" max="10">    
+                            </div>
+                            
+                            <div class="box-minmax">
+                            <span>0</span><span>10</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div id="result"></div>

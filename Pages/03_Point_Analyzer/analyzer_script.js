@@ -15,8 +15,12 @@ function generateScoreList(eventBonus, basePoint = 100, maxScore) {
     if (maxScore > 3000000) {
         maxScore = 3000000;
     }
+    // LB最大消費量のスライダー値を取得（例：スライダーが8なら 8＋1 = 9 個を利用）
+    const rsRange = document.getElementById("rs-range-line");
+    const maxLBConsumption = parseInt(rsRange.value, 10) + 1; // 使用するliveBonusの項目数
+
     for (let score = 0; score < maxScore; score += 20000) {
-        for (let liveBonusIndex = 0; liveBonusIndex < liveBonusMultipliers.length; liveBonusIndex++) {
+        for (let liveBonusIndex = 0; liveBonusIndex < maxLBConsumption; liveBonusIndex++) {
             const scoreUpper = score + 20000 - 1;
             const lowerResult = calculateEventPoint(score, eventBonus, basePoint, liveBonusIndex);
             const upperResult = calculateEventPoint(scoreUpper, eventBonus, basePoint, liveBonusIndex);
@@ -465,4 +469,22 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     calculate();
+});
+
+var rangeSlider = document.getElementById("rs-range-line");
+var rangeBullet = document.getElementById("rs-bullet");
+
+rangeSlider.addEventListener("input", showSliderValue, false);
+
+function showSliderValue() {
+    rangeBullet.innerHTML = rangeSlider.value;
+    var bulletPosition = (rangeSlider.value / rangeSlider.max);
+    rangeBullet.style.left = (bulletPosition * rangeSlider.offsetWidth) + "px";
+    // LB最大消費量の変更に伴い再計算を実施する
+    calculate();
+}
+
+// ページ読み込み時にスライダーの位置を設定
+document.addEventListener('DOMContentLoaded', function() {
+    showSliderValue();
 });

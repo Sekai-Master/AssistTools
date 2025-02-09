@@ -135,6 +135,66 @@
     gap: 20px;
 }
 
+/* Range_Slider */
+.range-slider {
+    position: relative;
+}
+
+.rs-range {
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #ddd;
+    height: 5px;
+    border-radius: 5px;
+    outline: none;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.rs-range:hover {
+    opacity: 1;
+}
+
+.rs-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 25px;
+    height: 25px;
+    background: var(--unit-corlor);
+    cursor: pointer;
+    border-radius: 50%;
+}
+
+.rs-range::-moz-range-thumb {
+    width: 25px;
+    height: 25px;
+    background: var(--unit-corlor);
+    cursor: pointer;
+    border-radius: 50%;
+}
+
+.rs-label {
+    position: absolute;
+    top: 30px;
+    left: 0;
+    transform: translateX(-50%);
+    background: var(--unit-corlor);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.box-minmax {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    font-size: 14px;
+    color: #333;
+}
+
 /* モバイル端末用のレイアウト */
 @media screen and (max-width: 768px) {
     main .container {
