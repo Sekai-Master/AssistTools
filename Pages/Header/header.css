@@ -78,7 +78,7 @@ background: #333;
     display: none;
     position: absolute;
     top: 100%;
-    left: -400%;
+    left: -180%;
     background-color: #fff;
     border: 1px solid #eee;
     border-radius: 4px;
@@ -102,6 +102,10 @@ background: #333;
 .dropdown:hover .dropdown-menu,
 .dropdown.active .dropdown-menu{
   display: block;
+}
+
+.settings {
+  left: -400%;
 }
 
 /* メディアクエリを使用して768px以下で表示 */
