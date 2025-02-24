@@ -17,6 +17,24 @@ const path = require('path');
   const metasResponse = await fetch(metasUrl);
   const metas = await metasResponse.json();
   
+  // 削除済み（非公開）楽曲情報を読み込み
+  // deletedSongs.json は [{ "id": 241, "title": "…", "reason": "…" }, …] の形式を想定
+  let deletedSongs = [];
+  const deletedSongsPath = path.join(__dirname, 'deletedSongs.json');
+  if (fs.existsSync(deletedSongsPath)) {
+    try {
+      const data = fs.readFileSync(deletedSongsPath, 'utf-8');
+      deletedSongs = JSON.parse(data);
+      console.log('削除済み楽曲情報を読み込みました:', deletedSongs);
+    } catch (err) {
+      console.error('削除済み楽曲情報の読み込みに失敗:', err);
+    }
+  } else {
+    console.log('削除済み楽曲情報ファイルが見つかりません。');
+  }
+  // 比較用に、deletedSongs の ID を3桁文字列で整形してSetに格納
+  const deletedIDsSet = new Set(deletedSongs.map(song => String(song.id).padStart(3, '0')));
+  
   // Unitの変換用マッピング
   const unitMapping = {
     '1': '0_VS',
@@ -58,8 +76,12 @@ const path = require('path');
     const music_time = meta ? meta.music_time : null;
     const event_rate = meta ? meta.event_rate : null;
     
-    // "published"プロパティを追加：publishedAtが現在時刻より前ならtrue、それ以外はfalse
-    const published = music.publishedAt <= Date.now();
+    // publishedAt が現在時刻より前なら true、それ以外は false
+    let published = music.publishedAt <= Date.now();
+    // もしこの楽曲のIDが削除済みのSetに含まれていれば published を false に上書き
+    if (deletedIDsSet.has(formattedId)) {
+      published = false;
+    }
     
     return {
       id: formattedId,
@@ -74,10 +96,9 @@ const path = require('path');
       published: published,
       isNewlyWrittenMusic: music.isNewlyWrittenMusic,
       isFullLength: music.isFullLength,
-      jacketLink: jacketLink, // JSONにはファイル名のみ保存
+      jacketLink: jacketLink, 
       music_time: music_time,
       event_rate: event_rate,
-      // 画像ダウンロード用URLを一時保持（最終JSONからは除外する）
       _jacketUrl: jacketUrl
     };
   });

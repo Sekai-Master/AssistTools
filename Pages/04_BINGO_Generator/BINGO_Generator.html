@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ポイント調整アナライザー</title>
+    <link rel="stylesheet" href="../../common.css">
+    <link rel="stylesheet" href="../Header/header.css">
+    <link rel="stylesheet" href="BINGO_style.css">
+    <script src="../Header/header.js" defer></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c&display=swap" rel="stylesheet">
+    <link rel="icon" href="../../images/icon.jpeg" type="image/jpeg">
+</head>
+<body>
+    <div class="wrapper">
+        <main>
+            <div class="container">
+                <h1 class="title">
+                    <span>04</span>
+                    BINGOカードジェネレーター
+                </h1>
+                <div class="input-group">
+                    <label class="mainLabel add-Border-01">生成条件</label>
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label class="miniLabel add-LeftLine-01">モード選択</label>
+                        </div>
+                        <div class="input-group">
+                            <label class="miniLabel add-LeftLine-01">絞り込み条件</label>
+                        </div>
+                    </div>
+                </div>
+                <button id="generateButton">生成</button>
+                <canvas id="bingoCanvas"></canvas>
+            </div>
+        </main>
+    </div>
+
+    <footer class="footer">
+        <p>© 2024 @Noritake All Rights Reserved.</p>
+    </footer>
+
+    <script src="BINGO_script.js"></script>  
+
+</body>
+</html>
