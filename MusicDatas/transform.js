@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 
 (async () => {
   // 各データの取得先URL
@@ -47,15 +48,19 @@ const fs = require('fs');
     // categories の変換："mv"のみ "mv_3d" に変更、それ以外はそのまま
     const categories = music.categories.map(cat => (cat === "mv" ? "mv_3d" : cat));
     
-    // jacketLinkの生成（3桁に整形したidを利用）
-    const jacketLink = `https://storage.sekai.best/sekai-jp-assets/music/jacket/jacket_s_${formattedId}_rip/jacket_s_${formattedId}.webp`;
+    // 画像ダウンロード用のURL（このURLを使って画像をダウンロードする）
+    const jacketUrl = `https://storage.sekai.best/sekai-jp-assets/music/jacket/jacket_s_${formattedId}_rip/jacket_s_${formattedId}.webp`;
+    // JSON内に残すのはファイル名のみ
+    const jacketLink = `jacket_s_${formattedId}.webp`;
     
     // metas.jsonから music_id が一致するレコードを取得
     const meta = metas.find(m => m.music_id === music.id);
     const music_time = meta ? meta.music_time : null;
     const event_rate = meta ? meta.event_rate : null;
     
-    // 整形後のオブジェクトを返す
+    // "published"プロパティを追加：publishedAtが現在時刻より前ならtrue、それ以外はfalse
+    const published = music.publishedAt <= Date.now();
+    
     return {
       id: formattedId,
       title: music.title,
@@ -66,15 +71,54 @@ const fs = require('fs');
       Unit: unit,
       categories: categories,
       publishedAt: music.publishedAt,
+      published: published,
       isNewlyWrittenMusic: music.isNewlyWrittenMusic,
       isFullLength: music.isFullLength,
-      jacketLink: jacketLink,
+      jacketLink: jacketLink, // JSONにはファイル名のみ保存
       music_time: music_time,
-      event_rate: event_rate
+      event_rate: event_rate,
+      // 画像ダウンロード用URLを一時保持（最終JSONからは除外する）
+      _jacketUrl: jacketUrl
     };
   });
   
-  // 結果を整形済みJSONとしてファイルに出力
-  fs.writeFileSync('transformedMusics.json', JSON.stringify(transformedData, null, 2), 'utf-8');
+  // _jacketUrlプロパティを除去して最終的なJSONを生成
+  const finalData = transformedData.map(({ _jacketUrl, ...rest }) => rest);
+  
+  // 整形済みJSONを保存
+  fs.writeFileSync('transformedMusics.json', JSON.stringify(finalData, null, 2), 'utf-8');
   console.log('変換完了！ transformedMusics.json に保存されました。');
+  
+  // 画像保存用のディレクトリ作成
+  const jacketDir = path.join(__dirname, 'jacket');
+  if (!fs.existsSync(jacketDir)) {
+    fs.mkdirSync(jacketDir);
+  }
+  
+  // 各楽曲の _jacketUrl から画像をダウンロード（既存ファイルがあればスキップ）
+  for (const music of transformedData) {
+    const jacketUrl = music._jacketUrl;
+    const fileName = `jacket_s_${music.id}.webp`;
+    const filePath = path.join(jacketDir, fileName);
+    
+    // ファイルが存在している場合はスキップ
+    if (fs.existsSync(filePath)) {
+      console.log(`ファイル ${fileName} は既に存在するためスキップ`);
+      continue;
+    }
+    
+    try {
+      const res = await fetch(jacketUrl);
+      if (!res.ok) {
+         console.error(`ダウンロード失敗: ${jacketUrl} ステータス: ${res.status}`);
+         continue;
+      }
+      const arrayBuffer = await res.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      fs.writeFileSync(filePath, buffer);
+      console.log(`ダウンロード成功: ${fileName}`);
+    } catch (error) {
+      console.error(`エラー発生 (${jacketUrl}):`, error);
+    }
+  }
 })();
