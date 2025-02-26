@@ -64,7 +64,12 @@ const path = require('path');
     const unit = unitMapping[secondDigit] || "";
     
     // categories の変換："mv"のみ "mv_3d" に変更、それ以外はそのまま
-    const categories = music.categories.map(cat => (cat === "mv" ? "mv_3d" : cat));
+    let categories = music.categories.map(cat => (cat === "mv" ? "mv_3d" : cat));
+
+    // "image"タグが含まれている場合に、他のタグがあるなら削除
+    if (categories.includes("image") && categories.length > 1) {
+      categories = categories.filter(cat => cat !== "image");
+    }
     
     // 画像ダウンロード用のURL（このURLを使って画像をダウンロードする）
     const jacketUrl = `https://storage.sekai.best/sekai-jp-assets/music/jacket/jacket_s_${formattedId}_rip/jacket_s_${formattedId}.webp`;

@@ -124,7 +124,6 @@
     "default": 1301201,
     "Unit": "2_MMJ",
     "categories": [
-      "image",
       "mv_2d"
     ],
     "publishedAt": 1602396000000,
@@ -4147,7 +4146,6 @@
     "default": 1518001,
     "Unit": "4_WxS",
     "categories": [
-      "image",
       "mv_2d"
     ],
     "publishedAt": 1657519200000,

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BINGOカードジェネレーターの使い方</title>
+    <link rel="stylesheet" href="../../common.css">
+    <link rel="stylesheet" href="../Header/header.css">
+    <link rel="stylesheet" href="BINGO_style.css">
+    <script src="../Header/header.js" defer></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c&display=swap" rel="stylesheet">
+    <link rel="icon" href="../../images/icon.jpeg" type="image/jpeg">
+</head>
+<body>
+    <div class="wrapper">
+        <main>
+            <div class="container">
+                <h1 class="title">
+                    <span>04</span>
+                    BINGOカードジェネレーター
+                </h1>
+                <div class="input-group">
+                    <label class="mainLabel add-Border-01">このツールについて</label>
+                    <p class="description">
+                        このシートは、プロセカの楽曲のBINGOカードを生成するためのツールです。<br>
+                        チアフルカーニバルイベントの際などにご利用ください。<br>   
+                        生成したBINGOカードは画像として保存することやコピーすることができます。<br>
+                    </p>
+                </div>
+                <div class="input-group">
+                    <label class="mainLabel add-Border-02">使い方</label>
+                    <p class="description">
+                        <!-- 各ステップをminiLabelで表示しそれぞれに詳細を付ける -->
+                        <label class="miniLabel add-LeftLine-02">1. モード選択</label>
+                        <p class="description">
+                            【生成方式】ではカード生成の方式を
+                            <ul>
+                                <li><b>[ランダム]</b> : 絞り込む条件に従ってランダムで楽曲を配置します</li>
+                                <li><b>[指定(曲)]</b> : 配置する曲を一部、または全て指定することができます。位置はランダムで生成されます</li>
+                                <li><b>[指定(完全)]</b> : 配置する曲を一部、または全て指定することができます。位置も指定できるようにします</li>
+                                <li><b>[シード値]</b> : シード値を入力することでカードを再現します。シード値の発行は「シード」ボタンから行えます</li>
+                            </ul>  
+                            から選択できます<br><br>
+                            【中央マスの処理】では中央のマスの設定を
+                            <!--FREEマスにする、ランダム選曲マスにする、曲指定できるようにする。をリスト化 -->
+                            <ul>
+                                <li><b>[FREE]</b> : 中央マスをFREEマスにします</li>
+                                <li><b>[ランダム]</b> : 中央マスを[生成方式]と同様な条件でのランダム選択にします</li>
+                                <li><b>[指定]</b> : 中央マスの曲を直接指定できるようにします</li>
+                            </ul>    
+                            から選択できます<br>
+                        </p>
+                        
+                        <label class="miniLabel add-LeftLine-02">2. 絞り込み条件</label>
+                        <p class="description">
+                            【ユニット】では生成に含むユニットを選択できます<br>
+                            ユニットの区分はゲーム内の設定に準拠しています<br>
+                            「その他」の項目には以下の楽曲が含まれます<br>
+                            <ul>
+                                <li>主人公組が歌唱しているテーマ曲・周年曲(『セカイ』『群青讃歌』等)</li>
+                                <li>ゲキ！チュウマイコラボ楽曲(『エンドマークに希望と涙を添えて』『Sage』等)</li>
+                                <li>カップヌードルタイアップ楽曲(『サラマンダー』『青色絵具』等)</li>
+                                <li>エイプリルフール2023(『Be The MUSIC!』)</li>
+                                <li>東方Projectコラボ楽曲(『超最終鬼畜妹フランドール・Ｓ』)</li>
+                                <li>あんさんぶるスターズ！！コラボ楽曲(『フュージョン』)</li>
+                                <li>劇場版プロジェクトセカイ楽曲(『Worlders』)</li>
+                            </ul>
+                            <br>
+                            【MV】では生成に含むMVの種別を選択できます<br>
+                            選択されているMVが存在する楽曲ののみが生成に含まれるようになります<br><br>
+
+                            【曲種】では曲種を選択できます<br>
+                            選択されている曲種の楽曲のみが生成に含まれるようになります<br>
+                        </p>
+
+                        <label class="miniLabel add-LeftLine-02">3. 生成</label>
+                        <p class="description">
+                            生成ボタンを押すとBINGOカードが生成されます<br>
+                            生成ボタンを再度押すことでカードは再生成されます<br>
+                        </p>
+
+                        <label class="miniLabel add-LeftLine-02">4. 画像の操作</label>
+                        <p class="description">
+                            <ul>
+                                <li><b>[コピー]</b> : 生成したカードを画像としてコピーします</li>
+                                <li><b>[保存]</b> : 生成したカードを画像として保存します</li>
+                                <li><b>[シード]</b> : ビンゴカードのシード値を発行します<br>
+                                    【生成方式】から[シード値]を選択し、この値を入力することで同じビンゴカードを再現することができます<br>
+                                    発行されたシード値をシェアすることで他のユーザーと同じカードを楽しむことができます
+                                </li>
+                            </ul>
+                        </p>
+                    </p>
+                </div>
+                <div class="input-group">
+                    <label class="mainLabel add-Border-03">その他</label>
+                    <label class="miniLabel add-LeftLine-03">免責事項</label>
+                    <p class="description">
+                        このツールは非公式のものであり、プロジェクトセカイの公式とは一切関係ありません。<br>
+                        このツールを利用したことによるいかなる損害についても責任を負いかねますのでご了承ください。<br><br>
+                        その他く具合や改善点、ご意見ご要望は<a href="/AssistTools/Pages/contact/contact.html">お問い合わせ</a>よりお知らせください。
+                    </p>
+                    <label class="miniLabel add-LeftLine-03">謝辞</label>
+                    <p class="description">
+                        このツールの作成に当たり、匿名M(<a href="https://twitter.com/tkmei_M">@tkmei_M</a>)さんの<a href="https://docs.google.com/spreadsheets/d/111XHqZqgfXP_l-FSKdlx5f4Re6MQFOIXqrEl6MgGuKU/edit?usp=sharing">【プロセカ】チアフルビンゴ自動生成シート</a>を参考にさせていただきました。ぜひこちらもご利用ください。<br>
+                    </p>
+                </div>
+
+                <div class="input-group">
+                    <label class="mainLabel add-Border-04">ツールに戻る▶<a href="../04_BINGO_Generator/BINGO_Generator.html">こちら</a></label>
+                </div>    
+            </div>
+        </main>
+    </div>
+
+    <footer class="footer">
+        <p>© 2024 @Noritake All Rights Reserved.</p>
+    </footer>
+
+</body>
+</html>

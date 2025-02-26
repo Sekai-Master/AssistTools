@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ポイント調整アナライザー</title>
+    <title>BINGOカードジェネレーター</title>
     <link rel="stylesheet" href="../../common.css">
     <link rel="stylesheet" href="../Header/header.css">
     <link rel="stylesheet" href="BINGO_style.css">
@@ -22,18 +22,96 @@
                     BINGOカードジェネレーター
                 </h1>
                 <div class="input-group">
-                    <label class="mainLabel add-Border-01">生成条件</label>
+                    <label class="mainLabel add-Border-01">モード選択</label>
                     <div class="input-row">
-                        <div class="input-group">
-                            <label class="miniLabel add-LeftLine-01">モード選択</label>
+                        <div class="input-group halfLabel">
+                            <label class="miniLabel add-LeftLine-01">生成方式</label>
+                            <div class="mode-buttons" id="modeSelection">
+                                <button type="button" data-mode="random" class="active mode-button">ランダム</button>
+                                <button type="button" data-mode="specified_song" class="mode-button">指定(曲)</button>
+                                <button type="button" data-mode="specified_complete" class="mode-button">指定(完全)</button>
+                                <button type="button" data-mode="seed" class="mode-button">シード値</button>
+                            </div>
                         </div>
-                        <div class="input-group">
-                            <label class="miniLabel add-LeftLine-01">絞り込み条件</label>
+                        <div class="input-group halfLabel" id="centerSelectiongroup">
+                            <label class="miniLabel add-LeftLine-01">中央マスの処理</label>
+                            <div class="mode-buttons" id="centerSelection">
+                                <button type="button" data-center="free" class="active center-button">FREE</button>
+                                <button type="button" data-center="random" class="center-button">ランダム</button>
+                                <button type="button" data-center="specified" class="center-button">指定</button>
+                            </div>
+                        </div>
+                        <div class="input-group halfLabel" style="display: none;" id="seedInputGroup">
+                            <label class="miniLabel add-LeftLine-01">シード値を入力</label>
+                            <input type="text" id="seedInput" placeholder="シード値を入力してください">
                         </div>
                     </div>
                 </div>
-                <button id="generateButton">生成</button>
-                <canvas id="bingoCanvas"></canvas>
+                <div class="input-group" id="FilterGroup">
+                    <label class="mainLabel add-Border-02" >絞り込み条件</label>
+                    <div class="input-row">
+                        <div class="input-group" id="unitFilterGroup">
+                            <label class="miniLabel add-LeftLine-02">ユニット</label>
+                            <div class="filter-buttons unit-buttons" id="unitFilter">
+                                <button type="button" data-unit="0_VS" class="active">
+                                    <img src="../../images/Team_Logo/virtual_singer.png" alt="Virtual Singer">
+                                </button>
+                                <button type="button" data-unit="1_L/n" class="active">
+                                    <img src="../../images/Team_Logo/leo_need.png" alt="Leo/need">
+                                </button>
+                                <button type="button" data-unit="2_MMJ" class="active">
+                                    <img src="../../images/Team_Logo/more_more_jump.png" alt="MORE MORE JUMP!">
+                                </button>
+                                <button type="button" data-unit="3_VBS" class="active">
+                                    <img src="../../images/Team_Logo/vivid_bad_squad.png" alt="Vivid BAD SQUAD">
+                                </button>
+                                <button type="button" data-unit="4_WxS" class="active">
+                                    <img src="../../images/Team_Logo/wonderlands_x_showtime.png" alt="ワンダーランズ×ショウタイム">
+                                </button>
+                                <button type="button" data-unit="5_25" class="active">
+                                    <img src="../../images/Team_Logo/25_ji_night_cord.png" alt="25時、ナイトコードで。">
+                                </button>
+                                <button type="button" data-unit="9_oth" class="active text">
+                                    Others
+                                </button>
+                            </div>
+                        </div>
+                        <div class="input-group halfLabel" id="categoryFilterGroup">
+                            <label class="miniLabel add-LeftLine-02">MV</label>
+                            <div class="filter-buttons category-buttons" id="categoryFilter">
+                                <button type="button" data-category="mv_3d" class="active category-button text2">3DMV</button>
+                                <button type="button" data-category="mv_2d" class="active category-button text2">2DMV</button>
+                                <button type="button" data-category="original" class="active category-button text2">原曲MV</button>
+                                <button type="button" data-category="image" class="active category-button text2">MVなし</button>
+                            </div>
+                        </div>
+                        <div class="input-group halfLabel" id="musicTypeFilterGroup">
+                            <label class="miniLabel add-LeftLine-02">曲種</label>
+                            <div class="filter-buttons music-type-buttons" id="musicTypeFilter">
+                                <button type="button" data-music-type="true" class="active music-type-button text2">書き下ろし</button>
+                                <button type="button" data-music-type="false" class="active music-type-button text2">既存曲</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label class="mainLabel add-Border-03">生成</label>
+                    <div class="input-row">
+                        <div class="input-group halfLabel generateButtons">
+                            <button id="generateButton" class="action-button text2">生成</button>
+                        </div>
+                        <div class="input-group halfLabel generateButtons">
+                            <button id="copyButton" class="action-button text2">画像をコピー</button>
+                            <button id="saveButton" class="action-button text2">画像を保存</button>
+                            <button id="seedButton" class="action-button text2">シードを発行</button>
+                        </div>
+                    </div>
+                    <canvas id="bingoCanvas"></canvas>
+                </div>
+
+                <div class="input-group">
+                    <label class="mainLabel add-Border-04">使い方は<a href="../04_BINGO_Generator/About_BINGO_Generator.html">こちら</a></label>
+                </div>
             </div>
         </main>
     </div>
@@ -43,6 +121,5 @@
     </footer>
 
     <script src="BINGO_script.js"></script>  
-
 </body>
 </html>
