@@ -150,6 +150,52 @@
     transition: background-color 0.3s ease, filter 0.3s ease; /* ホバー時のトランジション */
   }
 
+.card-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.card-table th, .card-table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: center;
+    cursor: pointer; /* セル全体をクリック可能にするためのスタイル */
+}
+
+.card-table th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+}
+
+.card-table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.card-table tr:nth-child(5n+2):not(:first-child) {
+    border-top: 2px solid #333;
+}
+
+.card-table tr:nth-child(odd) {
+    background-color: #fff;
+}
+
+.card-table img {
+    display: block;
+    margin: 0 auto;
+}
+
+.card-table button {
+    padding: 5px 10px;
+    font-size: 1em;
+    cursor: pointer;
+}
+
+.card-table .cleared {
+  background-color: #ffcccc;
+  font-weight: bold;
+}
+
 @media screen and (max-width: 768px) {
     body {
       font-size: 3.5vw;
