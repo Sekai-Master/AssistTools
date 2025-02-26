@@ -14,6 +14,9 @@ const colorCandidates = [
   "#849", "#B68", "#88C", "#CA8", "#DAC"           // 25時、ナイトコードで。
 ];
 
+// Base64アルファベット（標準の順番）
+const base64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
 // 初期状態：全ユニット、カテゴリ、曲種が選択されている
 let selectedUnits = new Set(["0_VS", "1_L/n", "2_MMJ", "3_VBS", "4_WxS", "5_25", "9_oth"]);
 let selectedCategories = new Set(["mv_3d", "mv_2d", "original", "image"]);
@@ -192,199 +195,216 @@ function initCenterSelection() {
   });
 }
 
+// シード値のエンコード
+function encodeSeedValue(card) {
+    return card.map(cell => {
+        if (cell === "FREE") {
+            return "AA";
+        } else {
+            let id = parseInt(cell.id, 10);
+            if (cell.cleared) {
+                id += 2048;
+            }
+            const firstChar = base64Alphabet[Math.floor(id / 64)];
+            const secondChar = base64Alphabet[id % 64];
+            return firstChar + secondChar;
+        }
+    }).join("");
+}
+
+// シード値のデコード
+function decodeSeedValue(seed) {
+    const card = [];
+    for (let i = 0; i < seed.length; i += 2) {
+        const firstChar = seed[i];
+        const secondChar = seed[i + 1];
+        const id = base64Alphabet.indexOf(firstChar) * 64 + base64Alphabet.indexOf(secondChar);
+        if (id === 0) {
+            card.push("FREE");
+        } else {
+            const cleared = id >= 2048;
+            const songId = (cleared ? id - 2048 : id).toString().padStart(3, '0');
+            const song = transformedMusics.find(song => song.id === songId);
+            if (!song) {
+                throw new Error("シード値に対応する楽曲が見つかりません。ID:" + songId);
+            }
+            song.cleared = cleared;
+            card.push(song);
+        }
+    }
+    return card;
+}
+
 function generateBingoCard() {
-  if (!transformedMusics.length) {
-    alert("楽曲データがまだ読み込まれていません。少し待ってから再度お試しください。");
-    return;
-  }
-
-  const modeButton = document.querySelector('#modeSelection .mode-button.active');
-  const mode = modeButton ? modeButton.getAttribute('data-mode') : 'random';
-
-  if (mode === 'seed') {
-    const seedInput = document.getElementById('seedInput').value.trim();
-    if (!seedInput) {
-      alert("シード値が入力されていません。シード値を入力してください。");
-      return;
-    }
-    try {
-      currentCardData = seedInput.match(/.{1,4}/g); // 4文字ごとに分割
-      if (currentCardData.length !== 25) {
-        throw new Error("シード値の形式が正しくありません。");
-      }
-      const card = currentCardData.map(cell => {
-        if (cell === "FFF0") {
-          return "FREE";
-        } else {
-          const id = parseInt(cell.slice(0, 3), 16).toString().padStart(3, '0');
-          const song = transformedMusics.find(song => song.id === id);
-          if (!song) {
-            console.error("シード値に対応する楽曲が見つかりません。ID:", id);
-            throw new Error("シード値に対応する楽曲が見つかりません。");
-          }
-          return song;
-        }
-      });
-      console.log("シード値から再現されたカード:", card);
-      drawBingoCard(card);
-      return;
-    } catch (error) {
-      console.error("シード値からの再現に失敗しました:", error);
-      alert("シード値からの再現に失敗しました。シード値を確認してください。");
-      return;
-    }
-  }
-
-  const selectedSongs = transformedMusics.filter(song => {
-    return song.published &&
-           selectedUnits.has(song.Unit) &&
-           song.categories.some(category => selectedCategories.has(category)) &&
-           selectedMusicTypes.has(song.isNewlyWrittenMusic);
-  });
-
-  const centerButton = document.querySelector('#centerSelection .center-button.active');
-  const centerMode = centerButton ? centerButton.getAttribute('data-center') : 'free';
-
-  const requiredSongsCount = centerMode === 'free' ? 24 : 25;
-
-  if (selectedSongs.length < requiredSongsCount) {
-    alert(`条件を満たす楽曲が不足しています。現在のフィルター条件に合致する楽曲数: ${selectedSongs.length}曲`);
-    return;
-  }
-
-  shuffleArray(selectedSongs);
-
-  const card = [];
-  let songIndex = 0;
-
-  for (let i = 0; i < 25; i++) {
-    if (i === 12) {
-      if (centerMode === 'free') {
-        card.push("FREE");
-      } else {
-        if (songIndex < selectedSongs.length) {
-          card.push(selectedSongs[songIndex]);
-          songIndex++;
-        } else {
-          alert("カード生成中にエラーが発生しました。条件を満たす楽曲が不足しています。");
-          return;
-        }
-      }
-    } else {
-      if (songIndex < selectedSongs.length) {
-        card.push(selectedSongs[songIndex]);
-        songIndex++;
-      } else {
-        alert("カード生成中にエラーが発生しました。条件を満たす楽曲が不足しています。");
+    if (!transformedMusics.length) {
+        alert("楽曲データがまだ読み込まれていません。少し待ってから再度お試しください。");
         return;
-      }
     }
-  }
 
-  // シード情報の生成：各セルを4文字に圧縮
-  currentCardData = card.map(cell => {
-    if (cell === "FREE") {
-      return "FFF0";
-    } else {
-      let dec = parseInt(cell.id, 10);
-      let hex = dec.toString(16).toUpperCase();
-      hex = hex.padStart(3, "0"); // 例: 34 -> "022"
-      // 初期状態はすべて未クリア（0）
-      return hex + "0";
+    const modeButton = document.querySelector('#modeSelection .mode-button.active');
+    const mode = modeButton ? modeButton.getAttribute('data-mode') : 'random';
+
+    if (mode === 'seed') {
+        const seedInput = document.getElementById('seedInput').value.trim();
+        if (!seedInput) {
+            alert("シード値が入力されていません。シード値を入力してください。");
+            return;
+        }
+        try {
+            const card = decodeSeedValue(seedInput);
+            console.log("シード値から再現されたカード:", card);
+            currentCardData = card; // ここで currentCardData に設定
+            drawBingoCard(card);
+            return;
+        } catch (error) {
+            console.error("シード値からの再現に失敗しました:", error);
+            alert("シード値からの再現に失敗しました。シード値を確認してください。");
+            return;
+        }
     }
-  });
 
-  console.log("生成されたシード値:", currentCardData.join(""));
+    const selectedSongs = transformedMusics.filter(song => {
+        return song.published &&
+               selectedUnits.has(song.Unit) &&
+               song.categories.some(category => selectedCategories.has(category)) &&
+               selectedMusicTypes.has(song.isNewlyWrittenMusic);
+    });
 
-  // キャンバスに描画
-  drawBingoCard(card);
+    const centerButton = document.querySelector('#centerSelection .center-button.active');
+    const centerMode = centerButton ? centerButton.getAttribute('data-center') : 'free';
+
+    const requiredSongsCount = centerMode === 'free' ? 24 : 25;
+
+    if (selectedSongs.length < requiredSongsCount) {
+        alert(`条件を満たす楽曲が不足しています。現在のフィルター条件に合致する楽曲数: ${selectedSongs.length}曲`);
+        return;
+    }
+
+    shuffleArray(selectedSongs);
+
+    const card = [];
+    let songIndex = 0;
+
+    for (let i = 0; i < 25; i++) {
+        if (i === 12) {
+            if (centerMode === 'free') {
+                card.push("FREE");
+            } else {
+                if (songIndex < selectedSongs.length) {
+                    card.push(selectedSongs[songIndex]);
+                    songIndex++;
+                } else {
+                    alert("カード生成中にエラーが発生しました。条件を満たす楽曲が不足しています。");
+                    return;
+                }
+            }
+        } else {
+            if (songIndex < selectedSongs.length) {
+                card.push(selectedSongs[songIndex]);
+                songIndex++;
+            } else {
+                alert("カード生成中にエラーが発生しました。条件を満たす楽曲が不足しています。");
+                return;
+            }
+        }
+    }
+
+    // シード情報の生成
+    const seedValue = encodeSeedValue(card);
+    console.log("生成されたシード値:", seedValue);
+
+    // currentCardData にカードデータを設定
+    currentCardData = card;
+
+    // キャンバスに描画
+    drawBingoCard(card);
 }
 
 function drawBingoCard(card) {
-  const canvas = document.getElementById('bingoCanvas');
-  const ctx = canvas.getContext('2d');
-  
-  const cellSize = 100;
-  const margin = 20;
-  const cardSize = cellSize * 5; // 500px
-
-  canvas.width = cardSize + margin * 2;
-  canvas.height = cardSize + margin * 2;
-  
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  const promises = [];
-
-  for (let i = 0; i < card.length; i++) {
-    const col = i % 5;
-    const row = Math.floor(i / 5);
-    const x = margin + col * cellSize;
-    const y = margin + row * cellSize;
+    const canvas = document.getElementById('bingoCanvas');
+    const ctx = canvas.getContext('2d');
     
-    if (i === 12) {
-      // FREEマス
-      if (card[i] === "FREE") {
-        if (freeIconLoaded) {
-          ctx.save();
-          ctx.globalAlpha = 1;
-          ctx.drawImage(freeIconImage, x, y, cellSize, cellSize);
-          ctx.restore();
+    const cellSize = 100;
+    const margin = 20;
+    const cardSize = cellSize * 5; // 500px
+
+    canvas.width = cardSize + margin * 2;
+    canvas.height = cardSize + margin * 2;
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const promises = [];
+
+    for (let i = 0; i < card.length; i++) {
+        const col = i % 5;
+        const row = Math.floor(i / 5);
+        const x = margin + col * cellSize;
+        const y = margin + row * cellSize;
+        
+        if (i === 12) {
+            // FREEマス
+            if (card[i] === "FREE") {
+                if (freeIconLoaded) {
+                    ctx.save();
+                    ctx.globalAlpha = 1;
+                    ctx.drawImage(freeIconImage, x, y, cellSize, cellSize);
+                    ctx.restore();
+                } else {
+                    ctx.fillStyle = "#cccccc";
+                    ctx.fillRect(x, y, cellSize, cellSize);
+                }
+                ctx.fillStyle = "#222";
+                ctx.font = "italic 25px 'Arial Black'";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.shadowColor = "rgba(255, 255, 255, 0.8)";
+                ctx.shadowBlur = 2;
+                ctx.fillText("FREE", x + cellSize / 2, y + cellSize / 2);
+                ctx.shadowColor = "transparent";
+                ctx.shadowBlur = 0;
+            } else {
+                const song = card[i];
+                const imgURL = "../../MusicDatas/jacket/" + song.jacketLink;
+                const promise = loadImage(imgURL).then(img => {
+                    ctx.drawImage(img, x, y, cellSize, cellSize);
+                }).catch(err => {
+                    console.error("画像読み込みエラー:", err);
+                    ctx.fillStyle = "#999999";
+                    ctx.fillRect(x, y, cellSize, cellSize);
+                });
+                promises.push(promise);
+            }
         } else {
-          ctx.fillStyle = "#cccccc";
-          ctx.fillRect(x, y, cellSize, cellSize);
+            const song = card[i];
+            const imgURL = "../../MusicDatas/jacket/" + song.jacketLink;
+            const promise = loadImage(imgURL).then(img => {
+                ctx.drawImage(img, x, y, cellSize, cellSize);
+            }).catch(err => {
+                console.error("画像読み込みエラー:", err);
+                ctx.fillStyle = "#999999";
+                ctx.fillRect(x, y, cellSize, cellSize);
+            });
+            promises.push(promise);
         }
-        ctx.fillStyle = "#222";
-        ctx.font = "italic 25px 'Arial Black'";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.shadowColor = "rgba(255, 255, 255, 0.8)";
-        ctx.shadowBlur = 2;
-        ctx.fillText("FREE", x + cellSize / 2, y + cellSize / 2);
-        ctx.shadowColor = "transparent";
-        ctx.shadowBlur = 0;
-      } else {
-        const song = card[i];
-        const imgURL = "../../MusicDatas/jacket/" + song.jacketLink;
-        const promise = loadImage(imgURL).then(img => {
-          ctx.drawImage(img, x, y, cellSize, cellSize);
-        }).catch(err => {
-          console.error("画像読み込みエラー:", err);
-          ctx.fillStyle = "#999999";
-          ctx.fillRect(x, y, cellSize, cellSize);
-        });
-        promises.push(promise);
-      }
-    } else {
-      const song = card[i];
-      const imgURL = "../../MusicDatas/jacket/" + song.jacketLink;
-      const promise = loadImage(imgURL).then(img => {
-        ctx.drawImage(img, x, y, cellSize, cellSize);
-      }).catch(err => {
-        console.error("画像読み込みエラー:", err);
-        ctx.fillStyle = "#999999";
-        ctx.fillRect(x, y, cellSize, cellSize);
-      });
-      promises.push(promise);
     }
-  }
-  
-  Promise.all(promises).then(() => {
-    drawSignature(ctx, canvas, margin, cardSize);
     
-    // 枠線（角丸）描画：2pxでランダムカラー
-    const randomColor = colorCandidates[Math.floor(Math.random() * colorCandidates.length)];
-    ctx.save();
-    ctx.strokeStyle = randomColor;
-    ctx.lineWidth = 4;
-    drawRoundedRect(ctx, margin, margin, cardSize, cardSize, 10);
-    ctx.stroke();
-    ctx.restore();
+    Promise.all(promises).then(() => {
+        drawSignature(ctx, canvas, margin, cardSize);
+        
+        // 枠線（角丸）描画：4pxでランダムカラー
+        const randomColor = colorCandidates[Math.floor(Math.random() * colorCandidates.length)];
+        ctx.save();
+        ctx.strokeStyle = randomColor;
+        ctx.lineWidth = 4;
+        drawRoundedRect(ctx, margin, margin, cardSize, cardSize, 10);
+        ctx.stroke();
+        ctx.restore();
 
-    console.log("ビンゴカード生成完了");
-    document.getElementById('copyButton').disabled = false;
-    document.getElementById('saveButton').disabled = false;
-    document.getElementById('seedButton').disabled = false;
-  });
+        console.log("ビンゴカード生成完了");
+        document.getElementById('copyButton').disabled = false;
+        document.getElementById('saveButton').disabled = false;
+        document.getElementById('seedButton').disabled = false;
+    });
 }
 
 function drawSignature(ctx, canvas, margin, cardSize) {
@@ -462,17 +482,17 @@ function saveCanvasImage() {
 }
 
 function generateSeedValue() {
-  if (!currentCardData) {
-    alert("シード値を生成できませんでした。まずカードを生成してください。");
-    return;
-  }
-  const seedValue = currentCardData.join(""); // 100文字の文字列
-  navigator.clipboard.writeText(seedValue)
-    .then(() => {
-      alert("シード値をコピーしました:\n" + seedValue);
-    })
-    .catch(err => {
-      console.error("シード値のコピーに失敗:", err);
-      alert("シード値のコピーに失敗しました。");
-    });
+    if (!currentCardData) {
+        alert("シード値を生成できませんでした。まずカードを生成してください。");
+        return;
+    }
+    const seedValue = encodeSeedValue(currentCardData); // currentCardData をエンコード
+    navigator.clipboard.writeText(seedValue)
+        .then(() => {
+            alert("シード値をコピーしました:\n" + seedValue);
+        })
+        .catch(err => {
+            console.error("シード値のコピーに失敗:", err);
+            alert("シード値のコピーに失敗しました。");
+        });
 }
