@@ -12,6 +12,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c&display=swap" rel="stylesheet">
     <link rel="icon" href="../../images/icon.jpeg" type="image/jpeg">
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2"></script>
 </head>
 <body>
     <div class="wrapper">
@@ -39,6 +40,13 @@
                                 <button type="button" data-center="free" class="active center-button">FREE</button>
                                 <button type="button" data-center="random" class="center-button">ランダム</button>
                                 <button type="button" data-center="specified" class="center-button">指定</button>
+                            </div>
+                        </div>
+                        <div class="input-group halfLabel" id="centerSongSelectionGroup" style="display: none;">
+                            <label class="miniLabel add-LeftLine-01">中央マスの曲</label>
+                            <div id="centerSongSelection" class="song-selection">
+                                <span id="centerSongTitle">Tell Your World</span>
+                                <button type="button" id="selectCenterSongButton">曲を選択</button>
                             </div>
                         </div>
                         <div class="input-group halfLabel" style="display: none;" id="seedInputGroup">
@@ -112,6 +120,51 @@
 
                 <div class="input-group">
                     <label class="mainLabel add-Border-04">使い方は<a href="../04_BINGO_Generator/About_BINGO_Generator.html">こちら</a></label>
+                </div>
+
+                <!-- モーダルウィンドウ（初期は非表示） -->
+                <div id="songSearchModal" class="modal" style="display:none;">
+                    <div class="modal-content">
+                        <h2>楽曲検索</h2>
+
+                        <!-- 条件検索アコーディオン -->
+                        <div class="accordion">
+                            <button class="accordion-button" id="toggleConditionSearch">条件検索</button>
+                            <div class="accordion-content" id="conditionSearchContent" style="display: none;">
+                                <label for="modalUnitFilter">ユニット</label>
+                                <select id="modalUnitFilter">
+                                    <option value="all">すべて</option>
+                                    <option value="0_VS">Virtual Singer</option>
+                                    <option value="1_L/n">Leo/need</option>
+                                    <option value="2_MMJ">MORE MORE JUMP!</option>
+                                    <option value="3_VBS">Vivid BAD SQUAD</option>
+                                    <option value="4_WxS">ワンダーランズ×ショウタイム</option>
+                                    <option value="5_25">25時、ナイトコードで。</option>
+                                    <option value="9_oth">Others</option>
+                                </select>
+                        
+                                <label for="modalCategoryFilter">MV形式</label>
+                                <select id="modalCategoryFilter">
+                                    <option value="all">すべて</option>
+                                    <option value="mv_3d">3DMV</option>
+                                    <option value="mv_2d">2DMV</option>
+                                    <option value="original">原曲MV</option>
+                                    <option value="image">MVなし</option>
+                                </select>
+                        
+                                <label for="modalMusicTypeFilter">曲種</label>
+                                <select id="modalMusicTypeFilter">
+                                    <option value="all">すべて</option>
+                                    <option value="true">書き下ろし</option>
+                                    <option value="false">既存曲</option>
+                                </select>
+                            </div>
+                        </div>
+                        <input type="text" id="songSearchInput" placeholder="曲名を入力..." />
+                        <div id="searchResults"></div>
+                    
+                        <button id="closeModalButton">閉じる</button>
+                    </div>
                 </div>
             </div>
         </main>

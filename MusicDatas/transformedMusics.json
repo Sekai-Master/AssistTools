@@ -2105,7 +2105,7 @@
     "title": "アイスドロップ",
     "pronunciation": "あいすどろっぷ",
     "creatorArtistId": 78,
-    "artistName": "aqu3ra",
+    "artistName": "Aqu3ra",
     "default": 2308501,
     "Unit": "2_MMJ",
     "categories": [
@@ -4581,7 +4581,7 @@
     "title": "ロンリーユニバース",
     "pronunciation": "ろんりーゆにばーす",
     "creatorArtistId": 78,
-    "artistName": "aqu3ra",
+    "artistName": "Aqu3ra",
     "default": 1322201,
     "Unit": "2_MMJ",
     "categories": [
@@ -8811,7 +8811,8 @@
     "default": 2646201,
     "Unit": "5_25",
     "categories": [
-      "mv_3d"
+      "mv_3d",
+      "mv_2d"
     ],
     "publishedAt": 1733749500000,
     "published": true,
@@ -9126,6 +9127,25 @@
     "event_rate": 113
   },
   {
+    "id": "521",
+    "title": "オーバーライド",
+    "pronunciation": "おーばーらいど",
+    "creatorArtistId": 244,
+    "artistName": "吉田夜世",
+    "default": 1349701,
+    "Unit": "2_MMJ",
+    "categories": [
+      "mv_3d"
+    ],
+    "publishedAt": 1741327200000,
+    "published": false,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_521.webp",
+    "music_time": 120,
+    "event_rate": 113
+  },
+  {
     "id": "522",
     "title": "WAVE",
     "pronunciation": "うぇーぶ",
@@ -9352,6 +9372,25 @@
     "jacketLink": "jacket_s_534.webp",
     "music_time": 128.9,
     "event_rate": 115
+  },
+  {
+    "id": "536",
+    "title": "Fire◎Flower (Rerec)",
+    "pronunciation": "ふぁいあふらわー",
+    "creatorArtistId": 141,
+    "artistName": "halyosy",
+    "default": 3749501,
+    "Unit": "9_oth",
+    "categories": [
+      "mv_3d"
+    ],
+    "publishedAt": 1740895200000,
+    "published": false,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_536.webp",
+    "music_time": 103.9,
+    "event_rate": 108
   },
   {
     "id": "541",
@@ -9905,6 +9944,25 @@
     "event_rate": 116
   },
   {
+    "id": "580",
+    "title": "三日月ステップ",
+    "pronunciation": "みかづきすてっぷ",
+    "creatorArtistId": 205,
+    "artistName": "r-906",
+    "default": 1449601,
+    "Unit": "3_VBS",
+    "categories": [
+      "original"
+    ],
+    "publishedAt": 1740981600000,
+    "published": false,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_580.webp",
+    "music_time": 122.2,
+    "event_rate": 113
+  },
+  {
     "id": "581",
     "title": "厨病激発ボーイ",
     "pronunciation": "ちゅうびょうげきはつぼーい",
@@ -9966,7 +10024,7 @@
     "title": "クリスタルスノウ",
     "pronunciation": "くりすたるすのう",
     "creatorArtistId": 78,
-    "artistName": "aqu3ra",
+    "artistName": "Aqu3ra",
     "default": 1148801,
     "Unit": "0_VS",
     "categories": [

@@ -32,54 +32,53 @@
     border-radius: 8px; /* 角を丸くする */
     transition: background-color 0.3s; /* 背景色の変化にトランジションを追加 */
     box-shadow: inset -1px -1px 0px 0px #000; /* ボタンの影 */
-  }
+}
   
-  .action-button:hover {
+.action-button:hover {
     background-color: var(--member-color-03); /* ホバー時の背景色 */
-  }
+}
 
 /* ユニット選択ボタンのスタイル */
 .filter-buttons {
-  display: flex;
-  flex-wrap: nowrap; /* 横並びにする */
-  justify-content: space-between; /* ボタン間を均等に配置 */
-  margin-top: 10px;
-  gap: 3px;
+    display: flex;
+    flex-wrap: nowrap; /* 横並びにする */
+    justify-content: space-between; /* ボタン間を均等に配置 */
+    margin-top: 10px;
+    gap: 3px;
 }
 
 .filter-buttons button {
-  flex: 1; /* ボタンの幅を均等にする */
-  margin-bottom: 10px; /* ボタン間の垂直方向のマージン */
-  border: 3px solid var(--member-color-02); /* ボタンの枠線 */
-  padding: 10px 0px 10px 0px; /* ボタンの内側余白 */
-  border-radius: 8px; /* ボタンの角丸 */
-  background-color: white;
-  cursor: pointer;
-  transition: background-color 0.3s ease, filter 0.3s ease; /* ホバー時のトランジション */
+    flex: 1; /* ボタンの幅を均等にする */
+    margin-bottom: 10px; /* ボタン間の垂直方向のマージン */
+    border: 3px solid var(--member-color-02); /* ボタンの枠線 */
+    padding: 10px 0px 10px 0px; /* ボタンの内側余白 */
+    border-radius: 8px; /* ボタンの角丸 */
+    background-color: white;
+    cursor: pointer;
+    transition: background-color 0.3s ease, filter 0.3s ease; /* ホバー時のトランジション */
 }
 
 .filter-buttons button:hover {
-  background-color: #f0f0f0; /* ホバー時の背景色 */
+    background-color: #f0f0f0; /* ホバー時の背景色 */
 }
 
 .filter-buttons button.active {
-  background-color: #FCD; /* 選択時の背景色 */
-  border-color: var(--member-color-02); /* 選択時の枠線の色 */
-  color: white; /* 選択時のテキストの色 */
-  filter: none; /* 選択時はグレースケールを解除 */
+    background-color: #FCD; /* 選択時の背景色 */
+    border-color: var(--member-color-02); /* 選択時の枠線の色 */
+    color: white; /* 選択時のテキストの色 */
+    filter: none; /* 選択時はグレースケールを解除 */
 }
 
 .filter-buttons button img {
-  max-width: 100%; /* 画像がボタンの幅を超えないように */
-  height: auto; /* アスペクト比を維持 */
+    max-width: 100%; /* 画像がボタンの幅を超えないように */
+    height: auto; /* アスペクト比を維持 */
 }
 
 .filter-buttons button.text {
-  font-size: 2em;
-  font-family:  'Noto Sans JP', sans-serif;
-  font-weight: bold;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
-  
+    font-size: 2em;
+    font-family:  'Noto Sans JP', sans-serif;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
 }
 
 .filter-buttons button.text2 {
@@ -87,8 +86,7 @@
     font-family:  'Noto Sans JP', sans-serif;
     font-weight: bold;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
-    
-  }
+}
 
 .mode-buttons {
     display: flex;
@@ -96,9 +94,9 @@
     justify-content: space-between; /* ボタン間を均等に配置 */
     margin-top: 10px;
     gap: 3px;
-  }
+}
   
-  .mode-buttons button {
+.mode-buttons button {
     flex: 1; /* ボタンの幅を均等にする */
     margin-bottom: 10px; /* ボタン間の垂直方向のマージン */
     border: 3px solid var(--member-color-01); /* ボタンの枠線 */
@@ -107,48 +105,47 @@
     background-color: white;
     cursor: pointer;
     transition: background-color 0.3s ease, filter 0.3s ease; /* ホバー時のトランジション */
-  }
+}
   
-  .mode-buttons button:hover {
+.mode-buttons button:hover {
     background-color: #f0f0f0; /* ホバー時の背景色 */
-  }
+}
   
-  .mode-buttons button.active {
+.mode-buttons button.active {
     background-color: #FEA; /* 選択時の背景色 */
     border-color: var(--member-color-01); /* 選択時の枠線の色 */
     color: black; /* 選択時のテキストの色 */
     font-weight: bold; /* 選択時のテキストの太字 */
     filter: none; /* 選択時はグレースケールを解除 */
-  }
+}
   
-  .mode-buttons button img {
+.mode-buttons button img {
     max-width: 100%; /* 画像がボタンの幅を超えないように */
     height: auto; /* アスペクト比を維持 */
-  }
+}
   
-  .mode-buttons button.text {
+.mode-buttons button.text {
     font-size: 2em;
     font-family:  'Noto Sans JP', sans-serif;
     font-weight: bold;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
-    
-  }
+}
 
-  .generateButtons {
+.generateButtons {
     display: flex;
     flex-wrap: nowrap; /* 横並びにする */
     justify-content: space-between; /* ボタン間を均等に配置 */
     margin-top: 10px;
     gap: 3px;
-  }
+}
 
-  .generateButtons button {
+.generateButtons button {
     flex: 1; /* ボタンの幅を均等にする */
     margin-bottom: 10px; /* ボタン間の垂直方向のマージン */
     border-radius: 8px; /* ボタンの角丸 */
     cursor: pointer;
     transition: background-color 0.3s ease, filter 0.3s ease; /* ホバー時のトランジション */
-  }
+}
 
 .card-table {
     width: 100%;
@@ -192,47 +189,198 @@
 }
 
 .card-table .cleared {
-  background-color: #ffcccc;
-  font-weight: bold;
+    background-color: #ffcccc;
+    font-weight: bold;
+}
+
+#bingoCanvas {
+    display: block;
+    margin: 0 auto;
+}
+
+/* モーダルウィンドウのスタイル */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7); /* 背景を少し暗くする */
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-content {
+  background: #fff;
+  padding: 20px;
+  width: 80%;
+  max-width: 600px;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* 影を追加 */
+  position: relative;
+  text-align: center;
+}
+
+.modal-content h2 {
+  font-size: 1.5em;
+  margin-bottom: 20px;
+  color: var(--member-color-01); 
+}
+
+.modal-content input[type="text"] {
+  width: 95%;
+  padding: 10px;
+  margin-bottom: 20px;
+  margin-top: 20px;
+  border: 1px solid var(--member-color-02);
+  border-radius: 5px;
+  font-size: 1em;
+}
+
+.modal-content #searchResults {
+  height: 300px;
+  overflow-y: auto;
+  margin-bottom: 20px;
+  text-align: left;
+  border: var(--member-color-02)  1px solid;
+  border-radius: 5px;
+}
+
+.modal-content #searchResults div {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.modal-content #searchResults div:hover {
+  background-color: #f0f0f0;
+}
+
+
+/* 検索ボックスのフォーカス時のスタイルを変更 */
+#songSearchInput:focus {
+  outline: none;
+  border: 2px solid var(--member-color-02); /* ここでボーダーの色を変更 */
+  box-shadow: 0 0 5px var(--member-color-02); /* ボックスシャドウを追加して強調 */
+}
+
+.modal-content button {
+  background-color: var(--member-color-03);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.modal-content button:hover {
+  background-color: var(--member-color-04);
+}
+
+/* アコーディオンスタイル */
+.accordion {
+  margin-top: 20px;
+}
+
+.accordion-button {
+  background-color: var(--member-color-03);
+  color: white;
+  border: none;
+  padding: 10px;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.accordion-button:hover {
+  background-color: var(--member-color-04);
+}
+
+.accordion-content {
+  padding: 10px;
+  display: none;
+  background-color: #f9f9f9;
+  border: 1px solid #ddd;
+  border-top: none;
 }
 
 @media screen and (max-width: 768px) {
+  .modal-content {
+    width: 90%;
+    padding: 15px;
+  }
+
+  .modal-content h2 {
+    font-size: 1.2em;
+  }
+
+  .modal-content input[type="text"] {
+    font-size: 1em;
+  }
+
+  .modal-content button {
+    padding: 8px 16px;
+    font-size: 0.9em;
+  }
+}
+
+.mode-toggle button.active {
+  background-color: #007bff;
+  color: #fff;
+}
+.mode-toggle button {
+  margin-right: 5px;
+}
+
+
+@media screen and (max-width: 768px) {
     body {
-      font-size: 3.5vw;
+        font-size: 3.5vw;
     }
-  
+
     .container {
-      max-width: 85%;
-      padding: 15px;
+        max-width: 85%;
+        padding: 15px;
     }
-  
+
     .header {
-      max-width: 85%;
-      margin: 10px auto;
-      padding: 15px;
+        max-width: 85%;
+        margin: 10px auto;
+        padding: 15px;
     }
-  
+
     .header h1 {
-      font-size: 24px;
+        font-size: 24px;
     }
-  
+
     .input-group input {
-      font-size: 3.5vw;
+        font-size: 3.5vw;
     }
 
     .filter-buttons {
         flex-wrap: wrap; /* 折り返しを許可 */
         justify-content: flex-start; /* 左寄せ */
-      }
-    
-      .filter-buttons button {
+    }
+
+    .filter-buttons button {
         flex: 1 0 30%; /* 3列にする */
         margin-right: 2%; /* ボタン間の水平方向のマージン */
         margin-bottom: 5px; /* ボタン間の垂直方向のマージン */
         padding: 5px; /* ボタンの内側余白を小さく */
-      }
+    }
 
-      .input-row {
+    .input-row {
         flex-direction: column;
+    }
+
+    #bingoCanvas {
+        width: 100%;
+        max-width: 540px;
+        height: auto;
     }
 }
