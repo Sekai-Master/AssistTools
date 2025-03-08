@@ -109,6 +109,17 @@ window.addEventListener('load', () => {
     document.getElementById('songSearchInput').addEventListener('input', function() {
     filterSongs();
     });
+
+    // アコーディオンの開閉イベントを設定
+    document.getElementById('toggleConditionSearch').addEventListener('click', () => {
+        console.log('アコーディオンボタンがクリックされました');
+        const content = document.getElementById('conditionSearchContent');
+        if (content.style.display === 'block') {
+            content.style.display = 'none';
+        } else {
+            content.style.display = 'block';
+        }
+    });
 });
 
 // ------------------------------
