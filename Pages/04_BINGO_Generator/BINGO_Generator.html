@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="../../common.css">
     <link rel="stylesheet" href="../Header/header.css">
     <link rel="stylesheet" href="BINGO_style.css">
+    <link rel="stylesheet" href="loader.css">
     <script src="../Header/header.js" defer></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -46,7 +47,7 @@
                             <label class="miniLabel add-LeftLine-01">中央マスの曲</label>
                             <div id="centerSongSelection" class="song-selection">
                                 <span id="centerSongTitle">Tell Your World</span>
-                                <button type="button" id="selectCenterSongButton">曲を選択</button>
+                                <button type="button" id="selectCenterSongButton" class="action-button">曲を選択</button>
                             </div>
                         </div>
                         <div class="input-group halfLabel" style="display: none;" id="seedInputGroup">
@@ -114,6 +115,21 @@
                             <button id="seedButton" class="action-button text2">シードを発行</button>
                         </div>
                     </div>
+                    <div 
+                        id="loader" 
+                        class="ball-grid-pulse" 
+                        style="display: none;margin-top: 270px; /* 上部に余白 */margin-bottom: 270px; /* 下部に余白 */"
+                    >
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                    </div>
                     <canvas id="bingoCanvas"></canvas>
                     <div id="cardTableContainer"></div>
                 </div>
@@ -174,6 +190,9 @@
         <p>© 2024 @Noritake All Rights Reserved.</p>
     </footer>
 
-    <script src="BINGO_script.js"></script>  
+    <script src="BINGO_globals.js" defer></script>
+    <script src="BINGO_helpers.js" defer></script>
+    <script src="BINGO_draw.js" defer></script>
+    <script src="BINGO_events.js" defer></script>  
 </body>
 </html>

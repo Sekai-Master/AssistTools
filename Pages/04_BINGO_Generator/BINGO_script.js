@@ -7,7 +7,7 @@ let currentCardData = null;
 let currentBorderColor = null; // 現在の枠線の色を保持する変数
 let editingCellIndex = null; // 置換対象のカード内インデックス
 let fuse = null; // Fuse.js インスタンス
-let centerSong = { title: "Tell Your World", id: "001", jacketLink: "jacket_s_001.webp" };
+let centerSong = { title: "Tell Your World", id: "001", jacketLink: "jacket_s_001.webp", Unit: "0_VS" };
 
 // ◆ 枠線の色候補（CSS変数に対応する色をリスト化）
 const colorCandidates = [
@@ -230,12 +230,13 @@ window.addEventListener('load', () => {
   generateButton.addEventListener('click', generateBingoCard);
   copyButton.addEventListener('click', copyCanvasImage);
   saveButton.addEventListener('click', saveCanvasImage);
-  seedButton.addEventListener('click', generateSeedValue); 
+  seedButton.addEventListener('click', generateSeedValue);
   closeModalButton.addEventListener('click', closeSongSearchModal);
   selectCenterSongButton.addEventListener('click', () => {
-    editingCellIndex = 12; // 中央マスのインデックス
+    editingCellIndex = null; // 中央マスのインデックスをリセット
     openSongSearchModal();
   });
+
 
   // メインページのフィルター要素
   const unitFilter = document.getElementById('unitFilter');
@@ -892,12 +893,6 @@ function closeSongSearchModal() {
   editingCellIndex = null;
 }
 
-// アコーディオンのトグル
-document.getElementById('toggleConditionSearch').addEventListener('click', () => {
-  const content = document.getElementById('conditionSearchContent');
-  content.style.display = content.style.display === 'none' ? 'block' : 'none';
-});
-
 // 検索結果項目の生成
 function addSearchResultItem(song) {
   const div = document.createElement('div');
@@ -910,6 +905,10 @@ function addSearchResultItem(song) {
       updateCardAtIndex(editingCellIndex, newSong);
       const newSeed = encodeSeedValue(currentCardData);
       console.log("更新後のシード値:", newSeed);
+    } else {
+      // 中央マスの曲を選択した場合の処理
+      centerSong = { ...song, cleared: false };
+      document.getElementById('centerSongTitle').textContent = song.title;
     }
     closeSongSearchModal();
   });
