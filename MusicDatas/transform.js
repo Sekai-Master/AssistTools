@@ -72,7 +72,7 @@ const path = require('path');
     }
     
     // 画像ダウンロード用のURL（このURLを使って画像をダウンロードする）
-    const jacketUrl = `https://storage.sekai.best/sekai-jp-assets/music/jacket/jacket_s_${formattedId}_rip/jacket_s_${formattedId}.webp`;
+    const jacketUrl = `https://storage.sekai.best/sekai-jp-assets/music/jacket/jacket_s_${formattedId}/jacket_s_${formattedId}.webp`;
     // JSON内に残すのはファイル名のみ
     const jacketLink = `jacket_s_${formattedId}.webp`;
     

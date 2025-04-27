@@ -2336,8 +2336,8 @@
     "id": "152",
     "title": "だれかの心臓になれたなら",
     "pronunciation": "だれかのしんぞうになれたら",
-    "creatorArtistId": 85,
-    "artistName": "ユリイ・カノン（月詠み）",
+    "creatorArtistId": 277,
+    "artistName": "ユリイ・カノン",
     "default": 1110101,
     "Unit": "0_VS",
     "categories": [
@@ -8975,6 +8975,25 @@
     "event_rate": 112
   },
   {
+    "id": "509",
+    "title": "ライアーダンサー",
+    "pronunciation": "らいあーだんさー",
+    "creatorArtistId": 271,
+    "artistName": "マサラダ",
+    "default": 1549901,
+    "Unit": "4_WxS",
+    "categories": [
+      "mv_3d"
+    ],
+    "publishedAt": 1741586400000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_509.webp",
+    "music_time": 123.1,
+    "event_rate": 114
+  },
+  {
     "id": "511",
     "title": "如月アテンション",
     "pronunciation": "きさらぎあてんしょん",
@@ -9125,6 +9144,25 @@
     "jacketLink": "jacket_s_519.webp",
     "music_time": 122.1,
     "event_rate": 113
+  },
+  {
+    "id": "520",
+    "title": "透明エレジー",
+    "pronunciation": "とうめいえれじー",
+    "creatorArtistId": 39,
+    "artistName": "n-buna",
+    "default": 1250101,
+    "Unit": "1_L/n",
+    "categories": [
+      "mv_3d"
+    ],
+    "publishedAt": 1742191200000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_520.webp",
+    "music_time": 122.9,
+    "event_rate": 114
   },
   {
     "id": "521",
@@ -9391,6 +9429,25 @@
     "jacketLink": "jacket_s_536.webp",
     "music_time": 103.9,
     "event_rate": 108
+  },
+  {
+    "id": "537",
+    "title": "花に風",
+    "pronunciation": "はなにかぜ",
+    "creatorArtistId": 11,
+    "artistName": "バルーン",
+    "default": 1451001,
+    "Unit": "3_VBS",
+    "categories": [
+      "mv_3d"
+    ],
+    "publishedAt": 1744092000000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_537.webp",
+    "music_time": 128.7,
+    "event_rate": 115
   },
   {
     "id": "541",
@@ -9724,7 +9781,7 @@
     "default": 2648201,
     "Unit": "5_25",
     "categories": [
-      "image"
+      "mv_2d"
     ],
     "publishedAt": 1738055400000,
     "published": true,
@@ -9819,7 +9876,7 @@
     "default": 2146601,
     "Unit": "0_VS",
     "categories": [
-      "image"
+      "mv_2d"
     ],
     "publishedAt": 1735365600000,
     "published": true,
@@ -9857,7 +9914,7 @@
     "default": 2348401,
     "Unit": "2_MMJ",
     "categories": [
-      "image"
+      "mv_2d"
     ],
     "publishedAt": 1738314600000,
     "published": true,
@@ -9876,7 +9933,7 @@
     "default": 2448101,
     "Unit": "3_VBS",
     "categories": [
-      "image"
+      "mv_2d"
     ],
     "publishedAt": 1737796200000,
     "published": true,
@@ -9895,7 +9952,7 @@
     "default": 2548601,
     "Unit": "4_WxS",
     "categories": [
-      "image"
+      "mv_2d"
     ],
     "publishedAt": 1738573800000,
     "published": true,
@@ -9914,7 +9971,7 @@
     "default": 2148901,
     "Unit": "0_VS",
     "categories": [
-      "image"
+      "mv_2d"
     ],
     "publishedAt": 1739027400000,
     "published": true,
@@ -9933,7 +9990,7 @@
     "default": 2748301,
     "Unit": "9_oth",
     "categories": [
-      "image"
+      "mv_2d"
     ],
     "publishedAt": 1738141800000,
     "published": true,
@@ -10020,6 +10077,101 @@
     "event_rate": 114
   },
   {
+    "id": "588",
+    "title": "プラネットヒーロー",
+    "pronunciation": "ぷらねっとひーろー",
+    "creatorArtistId": 272,
+    "artistName": "打打だいず＋いるかアイス",
+    "default": 1150001,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1741932000000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_588.webp",
+    "music_time": 121,
+    "event_rate": 113
+  },
+  {
+    "id": "589",
+    "title": "バレリーコ",
+    "pronunciation": "ばれりーこ",
+    "creatorArtistId": 2,
+    "artistName": "みきとP",
+    "default": 1150901,
+    "Unit": "0_VS",
+    "categories": [
+      "original"
+    ],
+    "publishedAt": 1743832800000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_589.webp",
+    "music_time": 129.2,
+    "event_rate": 115
+  },
+  {
+    "id": "590",
+    "title": "マンハッタン",
+    "pronunciation": "まんはったん",
+    "creatorArtistId": 142,
+    "artistName": "wotaku",
+    "default": 1150701,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1743660000000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_590.webp",
+    "music_time": 131,
+    "event_rate": 116
+  },
+  {
+    "id": "591",
+    "title": "吉原ラメント 再来盤",
+    "pronunciation": "よしわららめんと さいらいばん",
+    "creatorArtistId": 275,
+    "artistName": "亜沙",
+    "default": 1150601,
+    "Unit": "0_VS",
+    "categories": [
+      "original"
+    ],
+    "publishedAt": 1743573600000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_591.webp",
+    "music_time": 136.5,
+    "event_rate": 117
+  },
+  {
+    "id": "592",
+    "title": "クイーンオブハート",
+    "pronunciation": "くいーんおぶはーと",
+    "creatorArtistId": 276,
+    "artistName": "奏音69 (Royal Scandal)",
+    "default": 1150801,
+    "Unit": "0_VS",
+    "categories": [
+      "original"
+    ],
+    "publishedAt": 1743746400000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_592.webp",
+    "music_time": 124.6,
+    "event_rate": 114
+  },
+  {
     "id": "593",
     "title": "クリスタルスノウ",
     "pronunciation": "くりすたるすのう",
@@ -10037,5 +10189,157 @@
     "jacketLink": "jacket_s_593.webp",
     "music_time": 104.8,
     "event_rate": 109
+  },
+  {
+    "id": "594",
+    "title": "Call!!",
+    "pronunciation": "こーる",
+    "creatorArtistId": 274,
+    "artistName": "沫尾",
+    "default": 1150501,
+    "Unit": "0_VS",
+    "categories": [
+      "original"
+    ],
+    "publishedAt": 1743400800000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_594.webp",
+    "music_time": 101.7,
+    "event_rate": 108
+  },
+  {
+    "id": "596",
+    "title": "D/N/A",
+    "pronunciation": "でぃー・えぬ・えー",
+    "creatorArtistId": 259,
+    "artistName": "Azari",
+    "default": 2650201,
+    "Unit": "5_25",
+    "categories": [
+      "mv_2d"
+    ],
+    "publishedAt": 1742450400000,
+    "published": true,
+    "isNewlyWrittenMusic": true,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_596.webp",
+    "music_time": 129,
+    "event_rate": 115
+  },
+  {
+    "id": "603",
+    "title": "ドレミファロンド",
+    "pronunciation": "どれみふぁろんど",
+    "creatorArtistId": 48,
+    "artistName": "40mP",
+    "default": 1550301,
+    "Unit": "4_WxS",
+    "categories": [
+      "original"
+    ],
+    "publishedAt": 1742796000000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_603.webp",
+    "music_time": 129.6,
+    "event_rate": 116
+  },
+  {
+    "id": "604",
+    "title": "Packaged",
+    "pronunciation": "ぱっけーじど",
+    "creatorArtistId": 270,
+    "artistName": "kz",
+    "default": 1149801,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1741521600000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_604.webp",
+    "music_time": 128.8,
+    "event_rate": 115
+  },
+  {
+    "id": "605",
+    "title": "Sympathy",
+    "pronunciation": "しんぱしー",
+    "creatorArtistId": 50,
+    "artistName": "Eve",
+    "default": 2250401,
+    "Unit": "1_L/n",
+    "categories": [
+      "mv_2d"
+    ],
+    "publishedAt": 1743314400000,
+    "published": true,
+    "isNewlyWrittenMusic": true,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_605.webp",
+    "music_time": 97.5,
+    "event_rate": 107
+  },
+  {
+    "id": "606",
+    "title": "スーサイドパレヱド",
+    "pronunciation": "すーさいどぱれえど",
+    "creatorArtistId": 277,
+    "artistName": "ユリイ・カノン",
+    "default": 1651101,
+    "Unit": "5_25",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1744610400000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_606.webp",
+    "music_time": 115.7,
+    "event_rate": 112
+  },
+  {
+    "id": "607",
+    "title": "回る空うさぎ",
+    "pronunciation": "まわるそらうさぎ",
+    "creatorArtistId": 10,
+    "artistName": "Orangestar",
+    "default": 1351301,
+    "Unit": "2_MMJ",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1745301600000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_607.webp",
+    "music_time": 131.9,
+    "event_rate": 116
+  },
+  {
+    "id": "608",
+    "title": "星宙メランコリア",
+    "pronunciation": "ほしぞらめらんこりあ",
+    "creatorArtistId": 278,
+    "artistName": "yuichi NAGAO",
+    "default": 1151201,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1744956000000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_608.webp",
+    "music_time": 122.9,
+    "event_rate": 114
   }
 ]
