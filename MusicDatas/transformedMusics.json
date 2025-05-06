@@ -8980,7 +8980,7 @@
     "pronunciation": "らいあーだんさー",
     "creatorArtistId": 271,
     "artistName": "マサラダ",
-    "default": 1549901,
+    "default": 1549801,
     "Unit": "4_WxS",
     "categories": [
       "mv_3d"
@@ -9151,7 +9151,7 @@
     "pronunciation": "とうめいえれじー",
     "creatorArtistId": 39,
     "artistName": "n-buna",
-    "default": 1250101,
+    "default": 1250001,
     "Unit": "1_L/n",
     "categories": [
       "mv_3d"
@@ -9170,7 +9170,7 @@
     "pronunciation": "おーばーらいど",
     "creatorArtistId": 244,
     "artistName": "吉田夜世",
-    "default": 1349701,
+    "default": 1349601,
     "Unit": "2_MMJ",
     "categories": [
       "mv_3d"
@@ -9417,7 +9417,7 @@
     "pronunciation": "ふぁいあふらわー",
     "creatorArtistId": 141,
     "artistName": "halyosy",
-    "default": 3749501,
+    "default": 3749401,
     "Unit": "9_oth",
     "categories": [
       "mv_3d"
@@ -9436,7 +9436,7 @@
     "pronunciation": "はなにかぜ",
     "creatorArtistId": 11,
     "artistName": "バルーン",
-    "default": 1451001,
+    "default": 1450901,
     "Unit": "3_VBS",
     "categories": [
       "mv_3d"
@@ -9448,6 +9448,44 @@
     "jacketLink": "jacket_s_537.webp",
     "music_time": 128.7,
     "event_rate": 115
+  },
+  {
+    "id": "538",
+    "title": "オールセーブチャレンジ",
+    "pronunciation": "おーるせーぶちゃれんじ",
+    "creatorArtistId": 237,
+    "artistName": "香椎モイミ",
+    "default": 2551301,
+    "Unit": "4_WxS",
+    "categories": [
+      "mv_3d"
+    ],
+    "publishedAt": 1745845500000,
+    "published": true,
+    "isNewlyWrittenMusic": true,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_538.webp",
+    "music_time": 96.7,
+    "event_rate": 106
+  },
+  {
+    "id": "540",
+    "title": "虚無さん",
+    "pronunciation": "にひるさん",
+    "creatorArtistId": 279,
+    "artistName": "¿?shimon",
+    "default": 2651701,
+    "Unit": "5_25",
+    "categories": [
+      "mv_3d"
+    ],
+    "publishedAt": 1746536700000,
+    "published": false,
+    "isNewlyWrittenMusic": true,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_540.webp",
+    "music_time": 94.2,
+    "event_rate": 106
   },
   {
     "id": "541",
@@ -9895,7 +9933,7 @@
     "default": 2248701,
     "Unit": "1_L/n",
     "categories": [
-      "image"
+      "mv_2d"
     ],
     "publishedAt": 1738833000000,
     "published": true,
@@ -10006,7 +10044,7 @@
     "pronunciation": "みかづきすてっぷ",
     "creatorArtistId": 205,
     "artistName": "r-906",
-    "default": 1449601,
+    "default": 1449501,
     "Unit": "3_VBS",
     "categories": [
       "original"
@@ -10082,7 +10120,7 @@
     "pronunciation": "ぷらねっとひーろー",
     "creatorArtistId": 272,
     "artistName": "打打だいず＋いるかアイス",
-    "default": 1150001,
+    "default": 1149901,
     "Unit": "0_VS",
     "categories": [
       "image"
@@ -10101,7 +10139,7 @@
     "pronunciation": "ばれりーこ",
     "creatorArtistId": 2,
     "artistName": "みきとP",
-    "default": 1150901,
+    "default": 1150801,
     "Unit": "0_VS",
     "categories": [
       "original"
@@ -10120,7 +10158,7 @@
     "pronunciation": "まんはったん",
     "creatorArtistId": 142,
     "artistName": "wotaku",
-    "default": 1150701,
+    "default": 1150601,
     "Unit": "0_VS",
     "categories": [
       "image"
@@ -10139,7 +10177,7 @@
     "pronunciation": "よしわららめんと さいらいばん",
     "creatorArtistId": 275,
     "artistName": "亜沙",
-    "default": 1150601,
+    "default": 1150501,
     "Unit": "0_VS",
     "categories": [
       "original"
@@ -10158,7 +10196,7 @@
     "pronunciation": "くいーんおぶはーと",
     "creatorArtistId": 276,
     "artistName": "奏音69 (Royal Scandal)",
-    "default": 1150801,
+    "default": 1150701,
     "Unit": "0_VS",
     "categories": [
       "original"
@@ -10196,7 +10234,7 @@
     "pronunciation": "こーる",
     "creatorArtistId": 274,
     "artistName": "沫尾",
-    "default": 1150501,
+    "default": 1150401,
     "Unit": "0_VS",
     "categories": [
       "original"
@@ -10215,7 +10253,7 @@
     "pronunciation": "でぃー・えぬ・えー",
     "creatorArtistId": 259,
     "artistName": "Azari",
-    "default": 2650201,
+    "default": 2650101,
     "Unit": "5_25",
     "categories": [
       "mv_2d"
@@ -10234,7 +10272,7 @@
     "pronunciation": "どれみふぁろんど",
     "creatorArtistId": 48,
     "artistName": "40mP",
-    "default": 1550301,
+    "default": 1550201,
     "Unit": "4_WxS",
     "categories": [
       "original"
@@ -10253,7 +10291,7 @@
     "pronunciation": "ぱっけーじど",
     "creatorArtistId": 270,
     "artistName": "kz",
-    "default": 1149801,
+    "default": 1149701,
     "Unit": "0_VS",
     "categories": [
       "image"
@@ -10272,7 +10310,7 @@
     "pronunciation": "しんぱしー",
     "creatorArtistId": 50,
     "artistName": "Eve",
-    "default": 2250401,
+    "default": 2250301,
     "Unit": "1_L/n",
     "categories": [
       "mv_2d"
@@ -10291,7 +10329,7 @@
     "pronunciation": "すーさいどぱれえど",
     "creatorArtistId": 277,
     "artistName": "ユリイ・カノン",
-    "default": 1651101,
+    "default": 1651001,
     "Unit": "5_25",
     "categories": [
       "image"
@@ -10310,7 +10348,7 @@
     "pronunciation": "まわるそらうさぎ",
     "creatorArtistId": 10,
     "artistName": "Orangestar",
-    "default": 1351301,
+    "default": 1351201,
     "Unit": "2_MMJ",
     "categories": [
       "image"
@@ -10329,7 +10367,7 @@
     "pronunciation": "ほしぞらめらんこりあ",
     "creatorArtistId": 278,
     "artistName": "yuichi NAGAO",
-    "default": 1151201,
+    "default": 1151101,
     "Unit": "0_VS",
     "categories": [
       "image"
@@ -10341,5 +10379,62 @@
     "jacketLink": "jacket_s_608.webp",
     "music_time": 122.9,
     "event_rate": 114
+  },
+  {
+    "id": "622",
+    "title": "超ナイト・オブ・ナイツ",
+    "pronunciation": "ちょうないと・おぶ・ないつ",
+    "creatorArtistId": 240,
+    "artistName": "ビートまりお×まろん",
+    "default": 3751601,
+    "Unit": "9_oth",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1746424800000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_622.webp",
+    "music_time": 130.9,
+    "event_rate": 116
+  },
+  {
+    "id": "623",
+    "title": "とうほう☆ワンダーランド",
+    "pronunciation": "とうほうわんだーらんど",
+    "creatorArtistId": 240,
+    "artistName": "ビートまりお×まろん",
+    "default": 1551501,
+    "Unit": "4_WxS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1746338400000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_623.webp",
+    "music_time": 112.3,
+    "event_rate": 111
+  },
+  {
+    "id": "624",
+    "title": "チルノのパーフェクトさんすう学園",
+    "pronunciation": "ちるののぱーふぇくとさんすうがくえん",
+    "creatorArtistId": 240,
+    "artistName": "ビートまりお×まろん",
+    "default": 1151401,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1746252000000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_624.webp",
+    "music_time": 127,
+    "event_rate": 115
   }
 ]

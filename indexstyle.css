@@ -138,6 +138,27 @@ transform: translateY(-2px);
   box-shadow: none;
 }
 
+.tool-card .material-icons {
+  font-size: 48px;
+  margin-bottom: 10px;
+  color: #2196F3;
+  background: -webkit-linear-gradient(45deg, #2196F3, #4CAF50);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.tool-card:hover .material-icons {
+  transform: scale(1.1);
+  transition: transform 0.3s ease;
+}
+
+/* ComingSoonのツールカードのアイコン色を変更 */
+.tool-card .btn.disabled ~ .material-icons {
+  background: -webkit-linear-gradient(45deg, #9E9E9E, #757575);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
 footer {
   background-color: #fff;
   text-align: center;
