@@ -1,14 +1,38 @@
 // ② liveBonusMultipliersをグローバル変数として定義
-const liveBonusMultipliers = [1, 5, 10, 15, 19, 23, 26, 29, 31, 33, 35];
+const liveBonusMultipliers = [1, 5, 10, 15, 20, 25, 27, 29, 31, 33, 35];
 
+/**
+ * イベントポイントを計算する関数（整数演算版）
+ * 浮動小数点数による計算誤差を避けるため、すべての計算を整数で行います。
+ */
 function calculateEventPoint(score, eventBonus, basePoint = 100, liveBonusIndex = 0) {
     const liveBonus = liveBonusMultipliers[liveBonusIndex];
     const scoreComponent = Math.floor(score / 20000);
-    const eventBonusApplied = Math.floor((100 + scoreComponent) * (1 + eventBonus / 100) * 100) / 100;
-    const basePointApplied = Math.floor(eventBonusApplied * (basePoint / 100));
+
+    // --- 修正箇所 START ---
+
+    // 1. 基礎となるポイントを計算
+    const baseEventPoint = 100 + scoreComponent;
+
+    // 2. イベントボーナスを適用
+    // eventBonusはパーセント値 (例: 410, 410.25)
+    // 誤差をなくすため、100倍して整数に変換 (例: 410.25 -> 41025)
+    const integerEventBonus = Math.round(eventBonus * 100);
+
+    // floor(基礎ポイント * (1 + eventBonus/100)) の計算を整数で行う
+    // = floor(baseEventPoint * (10000 + integerEventBonus) / 10000)
+    const bonusIncludedBasePoint = Math.floor((baseEventPoint * (10000 + integerEventBonus)) / 10000);
+
+    // 3. 楽曲基礎ポイント(basePoint)を適用
+    // floor(ボーナス適用後ポイント * (basePoint / 100)) の計算を整数で行う
+    const basePointApplied = Math.floor((bonusIncludedBasePoint * basePoint) / 100);
+
+    // --- 修正箇所 END ---
+
     const totalPoint = basePointApplied * liveBonus;
     return totalPoint;
 }
+
 
 function generateScoreList(eventBonus, basePoint = 100, maxScore) {
     const scoreList = [];
