@@ -83,7 +83,7 @@ function canMakeSum(target, scoreList) {
     return dp[target] ? combination[target] : null;
 }
 
-function findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint = 100, maxScore = 1100000) {
+function findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint = 100, maxScore = 2100000) {
     const pointDifference = targetPoints - currentPoints;
 
     if (pointDifference < 0) {
@@ -182,7 +182,7 @@ function findPointAdjustment(currentPoints, targetPoints, eventBonus, basePoint 
 let additionalChecks = 0;
 let selectedFinalPointsBonus = 0; // 最終回モード用の選択されたボーナス
 
-function findPointAdjustmentByFinalPoints(currentPoints, targetPoints, finalPoints, basePoint = 100, maxScore = 1100000, additionalChecks = 0) {
+function findPointAdjustmentByFinalPoints(currentPoints, targetPoints, finalPoints, basePoint = 100, maxScore = 2100000, additionalChecks = 0) {
     const pointDifference = targetPoints - currentPoints;
 
     if (pointDifference < 0) {
@@ -281,7 +281,7 @@ function updateEventBonus(newEventBonus) {
         const targetPoints = parseInt(convertToHalfWidth(targetPointsInput.value), 10);
         const finalPoints = parseInt(convertToHalfWidth(finalPointsInput.value), 10);
         const basePoint = parseInt(convertToHalfWidth(basePointsInput.value), 10) || 100;
-        const maxScore = parseInt(convertToHalfWidth(maxScoreInput.value), 10) || 1100000;
+        const maxScore = parseInt(convertToHalfWidth(maxScoreInput.value), 10) || 2100000;
         const pointDifference = targetPoints - currentPoints;
         const scoreList = generateScoreList(newEventBonus, basePoint, maxScore);
 
@@ -427,7 +427,7 @@ function calculate() {
     const eventBonus = parseFloat(convertToHalfWidth(eventBonusInput.value));
     const finalPoints = parseInt(convertToHalfWidth(finalPointsInput.value), 10);
     const basePoint = parseInt(convertToHalfWidth(basePointsInput.value), 10) || 100;
-    const maxScore = parseInt(convertToHalfWidth(maxScoreInput.value), 10) || 1100000;
+    const maxScore = parseInt(convertToHalfWidth(maxScoreInput.value), 10) || 2100000;
     const mode = modeToggle.value;
 
 
