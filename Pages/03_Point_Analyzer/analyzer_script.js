@@ -9,8 +9,6 @@ function calculateEventPoint(score, eventBonus, basePoint = 100, liveBonusIndex 
     const liveBonus = liveBonusMultipliers[liveBonusIndex];
     const scoreComponent = Math.floor(score / 20000);
 
-    // --- 修正箇所 START ---
-
     // 1. 基礎となるポイントを計算
     const baseEventPoint = 100 + scoreComponent;
 
@@ -27,12 +25,9 @@ function calculateEventPoint(score, eventBonus, basePoint = 100, liveBonusIndex 
     // floor(ボーナス適用後ポイント * (basePoint / 100)) の計算を整数で行う
     const basePointApplied = Math.floor((bonusIncludedBasePoint * basePoint) / 100);
 
-    // --- 修正箇所 END ---
-
     const totalPoint = basePointApplied * liveBonus;
     return totalPoint;
 }
-
 
 function generateScoreList(eventBonus, basePoint = 100, maxScore) {
     const scoreList = [];
@@ -349,8 +344,14 @@ function updateEventBonus(newEventBonus) {
         });
 
         resultText += `</tbody></table>`;
+        
+        // 既存の調整表があれば削除する
+        const oldTable = document.querySelector('.result-table');
+        if (oldTable) {
+            oldTable.remove();
+        }
 
-        // ③ 挿入位置をresult-summaryの直後に設定（resultDiv内の他コンテンツと競合しないよう注意）
+        // 挿入位置をresult-summaryの直後に設定
         const resultSummary = document.querySelector('.result-summary');
         if (resultSummary) {
             resultSummary.insertAdjacentHTML('afterend', resultText);
@@ -358,8 +359,6 @@ function updateEventBonus(newEventBonus) {
             resultDiv.innerHTML += resultText;
         }
     }
-    // ① calculate() の再呼び出しは削除（テーブル挿入後に上書きされないようにする）
-    // calculate();
 }
 
 function convertToHalfWidth(str) {
