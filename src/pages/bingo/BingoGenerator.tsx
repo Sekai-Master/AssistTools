@@ -91,6 +91,10 @@ export default function BingoGenerator() {
     };
   }, [card, borderColor]);
 
+  // 中央マス「指定」で曲が未選択なら生成できない（buildRandomCard も throw するが、
+  // その前に UI で無効化して無駄な操作＋既存カード消去を防ぐ）。
+  const centerSongMissing = mode === "random" && centerMode === "specified" && !centerSong;
+
   const toggle = <T,>(set: Set<T>, setter: (s: Set<T>) => void, v: T) => {
     const next = new Set(set);
     if (next.has(v)) next.delete(v);
@@ -246,8 +250,16 @@ export default function BingoGenerator() {
         </Panel>
       )}
 
-      <ActionButton onClick={handleGenerate} disabled={loading} className="w-full text-base">
-        {loading ? "楽曲データ読込中…" : "カードを生成"}
+      <ActionButton
+        onClick={handleGenerate}
+        disabled={loading || centerSongMissing}
+        className="w-full text-base"
+      >
+        {loading
+          ? "楽曲データ読込中…"
+          : centerSongMissing
+            ? "中央マスの曲を選択してください"
+            : "カードを生成"}
       </ActionButton>
 
       {error && (

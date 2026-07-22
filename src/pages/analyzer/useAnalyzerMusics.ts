@@ -85,17 +85,18 @@ export function useAnalyzerMusics(): {
     const base = import.meta.env.BASE_URL;
     (async () => {
       try {
-        // 楽曲データは必須。res.ok を確認（SPAフォールバックで index.html が
-        // 返ると r.json() が例外になるため、HTTP ステータスで明示的に弾く）。
-        const mRes = await fetch(`${base}MusicDatas/transformedMusics.json`, {
-          signal: controller.signal,
-        });
+        // 楽曲データ(必須)とエイリアス(任意)を並列取得。楽曲は res.ok を確認
+        // （SPAフォールバックで index.html が返ると r.json() が例外になるため）。
+        const [mRes, aRes] = await Promise.all([
+          fetch(`${base}MusicDatas/transformedMusics.json`, { signal: controller.signal }),
+          fetch(`${base}MusicDatas/aliasMapping.json`, { signal: controller.signal }).catch(
+            () => null
+          ),
+        ]);
         if (!mRes.ok) throw new Error(`楽曲データの取得に失敗しました (HTTP ${mRes.status})`);
         const m = await mRes.json();
-        // エイリアスは任意。失敗しても本体は続行。
-        const a = await fetch(`${base}MusicDatas/aliasMapping.json`, { signal: controller.signal })
-          .then((r) => (r.ok ? r.json() : []))
-          .catch(() => []);
+        // エイリアスは失敗しても本体は続行。
+        const a = aRes && aRes.ok ? await aRes.json().catch(() => []) : [];
         if (controller.signal.aborted) return;
         const parsed = parse(m);
         if (parsed.length === 0) {

@@ -82,4 +82,18 @@ describe("buildRandomCard", () => {
   it("曲不足なら例外", () => {
     expect(() => buildRandomCard(POOL.slice(0, 10), "random", null)).toThrow();
   });
+
+  it("中央マス指定なのに曲未選択なら例外", () => {
+    expect(() => buildRandomCard(POOL, "specified", null)).toThrow(/中央マス/);
+  });
+
+  it("中央マス指定は index12 が指定曲、その曲は他マスに出ない", () => {
+    const center = POOL[0];
+    const card = buildRandomCard(POOL, "specified", center);
+    expect(card).toHaveLength(25);
+    const c12 = card[12] as Exclude<Cell, "FREE">;
+    expect(c12.id).toBe(center.id);
+    const others = card.filter((_, i) => i !== 12) as Exclude<Cell, "FREE">[];
+    expect(others.some((m) => m.id === center.id)).toBe(false);
+  });
 });

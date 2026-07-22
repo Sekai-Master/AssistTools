@@ -10,7 +10,8 @@ export const NeuTextarea = forwardRef<
     ref={ref}
     className={cn(
       "w-full rounded-lg bg-neu px-3 py-2.5 text-slate-800 shadow-neu-inset resize-y",
-      "outline-none border-2 border-transparent neu-field-focus transition-colors",
+      "outline-none border-2 border-transparent transition-colors",
+      "focus-visible:border-[color:color-mix(in_srgb,var(--unit-color)_62%,#2b2b2b)]",
       className
     )}
     {...props}

@@ -2,8 +2,10 @@ import type { SyntheticEvent } from "react";
 
 /**
  * ジャケット画像が 404 等で読めないときのフォールバック。
- * 無限ループを防ぐため onerror を一度で解除し、中立なプレースホルダ
- * （薄いグレーの正方形）に差し替える。壊れた画像アイコンを見せない。
+ * 中立なプレースホルダ（薄いグレーの正方形）に差し替え、壊れた画像アイコンを見せない。
+ * プレースホルダ自体は必ずロードできる inline SVG なので再発火しないが、万一に備え
+ * 既にプレースホルダなら早期 return して無限差し替えを防ぐ（React の合成 onError は
+ * DOM の onerror プロパティを使わないため、その解除ではなくこの src 等価判定で守る）。
  */
 const JACKET_PLACEHOLDER =
   "data:image/svg+xml;utf8," +
@@ -14,6 +16,5 @@ const JACKET_PLACEHOLDER =
 export function onJacketError(e: SyntheticEvent<HTMLImageElement>): void {
   const img = e.currentTarget;
   if (img.src === JACKET_PLACEHOLDER) return;
-  img.onerror = null;
   img.src = JACKET_PLACEHOLDER;
 }
