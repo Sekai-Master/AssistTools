@@ -101,10 +101,10 @@ export default function EffectiveValueCalculator() {
   const reverseResults = useMemo(() => {
     const eff = toHalfWidthNumber(effInput);
     if (eff === null) return [];
+    // 未入力・0 は「代表値ごとに一覧表示」（0を指定しても意味のある逆算にならないため）。
+    const leaderVal = toHalfWidthNumber(revLeader);
     const leaders =
-      toHalfWidthNumber(revLeader) !== null
-        ? [toHalfWidthNumber(revLeader) as number]
-        : [...REVERSE_DEFAULT_LEADERS];
+      leaderVal !== null && leaderVal !== 0 ? [leaderVal] : [...REVERSE_DEFAULT_LEADERS];
     return leaders.map((leader) => ({ leader, verdict: reverseVerdict(eff, leader) }));
   }, [effInput, revLeader]);
 

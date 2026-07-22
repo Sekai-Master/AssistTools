@@ -56,6 +56,8 @@ export default function PointAnalyzer() {
   );
 
   const handleCalc = () => {
+    if (musics.length === 0)
+      return reject("楽曲データを読み込み中です。少し待ってから再度お試しください。");
     const c = parseAmount(current);
     const tv = parseAmount(target);
     const f = parseAmount(final);
@@ -192,8 +194,8 @@ export default function PointAnalyzer() {
         </div>
       </Panel>
 
-      <ActionButton onClick={handleCalc} className="w-full text-base">
-        計算する
+      <ActionButton onClick={handleCalc} disabled={loading} className="w-full text-base">
+        {loading ? "楽曲データ読込中…" : "計算する"}
       </ActionButton>
 
       {error && (

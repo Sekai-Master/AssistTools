@@ -34,20 +34,45 @@ const COMMENT_TEMPLATES = [
 ];
 
 interface HistoryItem {
+  id: string;
   state: TweetState;
   dateTime: string;
   favorite: boolean;
 }
 
+// 外部（localStorage）由来なので1件ずつ検証する。壊れた要素が混じっても
+// 画面全体をクラッシュさせず、健全な履歴だけを残す。
+function isValidHistory(h: unknown): h is HistoryItem {
+  if (!h || typeof h !== "object") return false;
+  const r = h as Record<string, unknown>;
+  return (
+    typeof r.state === "object" &&
+    r.state !== null &&
+    typeof (r.state as Record<string, unknown>).room === "string" &&
+    typeof r.dateTime === "string"
+  );
+}
+
+let historyIdSeq = 0;
 function loadHistory(): HistoryItem[] {
   try {
     const raw = localStorage.getItem(HISTORY_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as HistoryItem[]) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isValidHistory).map((h) => ({
+      ...h,
+      id: typeof h.id === "string" ? h.id : `h${historyIdSeq++}`,
+      favorite: typeof h.favorite === "boolean" ? h.favorite : false,
+    }));
   } catch {
     return [];
   }
+}
+
+function newHistoryId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `h${historyIdSeq++}-${Math.floor(performance.now())}`;
 }
 
 /** 半角数字のみ残す（現行の「非数値で全消去」より穏当に）。 */
@@ -72,7 +97,7 @@ export default function TweetGenerator() {
 
   const saveHistory = () =>
     setHistory((prev) =>
-      [{ state: s, dateTime: new Date().toLocaleString(), favorite: false }, ...prev].slice(
+      [{ id: newHistoryId(), state: s, dateTime: new Date().toLocaleString(), favorite: false }, ...prev].slice(
         0,
         HISTORY_MAX
       )
@@ -324,7 +349,7 @@ export default function TweetGenerator() {
         <Panel title="履歴">
           <ul className="space-y-2">
             {history.map((h, i) => (
-              <li key={i} className="flex items-center gap-3">
+              <li key={h.id} className="flex items-center gap-3">
                 <button
                   type="button"
                   aria-label={h.favorite ? "お気に入り解除" : "お気に入り"}

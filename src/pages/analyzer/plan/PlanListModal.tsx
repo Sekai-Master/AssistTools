@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { clickableProps } from "../../../lib/a11y";
+import { useId, useMemo, useRef, useState } from "react";
+import { clickableProps, useModalA11y } from "../../../lib/a11y";
 import { NeuButton } from "../../../components/ui/NeuButton";
 import type { UniversalPlan } from "./types";
 
@@ -21,6 +21,9 @@ export function PlanListModal({
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("bonus");
   const [asc, setAsc] = useState(true);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useModalA11y(isOpen, onClose, dialogRef);
 
   const sorted = useMemo(
     () => [...plans].sort((a, b) => (asc ? a[sortKey] - b[sortKey] : b[sortKey] - a[sortKey])),
@@ -45,12 +48,17 @@ export function PlanListModal({
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-2xl h-[75vh] max-h-[620px] flex flex-col neu-panel p-5"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="w-full max-w-2xl h-[75vh] max-h-[620px] flex flex-col neu-panel p-5 focus:outline-none"
       >
         <div className="mb-3 flex items-center justify-between shrink-0">
-          <h2 className="font-bold text-slate-700">{title}</h2>
+          <h2 id={titleId} className="font-bold text-slate-700">
+            {title}
+          </h2>
           <button
             type="button"
             onClick={onClose}
@@ -80,9 +88,9 @@ export function PlanListModal({
           ))}
         </div>
         <div className="grid flex-1 min-h-0 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
-          {sorted.map((plan, i) => (
+          {sorted.map((plan) => (
             <div
-              key={i}
+              key={`${plan.bonus}-${plan.liveBonus}-${plan.minScore}`}
               {...clickableProps(() => onSelect(plan))}
               className="neu-raised neu-tactile cursor-pointer p-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]"
             >

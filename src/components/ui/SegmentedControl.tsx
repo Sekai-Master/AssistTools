@@ -27,6 +27,7 @@ export function SegmentedControl<T extends string>({
   );
   return (
     <div
+      role="radiogroup"
       className={cn(
         "relative inline-flex w-full max-w-sm rounded-xl bg-neu p-1 shadow-neu-inset",
         className
@@ -45,12 +46,15 @@ export function SegmentedControl<T extends string>({
         <button
           key={o.value}
           type="button"
+          role="radio"
           onClick={() => onChange(o.value)}
-          aria-pressed={value === o.value}
+          aria-checked={value === o.value}
           className={cn(
             "relative z-10 flex-1 rounded-lg px-3 py-1.5 text-sm font-bold transition-colors",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
-            value === o.value ? "text-white" : "text-slate-500 hover:text-slate-700"
+            value === o.value
+              ? "text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]"
+              : "text-slate-500 hover:text-slate-700"
           )}
         >
           {o.label}

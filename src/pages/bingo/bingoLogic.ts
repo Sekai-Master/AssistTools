@@ -92,6 +92,11 @@ export function buildRandomCard(
   centerSong: BingoMusic | null
 ): Cell[] {
   const needed = centerMode === "random" ? 25 : 24;
+  // 中央の指定曲を他マスから除外するのは centerMode==='specified' のときだけ。
+  // legacy版は centerMode に関わらず、以前 specified で選んだ曲(既定 Tell Your World)を
+  // 常に除外していた（porting doc も『潜在バグ的挙動・要確認』と評していた）。
+  // free/random で古い指定曲を除外し続ける挙動は不自然なので、ここでは意図的に
+  // specified のときだけ除外する（legacy からの意図的な改善）。
   const excludeId = centerSong && centerMode === "specified" ? centerSong.id : null;
   const usable = excludeId ? pool.filter((m) => m.id !== excludeId) : pool;
   if (usable.length < needed) {

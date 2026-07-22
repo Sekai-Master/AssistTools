@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { NeuInput } from "./ui/NeuInput";
+import { useModalA11y } from "../lib/a11y";
 
 export interface SearchableSong {
   id: string;
@@ -41,6 +42,9 @@ export function SongSearchModal<T extends SearchableSong>({
   meta,
 }: Props<T>) {
   const [query, setQuery] = useState("");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useModalA11y(true, onClose, dialogRef);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -69,12 +73,17 @@ export function SongSearchModal<T extends SearchableSong>({
     >
       {/* 固定高さ: 結果数が変わってもモーダルの大きさは動かない */}
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-lg h-[70vh] max-h-[560px] flex flex-col neu-panel p-5"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="w-full max-w-lg h-[70vh] max-h-[560px] flex flex-col neu-panel p-5 focus:outline-none"
       >
         <div className="flex items-center justify-between mb-3 shrink-0">
-          <h2 className="font-bold text-slate-700">{title}</h2>
+          <h2 id={titleId} className="font-bold text-slate-700">
+            {title}
+          </h2>
           <button
             type="button"
             onClick={onClose}

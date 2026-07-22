@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { READY_TOOLS } from "../tools";
@@ -10,6 +10,16 @@ import { READY_TOOLS } from "../tools";
 export function Layout({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { pathname } = useLocation();
+
+  // モバイルメニューを開いている間は Escape で閉じられるようにする。
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -47,6 +57,7 @@ export function Layout({ children }: { children: ReactNode }) {
             type="button"
             aria-label={menuOpen ? "メニューを閉じる" : "メニューを開く"}
             aria-expanded={menuOpen}
+            aria-controls="mobile-nav"
             onClick={() => setMenuOpen((v) => !v)}
             className="md:hidden neu-raised neu-tactile p-2 text-slate-600"
           >
@@ -56,7 +67,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
         {/* モバイルメニュー */}
         {menuOpen && (
-          <nav className="md:hidden border-t border-white/60 px-4 pb-3 pt-1">
+          <nav id="mobile-nav" className="md:hidden border-t border-white/60 px-4 pb-3 pt-1">
             {READY_TOOLS.map((t) => {
               const active = pathname === t.path;
               return (

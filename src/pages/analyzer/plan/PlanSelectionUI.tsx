@@ -57,9 +57,9 @@ export function PlanSelectionUI({
           </h3>
           {recommendedPlans.length > 0 ? (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {recommendedPlans.map((plan, i) => (
+              {recommendedPlans.map((plan) => (
                 <PlanCard
-                  key={i}
+                  key={`${plan.bonus}-${plan.liveBonus}-${plan.minScore}`}
                   variant="compact"
                   plan={plan}
                   onClick={() => onSelectPlan(plan)}
