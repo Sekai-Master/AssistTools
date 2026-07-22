@@ -18,7 +18,7 @@ import {
 } from "./bingoLogic";
 import { drawBingoCard } from "./bingoCanvas";
 import { BingoTable } from "./BingoTable";
-import { BingoSongSearch } from "./BingoSongSearch";
+import { SongSearchModal } from "../../components/SongSearchModal";
 import {
   ALL_CATEGORY_VALUES,
   ALL_TYPE_VALUES,
@@ -279,9 +279,10 @@ export default function BingoGenerator() {
       )}
 
       {editing !== null && (
-        <BingoSongSearch
+        <SongSearchModal
           musics={musics}
           aliases={aliases}
+          jacketBase={JACKET_BASE}
           onSelect={replaceCell}
           onClose={() => setEditing(null)}
         />

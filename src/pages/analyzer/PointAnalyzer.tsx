@@ -1,17 +1,21 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { Panel } from "../../components/ui/Panel";
 import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { ActionButton } from "../../components/ui/ActionButton";
+import { NeuButton } from "../../components/ui/NeuButton";
 import { Switch } from "../../components/ui/Switch";
+import { SongSearchModal } from "../../components/SongSearchModal";
 import { useAnalyzerMusics } from "./useAnalyzerMusics";
 import { calculatePlanV6, ENVY_ID, type CalculationResultV6 } from "./lib/calculator";
 import { calculateUnitBasePt } from "./lib/mySekai";
 import { parseAmount, completeTargetSuffix } from "./lib/inputParsing";
 
+const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
+
 export default function PointAnalyzer() {
-  const { musics, loading } = useAnalyzerMusics();
+  const { musics, aliases, loading } = useAnalyzerMusics();
 
   const [current, setCurrent] = useState("");
   const [target, setTarget] = useState("");
@@ -20,23 +24,23 @@ export default function PointAnalyzer() {
   const [bonus, setBonus] = useState("");
   const [hasWorldPass, setHasWorldPass] = useState(false);
   const [songId, setSongId] = useState(ENVY_ID);
-  const [songQuery, setSongQuery] = useState("");
+  const [songModalOpen, setSongModalOpen] = useState(false);
   const [result, setResult] = useState<CalculationResultV6 | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
+
+  // 計算後は結果へスクロール（ボタンの下に結果が出るので気づけるように）
+  useEffect(() => {
+    if (!result) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    resultRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }, [result]);
 
   // 入力中のマイセカイ単価ヒント
   const unitHint = useMemo(
     () => calculateUnitBasePt(parseAmount(talent), parseAmount(bonus, true), hasWorldPass),
     [talent, bonus, hasWorldPass]
   );
-
-  const filteredSongs = useMemo(() => {
-    const q = songQuery.trim().toLowerCase();
-    const base = q
-      ? musics.filter((m) => m.title.toLowerCase().includes(q) || m.id === q)
-      : musics;
-    return base.slice(0, 60);
-  }, [musics, songQuery]);
 
   const selectedSong = musics.find((m) => m.id === songId);
 
@@ -142,34 +146,29 @@ export default function PointAnalyzer() {
               {unitHint} Pt/個
             </span>
           </p>
-          <Field label="最終楽曲" hint={loading ? "楽曲データ読込中…" : `${musics.length}曲`}>
-            <NeuInput
-              value={songQuery}
-              onChange={(e) => setSongQuery(e.target.value)}
-              placeholder="曲名で絞り込み"
-            />
-            <div className="mt-2 max-h-40 overflow-y-auto rounded-lg bg-neu shadow-neu-inset p-1">
-              {filteredSongs.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => setSongId(m.id)}
-                  className={`block w-full text-left px-3 py-1.5 rounded text-sm ${
-                    m.id === songId ? "text-white" : "text-slate-600 hover:bg-black/5"
-                  }`}
-                  style={m.id === songId ? { backgroundColor: "var(--unit-color)" } : undefined}
-                >
-                  {m.title}
-                  <span className="ml-2 text-xs opacity-70">基礎点 {m.basePoint}</span>
-                </button>
-              ))}
+          <Field label="最終楽曲" hint={loading ? "楽曲データ読込中…" : `${musics.length}曲から選択`}>
+            <div className="flex items-center gap-3">
+              {selectedSong ? (
+                <img
+                  src={`${JACKET_BASE}${selectedSong.jacketLink}`}
+                  alt=""
+                  className="h-12 w-12 rounded-lg object-cover shadow-neu-sm shrink-0"
+                />
+              ) : (
+                <div className="h-12 w-12 rounded-lg bg-neu shadow-neu-inset shrink-0" />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="truncate font-bold text-slate-700">
+                  {selectedSong ? selectedSong.title : "未選択"}
+                </p>
+                {selectedSong && (
+                  <p className="text-xs text-slate-400">基礎点 {selectedSong.basePoint}</p>
+                )}
+              </div>
+              <NeuButton className="!px-3 !py-1.5 !text-xs shrink-0" onClick={() => setSongModalOpen(true)}>
+                曲を選択
+              </NeuButton>
             </div>
-            {selectedSong && (
-              <p className="mt-1 text-sm text-slate-500">
-                選択中: <span className="font-bold">{selectedSong.title}</span>（基礎点{" "}
-                {selectedSong.basePoint}）
-              </p>
-            )}
           </Field>
         </div>
       </Panel>
@@ -184,7 +183,24 @@ export default function PointAnalyzer() {
         </div>
       )}
 
-      {result && <AnalyzerResult result={result} />}
+      <div ref={resultRef} className="scroll-mt-20 space-y-6 empty:hidden">
+        {result && <AnalyzerResult result={result} />}
+      </div>
+
+      {songModalOpen && (
+        <SongSearchModal
+          musics={musics}
+          aliases={aliases}
+          jacketBase={JACKET_BASE}
+          title="最終楽曲を選択"
+          meta={(m) => `基礎点 ${m.basePoint}`}
+          onSelect={(m) => {
+            setSongId(m.id);
+            setSongModalOpen(false);
+          }}
+          onClose={() => setSongModalOpen(false)}
+        />
+      )}
     </ToolPage>
   );
 }
