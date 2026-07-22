@@ -31,10 +31,20 @@ function read(): SavedPlan[] {
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (p): p is SavedPlan =>
-        !!p && typeof p.name === "string" && Array.isArray((p as SavedPlan).segments)
-    );
+    // 呼び出し側(loadPlan/parseClock)が前提にする全フィールドをここで検証する。
+    // startTime欠けはparseClock(undefined).trim()で、inputs欠けはplan.inputs.songId参照で
+    // それぞれ実行時クラッシュになるため、name/segmentsだけでは不十分。
+    return parsed.filter((p): p is SavedPlan => {
+      if (!p || typeof p !== "object") return false;
+      const c = p as Partial<SavedPlan>;
+      return (
+        typeof c.name === "string" &&
+        typeof c.startTime === "string" &&
+        Array.isArray(c.segments) &&
+        !!c.inputs &&
+        typeof c.inputs === "object"
+      );
+    });
   } catch {
     return [];
   }

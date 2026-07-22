@@ -13,8 +13,6 @@ import { GaugeInputsPanel } from "../refresh/GaugeInputsPanel";
 import { fmtDuration } from "../refresh/lib/format";
 import { drawPlanCanvas, type PlanCanvasData } from "../refresh/lib/planCanvas";
 import { Stat } from "../refresh/Stat";
-
-const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 import {
   type WorkParams,
   type WorkSegment,
@@ -22,6 +20,8 @@ import {
   hourlyRateAt,
   minutesForTarget,
 } from "./lib/worktime";
+
+const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 
 let seq = 0;
 const newId = () =>
@@ -103,7 +103,7 @@ export default function WorkTimeCalculator() {
       elapsed += r.segment.minutes;
       cumulative += r.points;
       return {
-        time: `${fmtDuration(startMin) || "0分"}〜${fmtDuration(elapsed)}`,
+        time: `${fmtDuration(startMin)}〜${fmtDuration(elapsed)}`,
         label: `焚き${r.segment.taki}　${fmtDuration(r.segment.minutes)}`,
         sub: `+${Math.round(r.points).toLocaleString()}pt ・ ライボ${Math.round(r.lb)}`,
         percent: Math.round(cumulative).toLocaleString(),
