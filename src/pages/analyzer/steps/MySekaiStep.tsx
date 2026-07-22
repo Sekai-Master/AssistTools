@@ -36,7 +36,7 @@ export function MySekaiStep({ result }: { result: CalculationResultV6 }) {
               <span className="rounded-full bg-slate-200/70 px-2 py-0.5 text-[10px] text-slate-500">
                 ×{item.memo}
               </span>
-              <span className="text-[10px] text-slate-400">単価 {item.pt}</span>
+              <span className="text-[10px] text-slate-500">単価 {item.pt}</span>
             </div>
           </div>
         ))}

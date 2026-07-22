@@ -21,7 +21,7 @@ export function NeuButton({ active, className, ...props }: NeuButtonProps) {
         "rounded-lg px-4 py-2 text-sm font-bold",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
         active
-          ? "neu-selected transition-transform duration-100 active:scale-[0.98]"
+          ? "neu-selected transition-transform duration-100 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
           : "bg-neu text-slate-600 shadow-neu-sm neu-tactile",
         className
       )}

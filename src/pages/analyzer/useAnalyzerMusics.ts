@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 import type { AliasEntry } from "../bingo/useBingoMusics";
+import { getVerifiedBasePoint } from "./verifiedBasePoints";
 
-/** アナライザーで使う楽曲情報。基礎点は event_rate（無い曲は除外）。 */
+/**
+ * アナライザーで使う楽曲情報。基礎点は「実測値 > event_rate」の優先順位で決める
+ * （event_rate は長尺曲を130で頭打ちにする系統誤差があるため）。基礎点が無い曲は除外。
+ */
 export interface AnalyzerMusic {
   id: string;
   title: string;
   basePoint: number;
+  /** 基礎点の出どころ。実測補正が効いた曲を UI で示すために使う。 */
+  basePointSource: "verified" | "remote";
   jacketLink: string;
   pronunciation?: string;
   artistName?: string;
@@ -34,10 +40,13 @@ function parse(raw: unknown): AnalyzerMusic[] {
     if (r.published === false) continue;
     // 基礎点が無い曲は計算に使えないので除外。
     if (!isNum(r.event_rate) || r.event_rate < 50 || r.event_rate > 300) continue;
+    // 実測補正が有ればそれを優先（event_rate の 130 頭打ち系統誤差を上書き）。
+    const verified = getVerifiedBasePoint(r.id);
     out.push({
       id: r.id,
       title: r.title,
-      basePoint: r.event_rate,
+      basePoint: verified ?? r.event_rate,
+      basePointSource: verified !== undefined ? "verified" : "remote",
       jacketLink: isStr(r.jacketLink) ? r.jacketLink : `jacket_s_${r.id}.webp`,
       pronunciation: isStr(r.pronunciation) ? r.pronunciation : undefined,
       artistName: isStr(r.artistName) ? r.artistName : undefined,
@@ -64,29 +73,40 @@ export function useAnalyzerMusics(): {
   musics: AnalyzerMusic[];
   aliases: AliasEntry[];
   loading: boolean;
+  error: string | null;
 } {
   const [musics, setMusics] = useState<AnalyzerMusic[]>([]);
   const [aliases, setAliases] = useState<AliasEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     const base = import.meta.env.BASE_URL;
     (async () => {
       try {
-        const [m, a] = await Promise.all([
-          fetch(`${base}MusicDatas/transformedMusics.json`, { signal: controller.signal }).then(
-            (r) => r.json()
-          ),
-          fetch(`${base}MusicDatas/aliasMapping.json`, { signal: controller.signal })
-            .then((r) => r.json())
-            .catch(() => []),
-        ]);
+        // 楽曲データは必須。res.ok を確認（SPAフォールバックで index.html が
+        // 返ると r.json() が例外になるため、HTTP ステータスで明示的に弾く）。
+        const mRes = await fetch(`${base}MusicDatas/transformedMusics.json`, {
+          signal: controller.signal,
+        });
+        if (!mRes.ok) throw new Error(`楽曲データの取得に失敗しました (HTTP ${mRes.status})`);
+        const m = await mRes.json();
+        // エイリアスは任意。失敗しても本体は続行。
+        const a = await fetch(`${base}MusicDatas/aliasMapping.json`, { signal: controller.signal })
+          .then((r) => (r.ok ? r.json() : []))
+          .catch(() => []);
         if (controller.signal.aborted) return;
-        setMusics(parse(m));
+        const parsed = parse(m);
+        if (parsed.length === 0) {
+          throw new Error("有効な楽曲データがありません。データ更新が必要かもしれません。");
+        }
+        setMusics(parsed);
         setAliases(parseAliases(a));
-      } catch {
-        /* 読み込み失敗時は空。UIでガードする */
+        setError(null);
+      } catch (e) {
+        if (controller.signal.aborted) return;
+        setError(e instanceof Error ? e.message : "楽曲データの読み込みに失敗しました。");
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -94,5 +114,5 @@ export function useAnalyzerMusics(): {
     return () => controller.abort();
   }, []);
 
-  return { musics, aliases, loading };
+  return { musics, aliases, loading, error };
 }

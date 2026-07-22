@@ -62,6 +62,9 @@ function loadHistory(): HistoryItem[] {
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(isValidHistory).map((h) => ({
       ...h,
+      // 旧スキーマ等でフィールドが欠けた state を既定値で補完し、再利用時に
+      // buildTweetText（.trim() 等）がクラッシュしないよう全フィールドを保証する。
+      state: { ...DEFAULT_TWEET_STATE, ...h.state },
       id: typeof h.id === "string" ? h.id : `h${historyIdSeq++}`,
       favorite: typeof h.favorite === "boolean" ? h.favorite : false,
     }));
@@ -306,7 +309,7 @@ export default function TweetGenerator() {
       </Panel>
 
       <Panel title="その他コメント">
-        <p className="mb-2 text-xs text-slate-400">テンプレ（クリックで追記）</p>
+        <p className="mb-2 text-xs text-slate-500">テンプレ（クリックで追記）</p>
         <div className="mb-3 flex flex-wrap gap-2">
           {COMMENT_TEMPLATES.map((tmpl) => (
             <NeuButton
@@ -364,7 +367,7 @@ export default function TweetGenerator() {
                 </button>
                 <span className="flex-1 truncate text-sm text-slate-600">
                   {h.state.roomId ? `${h.state.roomIdSymbol}${h.state.roomId}` : "ルームIDなし"}
-                  <span className="ml-2 text-xs text-slate-400">{h.dateTime}</span>
+                  <span className="ml-2 text-xs text-slate-500">{h.dateTime}</span>
                 </span>
                 <NeuButton className="!px-3 !py-1" onClick={() => setS(h.state)}>
                   再利用
@@ -373,7 +376,7 @@ export default function TweetGenerator() {
                   type="button"
                   aria-label="削除"
                   onClick={() => setHistory((prev) => prev.filter((_, j) => j !== i))}
-                  className="text-slate-400 hover:text-slate-600"
+                  className="text-slate-500 hover:text-slate-600"
                 >
                   ×
                 </button>

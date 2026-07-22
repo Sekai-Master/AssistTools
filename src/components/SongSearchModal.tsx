@@ -1,6 +1,7 @@
 import { useId, useMemo, useRef, useState } from "react";
 import { NeuInput } from "./ui/NeuInput";
 import { useModalA11y } from "../lib/a11y";
+import { onJacketError } from "../lib/img";
 
 export interface SearchableSong {
   id: string;
@@ -88,7 +89,7 @@ export function SongSearchModal<T extends SearchableSong>({
             type="button"
             onClick={onClose}
             aria-label="閉じる"
-            className="text-slate-400 hover:text-slate-600 text-xl leading-none"
+            className="text-slate-500 hover:text-slate-600 text-xl leading-none"
           >
             ×
           </button>
@@ -102,7 +103,7 @@ export function SongSearchModal<T extends SearchableSong>({
         />
         <div className="mt-3 flex-1 min-h-0 overflow-y-auto rounded-lg bg-neu shadow-neu-inset p-1">
           {results.length === 0 ? (
-            <p className="p-4 text-center text-sm text-slate-400">見つかりませんでした</p>
+            <p className="p-4 text-center text-sm text-slate-500">見つかりませんでした</p>
           ) : (
             results.map((m) => (
               <button
@@ -116,14 +117,15 @@ export function SongSearchModal<T extends SearchableSong>({
                   alt=""
                   className="h-9 w-9 rounded object-cover shrink-0"
                   loading="lazy"
+                  onError={onJacketError}
                 />
                 <span className="flex-1 min-w-0">
                   <span className="block truncate text-sm text-slate-700">{m.title}</span>
                   {m.artistName && (
-                    <span className="block truncate text-xs text-slate-400">{m.artistName}</span>
+                    <span className="block truncate text-xs text-slate-500">{m.artistName}</span>
                   )}
                 </span>
-                {meta && <span className="text-xs text-slate-400 shrink-0">{meta(m)}</span>}
+                {meta && <span className="text-xs text-slate-500 shrink-0">{meta(m)}</span>}
               </button>
             ))
           )}

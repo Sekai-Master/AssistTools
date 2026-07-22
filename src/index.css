@@ -157,6 +157,15 @@ body {
     box-shadow: var(--shadow-neu-sm), inset 0 1px 1px rgba(255, 255, 255, 0.4);
   }
 
+  /*
+   * 入力欄のフォーカス枠。淡いユニットカラー(mmj/wxs/vs)だと #f0f0f0 に対して
+   * コントラストが足りず枠が見えにくいので、暗い方へ寄せて 3:1 以上を確保する。
+   * 色相はユニット色を保ったまま視認性だけ上げる。
+   */
+  .neu-field-focus:focus-visible {
+    border-color: color-mix(in srgb, var(--unit-color) 62%, #2b2b2b);
+  }
+
   /* ニューモーフィズムの浮き出しパネル */
   .neu-panel {
     background-color: var(--color-neu);

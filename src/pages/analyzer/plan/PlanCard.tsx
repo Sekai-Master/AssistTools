@@ -1,5 +1,6 @@
 import { clickableProps } from "../../../lib/a11y";
 import { cn } from "../../../lib/utils";
+import { onJacketError } from "../../../lib/img";
 import type { UniversalPlan } from "./types";
 
 interface PlanCardProps {
@@ -39,7 +40,7 @@ export function PlanCard({ plan, variant, jacketSrc, songTitle, onClick }: PlanC
           <span className="text-xs font-bold text-slate-500">目標スコア</span>
           <div className="font-mono font-bold text-slate-800 tabular-nums">
             {plan.minScore.toLocaleString()}
-            <span className="mx-1 text-slate-400">〜</span>
+            <span className="mx-1 text-slate-500">〜</span>
             {plan.maxScore.toLocaleString()}
           </div>
         </div>
@@ -55,6 +56,7 @@ export function PlanCard({ plan, variant, jacketSrc, songTitle, onClick }: PlanC
             src={jacketSrc}
             alt=""
             className="h-24 w-24 rounded-xl object-cover shadow-neu-sm shrink-0"
+            onError={onJacketError}
           />
         )}
         <div className="flex-1 w-full text-center sm:text-left">

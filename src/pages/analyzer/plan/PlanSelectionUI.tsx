@@ -45,7 +45,7 @@ export function PlanSelectionUI({
           <button
             type="button"
             onClick={() => onSelectPlan(null)}
-            className="mt-2 w-full text-sm text-slate-400 hover:text-slate-600"
+            className="mt-2 w-full text-sm text-slate-500 hover:text-slate-600"
           >
             選択を解除して一覧に戻る
           </button>
@@ -67,7 +67,7 @@ export function PlanSelectionUI({
               ))}
             </div>
           ) : (
-            <p className="py-4 text-center text-sm text-slate-400">
+            <p className="py-4 text-center text-sm text-slate-500">
               {emptyMessage ?? "推奨プランが見つかりませんでした。"}
             </p>
           )}

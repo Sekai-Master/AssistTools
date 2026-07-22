@@ -8,6 +8,7 @@ import { Switch } from "../../components/ui/Switch";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { UNIT_COLOR_VAR, UNIT_LABEL, type UnitKey } from "../../lib/units";
 import {
+  type SkillCandidate,
   type SkillLevel,
   effectiveValue,
   formatCandidates,
@@ -63,39 +64,50 @@ export default function EffectiveValueCalculator() {
   const isOc = leaderKind === "bulfes" && train === "untrained" && charType === "oc";
   const slotVals = slots.map((s) => toHalfWidthNumber(s) ?? 0);
 
-  // 先頭スキル値の候補（OCのみ複数）
-  const leaderCandidates = useMemo<number[]>(() => {
+  // 先頭スキル値の候補（OCのみ複数）。OCは値ごとの個数(count)を保持し、
+  // 平均・表示を legacy 同様に「4枠の生候補」ベースで個数重み付けする。
+  const leaderCandidates = useMemo<SkillCandidate[]>(() => {
     if (leaderKind === "preset") {
       const v = toHalfWidthNumber(presetLeader);
-      return v === null ? [] : [v];
+      return v === null ? [] : [{ value: v, count: 1 }];
     }
     if (train === "trained") {
       const r = toHalfWidthNumber(rank);
-      return r === null ? [] : [trainedSkillValue(level, r)];
+      return r === null ? [] : [{ value: trainedSkillValue(level, r), count: 1 }];
     }
-    if (charType === "vs") return [vsSkillValue(level, units.size)];
-    return ocSkillCandidates(level, slotVals).map((c) => c.value);
+    if (charType === "vs") return [{ value: vsSkillValue(level, units.size), count: 1 }];
+    return ocSkillCandidates(level, slotVals);
   }, [leaderKind, presetLeader, train, rank, level, charType, units, slotVals]);
 
   const ocCandidateLabel = isOc ? formatCandidates(ocSkillCandidates(level, slotVals)) : "";
 
-  // 実効値（候補ごと）
+  // 実効値（候補ごと、個数付き）
   const forwardResults = useMemo(() => {
     if (leaderCandidates.length === 0) return [];
-    return leaderCandidates.map((leader) => {
+    return leaderCandidates.map((cand) => {
+      const leader = cand.value;
       // 内部値 = 先頭 + 他4枠合計（詳細/OC）or 単一入力
       const innerTotal =
         detailMode || isOc
           ? leader + slotVals.reduce((a, b) => a + b, 0)
           : (toHalfWidthNumber(inner) ?? 0);
-      return { leader, effective: effectiveValue(leader, innerTotal) };
+      return { leader, count: cand.count, effective: effectiveValue(leader, innerTotal) };
     });
   }, [leaderCandidates, detailMode, isOc, slotVals, inner]);
 
-  const forwardAvg =
-    forwardResults.length > 1
-      ? Math.round(forwardResults.reduce((a, r) => a + r.effective, 0) / forwardResults.length)
-      : null;
+  // 表示用に実効値を個数集計（同一実効値が複数候補から出るケースを「値(個数)」でまとめる）。
+  const forwardEffectiveCandidates = useMemo<SkillCandidate[]>(() => {
+    const counts = new Map<number, number>();
+    for (const r of forwardResults) counts.set(r.effective, (counts.get(r.effective) ?? 0) + r.count);
+    return [...counts.entries()].map(([value, count]) => ({ value, count }));
+  }, [forwardResults]);
+
+  // 個数重み付き平均（legacy: 4枠の生候補の平均）。候補が実質1種なら非表示。
+  const forwardAvg = useMemo(() => {
+    const total = forwardResults.reduce((a, r) => a + r.count, 0);
+    if (forwardEffectiveCandidates.length <= 1 || total === 0) return null;
+    return Math.round(forwardResults.reduce((a, r) => a + r.effective * r.count, 0) / total);
+  }, [forwardResults, forwardEffectiveCandidates]);
 
   // 逆算
   const reverseResults = useMemo(() => {
@@ -210,9 +222,9 @@ export default function EffectiveValueCalculator() {
                               key={u}
                               active={units.has(u)}
                               onClick={() => toggleUnit(u)}
-                              style={
-                                units.has(u) ? { backgroundColor: UNIT_COLOR_VAR[u] } : undefined
-                              }
+                              // 各チップは自分のユニット色を --unit-color に上書きし、
+                              // neu-selected のグラデをそのユニット色から生成させる。
+                              style={{ ["--unit-color" as string]: UNIT_COLOR_VAR[u] }}
                             >
                               {UNIT_LABEL[u]}
                             </NeuButton>
@@ -267,9 +279,9 @@ export default function EffectiveValueCalculator() {
           <Panel>
             <p className="text-sm text-slate-500">この編成の実効値は</p>
             <p className="mt-1 text-4xl font-extrabold" style={{ color: "var(--unit-color)" }}>
-              {forwardResults.length === 0
+              {forwardEffectiveCandidates.length === 0
                 ? "—"
-                : forwardResults.map((r) => r.effective).join(" or ")}
+                : formatCandidates(forwardEffectiveCandidates)}
             </p>
             {forwardAvg !== null && (
               <p className="text-sm text-slate-500">（平均 {forwardAvg}）</p>
@@ -302,7 +314,7 @@ export default function EffectiveValueCalculator() {
 
           <Panel title="内部値">
             {reverseResults.length === 0 ? (
-              <p className="text-slate-400">実効値を入力してください。</p>
+              <p className="text-slate-500">実効値を入力してください。</p>
             ) : (
               <ul className="space-y-2">
                 {reverseResults.map(({ leader, verdict }) => (
@@ -318,9 +330,9 @@ export default function EffectiveValueCalculator() {
                         )}
                       </span>
                     ) : verdict.kind === "recheck" ? (
-                      <span className="text-sm text-slate-400">実効値を再確認してください</span>
+                      <span className="text-sm text-slate-500">実効値を再確認してください</span>
                     ) : (
-                      <span className="text-sm text-slate-400">該当なし</span>
+                      <span className="text-sm text-slate-500">該当なし</span>
                     )}
                   </li>
                 ))}

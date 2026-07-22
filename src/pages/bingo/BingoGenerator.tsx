@@ -59,7 +59,7 @@ function ToggleChips<T extends string | boolean>({
 }
 
 export default function BingoGenerator() {
-  const { musics, aliases, loading } = useBingoMusics();
+  const { musics, aliases, loading, error: dataError } = useBingoMusics();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const [mode, setMode] = useState<"random" | "seed">("random");
@@ -75,14 +75,20 @@ export default function BingoGenerator() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // カード/枠線色が変わるたび Canvas を再描画
+  // カード/枠線色が変わるたび Canvas を再描画。
+  // 非同期描画中に次の描画が始まったら古い方を中断する（レース防止）。
   useEffect(() => {
     if (!card || !canvasRef.current) return;
-    drawBingoCard(canvasRef.current, card, {
-      jacketBase: JACKET_BASE,
-      freeIconUrl: FREE_ICON,
-      borderColor,
-    });
+    let cancelled = false;
+    drawBingoCard(
+      canvasRef.current,
+      card,
+      { jacketBase: JACKET_BASE, freeIconUrl: FREE_ICON, borderColor },
+      () => cancelled
+    );
+    return () => {
+      cancelled = true;
+    };
   }, [card, borderColor]);
 
   const toggle = <T,>(set: Set<T>, setter: (s: Set<T>) => void, v: T) => {
@@ -163,6 +169,11 @@ export default function BingoGenerator() {
 
   return (
     <ToolPage unit="wxs" title="BINGOカードジェネレーター" icon="grid_on">
+      {dataError && (
+        <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
+          {dataError}
+        </div>
+      )}
       <Panel title="生成モード">
         <SegmentedControl
           options={[

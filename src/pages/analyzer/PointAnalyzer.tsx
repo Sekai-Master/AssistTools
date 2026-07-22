@@ -14,11 +14,12 @@ import { parseAmount, completeTargetSuffix } from "./lib/inputParsing";
 import { MySekaiStep } from "./steps/MySekaiStep";
 import { LiveAdjustStep } from "./steps/LiveAdjustStep";
 import { FinalRunStep } from "./steps/FinalRunStep";
+import { onJacketError } from "../../lib/img";
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 
 export default function PointAnalyzer() {
-  const { musics, aliases, loading } = useAnalyzerMusics();
+  const { musics, aliases, loading, error: dataError } = useAnalyzerMusics();
 
   const [current, setCurrent] = useState("");
   const [target, setTarget] = useState("");
@@ -103,6 +104,11 @@ export default function PointAnalyzer() {
 
   return (
     <ToolPage unit="n25" title="ポイント調整アナライザー" icon="analytics">
+      {dataError && (
+        <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
+          {dataError}
+        </div>
+      )}
       <Panel title="ポイント設定">
         <div className="space-y-4">
           <Field label="現在ポイント" htmlFor="pa-current">
@@ -174,6 +180,7 @@ export default function PointAnalyzer() {
                   src={`${JACKET_BASE}${selectedSong.jacketLink}`}
                   alt=""
                   className="h-12 w-12 rounded-lg object-cover shadow-neu-sm shrink-0"
+                  onError={onJacketError}
                 />
               ) : (
                 <div className="h-12 w-12 rounded-lg bg-neu shadow-neu-inset shrink-0" />
@@ -183,7 +190,18 @@ export default function PointAnalyzer() {
                   {selectedSong ? selectedSong.title : "未選択"}
                 </p>
                 {selectedSong && (
-                  <p className="text-xs text-slate-400">基礎点 {selectedSong.basePoint}</p>
+                  <p className="text-xs text-slate-500">
+                    基礎点 {selectedSong.basePoint}
+                    {selectedSong.basePointSource === "verified" && (
+                      <span
+                        className="ml-1.5 rounded px-1 py-0.5 text-[10px] font-bold text-white"
+                        style={{ backgroundColor: "var(--unit-color)" }}
+                        title="実機計測で確定した基礎点（event_rate の系統誤差を補正）"
+                      >
+                        実測
+                      </span>
+                    )}
+                  </p>
                 )}
               </div>
               <NeuButton className="!px-3 !py-1.5 !text-xs shrink-0" onClick={() => setSongModalOpen(true)}>

@@ -91,6 +91,9 @@ export function buildRandomCard(
   centerMode: CenterMode,
   centerSong: BingoMusic | null
 ): Cell[] {
+  if (centerMode === "specified" && !centerSong) {
+    throw new Error("中央マスの曲を選択してください。");
+  }
   const needed = centerMode === "random" ? 25 : 24;
   // 中央の指定曲を他マスから除外するのは centerMode==='specified' のときだけ。
   // legacy版は centerMode に関わらず、以前 specified で選んだ曲(既定 Tell Your World)を

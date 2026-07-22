@@ -139,7 +139,7 @@ export function buildTweetText(s: TweetState): string {
   const hostRemarks = joinRemarks([
     s.showConditionOutside && s.conditionOutside ? `条件外${s.conditionOutside}` : "",
     s.showSupporter && s.supporterCount ? `支援者${s.supporterCount}人` : "",
-    s.showFreeDescription ? s.freeDescription : "",
+    s.showFreeDescription ? s.freeDescription.trim() : "",
   ]);
   text += `主：${hostSkill}${hostInner ? "/" + hostInner : ""}${hostRemarks}\n`;
 

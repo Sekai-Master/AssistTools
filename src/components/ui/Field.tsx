@@ -28,7 +28,7 @@ export function Field({
         {label}
       </label>
       {children}
-      {hint && <p className="text-xs text-slate-400">{hint}</p>}
+      {hint && <p className="text-xs text-slate-500">{hint}</p>}
     </div>
   );
 }

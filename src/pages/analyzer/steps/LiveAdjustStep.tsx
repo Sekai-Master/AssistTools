@@ -32,9 +32,10 @@ export function LiveAdjustStep({ result }: { result: CalculationResultV6 }) {
       </p>
 
       {live.status === "NG" && !selectedPlan ? (
-        <div className="rounded-xl bg-rose-50 p-6 text-center text-sm font-bold text-rose-600">
-          このポイント（{live.requiredPt.toLocaleString()} Pt）は0〜1炊きでは調整できません。
-          <span className="mt-1 block font-normal">
+        <div className="rounded-xl bg-rose-50 p-6 text-center text-sm text-rose-600">
+          このポイント（<span className="font-bold">{live.requiredPt.toLocaleString()} Pt</span>
+          ）は0〜1炊きでは調整できません。
+          <span className="mt-1 block">
             目標ポイントを数ポイントずらすか、下の一覧から編成を組み替えるプランを選んでください。
           </span>
         </div>
@@ -52,7 +53,7 @@ export function LiveAdjustStep({ result }: { result: CalculationResultV6 }) {
             </span>
             {live.targetScoreRange.max.toLocaleString()}
           </div>
-          <div className="mt-1 text-xs text-slate-400">現在のボーナス・0〜1炊きで達成可能です</div>
+          <div className="mt-1 text-xs text-slate-500">現在のボーナス・0〜1炊きで達成可能です</div>
         </div>
       )}
 

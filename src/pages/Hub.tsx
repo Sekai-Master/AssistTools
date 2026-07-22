@@ -41,7 +41,7 @@ export function Hub() {
                   {isReady ? (
                     <span style={{ color: accent }}>使う →</span>
                   ) : (
-                    <span className="text-slate-400">Coming soon</span>
+                    <span className="text-slate-500">Coming soon</span>
                   )}
                 </div>
               </div>

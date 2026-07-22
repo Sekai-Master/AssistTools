@@ -1,5 +1,6 @@
 import { type Cell, cellPositionLabel } from "./bingoLogic";
 import { UNIT_OPTIONS } from "./bingoConstants";
+import { onJacketError } from "../../lib/img";
 
 const unitLabel = (u: string) => UNIT_OPTIONS.find((o) => o.value === u)?.label ?? "その他";
 
@@ -35,19 +36,20 @@ export function BingoTable({ card, jacketBase, onToggleCleared, onEditCell }: Pr
                 <td className="p-2 text-slate-500">{cellPositionLabel(i)}</td>
                 <td className="p-2">
                   {cell === "FREE" ? (
-                    <span className="text-slate-400 text-xs">FREE</span>
+                    <span className="text-slate-500 text-xs">FREE</span>
                   ) : (
                     <img
                       src={`${jacketBase}${cell.jacketLink}`}
                       alt=""
                       className={`h-10 w-10 rounded object-cover ${cleared ? "grayscale" : ""}`}
                       loading="lazy"
+                      onError={onJacketError}
                     />
                   )}
                 </td>
                 <td className="p-2">
                   {cell === "FREE" ? (
-                    <span className="text-slate-400">FREE（中央）</span>
+                    <span className="text-slate-500">FREE（中央）</span>
                   ) : (
                     <button
                       type="button"

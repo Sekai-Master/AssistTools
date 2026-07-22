@@ -51,25 +51,35 @@ export function useBingoMusics() {
   const [musics, setMusics] = useState<BingoMusic[]>([]);
   const [aliases, setAliases] = useState<AliasEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     const base = import.meta.env.BASE_URL;
     (async () => {
       try {
-        const [m, a] = await Promise.all([
-          fetch(`${base}MusicDatas/transformedMusics.json`, { signal: controller.signal }).then(
-            (r) => r.json()
-          ),
-          fetch(`${base}MusicDatas/aliasMapping.json`, { signal: controller.signal })
-            .then((r) => r.json())
-            .catch(() => []),
-        ]);
+        // 楽曲データは必須。res.ok を確認（SPAフォールバックで index.html が
+        // 返ると r.json() が例外になるため、HTTP ステータスで明示的に弾く）。
+        const mRes = await fetch(`${base}MusicDatas/transformedMusics.json`, {
+          signal: controller.signal,
+        });
+        if (!mRes.ok) throw new Error(`楽曲データの取得に失敗しました (HTTP ${mRes.status})`);
+        const m = await mRes.json();
+        // エイリアスは任意。失敗しても本体は続行。
+        const a = await fetch(`${base}MusicDatas/aliasMapping.json`, { signal: controller.signal })
+          .then((r) => (r.ok ? r.json() : []))
+          .catch(() => []);
         if (controller.signal.aborted) return;
-        setMusics(parseMusics(m));
+        const parsed = parseMusics(m);
+        if (parsed.length === 0) {
+          throw new Error("有効な楽曲データがありません。データ更新が必要かもしれません。");
+        }
+        setMusics(parsed);
         setAliases(parseAliases(a));
-      } catch {
-        /* 失敗時は空。UIでガード */
+        setError(null);
+      } catch (e) {
+        if (controller.signal.aborted) return;
+        setError(e instanceof Error ? e.message : "楽曲データの読み込みに失敗しました。");
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -77,5 +87,5 @@ export function useBingoMusics() {
     return () => controller.abort();
   }, []);
 
-  return { musics, aliases, loading };
+  return { musics, aliases, loading, error };
 }

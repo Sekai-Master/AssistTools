@@ -82,11 +82,16 @@ export interface DrawOptions {
   borderColor: string;
 }
 
-/** カードを canvas に描画する（ジャケット画像を非同期ロード）。 */
+/**
+ * カードを canvas に描画する（ジャケット画像を非同期ロード）。
+ * isCancelled: 描画中に新しい描画が始まったら true を返す関数。古い描画が
+ * 新しいカードを上書きしないよう、要所で確認して中断する。
+ */
 export async function drawBingoCard(
   canvas: HTMLCanvasElement,
   card: readonly Cell[],
-  opts: DrawOptions
+  opts: DrawOptions,
+  isCancelled: () => boolean = () => false
 ): Promise<void> {
   canvas.width = CANVAS_SIZE;
   canvas.height = CANVAS_SIZE;
@@ -96,6 +101,7 @@ export async function drawBingoCard(
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
   const freeIcon = await loadImage(opts.freeIconUrl).catch(() => null);
+  if (isCancelled()) return;
 
   await Promise.all(
     card.map(async (cell, i) => {
@@ -107,14 +113,17 @@ export async function drawBingoCard(
       }
       try {
         const img = await loadImage(`${opts.jacketBase}${cell.jacketLink}`);
+        if (isCancelled()) return;
         ctx.drawImage(img, x, y, CELL, CELL);
       } catch {
+        if (isCancelled()) return;
         ctx.fillStyle = "#999999";
         ctx.fillRect(x, y, CELL, CELL);
       }
       if (cell.cleared) drawClearedOverlay(ctx, x, y);
     })
   );
+  if (isCancelled()) return;
 
   // 署名
   ctx.fillStyle = "#000000";

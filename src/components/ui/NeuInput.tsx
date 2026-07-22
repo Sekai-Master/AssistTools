@@ -8,8 +8,7 @@ export const NeuInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInp
       ref={ref}
       className={cn(
         "w-full rounded-lg bg-neu px-3 py-2.5 text-slate-800 shadow-neu-inset",
-        "outline-none border-2 border-transparent",
-        "focus-visible:border-[color:var(--unit-color)] transition-colors",
+        "outline-none border-2 border-transparent neu-field-focus transition-colors",
         className
       )}
       {...props}

@@ -8,6 +8,7 @@ import { byDistanceTo, recommendPlans } from "../lib/recommendPlans";
 import type { CalculationResultV6 } from "../lib/calculator";
 import type { AnalyzerMusic } from "../useAnalyzerMusics";
 import type { AliasEntry } from "../../bingo/useBingoMusics";
+import { onJacketError } from "../../../lib/img";
 
 interface Props {
   result: CalculationResultV6;
@@ -54,7 +55,12 @@ export function FinalRunStep({
     >
       <div className="mb-4 flex items-center gap-3">
         {jacketSrc ? (
-          <img src={jacketSrc} alt="" className="h-12 w-12 rounded-lg object-cover shadow-neu-sm shrink-0" />
+          <img
+            src={jacketSrc}
+            alt=""
+            className="h-12 w-12 rounded-lg object-cover shadow-neu-sm shrink-0"
+            onError={onJacketError}
+          />
         ) : (
           <div className="h-12 w-12 rounded-lg bg-neu shadow-neu-inset shrink-0" />
         )}
@@ -62,7 +68,7 @@ export function FinalRunStep({
           <p className="truncate font-bold text-slate-700">
             {selectedSong ? selectedSong.title : "楽曲"}
           </p>
-          <p className="text-xs text-slate-400">基礎点 {result.finalBase}</p>
+          <p className="text-xs text-slate-500">基礎点 {result.finalBase}</p>
         </div>
         <NeuButton className="!px-3 !py-1.5 !text-xs shrink-0" onClick={() => setModalOpen(true)}>
           曲を変更
