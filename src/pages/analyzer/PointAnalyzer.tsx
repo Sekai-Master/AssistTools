@@ -11,6 +11,9 @@ import { useAnalyzerMusics } from "./useAnalyzerMusics";
 import { calculatePlanV6, ENVY_ID, type CalculationResultV6 } from "./lib/calculator";
 import { calculateUnitBasePt } from "./lib/mySekai";
 import { parseAmount, completeTargetSuffix } from "./lib/inputParsing";
+import { MySekaiStep } from "./steps/MySekaiStep";
+import { LiveAdjustStep } from "./steps/LiveAdjustStep";
+import { FinalRunStep } from "./steps/FinalRunStep";
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 
@@ -28,21 +31,29 @@ export default function PointAnalyzer() {
   const [result, setResult] = useState<CalculationResultV6 | null>(null);
   const [error, setError] = useState<string | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
+  // 計算ボタン押下時だけ結果へスクロールする（Step3の曲変更での再計算では飛ばない）。
+  const scrollOnResult = useRef(false);
 
-  // 計算後は結果へスクロール（ボタンの下に結果が出るので気づけるように）
+  const bonusNum = parseAmount(bonus, true);
+
   useEffect(() => {
-    if (!result) return;
+    if (!result || !scrollOnResult.current) return;
+    scrollOnResult.current = false;
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     resultRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   }, [result]);
 
   // 入力中のマイセカイ単価ヒント
   const unitHint = useMemo(
-    () => calculateUnitBasePt(parseAmount(talent), parseAmount(bonus, true), hasWorldPass),
-    [talent, bonus, hasWorldPass]
+    () => calculateUnitBasePt(parseAmount(talent), bonusNum, hasWorldPass),
+    [talent, bonusNum, hasWorldPass]
   );
 
   const selectedSong = musics.find((m) => m.id === songId);
+  const musicList = useMemo(
+    () => musics.map((m) => ({ id: m.id, basePoint: m.basePoint })),
+    [musics]
+  );
 
   const handleCalc = () => {
     const c = parseAmount(current);
@@ -56,16 +67,24 @@ export default function PointAnalyzer() {
       return reject("イベントボーナスは0〜1000%で入力してください。");
     if (f > tv - c) return reject("最終獲得希望ポイントが差分を超えています。");
     setError(null);
+    scrollOnResult.current = true;
+    setResult(calculatePlanV6(c, tv, f, tal, bon, hasWorldPass, songId, musicList));
+  };
+
+  // Step3で楽曲を変えたときの再計算（検証済み前提・スクロールはしない）。
+  const recalcWithSong = (newId: string) => {
+    setSongId(newId);
+    if (!result) return;
     setResult(
       calculatePlanV6(
-        c,
-        tv,
-        f,
-        tal,
-        bon,
+        parseAmount(current),
+        parseAmount(target),
+        parseAmount(final),
+        parseAmount(talent),
+        bonusNum,
         hasWorldPass,
-        songId,
-        musics.map((m) => ({ id: m.id, basePoint: m.basePoint }))
+        newId,
+        musicList
       )
     );
   };
@@ -184,7 +203,32 @@ export default function PointAnalyzer() {
       )}
 
       <div ref={resultRef} className="scroll-mt-20 space-y-6 empty:hidden">
-        {result && <AnalyzerResult result={result} />}
+        {result && (
+          <>
+            {!result.isVerified && result.targetPt - result.finalEstimatedPt > 0 && (
+              <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
+                <p className="font-bold">この条件では目標ちょうどに着地できません</p>
+                <p className="mt-1 text-xs">
+                  {(result.targetPt - result.finalEstimatedPt).toLocaleString()} Pt
+                  の差が埋まりません。目標を数ポイントずらすか、ボーナスを調整してください。
+                </p>
+              </div>
+            )}
+            <MySekaiStep result={result} />
+            <LiveAdjustStep result={result} />
+            {result.finalRunPt > 0 && (
+              <FinalRunStep
+                result={result}
+                musics={musics}
+                aliases={aliases}
+                jacketBase={JACKET_BASE}
+                bonus={bonusNum}
+                selectedSong={selectedSong}
+                onChangeSong={recalcWithSong}
+              />
+            )}
+          </>
+        )}
       </div>
 
       {songModalOpen && (
@@ -205,90 +249,3 @@ export default function PointAnalyzer() {
   );
 }
 
-function AnalyzerResult({ result }: { result: CalculationResultV6 }) {
-  const a = result.mySekaiAllocation;
-  return (
-    <>
-      {!result.isVerified && result.targetPt - result.finalEstimatedPt > 0 && (
-        <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
-          <p className="font-bold">この条件では目標ちょうどに着地できません</p>
-          <p className="mt-1 text-xs">
-            {(result.targetPt - result.finalEstimatedPt).toLocaleString()} Pt
-            の差が埋まりません。目標を数ポイントずらすか、ボーナスを調整してください。
-          </p>
-        </div>
-      )}
-
-      <Panel title="① マイセカイ配分">
-        <div className="grid grid-cols-3 gap-3 text-center">
-          <Stat label="木・石" value={a.countA} />
-          <Stat label="キラキラ・樽" value={a.countB} />
-          <Stat label="草花・工具箱・宝箱" value={a.countC} />
-        </div>
-        <p className="mt-3 text-sm text-slate-500">
-          このステップで約{" "}
-          <span className="font-bold" style={{ color: "var(--unit-color)" }}>
-            {a.totalPt.toLocaleString()}
-          </span>{" "}
-          Pt（単価 {result.unitBasePt} Pt/個）
-        </p>
-      </Panel>
-
-      <Panel title="② ライブ調整（独りんぼエンヴィー）">
-        {result.liveAdjustment.status === "OK" ? (
-          <div className="space-y-1 text-sm">
-            <p>
-              <span className="font-bold" style={{ color: "var(--unit-color)" }}>
-                {result.liveAdjustment.requiredPt.toLocaleString()}
-              </span>{" "}
-              Pt を獲得
-            </p>
-            {result.liveAdjustment.targetScoreRange && (
-              <p className="text-slate-500">
-                目標スコア: {result.liveAdjustment.targetScoreRange.min.toLocaleString()} 〜{" "}
-                {result.liveAdjustment.targetScoreRange.max.toLocaleString()}
-              </p>
-            )}
-          </div>
-        ) : (
-          <p className="text-sm text-rose-600">
-            このポイント（{result.liveAdjustment.requiredPt.toLocaleString()} Pt）は0〜1炊きでは調整できません。
-          </p>
-        )}
-      </Panel>
-
-      {result.finalRunPt > 0 && (
-        <Panel title={`③ ラストラン（${result.finalRunPt.toLocaleString()} Pt / 基礎点 ${result.finalBase}）`}>
-          {result.finalRunPlans.length === 0 ? (
-            <p className="text-sm text-rose-600">
-              このポイントを獲得するプランは見つかりませんでした。
-            </p>
-          ) : (
-            <ul className="space-y-1 text-sm">
-              {result.finalRunPlans.slice(0, 8).map((p, i) => (
-                <li key={i} className="flex flex-wrap gap-x-4 text-slate-600">
-                  <span>ボーナス {p.bonus}%</span>
-                  <span>消費 {p.liveBonus}</span>
-                  <span>
-                    スコア {p.minScore.toLocaleString()}〜{p.maxScore.toLocaleString()}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-      )}
-    </>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="neu-inset rounded-lg p-3">
-      <div className="text-2xl font-bold" style={{ color: "var(--unit-color)" }}>
-        {value}
-      </div>
-      <div className="mt-1 text-xs text-slate-500">{label}</div>
-    </div>
-  );
-}
