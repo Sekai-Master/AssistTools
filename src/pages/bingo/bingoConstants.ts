@@ -3,7 +3,7 @@ import type { UnitKey } from "../../lib/units";
 /** transformedMusics の Unit 文字列 → 表示ラベル＋テーマ用ユニットキー。 */
 export const UNIT_OPTIONS: { value: string; label: string; unit?: UnitKey }[] = [
   { value: "0_VS", label: "VS", unit: "vs" },
-  { value: "1_L/n", label: "Leo/need", unit: "ln" },
+  { value: "1_L/n", label: "L/n", unit: "ln" },
   { value: "2_MMJ", label: "MMJ", unit: "mmj" },
   { value: "3_VBS", label: "VBS", unit: "vbs" },
   { value: "4_WxS", label: "WxS", unit: "wxs" },

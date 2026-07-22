@@ -15,7 +15,16 @@ interface Props {
 export function BingoTable({ card, jacketBase, onToggleCleared, onEditCell }: Props) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      {/* table-fixed＋列幅固定: クリア切替で中身（太字化・CLEARED表記）が変わっても
+          列幅・表幅が動かないようにする。曲名だけ残り幅を取り、はみ出しは truncate。 */}
+      <table className="w-full text-sm table-fixed">
+        <colgroup>
+          <col className="w-12" />
+          <col className="w-16" />
+          <col />
+          <col className="w-16" />
+          <col className="w-24" />
+        </colgroup>
         <thead>
           <tr className="text-slate-500 text-xs">
             <th className="p-2 text-left">位置</th>
@@ -49,18 +58,19 @@ export function BingoTable({ card, jacketBase, onToggleCleared, onEditCell }: Pr
                 </td>
                 <td className="p-2">
                   {cell === "FREE" ? (
-                    <span className="text-slate-500">FREE（中央）</span>
+                    <span className="block truncate text-slate-500">FREE（中央）</span>
                   ) : (
                     <button
                       type="button"
                       onClick={() => onEditCell(i)}
-                      className="text-left text-slate-700 hover:underline"
+                      className="block w-full truncate text-left text-slate-700 hover:underline"
+                      title={cell.title}
                     >
                       {cell.title}
                     </button>
                   )}
                 </td>
-                <td className="p-2 text-slate-500">
+                <td className="p-2 text-slate-500 truncate">
                   {cell === "FREE" ? "-" : unitLabel(cell.Unit)}
                 </td>
                 <td className="p-2">
@@ -70,7 +80,7 @@ export function BingoTable({ card, jacketBase, onToggleCleared, onEditCell }: Pr
                     <button
                       type="button"
                       onClick={() => onToggleCleared(i)}
-                      className={`px-2 py-0.5 rounded text-xs font-bold ${
+                      className={`block w-full py-0.5 rounded text-center text-xs font-bold ${
                         cleared
                           ? "bg-rose-500 text-white"
                           : "bg-neu shadow-neu-sm text-slate-500"
