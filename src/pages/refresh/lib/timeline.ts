@@ -25,6 +25,8 @@ export type Segment =
       songLengthSec: number;
       /** このブロックの走行時間(分)。シフト単位（60/30等）で指定。 */
       minutes: number;
+      /** 焚き数（ライブボーナス消費数 0〜10）。点数計算に使う。ゲージには影響しない。 */
+      taki?: number;
     }
   | { id: string; kind: "mysekai"; stamina: number; minutes: number }
   | { id: string; kind: "rest"; minutes: number };

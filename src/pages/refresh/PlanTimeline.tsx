@@ -4,12 +4,21 @@ import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { DurationInput } from "../../components/ui/DurationInput";
+import { TakiInput } from "../../components/ui/TakiInput";
 import { Stat } from "./Stat";
 import { type Segment, simulateTimeline } from "./lib/timeline";
 import { drawPlanCanvas, type PlanCanvasData } from "./lib/planCanvas";
 import { getRefreshConstant } from "./lib/refreshConstant";
 import { fmtClock, fmtDuration, nearestRoundTime, parseClock } from "./lib/format";
+import { LIVE_BONUS_MULTIPLIERS } from "../analyzer/lib/calcLivePt";
 import type { AnalyzerMusic } from "../analyzer/useAnalyzerMusics";
+
+/** 焚き数での点数倍率比。基準時速×この比＝その焚き数の時速。 */
+function takiRate(hourlyRate: number, refTaki: number, taki: number): number {
+  const ref = LIVE_BONUS_MULTIPLIERS[Math.max(0, Math.min(10, refTaki))] || 1;
+  const m = LIVE_BONUS_MULTIPLIERS[Math.max(0, Math.min(10, taki))] || 1;
+  return (hourlyRate * m) / ref;
+}
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 
@@ -17,6 +26,15 @@ let seq = 0;
 function newId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return `seg-${seq++}`;
+}
+
+interface PointsConfig {
+  /** 起点となる現在ポイント */
+  startPoints: number;
+  /** 基準焚き数での点数時速(pt/時) */
+  hourlyRate: number;
+  /** 上の時速を出した焚き数 */
+  refTaki: number;
 }
 
 interface Props {
@@ -28,13 +46,15 @@ interface Props {
   startPercent: number;
   /** エビ基準の周回ペース(回/時)。画像のメタ表示に使う。 */
   ratePerHour: number;
+  /** 指定すると各プレイに焚き数を持たせ、累積到達ポイントも計算・表示する（全部入り） */
+  points?: PointsConfig;
 }
 
 /**
- * 周回プランのタイムライン。プレイ(時間指定)/休憩ブロックを積み、各時点の時刻とゲージを表示。
- * イベランのシフトが1時間・30分区切りなので、プレイは時間で足す。
+ * 周回プランのタイムライン。プレイ(時間指定)/休憩/マイセカイを積み、各時点の時刻とゲージを表示。
+ * points 指定時はプレイに焚き数を持たせ、累積到達ポイントも並走で計算する。
  */
-export function PlanTimeline({ selectedSong, overhead, startPercent, ratePerHour }: Props) {
+export function PlanTimeline({ selectedSong, overhead, startPercent, ratePerHour, points }: Props) {
   const [startTime, setStartTime] = useState(nearestRoundTime);
   const [segments, setSegments] = useState<Segment[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -45,6 +65,27 @@ export function PlanTimeline({ selectedSong, overhead, startPercent, ratePerHour
     () => simulateTimeline(segments, startPercent, overhead),
     [segments, startPercent, overhead]
   );
+
+  // points指定時: 各ブロックの獲得pt・累積到達ptを並走計算。
+  // ゲージ100%到達後のムダ時間(wastedMinutes)は加点されない＝ゲージと連動する。
+  const pointRows = useMemo(() => {
+    if (!points) return null;
+    let cum = points.startPoints;
+    return result.points.map((pt) => {
+      const seg = pt.segment;
+      let gained = 0;
+      if (seg.kind === "play") {
+        const effMin = Math.max(0, seg.minutes - pt.wastedMinutes);
+        gained = takiRate(points.hourlyRate, points.refTaki, seg.taki ?? points.refTaki) * (effMin / 60);
+      }
+      cum += gained;
+      return { gained: Math.round(gained), cumulative: Math.round(cum) };
+    });
+  }, [points, result]);
+
+  const finalPoints =
+    pointRows && pointRows.length ? pointRows[pointRows.length - 1].cumulative : points?.startPoints ?? 0;
+  const gainedPoints = finalPoints - (points?.startPoints ?? 0);
 
   const canAddPlay = !!selectedSong && selectedSong.musicTime > 0;
 
@@ -61,6 +102,7 @@ export function PlanTimeline({ selectedSong, overhead, startPercent, ratePerHour
         refreshConstant: getRefreshConstant(selectedSong.basePoint, selectedSong.id),
         songLengthSec: selectedSong.musicTime,
         minutes,
+        taki: points ? points.refTaki : undefined,
       },
     ]);
   };
@@ -70,6 +112,8 @@ export function PlanTimeline({ selectedSong, overhead, startPercent, ratePerHour
     setSegments((s) => [...s, { id: newId(), kind: "mysekai", stamina: 30, minutes: 10 }]);
   const setPlayMinutes = (id: string, minutes: number) =>
     setSegments((s) => s.map((g) => (g.id === id && g.kind === "play" ? { ...g, minutes } : g)));
+  const setPlayTaki = (id: string, taki: number) =>
+    setSegments((s) => s.map((g) => (g.id === id && g.kind === "play" ? { ...g, taki } : g)));
   const setRestMinutes = (id: string, minutes: number) =>
     setSegments((s) => s.map((g) => (g.id === id && g.kind === "rest" ? { ...g, minutes } : g)));
   const setMysekaiStamina = (id: string, stamina: number) =>
@@ -92,24 +136,38 @@ export function PlanTimeline({ selectedSong, overhead, startPercent, ratePerHour
       (canvasRef.current &&
         getComputedStyle(canvasRef.current).getPropertyValue("--unit-color").trim()) ||
       "#ff9900";
+    const gauge = (pct: number) => `ゲージ${pct.toFixed(1)}%`;
     return {
-      songTitle: selectedSong?.title ?? "リフレッシュゲージ",
-      meta: [
-        `ペース: ${ratePerHour}回/時（エビ基準）`,
-        `開始 ${startTime || "—"}・ゲージ ${startPercent}%`,
-      ],
-      rows: result.points.map((pt) => {
+      heading: points
+        ? "リフレッシュゲージ 周回プラン（全部入り）"
+        : "リフレッシュゲージ 周回プラン",
+      songTitle: points
+        ? `到達 ${finalPoints.toLocaleString()} pt`
+        : selectedSong?.title ?? "リフレッシュゲージ",
+      meta: points
+        ? [
+            `時速 ${points.hourlyRate.toLocaleString()} pt/時（基準焚き${points.refTaki}）・${ratePerHour}回/時`,
+            `現在 ${points.startPoints.toLocaleString()} pt ・ 開始 ${startTime || "—"} ・ ゲージ ${startPercent}%`,
+          ]
+        : [
+            `ペース: ${ratePerHour}回/時（エビ基準）`,
+            `開始 ${startTime || "—"}・ゲージ ${startPercent}%`,
+          ],
+      rows: result.points.map((pt, i) => {
         const seg = pt.segment;
         const time = `${fmtClock(startMOD, pt.startMinute)} → ${fmtClock(startMOD, pt.endMinute)}`;
+        const cum = pointRows ? pointRows[i].cumulative.toLocaleString() : null;
+        const gained = pointRows ? pointRows[i].gained : 0;
         if (seg.kind === "play") {
           const warn = pt.wastedPlays >= 1;
+          const base =
+            `≈${Math.round(pt.plays)}回` +
+            (warn ? ` / 約${Math.round(pt.wastedMinutes)}分ムダ` : "");
           return {
             time,
-            label: `${seg.title}　${fmtDuration(seg.minutes)}`,
-            sub:
-              `≈${Math.round(pt.plays)}回` +
-              (warn ? ` / 約${Math.round(pt.wastedMinutes)}分ムダ` : ""),
-            percent: `${pt.endPercent.toFixed(1)}%`,
+            label: points ? `${seg.title}　焚き${seg.taki ?? points.refTaki}　${fmtDuration(seg.minutes)}` : `${seg.title}　${fmtDuration(seg.minutes)}`,
+            sub: points ? `+${gained.toLocaleString()}pt ・ ${gauge(pt.endPercent)} ・ ${base}` : base,
+            percent: cum ?? `${pt.endPercent.toFixed(1)}%`,
             warn,
             jacket: `${JACKET_BASE}${seg.jacketLink}`,
           };
@@ -118,29 +176,39 @@ export function PlanTimeline({ selectedSong, overhead, startPercent, ratePerHour
           return {
             time,
             label: `マイセカイ採取　スタミナ${seg.stamina}`,
-            sub: fmtDuration(seg.minutes),
-            percent: `${pt.endPercent.toFixed(1)}%`,
+            sub: points ? `${fmtDuration(seg.minutes)} ・ ${gauge(pt.endPercent)}` : fmtDuration(seg.minutes),
+            percent: cum ?? `${pt.endPercent.toFixed(1)}%`,
             warn: false,
           };
         }
+        const restSub =
+          pt.endPercent > 0
+            ? `次の減少まで${Math.max(0, Math.ceil(30 - pt.decayProgressMin))}分`
+            : undefined;
         return {
           time,
           label: `休憩　${fmtDuration(seg.minutes)}`,
-          sub:
-            pt.endPercent > 0
-              ? `次の減少まで${Math.max(0, Math.ceil(30 - pt.decayProgressMin))}分`
-              : undefined,
-          percent: `${pt.endPercent.toFixed(1)}%`,
+          sub: points ? [gauge(pt.endPercent), restSub].filter(Boolean).join(" ・ ") : restSub,
+          percent: cum ?? `${pt.endPercent.toFixed(1)}%`,
           warn: false,
         };
       }),
-      summary: [
-        { label: "総時間", value: fmtDuration(result.totalMinutes) },
-        { label: "終了時刻", value: fmtClock(startMOD, result.totalMinutes) },
-        { label: "終了ゲージ", value: `${result.finalPercent.toFixed(1)}%` },
-        { label: "ムダ時間", value: fmtDuration(result.totalWastedMinutes) },
-      ],
+      summary: points
+        ? [
+            { label: "到達ポイント", value: finalPoints.toLocaleString() },
+            { label: "獲得", value: `+${gainedPoints.toLocaleString()}` },
+            { label: "総時間", value: fmtDuration(result.totalMinutes) },
+            { label: "終了時刻", value: fmtClock(startMOD, result.totalMinutes) },
+            { label: "終了ゲージ", value: `${result.finalPercent.toFixed(1)}%` },
+          ]
+        : [
+            { label: "総時間", value: fmtDuration(result.totalMinutes) },
+            { label: "終了時刻", value: fmtClock(startMOD, result.totalMinutes) },
+            { label: "終了ゲージ", value: `${result.finalPercent.toFixed(1)}%` },
+            { label: "ムダ時間", value: fmtDuration(result.totalWastedMinutes) },
+          ],
       accent,
+      rightColW: points ? 150 : undefined,
     };
   };
 
@@ -170,7 +238,7 @@ export function PlanTimeline({ selectedSong, overhead, startPercent, ratePerHour
   };
 
   return (
-    <Panel title="周回プラン（休憩込み）">
+    <Panel title={points ? "タイムライン（曲・休憩・マイセカイ・到達pt）" : "周回プラン（休憩込み）"}>
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <Field label="開始時刻" htmlFor="rg-start" className="!space-y-1">
           <NeuInput
@@ -248,6 +316,18 @@ export function PlanTimeline({ selectedSong, overhead, startPercent, ratePerHour
                         <span className="max-w-36 truncate font-bold text-slate-700">{seg.title}</span>
                         <DurationInput value={seg.minutes} onChange={(v) => setPlayMinutes(seg.id, v)} />
                         <span className="text-xs text-slate-400">≈{Math.round(pt.plays)}回</span>
+                        {points && pointRows && (
+                          <>
+                            <span className="text-xs text-slate-500">焚き</span>
+                            <TakiInput
+                              value={seg.taki ?? points.refTaki}
+                              onChange={(v) => setPlayTaki(seg.id, v)}
+                            />
+                            <span className="text-xs font-bold" style={{ color: "var(--unit-color)" }}>
+                              +{pointRows[i].gained.toLocaleString()}
+                            </span>
+                          </>
+                        )}
                       </div>
                     ) : seg.kind === "mysekai" ? (
                       <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -289,14 +369,30 @@ export function PlanTimeline({ selectedSong, overhead, startPercent, ratePerHour
                     )}
                   </div>
 
-                  <div className="w-20 shrink-0 text-right">
-                    <div
-                      className="font-bold"
-                      style={{ color: pt.endPercent >= 100 ? "#e11d48" : "var(--unit-color)" }}
-                    >
-                      {pt.endPercent.toFixed(1)}%
-                    </div>
-                    <div className="text-[10px] text-slate-400">{pt.startPercent.toFixed(1)}%→</div>
+                  <div className={`shrink-0 text-right ${points ? "w-28" : "w-20"}`}>
+                    {points && pointRows ? (
+                      <>
+                        <div className="break-all font-bold leading-tight tabular-nums text-slate-700">
+                          {pointRows[i].cumulative.toLocaleString()}
+                        </div>
+                        <div
+                          className="text-[10px]"
+                          style={{ color: pt.endPercent >= 100 ? "#e11d48" : "var(--unit-color)" }}
+                        >
+                          ゲージ{pt.endPercent.toFixed(1)}%
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div
+                          className="font-bold"
+                          style={{ color: pt.endPercent >= 100 ? "#e11d48" : "var(--unit-color)" }}
+                        >
+                          {pt.endPercent.toFixed(1)}%
+                        </div>
+                        <div className="text-[10px] text-slate-400">{pt.startPercent.toFixed(1)}%→</div>
+                      </>
+                    )}
                   </div>
 
                   <div className="flex shrink-0 flex-col leading-none">
@@ -332,6 +428,12 @@ export function PlanTimeline({ selectedSong, overhead, startPercent, ratePerHour
             })}
           </ul>
 
+          {points && (
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <Stat label="到達ポイント" value={finalPoints.toLocaleString()} />
+              <Stat label="獲得ポイント" value={`+${gainedPoints.toLocaleString()}`} />
+            </div>
+          )}
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <Stat label="総時間" value={fmtDuration(result.totalMinutes)} />
             <Stat label="終了時刻" value={fmtClock(startMOD, result.totalMinutes)} />

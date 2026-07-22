@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { Panel } from "../../components/ui/Panel";
 import { Field } from "../../components/ui/Field";
@@ -11,7 +11,10 @@ import { useAnalyzerMusics } from "../analyzer/useAnalyzerMusics";
 import { useGaugeInputs } from "../refresh/useGaugeInputs";
 import { GaugeInputsPanel } from "../refresh/GaugeInputsPanel";
 import { fmtDuration } from "../refresh/lib/format";
+import { drawPlanCanvas, type PlanCanvasData } from "../refresh/lib/planCanvas";
 import { Stat } from "../refresh/Stat";
+
+const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 import {
   type WorkParams,
   type WorkSegment,
@@ -84,6 +87,76 @@ export default function WorkTimeCalculator() {
   const longRun = result.totalMinutes >= 16 * 60;
   const secPerPlay = (selectedSong?.musicTime || 74.8) + overhead;
   const revLB = Math.round(((revMinutes * 60) / secPerPlay) * revTaki);
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const buildCanvasData = (): PlanCanvasData => {
+    const accent =
+      (canvasRef.current &&
+        getComputedStyle(canvasRef.current).getPropertyValue("--unit-color").trim()) ||
+      "#884499";
+    let elapsed = 0;
+    let cumulative = 0;
+    const rows = result.rows.map((r) => {
+      const startMin = elapsed;
+      elapsed += r.segment.minutes;
+      cumulative += r.points;
+      return {
+        time: `${fmtDuration(startMin) || "0分"}〜${fmtDuration(elapsed)}`,
+        label: `焚き${r.segment.taki}　${fmtDuration(r.segment.minutes)}`,
+        sub: `+${Math.round(r.points).toLocaleString()}pt ・ ライボ${Math.round(r.lb)}`,
+        percent: Math.round(cumulative).toLocaleString(),
+        warn: false,
+        jacket: selectedSong ? `${JACKET_BASE}${selectedSong.jacketLink}` : undefined,
+      };
+    });
+    return {
+      heading: "必要稼働時間計算",
+      songTitle: `到達 ${result.totalPoints.toLocaleString()} pt`,
+      meta: [
+        `時速 ${(Number(hourlyRate) || 0).toLocaleString()} pt/時（基準焚き${refTaki}）`,
+        `曲 ${selectedSong?.title ?? "エビ"} ・ 所持ライボ ${Number(startLB) || 0}`,
+      ],
+      rows,
+      summary: [
+        { label: "到達ポイント", value: result.totalPoints.toLocaleString() },
+        { label: "総稼働", value: fmtDuration(result.totalMinutes) },
+        { label: "消費ライボ", value: `${result.totalLB}` },
+        {
+          label: "必要な石",
+          value: result.requiredCrystals > 0 ? result.requiredCrystals.toLocaleString() : "0",
+        },
+      ],
+      accent,
+      rightColW: 150,
+    };
+  };
+
+  const copyImage = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    await drawPlanCanvas(canvas, buildCanvasData());
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        setNotice("画像をコピーしました。");
+      } catch {
+        setNotice("コピーに失敗しました（保存をお使いください）。");
+      }
+    }, "image/png");
+  };
+
+  const saveImage = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    await drawPlanCanvas(canvas, buildCanvasData());
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/png");
+    a.download = "worktime.png";
+    a.click();
+  };
 
   return (
     <ToolPage unit="n25" title="必要稼働時間計算" icon="schedule">
@@ -243,6 +316,24 @@ export default function WorkTimeCalculator() {
                 ⚠ 稼働が長め。リフレッシュゲージが100%で止まる可能性（約16時間前後で頭打ち）。
                 「リフレッシュゲージ」ツールで確認を。
               </p>
+            )}
+            {result.rows.length > 0 && (
+              <>
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <NeuButton onClick={copyImage} className="!py-1.5">
+                    画像をコピー
+                  </NeuButton>
+                  <NeuButton onClick={saveImage} className="!py-1.5">
+                    画像を保存
+                  </NeuButton>
+                  {notice && <span className="text-xs text-slate-500">{notice}</span>}
+                </div>
+                <canvas
+                  ref={canvasRef}
+                  aria-hidden
+                  className="pointer-events-none absolute -left-[9999px] top-0 h-px w-px"
+                />
+              </>
             )}
           </Panel>
         </>
