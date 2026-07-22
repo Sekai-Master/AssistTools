@@ -3,7 +3,7 @@ import { ToolPage } from "../../components/ui/ToolPage";
 import { Panel } from "../../components/ui/Panel";
 import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
-import { NeuButton } from "../../components/ui/NeuButton";
+import { ActionButton } from "../../components/ui/ActionButton";
 import { Switch } from "../../components/ui/Switch";
 import { useAnalyzerMusics } from "./useAnalyzerMusics";
 import { calculatePlanV6, ENVY_ID, type CalculationResultV6 } from "./lib/calculator";
@@ -174,13 +174,9 @@ export default function PointAnalyzer() {
         </div>
       </Panel>
 
-      <NeuButton
-        active
-        onClick={handleCalc}
-        className="w-full !py-3 text-base"
-      >
+      <ActionButton onClick={handleCalc} className="w-full text-base">
         計算する
-      </NeuButton>
+      </ActionButton>
 
       {error && (
         <div className="neu-panel p-4 text-sm text-rose-600" role="alert">

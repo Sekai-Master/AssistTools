@@ -69,21 +69,22 @@ body {
     transition:
       transform 140ms var(--ease-out),
       box-shadow 140ms var(--ease-out);
-    will-change: transform;
+    will-change: box-shadow;
   }
+  /* 押下: 影を inset にして表面にめり込ませる。動きは控えめな scale だけ。 */
   .neu-tactile:active {
-    transform: scale(0.97);
     box-shadow: var(--shadow-neu-inset);
+    transform: scale(0.985);
     transition-duration: 100ms;
   }
   @media (hover: hover) and (pointer: fine) {
+    /* ホバー: 奥行きは影の距離で表す（表面から高く浮く）。translate はしない。 */
     .neu-tactile:hover {
-      transform: translateY(-2px);
       box-shadow: var(--shadow-neu-lg);
     }
     .neu-tactile:active:hover {
-      transform: scale(0.97);
       box-shadow: var(--shadow-neu-inset);
+      transform: scale(0.985);
     }
   }
   @media (prefers-reduced-motion: reduce) {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { Panel } from "../../components/ui/Panel";
 import { NeuButton } from "../../components/ui/NeuButton";
+import { ActionButton } from "../../components/ui/ActionButton";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { Segmented } from "../../components/ui/Segmented";
 import { useBingoMusics } from "./useBingoMusics";
@@ -234,9 +235,9 @@ export default function BingoGenerator() {
         </Panel>
       )}
 
-      <NeuButton active onClick={handleGenerate} disabled={loading} className="w-full !py-3 text-base">
+      <ActionButton onClick={handleGenerate} disabled={loading} className="w-full text-base">
         {loading ? "楽曲データ読込中…" : "カードを生成"}
-      </NeuButton>
+      </ActionButton>
 
       {error && (
         <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
