@@ -5,6 +5,7 @@ import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { Switch } from "../../components/ui/Switch";
+import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { UNIT_COLOR_VAR, UNIT_LABEL, type UnitKey } from "../../lib/units";
 import {
   type SkillLevel,
@@ -117,13 +118,14 @@ export default function EffectiveValueCalculator() {
 
   return (
     <ToolPage unit="mmj" title="スキル実効値計算機" icon="calculate">
-      <div className="flex items-center justify-end">
-        <Switch
-          checked={mode === "reverse"}
-          onChange={(c) => setMode(c ? "reverse" : "forward")}
-          label={mode === "reverse" ? "逆算（実効値→内部値）" : "順方向（→実効値）"}
-        />
-      </div>
+      <SegmentedControl
+        options={[
+          { value: "forward", label: "順方向（→実効値）" },
+          { value: "reverse", label: "逆算（→内部値）" },
+        ]}
+        value={mode}
+        onChange={setMode}
+      />
 
       {mode === "forward" ? (
         <>

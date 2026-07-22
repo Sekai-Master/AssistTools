@@ -14,13 +14,12 @@ export function ActionButton({
     <button
       type="button"
       className={cn(
-        "neu-tactile rounded-xl px-6 py-3 font-bold text-white shadow-neu",
+        "neu-cta rounded-xl px-6 py-3 font-bold",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
         "focus-visible:ring-[color:var(--unit-color)] focus-visible:ring-offset-neu",
         "disabled:opacity-50 disabled:pointer-events-none",
         className
       )}
-      style={{ backgroundColor: "var(--unit-color)" }}
       {...props}
     />
   );

@@ -18,14 +18,13 @@ export function NeuButton({ active, className, ...props }: NeuButtonProps) {
       type="button"
       aria-pressed={active}
       className={cn(
-        "rounded-lg px-4 py-2 text-sm font-bold bg-neu",
+        "rounded-lg px-4 py-2 text-sm font-bold",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
         active
-          ? "text-white shadow-neu-inset transition-transform duration-100 active:scale-[0.98]"
-          : "text-slate-600 shadow-neu-sm neu-tactile",
+          ? "neu-selected transition-transform duration-100 active:scale-[0.98]"
+          : "bg-neu text-slate-600 shadow-neu-sm neu-tactile",
         className
       )}
-      style={active ? { backgroundColor: "var(--unit-color)" } : undefined}
       {...props}
     />
   );

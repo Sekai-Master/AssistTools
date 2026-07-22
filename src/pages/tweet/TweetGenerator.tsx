@@ -7,6 +7,7 @@ import { NeuTextarea } from "../../components/ui/NeuTextarea";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { Switch } from "../../components/ui/Switch";
 import { Segmented } from "../../components/ui/Segmented";
+import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import {
   DEFAULT_TWEET_STATE,
   buildTweetText,
@@ -82,7 +83,7 @@ export default function TweetGenerator() {
       <Panel title="募集内容">
         <div className="space-y-4">
           <Field label="TL放流">
-            <Segmented
+            <SegmentedControl
               options={[
                 { value: "", label: "あり" },
                 { value: "@No_TL", label: "なし" },
@@ -92,7 +93,7 @@ export default function TweetGenerator() {
             />
           </Field>
           <Field label="ルーム">
-            <Segmented
+            <SegmentedControl
               options={[
                 { value: "ベテラン", label: "ベテラン" },
                 { value: "フリー", label: "フリー" },
@@ -136,7 +137,7 @@ export default function TweetGenerator() {
             />
           </Field>
           <Field label="ルームID記号">
-            <Segmented
+            <SegmentedControl
               options={[
                 { value: "🔑", label: "🔑" },
                 { value: "ルームID", label: "ルームID" },
@@ -311,8 +312,7 @@ export default function TweetGenerator() {
             href={tweetIntentUrl(preview)}
             target="_blank"
             rel="noreferrer"
-            className="neu-tactile rounded-lg px-5 py-2.5 text-sm font-bold text-white shadow-neu-sm"
-            style={{ backgroundColor: "var(--unit-color)" }}
+            className="neu-cta inline-block rounded-lg px-5 py-2.5 text-sm font-bold"
           >
             ツイートする
           </a>

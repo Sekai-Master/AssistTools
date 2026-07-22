@@ -96,6 +96,64 @@ body {
     }
   }
 
+  /*
+   * 色付きボタンの立体感。単色ベタ塗りだと灰色影が効かずフラットに見えるため、
+   * ユニットカラーから作った「上明・下暗」のグラデーション＋上端の内側ハイライトで
+   * ドーム状に盛り上がって見せる。表面からの浮きは灰色のドロップシャドウで表す。
+   */
+  .neu-cta {
+    color: #fff;
+    background-image: linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--unit-color) 86%, #ffffff),
+      color-mix(in srgb, var(--unit-color) 90%, #000000)
+    );
+    box-shadow: var(--shadow-neu), inset 0 1.5px 1px rgba(255, 255, 255, 0.45);
+    transition:
+      box-shadow 140ms var(--ease-out),
+      transform 140ms var(--ease-out);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .neu-cta:hover {
+      box-shadow: var(--shadow-neu-lg), inset 0 1.5px 1px rgba(255, 255, 255, 0.45);
+    }
+  }
+  .neu-cta:active {
+    transform: scale(0.985);
+    box-shadow:
+      inset 3px 3px 6px color-mix(in srgb, var(--unit-color) 58%, #000),
+      inset -3px -3px 6px color-mix(in srgb, var(--unit-color) 76%, #fff);
+    transition-duration: 100ms;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .neu-cta:active {
+      transform: none;
+    }
+  }
+
+  /* 選択中トグル: 色のまま「表面にめり込んだ」立体。色付きの inset 影で凹ませる。 */
+  .neu-selected {
+    color: #fff;
+    background-image: linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--unit-color) 90%, #000000),
+      color-mix(in srgb, var(--unit-color) 85%, #ffffff)
+    );
+    box-shadow:
+      inset 3px 3px 6px color-mix(in srgb, var(--unit-color) 58%, #000),
+      inset -3px -3px 6px color-mix(in srgb, var(--unit-color) 78%, #fff);
+  }
+
+  /* セグメントコントロールの「滑るつまみ」。溝(neu-inset)の中で浮き出す色付きピル。 */
+  .seg-thumb {
+    background-image: linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--unit-color) 86%, #ffffff),
+      color-mix(in srgb, var(--unit-color) 90%, #000000)
+    );
+    box-shadow: var(--shadow-neu-sm), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  }
+
   /* ニューモーフィズムの浮き出しパネル */
   .neu-panel {
     background-color: var(--color-neu);

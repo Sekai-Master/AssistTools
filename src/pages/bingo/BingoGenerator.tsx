@@ -4,7 +4,7 @@ import { Panel } from "../../components/ui/Panel";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { ActionButton } from "../../components/ui/ActionButton";
 import { NeuInput } from "../../components/ui/NeuInput";
-import { Segmented } from "../../components/ui/Segmented";
+import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { useBingoMusics } from "./useBingoMusics";
 import {
   type BingoMusic,
@@ -164,13 +164,13 @@ export default function BingoGenerator() {
   return (
     <ToolPage unit="wxs" title="BINGOカードジェネレーター" icon="grid_on">
       <Panel title="生成モード">
-        <Segmented
+        <SegmentedControl
           options={[
             { value: "random", label: "ランダム" },
             { value: "seed", label: "シード値" },
           ]}
           value={mode}
-          onChange={(v) => setMode(v as "random" | "seed")}
+          onChange={setMode}
         />
         {mode === "seed" && (
           <NeuInput
@@ -211,14 +211,14 @@ export default function BingoGenerator() {
             </div>
             <div>
               <p className="mb-1 text-xs font-bold text-slate-500">中央マス</p>
-              <Segmented
+              <SegmentedControl
                 options={[
                   { value: "free", label: "FREE" },
                   { value: "random", label: "ランダム" },
                   { value: "specified", label: "指定" },
                 ]}
                 value={centerMode}
-                onChange={(v) => setCenterMode(v as CenterMode)}
+                onChange={setCenterMode}
               />
               {centerMode === "specified" && (
                 <div className="mt-2 flex items-center gap-2">
