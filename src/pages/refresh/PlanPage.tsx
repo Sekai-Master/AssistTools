@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { Panel } from "../../components/ui/Panel";
 import { Field } from "../../components/ui/Field";
@@ -8,6 +8,7 @@ import { DurationInput } from "../../components/ui/DurationInput";
 import { TakiInput } from "../../components/ui/TakiInput";
 import { Stat } from "./Stat";
 import { fmtClock, fmtDuration, nearestRoundTime, parseClock } from "./lib/format";
+import { drawPlanCanvas, type PlanCanvasData } from "./lib/planCanvas";
 import { type WorkParams, hourlyRateAt } from "../worktime/lib/worktime";
 
 let seq = 0;
@@ -70,6 +71,64 @@ export default function PlanPage() {
   const totalMinutes = rows.length ? rows[rows.length - 1].endMinute : 0;
   const finalPt = rows.length ? rows[rows.length - 1].cumulative : base;
   const gained = finalPt - base;
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const buildCanvasData = (): PlanCanvasData => {
+    const accent =
+      (canvasRef.current &&
+        getComputedStyle(canvasRef.current).getPropertyValue("--unit-color").trim()) ||
+      "#33ccbb";
+    return {
+      heading: "周回プラン（到達ポイント）",
+      songTitle: `到達 ${finalPt.toLocaleString()}`,
+      meta: [
+        `時速 ${(Number(hourlyRate) || 0).toLocaleString()} pt/時（基準焚き${refTaki}）`,
+        `現在 ${base.toLocaleString()} pt ・ 開始 ${startTime || "—"}`,
+      ],
+      rows: rows.map((r) => ({
+        time: `${fmtClock(startMOD, r.startMinute)} → ${fmtClock(startMOD, r.endMinute)}`,
+        label: `焚き${r.slot.taki}　${fmtDuration(r.slot.minutes)}`,
+        sub: `+${r.points.toLocaleString()} pt`,
+        percent: r.cumulative.toLocaleString(),
+        warn: false,
+      })),
+      summary: [
+        { label: "到達ポイント", value: finalPt.toLocaleString() },
+        { label: "獲得", value: `+${gained.toLocaleString()}` },
+        { label: "総稼働", value: fmtDuration(totalMinutes) },
+        { label: "終了時刻", value: fmtClock(startMOD, totalMinutes) },
+      ],
+      accent,
+      rightColW: 150,
+    };
+  };
+
+  const copyImage = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    await drawPlanCanvas(canvas, buildCanvasData());
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        setNotice("画像をコピーしました。");
+      } catch {
+        setNotice("コピーに失敗しました（保存をお使いください）。");
+      }
+    }, "image/png");
+  };
+
+  const saveImage = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    await drawPlanCanvas(canvas, buildCanvasData());
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/png");
+    a.download = "plan-points.png";
+    a.click();
+  };
 
   const setTaki = (id: string, taki: number) =>
     setSlots((s) => s.map((g) => (g.id === id ? { ...g, taki } : g)));
@@ -226,12 +285,29 @@ export default function PlanPage() {
         )}
 
         {slots.length > 0 && (
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="到達ポイント" value={finalPt.toLocaleString()} />
-            <Stat label="獲得ポイント" value={`+${gained.toLocaleString()}`} />
-            <Stat label="総稼働" value={fmtDuration(totalMinutes)} />
-            <Stat label="終了時刻" value={fmtClock(startMOD, totalMinutes)} />
-          </div>
+          <>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Stat label="到達ポイント" value={finalPt.toLocaleString()} />
+              <Stat label="獲得ポイント" value={`+${gained.toLocaleString()}`} />
+              <Stat label="総稼働" value={fmtDuration(totalMinutes)} />
+              <Stat label="終了時刻" value={fmtClock(startMOD, totalMinutes)} />
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <NeuButton onClick={copyImage} className="!py-1.5">
+                画像をコピー
+              </NeuButton>
+              <NeuButton onClick={saveImage} className="!py-1.5">
+                画像を保存
+              </NeuButton>
+              {notice && <span className="text-xs text-slate-500">{notice}</span>}
+            </div>
+            <canvas
+              ref={canvasRef}
+              aria-hidden
+              className="pointer-events-none absolute -left-[9999px] top-0 h-px w-px"
+            />
+          </>
         )}
       </Panel>
     </ToolPage>

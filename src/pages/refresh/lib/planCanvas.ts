@@ -24,6 +24,10 @@ export interface PlanCanvasData {
   rows: PlanCanvasRow[];
   summary: { label: string; value: string }[];
   accent: string;
+  /** 左上の小見出し（既定「リフレッシュゲージ 周回プラン」）。 */
+  heading?: string;
+  /** 右カラム（percent）の確保幅px。大きい数字（累積pt等）を出すとき広げる。既定72。 */
+  rightColW?: number;
 }
 
 const W = 700;
@@ -79,7 +83,7 @@ export async function drawPlanCanvas(canvas: HTMLCanvasElement, data: PlanCanvas
   ctx.textAlign = "left";
   ctx.fillStyle = INK;
   ctx.font = "bold 15px sans-serif";
-  ctx.fillText("リフレッシュゲージ 周回プラン", PAD, 30);
+  ctx.fillText(data.heading ?? "リフレッシュゲージ 周回プラン", PAD, 30);
   ctx.font = "bold 22px sans-serif";
   ctx.fillText(truncate(ctx, data.songTitle, W - PAD * 2), PAD, 60);
   ctx.font = "13px sans-serif";
@@ -111,7 +115,7 @@ export async function drawPlanCanvas(canvas: HTMLCanvasElement, data: PlanCanvas
     }
 
     // ラベル
-    const labelMax = W - PAD - 70 - labelX;
+    const labelMax = W - PAD - (data.rightColW ?? 72) - labelX;
     ctx.fillStyle = r.warn ? WARN : INK;
     ctx.font = "bold 14px sans-serif";
     ctx.fillText(truncate(ctx, r.label, labelMax), labelX, cy - (r.sub ? 8 : 0));
