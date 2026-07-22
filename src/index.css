@@ -15,7 +15,11 @@
   --color-neu-ink: #333333;
   --shadow-neu: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff;
   --shadow-neu-sm: 3px 3px 6px #bebebe, -3px -3px 6px #ffffff;
+  --shadow-neu-lg: 7px 7px 14px #bebebe, -7px -7px 14px #ffffff;
   --shadow-neu-inset: inset 3px 3px 6px #bebebe, inset -3px -3px 6px #ffffff;
+
+  /* 強めの ease-out（標準カーブは弱い）。触覚モーションに使う。 */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 
   /* ユニット代表色 */
   --color-vs: #33ccbb;
@@ -54,6 +58,43 @@ body {
 /* ユニットカラーを使う共通コンポーネント。Tailwind の任意値でも書けるが、
    タイトルの斜めバナーなど複数プロパティに跨るものはここにまとめる。 */
 @layer components {
+  /*
+   * 触覚インタラクション。ニューモーフィズムの「押すとへこむ」物理感を出す。
+   *  - ホバー: わずかに浮上（ポインタ環境のみ＝タッチ誤爆防止）
+   *  - 押下: scale(0.97) で沈み込み、影を inset にして本当にへこませる
+   *  - transform 主体でGPU任せ。box-shadow の inset 切替は瞬時でも「カチッ」と気持ちよい
+   * scale は 0.95〜0.98 の範囲（Emil の指針）。100〜160ms。
+   */
+  .neu-tactile {
+    transition:
+      transform 140ms var(--ease-out),
+      box-shadow 140ms var(--ease-out);
+    will-change: transform;
+  }
+  .neu-tactile:active {
+    transform: scale(0.97);
+    box-shadow: var(--shadow-neu-inset);
+    transition-duration: 100ms;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .neu-tactile:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-neu-lg);
+    }
+    .neu-tactile:active:hover {
+      transform: scale(0.97);
+      box-shadow: var(--shadow-neu-inset);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .neu-tactile,
+    .neu-tactile:hover,
+    .neu-tactile:active {
+      transform: none;
+      transition: box-shadow 120ms ease;
+    }
+  }
+
   /* ニューモーフィズムの浮き出しパネル */
   .neu-panel {
     background-color: var(--color-neu);
@@ -71,34 +112,33 @@ body {
     box-shadow: var(--shadow-neu-inset);
   }
 
-  /* ユニットカラーの斜めバナー付き見出し（legacy .title の踏襲） */
+  /* ユニットカラーの見出しバー。ベタ塗り＝白文字が常に読める。
+     legacy の斜めバナーは光沢（斜めのハイライト）として踏襲する。 */
   .unit-title {
     position: relative;
     display: flex;
     align-items: center;
+    gap: 0.5rem;
     overflow: hidden;
-    padding: 0.5em 0.7em;
-    border: 2px solid var(--unit-color);
-    border-radius: 8px;
-    color: var(--color-neu-ink);
+    padding: 0.6em 1em;
+    border-radius: 12px;
+    background-color: var(--unit-color);
+    color: #fff;
+    box-shadow: var(--shadow-neu-sm);
   }
   .unit-title::before {
     content: "";
     position: absolute;
-    top: -20vw;
-    left: -37vw;
-    z-index: 0;
-    width: 40vw;
-    height: 80vw;
-    transform: rotate(25deg);
-    background-color: var(--unit-color);
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      105deg,
+      rgba(255, 255, 255, 0.22) 0 28%,
+      rgba(255, 255, 255, 0) 32%
+    );
   }
   .unit-title > * {
     position: relative;
     z-index: 1;
-  }
-  .unit-title .unit-title__label {
-    margin-left: 1rem;
-    color: #fff;
   }
 }

@@ -25,11 +25,11 @@ export function ToolPage({ unit, title, icon, children }: ToolPageProps) {
     <div style={style} className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-8">
       <h1 className="unit-title text-xl font-bold">
         {icon && (
-          <span className="material-icons unit-title__label !ml-0" aria-hidden>
+          <span className="material-icons" aria-hidden>
             {icon}
           </span>
         )}
-        <span className="unit-title__label">{title}</span>
+        <span>{title}</span>
       </h1>
       <div className="mt-6 space-y-6">{children}</div>
     </div>

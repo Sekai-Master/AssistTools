@@ -25,9 +25,7 @@ export function Hub() {
             const accent = ACCENTS[i % ACCENTS.length];
             const card = (
               <div
-                className={`h-full neu-panel p-5 transition-transform ${
-                  isReady ? "hover:-translate-y-0.5" : "opacity-60"
-                }`}
+                className={`h-full neu-panel p-5 ${isReady ? "neu-tactile" : "opacity-60"}`}
                 style={{ borderTop: `4px solid ${accent}` }}
               >
                 <span
