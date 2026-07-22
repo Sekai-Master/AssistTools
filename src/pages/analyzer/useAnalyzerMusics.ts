@@ -12,6 +12,8 @@ export interface AnalyzerMusic {
   basePoint: number;
   /** 基礎点の出どころ。実測補正が効いた曲を UI で示すために使う。 */
   basePointSource: "verified" | "remote";
+  /** 楽曲の長さ(秒)。リフレッシュゲージの周回時間計算に使う。無い場合は 0。 */
+  musicTime: number;
   jacketLink: string;
   pronunciation?: string;
   artistName?: string;
@@ -21,6 +23,7 @@ interface RawMusic {
   id?: unknown;
   title?: unknown;
   event_rate?: unknown;
+  music_time?: unknown;
   jacketLink?: unknown;
   published?: unknown;
   pronunciation?: unknown;
@@ -47,6 +50,7 @@ function parse(raw: unknown): AnalyzerMusic[] {
       title: r.title,
       basePoint: verified ?? r.event_rate,
       basePointSource: verified !== undefined ? "verified" : "remote",
+      musicTime: isNum(r.music_time) ? r.music_time : 0,
       jacketLink: isStr(r.jacketLink) ? r.jacketLink : `jacket_s_${r.id}.webp`,
       pronunciation: isStr(r.pronunciation) ? r.pronunciation : undefined,
       artistName: isStr(r.artistName) ? r.artistName : undefined,

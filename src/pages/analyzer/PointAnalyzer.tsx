@@ -103,7 +103,7 @@ export default function PointAnalyzer() {
   };
 
   return (
-    <ToolPage unit="n25" title="ポイント調整アナライザー" icon="analytics">
+    <ToolPage unit="mmj" title="ポイント調整アナライザー" icon="analytics">
       {dataError && (
         <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
           {dataError}

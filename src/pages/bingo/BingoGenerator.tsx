@@ -172,7 +172,7 @@ export default function BingoGenerator() {
   };
 
   return (
-    <ToolPage unit="wxs" title="BINGOカードジェネレーター" icon="grid_on">
+    <ToolPage unit="vbs" title="BINGOカードジェネレーター" icon="grid_on">
       {dataError && (
         <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
           {dataError}

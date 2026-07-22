@@ -34,7 +34,7 @@ export function Layout({ children }: { children: ReactNode }) {
             Sekai-Master
           </Link>
 
-          {/* PC: 「|」区切りの横並びナビ */}
+          {/* PC: 「|」区切りの横並びナビ（短縮名で詰まりを防ぐ） */}
           <nav className="hidden md:flex items-center divide-x divide-slate-300/70 text-sm">
             {READY_TOOLS.map((t) => {
               const active = pathname === t.path;
@@ -42,11 +42,12 @@ export function Layout({ children }: { children: ReactNode }) {
                 <Link
                   key={t.id}
                   to={t.path}
+                  title={t.name}
                   className={`px-3 transition-colors ${
                     active ? "text-slate-900 font-bold" : "text-slate-500 hover:text-slate-800"
                   }`}
                 >
-                  {t.name}
+                  {t.shortName}
                 </Link>
               );
             })}

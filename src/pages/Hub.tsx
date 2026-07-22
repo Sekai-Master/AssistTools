@@ -1,9 +1,6 @@
 import { Link } from "react-router-dom";
 import { TOOLS } from "../tools";
 
-// 各ツールカードのアクセント（ユニット代表色を巡回。装飾用）。
-const ACCENTS = ["var(--color-vs)", "var(--color-ln)", "var(--color-mmj)", "var(--color-vbs)", "var(--color-wxs)", "var(--color-n25)"];
-
 /** ランディング（ハブ）。ニューモーフィズム＋ユニットカラー。 */
 export function Hub() {
   return (
@@ -20,9 +17,10 @@ export function Hub() {
       <section className="pb-16">
         <h2 className="text-lg font-bold mb-4 text-slate-600">ツール一覧</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {TOOLS.map((tool, i) => {
+          {TOOLS.map((tool) => {
             const isReady = tool.status === "ready";
-            const accent = ACCENTS[i % ACCENTS.length];
+            // カードのアクセント色 = そのツールのページ基調色（ユニット色）と一致させる。
+            const accent = `var(--color-${tool.unit})`;
             const card = (
               <div
                 className={`h-full neu-panel p-5 ${isReady ? "neu-tactile" : "opacity-60"}`}
