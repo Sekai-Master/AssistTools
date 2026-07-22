@@ -145,6 +145,11 @@ export default function TweetGenerator() {
 
       <Panel title="主（募集主）">
         <div className="space-y-4">
+          <Switch
+            checked={s.appendPercent}
+            onChange={(b) => set("appendPercent", b)}
+            label="スキル値に % を付ける"
+          />
           <SkillRow
             label="主スキル値"
             show={s.showHostSkill}

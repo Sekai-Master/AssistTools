@@ -53,15 +53,30 @@ describe("buildTweetText", () => {
     expect(t).toContain("【🔑12345】");
   });
 
-  it("主は生値・募は↑付き（非対称）", () => {
+  it("主は生値・募は↑付き（非対称・%オフ時）", () => {
     const s: TweetState = {
       ...DEFAULT_TWEET_STATE,
+      appendPercent: false,
       hostSkill: "150",
       requiredSkill: "580",
     };
     const t = buildTweetText(s);
     expect(t).toContain("主：150");
     expect(t).toContain("募：580↑");
+  });
+
+  it("%トグルON時はスキル値に%（内部値には付けない）", () => {
+    const s: TweetState = {
+      ...DEFAULT_TWEET_STATE,
+      appendPercent: true,
+      hostSkill: "272",
+      showHostInnerValue: true,
+      hostInnerValue: "585000",
+      requiredSkill: "240",
+    };
+    const t = buildTweetText(s);
+    expect(t).toContain("主：272%/585000");
+    expect(t).toContain("募：240%↑");
   });
 
   it("備考は・区切りで前後にスペース", () => {

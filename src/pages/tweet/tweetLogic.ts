@@ -25,6 +25,9 @@ export interface TweetState {
   showFreeDescription: boolean;
   freeDescription: string;
 
+  /** スキル値に % を付けるか（実募集文の約6割が%付き）。 */
+  appendPercent: boolean;
+
   showRequiredSkill: boolean;
   requiredSkill: string;
   showRequiredInnerValue: boolean;
@@ -60,6 +63,7 @@ export const DEFAULT_TWEET_STATE: TweetState = {
   supporterCount: "",
   showFreeDescription: false,
   freeDescription: "",
+  appendPercent: true,
   showRequiredSkill: true,
   requiredSkill: "",
   showRequiredInnerValue: false,
@@ -93,9 +97,17 @@ function roomIdDisplay(symbol: string, roomId: string): string {
   return roomId;
 }
 
-/** 募集スキル値の '↑' 付与。'/'区切りの各非空要素に↑を付ける。 */
-export function recruitSkillWithArrow(requiredSkill: string, requiredInnerValue: string): string {
-  const base = `${requiredSkill}${requiredInnerValue ? "/" + requiredInnerValue : ""}`;
+/**
+ * 募集スキル値の '↑' 付与。'/'区切りの各非空要素に↑を付ける。
+ * percent が true のときスキル値（内部値ではない先頭要素）に % を付ける。
+ */
+export function recruitSkillWithArrow(
+  requiredSkill: string,
+  requiredInnerValue: string,
+  percent = false
+): string {
+  const skill = requiredSkill && percent ? `${requiredSkill}%` : requiredSkill;
+  const base = `${skill}${requiredInnerValue ? "/" + requiredInnerValue : ""}`;
   return base
     .split("/")
     .map((v) => (v ? `${v}↑` : ""))
@@ -120,8 +132,9 @@ export function buildTweetText(s: TweetState): string {
   text += `${s.room} ${s.song}${s.rounds}　@${s.remainingSlots}\n`;
   text += `【${s.roomIdSymbol}${roomIdDisplay(s.roomIdSymbol, s.roomId)}】\n\n`;
 
-  // (3) 主：行
-  const hostSkill = s.showHostSkill ? s.hostSkill : "";
+  // (3) 主：行（スキル値に任意で%）
+  const rawHostSkill = s.showHostSkill ? s.hostSkill : "";
+  const hostSkill = rawHostSkill && s.appendPercent ? `${rawHostSkill}%` : rawHostSkill;
   const hostInner = s.showHostInnerValue ? s.hostInnerValue : "";
   const hostRemarks = joinRemarks([
     s.showConditionOutside && s.conditionOutside ? `条件外${s.conditionOutside}` : "",
@@ -130,10 +143,10 @@ export function buildTweetText(s: TweetState): string {
   ]);
   text += `主：${hostSkill}${hostInner ? "/" + hostInner : ""}${hostRemarks}\n`;
 
-  // (4) 募：行（募集スキルは↑付き）
+  // (4) 募：行（募集スキルは↑付き・任意で%）
   const reqSkill = s.showRequiredSkill ? s.requiredSkill : "";
   const reqInner = s.showRequiredInnerValue ? s.requiredInnerValue : "";
-  const recruitSkillText = recruitSkillWithArrow(reqSkill, reqInner);
+  const recruitSkillText = recruitSkillWithArrow(reqSkill, reqInner, s.appendPercent);
   const recruitRemarks = joinRemarks([
     s.showStar4 ? "☆４" : "",
     s.showLongSession ? "長時間できる方" : "",
