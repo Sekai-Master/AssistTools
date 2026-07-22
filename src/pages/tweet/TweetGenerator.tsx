@@ -98,10 +98,17 @@ export default function TweetGenerator() {
           </Field>
           <Field label="回数">
             <Segmented
-              options={["高速周回", "周回", "2回", "3回", "4回", "5回"].map((v) => ({
-                value: v,
-                label: v,
-              }))}
+              options={[
+                "高速周回",
+                "周回",
+                "2回",
+                "3回",
+                "4回",
+                "5回",
+                "6回",
+                "7回",
+                "8回",
+              ].map((v) => ({ value: v, label: v }))}
               value={s.rounds}
               onChange={(v) => set("rounds", v)}
             />
@@ -211,6 +218,16 @@ export default function TweetGenerator() {
               checked={s.showLongSession}
               onChange={(b) => set("showLongSession", b)}
               label="長時間できる方"
+            />
+            <Switch
+              checked={s.showSfcNoCare}
+              onChange={(b) => set("showSfcNoCare", b)}
+              label="SFC気にしません"
+            />
+            <Switch
+              checked={s.showMidLeaveOk}
+              onChange={(b) => set("showMidLeaveOk", b)}
+              label="途中抜けOK"
             />
             <Switch
               checked={s.showJudgementStrengthenDisabled}

@@ -32,6 +32,8 @@ export interface TweetState {
 
   showStar4: boolean;
   showLongSession: boolean;
+  showSfcNoCare: boolean; // SFC気にしません（実募集文の約6割で使われる定番）
+  showMidLeaveOk: boolean; // 途中抜けOK
   showJudgementStrengthenDisabled: boolean;
   showJudgementAndRecoveryDisabled: boolean;
   showRecruitFreeDescription: boolean;
@@ -64,6 +66,8 @@ export const DEFAULT_TWEET_STATE: TweetState = {
   requiredInnerValue: "",
   showStar4: false,
   showLongSession: false,
+  showSfcNoCare: false,
+  showMidLeaveOk: false,
   showJudgementStrengthenDisabled: false,
   showJudgementAndRecoveryDisabled: false,
   showRecruitFreeDescription: false,
@@ -133,6 +137,8 @@ export function buildTweetText(s: TweetState): string {
   const recruitRemarks = joinRemarks([
     s.showStar4 ? "☆４" : "",
     s.showLongSession ? "長時間できる方" : "",
+    s.showSfcNoCare ? "SFC気にしません" : "",
+    s.showMidLeaveOk ? "途中抜けOK" : "",
     s.showJudgementStrengthenDisabled ? "判定強化✖" : "",
     s.showJudgementAndRecoveryDisabled ? "判定・回復✖" : "",
     s.showRecruitFreeDescription ? s.recruitFreeDescription.trim() : "",
