@@ -1,0 +1,216 @@
+@import "tailwindcss";
+
+/*
+ * SekaiMaster デザイン言語（legacy/common.css から継承。不可侵ライン）。
+ * 詳細は docs/porting/design.md。
+ *  - ニューモーフィズム: 土台 #f0f0f0 ＋ 左上光源の二重影
+ *  - ユニットカラー: プロセカ6ユニット＋メンバー色。ページ毎に --unit-color を差し替える
+ *  - フォント: M PLUS Rounded 1c
+ */
+@theme {
+  --font-sans: "M PLUS Rounded 1c", ui-sans-serif, system-ui, sans-serif;
+
+  /* ニューモーフィズムの土台と影 */
+  --color-neu: #f0f0f0;
+  --color-neu-ink: #333333;
+  --shadow-neu: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff;
+  --shadow-neu-sm: 3px 3px 6px #bebebe, -3px -3px 6px #ffffff;
+  --shadow-neu-lg: 7px 7px 14px #bebebe, -7px -7px 14px #ffffff;
+  --shadow-neu-inset: inset 3px 3px 6px #bebebe, inset -3px -3px 6px #ffffff;
+
+  /* 強めの ease-out（標準カーブは弱い）。触覚モーションに使う。 */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  /* ユニット代表色 */
+  --color-vs: #33ccbb;
+  --color-ln: #4455dd;
+  --color-mmj: #88dd44;
+  --color-vbs: #ee1166;
+  --color-wxs: #ff9900;
+  --color-n25: #884499;
+}
+
+:root {
+  color-scheme: light;
+  /* 既定テーマ色。各ページ/ツールが上書きする。 */
+  --unit-color: #667;
+  --member-color-01: #667;
+  --member-color-02: #667;
+  --member-color-03: #667;
+  --member-color-04: #667;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-neu);
+  color: var(--color-neu-ink);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ユニットカラーを使う共通コンポーネント。Tailwind の任意値でも書けるが、
+   タイトルの斜めバナーなど複数プロパティに跨るものはここにまとめる。 */
+@layer components {
+  /*
+   * 触覚インタラクション。ニューモーフィズムの「押すとへこむ」物理感を出す。
+   *  - ホバー: わずかに浮上（ポインタ環境のみ＝タッチ誤爆防止）
+   *  - 押下: scale(0.97) で沈み込み、影を inset にして本当にへこませる
+   *  - transform 主体でGPU任せ。box-shadow の inset 切替は瞬時でも「カチッ」と気持ちよい
+   * scale は 0.95〜0.98 の範囲（Emil の指針）。100〜160ms。
+   */
+  .neu-tactile {
+    transition:
+      transform 140ms var(--ease-out),
+      box-shadow 140ms var(--ease-out);
+    will-change: box-shadow;
+  }
+  /* 押下: 影を inset にして表面にめり込ませる。動きは控えめな scale だけ。 */
+  .neu-tactile:active {
+    box-shadow: var(--shadow-neu-inset);
+    transform: scale(0.985);
+    transition-duration: 100ms;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    /* ホバー: 奥行きは影の距離で表す（表面から高く浮く）。translate はしない。 */
+    .neu-tactile:hover {
+      box-shadow: var(--shadow-neu-lg);
+    }
+    .neu-tactile:active:hover {
+      box-shadow: var(--shadow-neu-inset);
+      transform: scale(0.985);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .neu-tactile,
+    .neu-tactile:hover,
+    .neu-tactile:active {
+      transform: none;
+      transition: box-shadow 120ms ease;
+    }
+  }
+
+  /*
+   * 色付きボタンの立体感。単色ベタ塗りだと灰色影が効かずフラットに見えるため、
+   * ユニットカラーから作った「上明・下暗」のグラデーション＋上端の内側ハイライトで
+   * ドーム状に盛り上がって見せる。表面からの浮きは灰色のドロップシャドウで表す。
+   */
+  .neu-cta {
+    color: #fff;
+    /* 淡いユニットカラー(mmj/vs/wxs)でも白文字が読めるよう影で締める。 */
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.38);
+    background-image: linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--unit-color) 86%, #ffffff),
+      color-mix(in srgb, var(--unit-color) 90%, #000000)
+    );
+    box-shadow: var(--shadow-neu), inset 0 1.5px 1px rgba(255, 255, 255, 0.45);
+    transition:
+      box-shadow 140ms var(--ease-out),
+      transform 140ms var(--ease-out);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .neu-cta:hover {
+      box-shadow: var(--shadow-neu-lg), inset 0 1.5px 1px rgba(255, 255, 255, 0.45);
+    }
+  }
+  .neu-cta:active {
+    transform: scale(0.985);
+    box-shadow:
+      inset 3px 3px 6px color-mix(in srgb, var(--unit-color) 58%, #000),
+      inset -3px -3px 6px color-mix(in srgb, var(--unit-color) 76%, #fff);
+    transition-duration: 100ms;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .neu-cta:active {
+      transform: none;
+    }
+  }
+
+  /* 選択中トグル: 色のまま「表面にめり込んだ」立体。色付きの inset 影で凹ませる。 */
+  .neu-selected {
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.38);
+    background-image: linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--unit-color) 90%, #000000),
+      color-mix(in srgb, var(--unit-color) 85%, #ffffff)
+    );
+    box-shadow:
+      inset 3px 3px 6px color-mix(in srgb, var(--unit-color) 58%, #000),
+      inset -3px -3px 6px color-mix(in srgb, var(--unit-color) 78%, #fff);
+  }
+
+  /* セグメントコントロールの「滑るつまみ」。溝(neu-inset)の中で浮き出す色付きピル。 */
+  .seg-thumb {
+    background-image: linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--unit-color) 86%, #ffffff),
+      color-mix(in srgb, var(--unit-color) 90%, #000000)
+    );
+    box-shadow: var(--shadow-neu-sm), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  }
+
+  /*
+   * 入力欄のフォーカス枠。淡いユニットカラー(mmj/wxs/vs)だと #f0f0f0 に対して
+   * コントラストが足りず枠が見えにくいので、暗い方へ寄せて 3:1 以上を確保する。
+   * 色相はユニット色を保ったまま視認性だけ上げる。
+   */
+  .neu-field-focus:focus-visible {
+    border-color: color-mix(in srgb, var(--unit-color) 62%, #2b2b2b);
+  }
+
+  /* ニューモーフィズムの浮き出しパネル */
+  .neu-panel {
+    background-color: var(--color-neu);
+    border-radius: 1rem;
+    box-shadow: var(--shadow-neu);
+  }
+  .neu-raised {
+    background-color: var(--color-neu);
+    border-radius: 0.5rem;
+    box-shadow: var(--shadow-neu-sm);
+  }
+  .neu-inset {
+    background-color: var(--color-neu);
+    border-radius: 0.5rem;
+    box-shadow: var(--shadow-neu-inset);
+  }
+
+  /* ユニットカラーの見出しバー。ベタ塗り＝白文字が常に読める。
+     legacy の斜めバナーは光沢（斜めのハイライト）として踏襲する。 */
+  .unit-title {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    overflow: hidden;
+    padding: 0.6em 1em;
+    border-radius: 12px;
+    background-color: var(--unit-color);
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.32);
+    box-shadow: var(--shadow-neu-sm);
+  }
+  .unit-title::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      105deg,
+      rgba(255, 255, 255, 0.22) 0 28%,
+      rgba(255, 255, 255, 0) 32%
+    );
+  }
+  .unit-title > * {
+    position: relative;
+    z-index: 1;
+  }
+}
