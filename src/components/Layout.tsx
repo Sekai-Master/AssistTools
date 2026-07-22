@@ -13,8 +13,9 @@ export function Layout({ children }: { children: ReactNode }) {
         <div className="mx-auto max-w-5xl px-4 py-3 flex items-center justify-between gap-3">
           <Link
             to="/"
-            className="neu-raised px-4 py-2 font-bold tracking-wide text-slate-700"
+            className="neu-raised neu-tactile flex items-center gap-2 pl-2 pr-4 py-1.5 font-bold tracking-wide text-slate-700"
           >
+            <img src="/images/icon.webp" alt="" className="h-7 w-7" />
             Sekai-Master
           </Link>
           <nav className="hidden md:flex items-center gap-2 text-sm">
