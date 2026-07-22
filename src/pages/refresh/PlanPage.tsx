@@ -171,7 +171,7 @@ export default function PlanPage() {
         </details>
 
         <p className="mt-3 text-xs text-slate-500">
-          「上の曲」を選んで下の「＋1時間」等でプレイを積むと、各枠の焚き数・獲得ptと累積到達ptが出ます。
+          「上の曲」を選んで下の「＋稼働」で枠を積むと、各枠の焚き数・獲得ptと累積到達ptが出ます。
           ゲージが100%に達すると、そのぶんは加点されません（休憩・マイセカイで回復を）。
         </p>
       </Panel>

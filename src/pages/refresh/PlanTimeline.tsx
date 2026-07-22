@@ -280,13 +280,10 @@ export function PlanTimeline({
         </p>
         <div className="flex flex-wrap gap-2">
           <NeuButton onClick={() => addPlay(60)} disabled={!canAddPlay} className="!py-1.5">
-            ＋1時間
-          </NeuButton>
-          <NeuButton onClick={() => addPlay(30)} disabled={!canAddPlay} className="!py-1.5">
-            ＋30分
+            ＋稼働
           </NeuButton>
           <NeuButton onClick={() => addRest(30)} className="!py-1.5">
-            ＋休憩30分
+            ＋休憩
           </NeuButton>
           <NeuButton onClick={addMysekai} className="!py-1.5">
             ＋マイセカイ
@@ -301,8 +298,8 @@ export function PlanTimeline({
 
       {segments.length === 0 ? (
         <p className="mt-4 text-sm text-slate-500">
-          「＋1時間」「＋30分」「＋休憩」でシフトを積むと、各時点の時刻とゲージが出ます。
-          プレイの曲は上の「曲」で選んでから追加してください。
+          「＋稼働」「＋休憩」「＋マイセカイ」でシフトを積むと、各時点の時刻とゲージが出ます。
+          稼働は初期値1時間（各ブロックで調整可）。曲は上の「曲」で選んでから追加してください。
         </p>
       ) : (
         <>
