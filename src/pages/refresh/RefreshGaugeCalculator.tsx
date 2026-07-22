@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { Panel } from "../../components/ui/Panel";
 import { useAnalyzerMusics } from "../analyzer/useAnalyzerMusics";
 import { liveGaugePercent } from "./lib/gaugeModel";
 import { planSession, playsPerHour } from "./lib/sessionPlanner";
-import { fmtDuration } from "./lib/format";
+import type { Segment } from "./lib/timeline";
+import { fmtDuration, nearestRoundTime } from "./lib/format";
 import { Stat } from "./Stat";
 import { useGaugeInputs } from "./useGaugeInputs";
 import { GaugeInputsPanel } from "./GaugeInputsPanel";
@@ -18,6 +20,9 @@ export default function RefreshGaugeCalculator() {
   const { musics, aliases, loading, error: dataError } = useAnalyzerMusics();
   const inputs = useGaugeInputs(musics);
   const { selectedSong, rc, gaugePct, overhead, ratePerHour } = inputs;
+
+  const [segments, setSegments] = useState<Segment[]>([]);
+  const [startTime, setStartTime] = useState(nearestRoundTime);
 
   const len = selectedSong?.musicTime ?? 0;
   const hasLen = len > 0;
@@ -82,6 +87,10 @@ export default function RefreshGaugeCalculator() {
             overhead={overhead}
             startPercent={gaugePct}
             ratePerHour={ratePerHour}
+            segments={segments}
+            setSegments={setSegments}
+            startTime={startTime}
+            setStartTime={setStartTime}
           />
         </>
       ) : (

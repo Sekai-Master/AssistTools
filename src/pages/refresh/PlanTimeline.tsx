@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { type Dispatch, type SetStateAction, useMemo, useRef, useState } from "react";
 import { Panel } from "../../components/ui/Panel";
 import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
@@ -9,7 +9,7 @@ import { Stat } from "./Stat";
 import { type Segment, simulateTimeline } from "./lib/timeline";
 import { drawPlanCanvas, type PlanCanvasData } from "./lib/planCanvas";
 import { getRefreshConstant } from "./lib/refreshConstant";
-import { fmtClock, fmtDuration, nearestRoundTime, parseClock } from "./lib/format";
+import { fmtClock, fmtDuration, parseClock } from "./lib/format";
 import { LIVE_BONUS_MULTIPLIERS } from "../analyzer/lib/calcLivePt";
 import type { AnalyzerMusic } from "../analyzer/useAnalyzerMusics";
 
@@ -48,15 +48,29 @@ interface Props {
   ratePerHour: number;
   /** 指定すると各プレイに焚き数を持たせ、累積到達ポイントも計算・表示する（全部入り） */
   points?: PointsConfig;
+  /** タイムライン本体（親が保持＝保存/呼び出し対象）。 */
+  segments: Segment[];
+  setSegments: Dispatch<SetStateAction<Segment[]>>;
+  /** 開始時刻 "HH:MM"（親が保持）。 */
+  startTime: string;
+  setStartTime: Dispatch<SetStateAction<string>>;
 }
 
 /**
  * 周回プランのタイムライン。プレイ(時間指定)/休憩/マイセカイを積み、各時点の時刻とゲージを表示。
  * points 指定時はプレイに焚き数を持たせ、累積到達ポイントも並走で計算する。
  */
-export function PlanTimeline({ selectedSong, overhead, startPercent, ratePerHour, points }: Props) {
-  const [startTime, setStartTime] = useState(nearestRoundTime);
-  const [segments, setSegments] = useState<Segment[]>([]);
+export function PlanTimeline({
+  selectedSong,
+  overhead,
+  startPercent,
+  ratePerHour,
+  points,
+  segments,
+  setSegments,
+  startTime,
+  setStartTime,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -345,6 +359,9 @@ export function PlanTimeline({ selectedSong, overhead, startPercent, ratePerHour
                           className="w-14 rounded-lg bg-neu px-1 py-1 text-center text-slate-800 shadow-neu-inset outline-none"
                           aria-label="スタミナ"
                         />
+                        <span className="text-[10px] text-slate-400">
+                          ≈{(seg.stamina / 5).toFixed(1)}メモリ（5スタミナ≒1メモリ）
+                        </span>
                         <DurationInput value={seg.minutes} onChange={(v) => setMysekaiMinutes(seg.id, v)} />
                       </div>
                     ) : (

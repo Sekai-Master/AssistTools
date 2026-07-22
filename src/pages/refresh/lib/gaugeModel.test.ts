@@ -6,6 +6,7 @@ import {
   gaugeAfterPlays,
   liveGaugeInternal,
   liveGaugePercent,
+  mySekaiGaugeFromMemori,
   mySekaiGaugeInternal,
   playsToFull,
   toDisplayPercent,
@@ -59,6 +60,13 @@ describe("gaugeModel — マイセカイ", () => {
 
   it("素材1スタミナは表示%換算でライブより十分軽い", () => {
     expect(toDisplayPercent(mySekaiGaugeInternal(1, 0))).toBeLessThan(toDisplayPercent(13_188));
+  });
+
+  it("メモリ換算: 1メモリ=5スタミナ=3500、0.2メモリ=1スタミナ=700", () => {
+    expect(mySekaiGaugeFromMemori(1)).toBe(3_500);
+    expect(mySekaiGaugeFromMemori(0.2)).toBeCloseTo(700, 6);
+    // 木×3メモリ動かしても表示%は約0.16%（誤差レベル）
+    expect(toDisplayPercent(mySekaiGaugeFromMemori(3))).toBeLessThan(0.2);
   });
 });
 

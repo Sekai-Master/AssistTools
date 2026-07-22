@@ -16,6 +16,12 @@ export interface GaugeSpec {
   mySekaiMaterial: number;
   /** マイセカイ双葉: 1本あたりの内部増加 */
   mySekaiFutaba: number;
+  /**
+   * 画面のスタミナ1メモリ(目盛り)＝内部スタミナ何個ぶんか。
+   * 攻略記事の採取コスト（最小0.2メモリ）とTomo式（700/スタミナ）を噛み合わせると、
+   * 0.2メモリ＝ちょうど1スタミナになる比＝5が最も整合する（強い推測。実測で要確認）。
+   */
+  staminaPerMemori: number;
   /** 非活動が累計30分に到達するごとの内部減少量 */
   decayPer30min: number;
 }
@@ -26,6 +32,7 @@ export const GAUGE_SPEC: GaugeSpec = {
   liveCoef: 157,
   mySekaiMaterial: 700,
   mySekaiFutaba: 250,
+  staminaPerMemori: 5,
   decayPer30min: 550_000,
 };
 
@@ -52,6 +59,11 @@ export function mySekaiGaugeInternal(
   spec: GaugeSpec = GAUGE_SPEC
 ): number {
   return stamina * spec.mySekaiMaterial + futaba * spec.mySekaiFutaba;
+}
+
+/** マイセカイ採取の内部増加（画面表示のメモリ数から）。1メモリ = staminaPerMemori スタミナ。 */
+export function mySekaiGaugeFromMemori(memori: number, spec: GaugeSpec = GAUGE_SPEC): number {
+  return mySekaiGaugeInternal(Math.max(0, memori) * spec.staminaPerMemori, 0, spec);
 }
 
 /**
