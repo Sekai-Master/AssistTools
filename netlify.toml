@@ -1,0 +1,14 @@
+# デプロイ設定をリポジトリ側に持つ（GitHub Pages から Netlify へ移行）。
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# SPA（React Router）。未知パスは index.html にフォールバックさせ、
+# 直リンク・リロードで 404 にならないようにする。
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+/*
+ * SekaiMaster デザイン言語（legacy/common.css から継承。不可侵ライン）。
+ * 詳細は docs/porting/design.md。
+ *  - ニューモーフィズム: 土台 #f0f0f0 ＋ 左上光源の二重影
+ *  - ユニットカラー: プロセカ6ユニット＋メンバー色。ページ毎に --unit-color を差し替える
+ *  - フォント: M PLUS Rounded 1c
+ */
+@theme {
+  --font-sans: "M PLUS Rounded 1c", ui-sans-serif, system-ui, sans-serif;
+
+  /* ニューモーフィズムの土台と影 */
+  --color-neu: #f0f0f0;
+  --color-neu-ink: #333333;
+  --shadow-neu: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff;
+  --shadow-neu-sm: 3px 3px 6px #bebebe, -3px -3px 6px #ffffff;
+  --shadow-neu-inset: inset 3px 3px 6px #bebebe, inset -3px -3px 6px #ffffff;
+
+  /* ユニット代表色 */
+  --color-vs: #33ccbb;
+  --color-ln: #4455dd;
+  --color-mmj: #88dd44;
+  --color-vbs: #ee1166;
+  --color-wxs: #ff9900;
+  --color-n25: #884499;
+}
+
+:root {
+  color-scheme: light;
+  /* 既定テーマ色。各ページ/ツールが上書きする。 */
+  --unit-color: #667;
+  --member-color-01: #667;
+  --member-color-02: #667;
+  --member-color-03: #667;
+  --member-color-04: #667;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-neu);
+  color: var(--color-neu-ink);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ユニットカラーを使う共通コンポーネント。Tailwind の任意値でも書けるが、
+   タイトルの斜めバナーなど複数プロパティに跨るものはここにまとめる。 */
+@layer components {
+  /* ニューモーフィズムの浮き出しパネル */
+  .neu-panel {
+    background-color: var(--color-neu);
+    border-radius: 1rem;
+    box-shadow: var(--shadow-neu);
+  }
+  .neu-raised {
+    background-color: var(--color-neu);
+    border-radius: 0.5rem;
+    box-shadow: var(--shadow-neu-sm);
+  }
+  .neu-inset {
+    background-color: var(--color-neu);
+    border-radius: 0.5rem;
+    box-shadow: var(--shadow-neu-inset);
+  }
+
+  /* ユニットカラーの斜めバナー付き見出し（legacy .title の踏襲） */
+  .unit-title {
+    position: relative;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    padding: 0.5em 0.7em;
+    border: 2px solid var(--unit-color);
+    border-radius: 8px;
+    color: var(--color-neu-ink);
+  }
+  .unit-title::before {
+    content: "";
+    position: absolute;
+    top: -20vw;
+    left: -37vw;
+    z-index: 0;
+    width: 40vw;
+    height: 80vw;
+    transform: rotate(25deg);
+    background-color: var(--unit-color);
+  }
+  .unit-title > * {
+    position: relative;
+    z-index: 1;
+  }
+  .unit-title .unit-title__label {
+    margin-left: 1rem;
+    color: #fff;
+  }
+}
