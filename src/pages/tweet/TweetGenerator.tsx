@@ -18,18 +18,18 @@ import {
 const HISTORY_KEY = "tweetGenerator.history";
 const HISTORY_MAX = 10;
 
-// その他コメントのテンプレ（実募集文100件から抽出した頻出フレーズ順）。クリックで追記。
+// その他コメントのテンプレ（実募集文100件・WLイベント期間の最新分から頻度順抽出）。クリックで追記。
 const COMMENT_TEMPLATES = [
-  "スタンプ他部屋と同じです",
   "集まるまで待てる方",
+  "スタンプ他部屋と同じです",
+  "条件違い解散",
   "主のおつさきで解散",
   "難易度自由",
   "火消し",
   "時短のため部屋主選曲します",
-  "条件違いは立て直します",
   "速度気になる場合は建て直します",
-  "支援者いらっしゃいます",
-  "SF気にしません",
+  "支援者います",
+  "スキル見てます",
 ];
 
 interface HistoryItem {
@@ -103,7 +103,7 @@ export default function TweetGenerator() {
           </Field>
           <Field label="楽曲">
             <Segmented
-              options={["🦐", "ビバハピ", "ロスエン", "Sage", "おまかせ"].map((v) => ({
+              options={["🦐", "エビ", "ビバハピ", "ロスエン", "Sage", "おまかせ"].map((v) => ({
                 value: v,
                 label: v,
               }))}
