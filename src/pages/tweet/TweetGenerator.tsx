@@ -3,6 +3,7 @@ import { ToolPage } from "../../components/ui/ToolPage";
 import { Panel } from "../../components/ui/Panel";
 import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
+import { NeuTextarea } from "../../components/ui/NeuTextarea";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { Switch } from "../../components/ui/Switch";
 import { Segmented } from "../../components/ui/Segmented";
@@ -16,6 +17,20 @@ import {
 
 const HISTORY_KEY = "tweetGenerator.history";
 const HISTORY_MAX = 10;
+
+// その他コメントのテンプレ（実募集文100件から抽出した頻出フレーズ順）。クリックで追記。
+const COMMENT_TEMPLATES = [
+  "スタンプ他部屋と同じです",
+  "集まるまで待てる方",
+  "主のおつさきで解散",
+  "難易度自由",
+  "火消し",
+  "時短のため部屋主選曲します",
+  "条件違いは立て直します",
+  "速度気になる場合は建て直します",
+  "支援者いらっしゃいます",
+  "SF気にしません",
+];
 
 interface HistoryItem {
   state: TweetState;
@@ -189,7 +204,8 @@ export default function TweetGenerator() {
               label="自由記述"
             />
             {s.showFreeDescription && (
-              <NeuInput
+              <NeuTextarea
+                rows={2}
                 value={s.freeDescription}
                 onChange={(e) => set("freeDescription", e.target.value)}
                 placeholder="自由記述を入力"
@@ -252,7 +268,8 @@ export default function TweetGenerator() {
               label="自由記述"
             />
             {s.showRecruitFreeDescription && (
-              <NeuInput
+              <NeuTextarea
+                rows={2}
                 value={s.recruitFreeDescription}
                 onChange={(e) => set("recruitFreeDescription", e.target.value)}
                 placeholder="自由記述を入力"
@@ -263,10 +280,25 @@ export default function TweetGenerator() {
       </Panel>
 
       <Panel title="その他コメント">
-        <NeuInput
+        <p className="mb-2 text-xs text-slate-400">テンプレ（クリックで追記）</p>
+        <div className="mb-3 flex flex-wrap gap-2">
+          {COMMENT_TEMPLATES.map((tmpl) => (
+            <NeuButton
+              key={tmpl}
+              className="!px-3 !py-1 !text-xs"
+              onClick={() =>
+                set("otherComments", s.otherComments ? `${s.otherComments}\n${tmpl}` : tmpl)
+              }
+            >
+              ＋ {tmpl}
+            </NeuButton>
+          ))}
+        </div>
+        <NeuTextarea
+          rows={3}
           value={s.otherComments}
           onChange={(e) => set("otherComments", e.target.value)}
-          placeholder="任意"
+          placeholder="任意（テンプレを押すと追記されます）"
         />
       </Panel>
 
