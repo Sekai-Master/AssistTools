@@ -11,7 +11,7 @@ export function MySekaiStep({ result }: { result: CalculationResultV6 }) {
     return (
       <StepSection
         unit="vs"
-        title="① マイセカイ配分"
+        title="① マイセカイ配分（β）"
         footerLabel="このステップ完了時"
         footerValue={result.currentPt}
       >
@@ -31,7 +31,7 @@ export function MySekaiStep({ result }: { result: CalculationResultV6 }) {
   return (
     <StepSection
       unit="vs"
-      title="① マイセカイ配分"
+      title="① マイセカイ配分（β）"
       footerLabel="このステップ完了時"
       footerValue={result.currentPt + a.totalPt}
     >
@@ -65,6 +65,14 @@ export function MySekaiStep({ result }: { result: CalculationResultV6 }) {
           {a.totalPt.toLocaleString()}
         </span>{" "}
         Pt（単価 {result.unitBasePt} Pt/個）
+      </p>
+      {/* 単価の未確定要素を明示する。実測が取れるまでこの注記は外さないこと。
+          未解決点の一覧は docs/mysekai-unit-pt-open-questions.md。 */}
+      <p className="mt-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-700">
+        <span className="font-bold">β：この配分は参考値です。</span>
+        通常スタミナ（水色）とブーストスタミナ（オレンジ）で獲得ポイントが変わるという情報があり、
+        現在の計算は両者を区別していません。水色で採ると想定より大幅に少なくなる可能性があります。
+        ワールドパスの5倍という倍率も出典が未確認です。実測で確定するまで、この採取数は目安として扱ってください。
       </p>
     </StepSection>
   );

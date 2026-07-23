@@ -208,12 +208,23 @@ export default function PointAnalyzer() {
           <Switch checked={useMySekai} onChange={setUseMySekai} label="マイセカイを利用する" />
           {/* OFF時は採取しないので単価表示は出さない（無関係な数字で混乱させないため）。 */}
           {useMySekai && (
-            <p className="text-sm text-slate-500">
-              マイセカイ単価（自動算出）:{" "}
-              <span className="font-bold" style={{ color: "var(--unit-color)" }}>
-                {unitHint} Pt/個
-              </span>
-            </p>
+            <div className="text-sm text-slate-500">
+              <p>
+                マイセカイ単価（自動算出）:{" "}
+                <span className="font-bold" style={{ color: "var(--unit-color)" }}>
+                  {unitHint} Pt/個
+                </span>
+                <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                  β
+                </span>
+              </p>
+              {/* 単価の根拠が揃っていない点を隠さない。詳細は docs/mysekai-unit-pt-open-questions.md */}
+              <p className="mt-1 text-xs text-amber-700">
+                マイセカイの単価は未確定要素があります。通常スタミナ（水色）とブーストスタミナ（オレンジ）で
+                獲得ポイントが変わるという情報があり、現在の計算はこれを区別していません。
+                ワールドパスの5倍も出典未確認です。参考値として扱ってください。
+              </p>
+            </div>
           )}
           <Field label="最終楽曲" hint={loading ? "楽曲データ読込中…" : `${musics.length}曲から選択`}>
             <div className="flex items-center gap-3">
