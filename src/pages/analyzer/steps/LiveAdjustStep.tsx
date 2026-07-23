@@ -1,69 +1,141 @@
 import { useState } from "react";
 import { StepSection } from "./StepSection";
+import { NeuButton } from "../../../components/ui/NeuButton";
+import { SongSearchModal } from "../../../components/SongSearchModal";
+import type { AliasEntry } from "../../bingo/useBingoMusics";
 import { PlanSelectionUI } from "../plan/PlanSelectionUI";
 import type { UniversalPlan } from "../plan/types";
 import { byBonusDesc, recommendPlans } from "../lib/recommendPlans";
+import { onJacketError } from "../../../lib/img";
 import type { CalculationResultV6 } from "../lib/calculator";
 import type { MultiLivePlan } from "../lib/multiLiveAdjust";
 
 const ENVY_JACKET = `${import.meta.env.BASE_URL}MusicDatas/jacket/jacket_s_074.webp`;
 
-/** 曲サジェスト用に必要な最小の楽曲情報。 */
+const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
+
+/** 曲サジェスト用に必要な最小の楽曲情報。検索モーダルに渡すのでジャケットも要る。 */
 interface SuggestMusic {
   id: string;
   title: string;
   basePoint: number;
+  jacketLink: string;
+  pronunciation?: string;
+  artistName?: string;
 }
 
 /**
- * プランの基礎点に一致する実在曲のサジェスト（R2-2.3）。
- * 「基礎点113の曲を叩け」だけでは実行できないので、タイトルを3件まで具体的に出す。
+ * 採択プランの1ユニットで実際に叩く曲。
+ * 「基礎点113を叩け」だけでは実行できないので具体的な1曲を出し、
+ * 候補が何曲あっても検索モーダルから選び直せるようにする（「他N曲」で切り捨てない）。
  */
-function SongSuggestion({
-  musics,
+function UnitSong({
+  candidates,
   basePoint,
+  chosen,
+  onPick,
 }: {
-  musics: ReadonlyArray<SuggestMusic>;
+  candidates: ReadonlyArray<SuggestMusic>;
   basePoint: number;
+  chosen: SuggestMusic | undefined;
+  onPick: () => void;
 }) {
-  const matched = musics.filter((m) => m && m.basePoint === basePoint);
-  if (matched.length === 0) return null;
-  const rest = matched.length - 3;
+  if (!chosen) {
+    return (
+      <p className="mt-2 text-xs text-amber-600">
+        基礎点 {basePoint} に一致する曲が見つかりません（配信停止曲は候補から除外しています）。
+      </p>
+    );
+  }
   return (
-    <p className="mt-0.5 text-xs text-slate-500">
-      曲例: {matched.slice(0, 3).map((m) => m.title).join(" / ")}
-      {rest > 0 ? ` 他${rest}曲` : ""}
-    </p>
+    <div className="mt-2 flex items-center gap-3 rounded-lg bg-neu p-2 shadow-neu-sm">
+      <img
+        src={`${JACKET_BASE}${chosen.jacketLink}`}
+        alt=""
+        className="h-11 w-11 shrink-0 rounded-lg object-cover shadow-neu-sm"
+        onError={onJacketError}
+      />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-bold text-slate-700">{chosen.title}</p>
+        <p className="text-[11px] text-slate-500">
+          基礎点 {basePoint} の曲 {candidates.length} 曲から選択
+        </p>
+      </div>
+      <NeuButton className="!px-3 !py-1.5 !text-xs shrink-0" onClick={onPick}>
+        変更
+      </NeuButton>
+    </div>
   );
 }
 
-/** 複数回プラン1件ぶんのカード。各ライブの曲・LB・スコア帯が読み取れることが受け入れ条件（R2-5）。 */
+/** 1ユニット（同一条件でまとめて叩くライブ群）の要約行。 */
+function UnitLine({ u }: { u: MultiLivePlan["units"][number] }) {
+  return (
+    <span className="font-mono tabular-nums">
+      基礎点{u.basePoint} ・ {u.liveBonus}炊き ・ スコア {u.minScore.toLocaleString()}〜
+      {u.maxScore.toLocaleString()} × {u.count}回（1回 {u.pt.toLocaleString()} Pt）
+    </span>
+  );
+}
+
+/**
+ * 複数回プラン1件ぶんの選択カード。
+ * 一覧では要約だけを出し、曲候補は採択したプランにだけ出す（一覧が曲名で埋まると選べないため）。
+ */
 function MultiPlanCard({
   plan,
   index,
-  musics,
+  selected,
+  onSelect,
 }: {
   plan: MultiLivePlan;
   index: number;
-  musics: ReadonlyArray<SuggestMusic>;
+  selected: boolean;
+  onSelect: () => void;
 }) {
   return (
-    <div className="rounded-xl bg-neu p-4 shadow-neu-inset">
-      <div className="mb-2 text-sm font-bold text-slate-700">
-        プラン{index + 1} ・ 全{plan.liveCount}回 ・ LB合計{plan.lbCost}
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={`w-full rounded-xl bg-neu p-4 text-left transition ${
+        selected ? "shadow-neu-inset" : "shadow-neu-sm hover:shadow-neu"
+      }`}
+      style={
+        selected
+          ? { outline: "2px solid var(--unit-color)", outlineOffset: "-2px" }
+          : undefined
+      }
+    >
+      <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold text-slate-700">
+        <span
+          className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] text-white"
+          style={{ backgroundColor: selected ? "var(--unit-color)" : "#cbd5e1" }}
+          aria-hidden
+        >
+          {selected ? "✓" : ""}
+        </span>
+        プラン{index + 1}
+        {index === 0 && (
+          <span
+            className="rounded px-1.5 py-0.5 text-[10px] text-white"
+            style={{ backgroundColor: "var(--unit-color)" }}
+          >
+            LB最安
+          </span>
+        )}
+        <span className="ml-auto tabular-nums text-slate-500">
+          全{plan.liveCount}回 ・ LB合計{plan.lbCost}
+        </span>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-0.5 text-xs text-slate-600">
         {plan.units.map((u, j) => (
-          <div key={j} className="text-sm text-slate-600">
-            <div className="font-mono tabular-nums">
-              基礎点{u.basePoint} ・ {u.liveBonus}炊き ・ スコア {u.minScore.toLocaleString()}〜
-              {u.maxScore.toLocaleString()} × {u.count}回（1回 {u.pt.toLocaleString()} Pt）
-            </div>
-            <SongSuggestion musics={musics} basePoint={u.basePoint} />
+          <div key={j}>
+            <UnitLine u={u} />
           </div>
         ))}
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -71,12 +143,23 @@ function MultiPlanCard({
 export function LiveAdjustStep({
   result,
   musics = [],
+  aliases = [],
 }: {
   result: CalculationResultV6;
   /** 曲サジェスト用の楽曲リスト。省略時はサジェストなしで動く。 */
   musics?: ReadonlyArray<SuggestMusic>;
+  /** 曲検索モーダルの絞り込み用エイリアス。 */
+  aliases?: AliasEntry[];
 }) {
   const [selectedPlan, setSelectedPlan] = useState<UniversalPlan | null>(null);
+  // 採択中の複数回プラン。既定は0番＝LB最安（並びは lbCost 昇順）。
+  // 再計算でプラン数が減っても壊れないよう、参照時にクランプする。
+  const [multiIndex, setMultiIndex] = useState(0);
+  // 基礎点ごとに「実際に叩く曲」の選択を覚える。基礎点をキーにすることで、
+  // 同じ基礎点が複数ユニット・複数プランに出ても選択が引き継がれる。
+  const [songByBase, setSongByBase] = useState<Record<number, string>>({});
+  // 曲選択モーダルを開いている基礎点。null で閉じる。
+  const [pickerBase, setPickerBase] = useState<number | null>(null);
   const live = result.liveAdjustment;
   const plans = live.adjustmentPlans ?? [];
   // 複数回プラン（曲側・第1候補）。calculator が OFF 時のみ設定するが、
@@ -154,11 +237,69 @@ export function LiveAdjustStep({
           <div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             複数回プラン（現在の編成のまま曲を選ぶ・第1候補）
           </div>
-          <div className="space-y-3">
+          <p className="mb-2 text-xs text-slate-500">
+            どれか1つを選ぶと、叩く曲の候補が下に出ます。
+            どのプランも合計は {live.requiredPt.toLocaleString()} Pt ちょうどです。
+          </p>
+          <div className="space-y-2">
             {multi.plans.map((p, i) => (
-              <MultiPlanCard key={i} plan={p} index={i} musics={musics} />
+              <MultiPlanCard
+                key={i}
+                plan={p}
+                index={i}
+                selected={i === Math.min(multiIndex, multi.plans.length - 1)}
+                onSelect={() => setMultiIndex(i)}
+              />
             ))}
           </div>
+
+          {/* 採択したプランの実行手順。曲候補はここにだけ出す。 */}
+          {(() => {
+            const idx = Math.min(multiIndex, multi.plans.length - 1);
+            const chosen = multi.plans[idx];
+            return (
+              <div className="mt-3 rounded-xl bg-neu p-4 shadow-neu-inset">
+                <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span
+                    className="text-sm font-bold"
+                    style={{ color: "var(--unit-color)" }}
+                  >
+                    採択: プラン{idx + 1}
+                  </span>
+                  <span className="text-xs tabular-nums text-slate-500">
+                    全{chosen.liveCount}回 ・ ライブボーナス合計{chosen.lbCost}個 ・ 合計{" "}
+                    {chosen.totalPt.toLocaleString()} Pt
+                  </span>
+                </div>
+                <ol className="space-y-3">
+                  {chosen.units.map((u, j) => {
+                    const candidates = musics.filter((m) => m && m.basePoint === u.basePoint);
+                    const picked =
+                      candidates.find((m) => m.id === songByBase[u.basePoint]) ?? candidates[0];
+                    return (
+                      <li key={j}>
+                        <div className="text-sm text-slate-700">
+                          <span className="mr-1.5 font-bold" style={{ color: "var(--unit-color)" }}>
+                            {j + 1}.
+                          </span>
+                          <UnitLine u={u} />
+                        </div>
+                        <UnitSong
+                          candidates={candidates}
+                          basePoint={u.basePoint}
+                          chosen={picked}
+                          onPick={() => setPickerBase(u.basePoint)}
+                        />
+                      </li>
+                    );
+                  })}
+                </ol>
+                <p className="mt-3 text-[11px] text-slate-400">
+                  各回とも、表示されたスコア帯（2万点幅）に収める必要があります。
+                </p>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -175,14 +316,22 @@ export function LiveAdjustStep({
         </div>
       )}
 
+      {/* NO_EXACT でも第2候補が成立していれば着地はできる。その場合まで赤エラーを出すと
+          「検証済み(isVerified)なのに失敗表示」という矛盾になるので、深刻度を出し分ける。 */}
       {multi && multi.reason === "NO_EXACT" && (
-        <div className="mb-6 rounded-xl bg-rose-50 p-6 text-center text-sm text-rose-600">
+        <div
+          className={`mb-6 rounded-xl p-6 text-center text-sm ${
+            live.status === "OK" ? "bg-neu text-slate-500 shadow-neu-inset" : "bg-rose-50 text-rose-600"
+          }`}
+        >
           <span className="font-bold tabular-nums">{live.requiredPt.toLocaleString()} Pt</span> に
-          厳密一致する組合せは
+          厳密一致する複数回プランは
           {multi.searchedUpToCount != null && <>最小回数から {multi.searchedUpToCount} 回まで</>}
           探した範囲では見つかりませんでした。
           <span className="mt-1 block">
-            目標を数ポイントずらすか、下の編成組み替え案を確認してください。
+            {live.status === "OK"
+              ? "下の編成組み替え案（第2候補）で着地できます。"
+              : "目標を数ポイントずらすか、下の編成組み替え案を確認してください。"}
           </span>
         </div>
       )}
@@ -198,6 +347,21 @@ export function LiveAdjustStep({
         )
       ) : (
         secondCandidate
+      )}
+
+      {pickerBase !== null && (
+        <SongSearchModal
+          musics={musics.filter((m) => m && m.basePoint === pickerBase)}
+          aliases={aliases}
+          jacketBase={JACKET_BASE}
+          title={`基礎点 ${pickerBase} の曲を選択`}
+          meta={(m) => `基礎点 ${m.basePoint}`}
+          onSelect={(m) => {
+            setSongByBase((prev) => ({ ...prev, [pickerBase]: m.id }));
+            setPickerBase(null);
+          }}
+          onClose={() => setPickerBase(null)}
+        />
       )}
     </StepSection>
   );

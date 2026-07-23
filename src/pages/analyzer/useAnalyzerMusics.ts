@@ -33,7 +33,31 @@ interface RawMusic {
 const isStr = (v: unknown): v is string => typeof v === "string" && v.length > 0;
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
-function parse(raw: unknown): AnalyzerMusic[] {
+/**
+ * プレイ不可楽曲（配信停止・期間限定終了）のIDを集める。
+ *
+ * deletedSongs.json はデータとして同梱されていたが、これまでどこからも参照されておらず
+ * 実際には叩けない曲がプランの候補や曲選択に出ていた（＝実行不能な提案になる）。
+ * IDの表記ゆれ（数値 241 と ゼロ埋め文字列 "074"）があるので両形を登録して照合する。
+ */
+function parseDeletedIds(raw: unknown): Set<string> {
+  const ids = new Set<string>();
+  if (!Array.isArray(raw)) return ids;
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const id = (item as { id?: unknown }).id;
+    if (typeof id === "number" && Number.isFinite(id)) {
+      ids.add(String(id));
+      ids.add(String(id).padStart(3, "0"));
+    } else if (isStr(id)) {
+      ids.add(id);
+      ids.add(id.padStart(3, "0"));
+    }
+  }
+  return ids;
+}
+
+function parse(raw: unknown, deletedIds: ReadonlySet<string> = new Set()): AnalyzerMusic[] {
   if (!Array.isArray(raw)) return [];
   const out: AnalyzerMusic[] = [];
   for (const item of raw) {
@@ -41,6 +65,8 @@ function parse(raw: unknown): AnalyzerMusic[] {
     const r = item as RawMusic;
     if (!isStr(r.id) || !isStr(r.title)) continue;
     if (r.published === false) continue;
+    // 配信停止曲は叩けないので、そもそも候補に載せない。
+    if (deletedIds.has(r.id)) continue;
     // 基礎点が無い曲は計算に使えないので除外。
     if (!isNum(r.event_rate) || r.event_rate < 50 || r.event_rate > 300) continue;
     // 実測補正が有ればそれを優先（event_rate の 130 頭打ち系統誤差を上書き）。
@@ -91,18 +117,22 @@ export function useAnalyzerMusics(): {
       try {
         // 楽曲データ(必須)とエイリアス(任意)を並列取得。楽曲は res.ok を確認
         // （SPAフォールバックで index.html が返ると r.json() が例外になるため）。
-        const [mRes, aRes] = await Promise.all([
+        const [mRes, aRes, dRes] = await Promise.all([
           fetch(`${base}MusicDatas/transformedMusics.json`, { signal: controller.signal }),
           fetch(`${base}MusicDatas/aliasMapping.json`, { signal: controller.signal }).catch(
+            () => null
+          ),
+          fetch(`${base}MusicDatas/deletedSongs.json`, { signal: controller.signal }).catch(
             () => null
           ),
         ]);
         if (!mRes.ok) throw new Error(`楽曲データの取得に失敗しました (HTTP ${mRes.status})`);
         const m = await mRes.json();
-        // エイリアスは失敗しても本体は続行。
+        // エイリアスと配信停止リストは失敗しても本体は続行（除外できないだけ）。
         const a = aRes && aRes.ok ? await aRes.json().catch(() => []) : [];
+        const d = dRes && dRes.ok ? await dRes.json().catch(() => []) : [];
         if (controller.signal.aborted) return;
-        const parsed = parse(m);
+        const parsed = parse(m, parseDeletedIds(d));
         if (parsed.length === 0) {
           throw new Error("有効な楽曲データがありません。データ更新が必要かもしれません。");
         }

@@ -264,7 +264,7 @@ export default function PointAnalyzer() {
               </div>
             )}
             <MySekaiStep result={result} />
-            <LiveAdjustStep result={result} musics={musics} />
+            <LiveAdjustStep result={result} musics={musics} aliases={aliases} />
             {result.finalRunPt > 0 && (
               <FinalRunStep
                 result={result}
