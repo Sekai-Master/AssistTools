@@ -193,6 +193,11 @@ describe("calculatePlanV6 — 性質", () => {
 });
 
 describe("calculatePlanV6 — マイセカイ不使用モード", () => {
+  // R2で複数回ライブが解禁されたため、単発上限を前提にした旧アサーションを改訂した。
+  // OFF時は liveAdjustment.multi（曲側探索・複数回・LB0〜10）が第1候補になり、
+  // 従来の単発・編成組み替え経路（adjustmentPlans）は第2候補として残る。
+  // status は「multi が OK か、第2候補が OK なら OK」の合成。ON時 multi は undefined。
+
   /** 端数調整曲（独りんぼエンヴィー）の基礎点。 */
   const ADJUST_BASE = 100;
   /** 既存ゴールデンと同じ引数。ON経路のリグレッション凍結に使う。 */
@@ -242,21 +247,69 @@ describe("calculatePlanV6 — マイセカイ不使用モード", () => {
     expect(r.isVerified).toBe(true);
   });
 
-  it("OFF・着地不能: 上限超の差分は NG になり、吸収上限Pt が案内に使える", () => {
-    // adjustableDiff = 1,000,000 は調整ライブ1本の上限（LB10でも数万Pt）を大きく超える
+  it("OFF・百万Pt差分: R1では単発上限超でNGだったが、R2は複数回で厳密着地する", () => {
+    // adjustableDiff = 1,000,000。単発（第2候補）の上限は超えるが、
+    // multi（第1候補）が複数回ライブで解くので合成 status は OK になる。
+    // この値が multi 側で可解なことは multiLiveAdjust.test.ts の
+    // 「基礎点100のみ〜百万Ptを厳密着地する」が担保している。
     const args = [1_000_000, 2_001_005, 1005, 380_470, 435, true, ENVY_ID, ENVY_MUSICS] as const;
     const off = calculatePlanV6(...args, { useMySekai: false });
-    expect(off.liveAdjustment.status).toBe("NG");
-    expect(off.isVerified).toBe(false);
-    expect(off.liveAdjustment.maxAdjustablePt).toBeGreaterThan(0);
+    expect(off.adjustableDiff).toBe(1_000_000);
+    expect(off.liveAdjustment.status).toBe("OK");
+    expect(off.isVerified).toBe(true);
+
+    const multi = off.liveAdjustment.multi;
+    expect(multi).toBeDefined();
+    expect(multi!.status).toBe("OK");
+    expect(multi!.plans.length).toBeGreaterThan(0);
+    for (const plan of multi!.plans) {
+      // 「ちょうど着地」の根幹保証: 全プランの合計が adjustableDiff に厳密一致
+      expect(plan.totalPt).toBe(off.adjustableDiff);
+      expect(plan.units.reduce((sum, u) => sum + u.pt * u.count, 0)).toBe(off.adjustableDiff);
+    }
+
+    // 第2候補（単発・編成組み替え）は従来フィールドに残り、単発上限は式どおり
     expect(off.liveAdjustment.maxAdjustablePt).toBe(
       calcLivePt(ADJUST_BASE, 435, MAX_SCORE_N * SCORE_STEP, MAX_LIVE_BONUS)
     );
-    expect(off.adjustableDiff).toBeGreaterThan(off.liveAdjustment.maxAdjustablePt);
 
     // 同じ入力でも ON ならマイセカイが吸収して着地できる（モード差のコントラスト）
     const on = calculatePlanV6(...args);
     expect(on.isVerified).toBe(true);
+  });
+
+  it("OFF・回数上限超過: OVER_CAP で NG になり、必要回数が案内に使える", () => {
+    // adjustableDiff = 10,000,000 は上限50回 × 1回上限Pt（基礎点100・LB10で約5.6万）を超える
+    const r = calculatePlanV6(
+      1_000_000,
+      11_001_005,
+      1005,
+      380_470,
+      435,
+      true,
+      ENVY_ID,
+      ENVY_MUSICS,
+      { useMySekai: false }
+    );
+    expect(r.adjustableDiff).toBe(10_000_000);
+    expect(r.liveAdjustment.status).toBe("NG");
+    expect(r.isVerified).toBe(false);
+
+    const multi = r.liveAdjustment.multi;
+    expect(multi).toBeDefined();
+    expect(multi!.status).toBe("NG");
+    expect(multi!.reason).toBe("OVER_CAP");
+    expect(multi!.plans).toEqual([]);
+    // 無言NGの禁止: UIが「あと何回必要か」を出せるよう、理論最小回数が ceil どおり返る
+    expect(multi!.requiredLiveCount).toBe(Math.ceil(10_000_000 / multi!.maxPtPerLive));
+    expect(multi!.requiredLiveCount!).toBeGreaterThan(multi!.liveCountCap);
+  });
+
+  it("ON時は liveAdjustment.multi が undefined（複数回探索はOFF専用）", () => {
+    const omitted = calculatePlanV6(...GOLDEN_ARGS);
+    const explicit = calculatePlanV6(...GOLDEN_ARGS, { useMySekai: true });
+    expect(omitted.liveAdjustment.multi).toBeUndefined();
+    expect(explicit.liveAdjustment.multi).toBeUndefined();
   });
 
   it("OFF・ラストラン一本（adjustableDiff = 0）を NG にしない", () => {

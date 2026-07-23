@@ -2,6 +2,11 @@ import { DEFAULT_BASE_POINT, MAX_LIVE_BONUS } from "./constants";
 import { calcLivePt } from "./calcLivePt";
 import { EMPTY_ALLOCATION, allocateMySekai, calculateUnitBasePt, isAllocationAttempted } from "./mySekai";
 import { type AdjustmentPlan, planLiveAdjustment } from "./liveAdjust";
+import {
+  type MultiLiveAdjustResult,
+  distinctBasePoints,
+  planMultiLiveAdjustment,
+} from "./multiLiveAdjust";
 import { type FinalRunPlan, finalRunSearchedMaxBonus, planFinalRun } from "./finalRun";
 
 /**
@@ -55,6 +60,12 @@ export interface CalculationResultV6 {
   liveAdjustment: {
     requiredPt: number;
     status: "OK" | "NG";
+    /**
+     * OFF時の第1候補（曲側・複数回）。現在の編成を維持したまま、
+     * 調整ライブの楽曲（基礎点）とLB 0〜10を動かして厳密着地を狙う。
+     * ON時は undefined（従来経路のみ）。
+     */
+    multi?: MultiLiveAdjustResult;
     targetScoreRange?: { min: number; max: number };
     adjustmentPlans?: AdjustmentPlan[];
     /** 調整ライブ1回で吸収できる上限Pt。マイセカイ不使用時のNG案内に使う。 */
@@ -141,12 +152,27 @@ export function calculatePlanV6(
   }
 
   // 4-5. ライブ端数調整
-  // OFF時は調整ライブが唯一の吸収役なので、LBの縛りを 0〜MAX_LIVE_BONUS まで解放する。
+  // OFF時は調整ライブが唯一の吸収役。第1候補は「現在の編成を維持したまま
+  // 曲側（基礎点28通り）× LB 0〜10 × 複数回」で解く multi 経路。
+  // 従来の「編成を組み替えて別ボーナスにする」経路（planLiveAdjustment ＋
+  // NO_MYSEKAI_LIVE_BONUSES）は、編成の組み替えという実作業が重いため
+  // 第2候補に降格して残す（結果は従来どおり adjustmentPlans 等に入る）。
   const liveRequired = adjustableDiff - allocation.totalPt;
+  const multi = useMySekai
+    ? undefined
+    : planMultiLiveAdjustment(liveRequired, bonus, distinctBasePoints(musics));
+  if (multi) {
+    logs.push(...multi.logs);
+  }
   const live = useMySekai
     ? planLiveAdjustment(liveRequired, bonus)
     : planLiveAdjustment(liveRequired, bonus, NO_MYSEKAI_LIVE_BONUSES);
   logs.push(...live.logs);
+  // 合成ステータス: OFF時は multi が解ければ第2候補がNGでも着地可能とみなす。
+  // multi の plans は合計が liveRequired に厳密一致するので、
+  // 恒等式 currentPt + allocation + liveRequired + finalRunPt === targetPt は保たれる。
+  const liveStatus: "OK" | "NG" =
+    (!useMySekai && multi?.status === "OK") ? "OK" : live.status;
 
   // 6. ラストラン
   // 基礎点はどの曲も同じ経路（musicsList → 見つからなければ既定値）で引く。
@@ -170,9 +196,10 @@ export function calculatePlanV6(
   }
 
   // 7. 検証
-  const liveAdjPt = live.status === "OK" ? liveRequired : 0;
+  // OFF時は multi が OK なら liveRequired を厳密に稼げる（合成 liveStatus 参照）。
+  const liveAdjPt = liveStatus === "OK" ? liveRequired : 0;
   const estimatedTotal = currentPt + allocation.totalPt + liveAdjPt + finalRunPt;
-  const isVerified = estimatedTotal === targetPt && live.status === "OK";
+  const isVerified = estimatedTotal === targetPt && liveStatus === "OK";
 
   return {
     currentPt,
@@ -185,13 +212,14 @@ export function calculatePlanV6(
     mySekaiAllocation: allocation,
     liveAdjustment: {
       requiredPt: liveRequired,
-      status: live.status,
+      status: liveStatus,
+      multi,
       targetScoreRange: live.targetScoreRange,
       adjustmentPlans: live.plans,
       maxAdjustablePt: live.maxAdjustablePt,
       // ON時は探索に許したLBが 0〜1 なので上限は 1（NG案内の文言用）。
       maxLiveBonus: useMySekai ? 1 : MAX_LIVE_BONUS,
-      logMessage: live.status === "OK" ? `目標: ${liveRequired}` : `調整不可 ${liveRequired}`,
+      logMessage: liveStatus === "OK" ? `目標: ${liveRequired}` : `調整不可 ${liveRequired}`,
     },
     finalRunPlans,
     finalBase,

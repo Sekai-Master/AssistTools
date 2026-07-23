@@ -52,6 +52,9 @@ export default function PointAnalyzer() {
     [talent, bonusNum, hasWorldPass]
   );
 
+  // OFF時の複数回プラン結果（ON時は undefined）。NGバナーの理由別文言に使う。
+  const resultMulti = result?.liveAdjustment.multi;
+
   const selectedSong = musics.find((m) => m.id === songId);
   const musicList = useMemo(
     () => musics.map((m) => ({ id: m.id, basePoint: m.basePoint })),
@@ -235,13 +238,19 @@ export default function PointAnalyzer() {
             {!result.isVerified && result.targetPt - result.finalEstimatedPt > 0 && (
               <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
                 <p className="font-bold">この条件では目標ちょうどに着地できません</p>
-                {/* マイセカイOFF時は吸収役がライブ調整だけなので、上限Ptの根拠と代替案（周回で縮める/設定を戻す）を示す。 */}
-                {result.useMySekai === false ? (
+                {/* マイセカイOFF時は複数回プラン（multi）のNG理由に沿って案内を出し分ける。
+                    OVER_CAP: 回数上限超過。NO_EXACT: 厳密一致なし。それ以外はON時と同じ汎用文言。 */}
+                {result.useMySekai === false && resultMulti?.reason === "OVER_CAP" ? (
                   <p className="mt-1 text-xs">
-                    マイセカイを使わない設定では、ライブ調整1回で埋められるのは最大{" "}
-                    {result.liveAdjustment.maxAdjustablePt.toLocaleString()} Pt です。
-                    通常の周回で差分を {result.liveAdjustment.maxAdjustablePt.toLocaleString()} Pt
-                    以内まで縮めてから再計算するか、マイセカイを利用する設定に切り替えてください。
+                    調整には最低 {(resultMulti.requiredLiveCount ?? 0).toLocaleString()}{" "}
+                    回のライブが必要で、上限 {resultMulti.liveCountCap} 回を超えます。
+                    マイセカイを利用する設定に切り替えるか、通常の周回で差分を縮めてから再計算してください。
+                  </p>
+                ) : result.useMySekai === false && resultMulti?.reason === "NO_EXACT" ? (
+                  <p className="mt-1 text-xs">
+                    {result.liveAdjustment.requiredPt.toLocaleString()} Pt
+                    に厳密一致する調整ライブの組合せが見つかりませんでした。
+                    目標を数ポイントずらすか、ライブ調整の編成組み替え案（第2候補）を確認してください。
                   </p>
                 ) : (
                   <p className="mt-1 text-xs">
@@ -252,7 +261,7 @@ export default function PointAnalyzer() {
               </div>
             )}
             <MySekaiStep result={result} />
-            <LiveAdjustStep result={result} />
+            <LiveAdjustStep result={result} musics={musics} />
             {result.finalRunPt > 0 && (
               <FinalRunStep
                 result={result}
