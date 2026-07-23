@@ -27,6 +27,8 @@ export default function PointAnalyzer() {
   const [talent, setTalent] = useState("");
   const [bonus, setBonus] = useState("");
   const [hasWorldPass, setHasWorldPass] = useState(false);
+  // マイセカイを使わない周回者向けモード。ONが従来挙動（既定）。
+  const [useMySekai, setUseMySekai] = useState(true);
   const [songId, setSongId] = useState(ENVY_ID);
   const [songModalOpen, setSongModalOpen] = useState(false);
   const [result, setResult] = useState<CalculationResultV6 | null>(null);
@@ -71,7 +73,7 @@ export default function PointAnalyzer() {
     if (f > tv - c) return reject("最終獲得希望ポイントが差分を超えています。");
     setError(null);
     scrollOnResult.current = true;
-    setResult(calculatePlanV6(c, tv, f, tal, bon, hasWorldPass, songId, musicList));
+    setResult(calculatePlanV6(c, tv, f, tal, bon, hasWorldPass, songId, musicList, { useMySekai }));
   };
 
   // Step3で楽曲を変えたときの再計算（検証済み前提・スクロールはしない）。
@@ -87,7 +89,8 @@ export default function PointAnalyzer() {
         bonusNum,
         hasWorldPass,
         newId,
-        musicList
+        musicList,
+        { useMySekai }
       )
     );
   };
@@ -167,12 +170,16 @@ export default function PointAnalyzer() {
             />
           </Field>
           <Switch checked={hasWorldPass} onChange={setHasWorldPass} label="ワールドパス 有効" />
-          <p className="text-sm text-slate-500">
-            マイセカイ単価（自動算出）:{" "}
-            <span className="font-bold" style={{ color: "var(--unit-color)" }}>
-              {unitHint} Pt/個
-            </span>
-          </p>
+          <Switch checked={useMySekai} onChange={setUseMySekai} label="マイセカイを利用する" />
+          {/* OFF時は採取しないので単価表示は出さない（無関係な数字で混乱させないため）。 */}
+          {useMySekai && (
+            <p className="text-sm text-slate-500">
+              マイセカイ単価（自動算出）:{" "}
+              <span className="font-bold" style={{ color: "var(--unit-color)" }}>
+                {unitHint} Pt/個
+              </span>
+            </p>
+          )}
           <Field label="最終楽曲" hint={loading ? "楽曲データ読込中…" : `${musics.length}曲から選択`}>
             <div className="flex items-center gap-3">
               {selectedSong ? (
@@ -228,10 +235,20 @@ export default function PointAnalyzer() {
             {!result.isVerified && result.targetPt - result.finalEstimatedPt > 0 && (
               <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
                 <p className="font-bold">この条件では目標ちょうどに着地できません</p>
-                <p className="mt-1 text-xs">
-                  {(result.targetPt - result.finalEstimatedPt).toLocaleString()} Pt
-                  の差が埋まりません。目標を数ポイントずらすか、ボーナスを調整してください。
-                </p>
+                {/* マイセカイOFF時は吸収役がライブ調整だけなので、上限Ptの根拠と代替案（周回で縮める/設定を戻す）を示す。 */}
+                {result.useMySekai === false ? (
+                  <p className="mt-1 text-xs">
+                    マイセカイを使わない設定では、ライブ調整1回で埋められるのは最大{" "}
+                    {result.liveAdjustment.maxAdjustablePt.toLocaleString()} Pt です。
+                    通常の周回で差分を {result.liveAdjustment.maxAdjustablePt.toLocaleString()} Pt
+                    以内まで縮めてから再計算するか、マイセカイを利用する設定に切り替えてください。
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs">
+                    {(result.targetPt - result.finalEstimatedPt).toLocaleString()} Pt
+                    の差が埋まりません。目標を数ポイントずらすか、ボーナスを調整してください。
+                  </p>
+                )}
               </div>
             )}
             <MySekaiStep result={result} />

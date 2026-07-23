@@ -4,6 +4,24 @@ import type { CalculationResultV6 } from "../lib/calculator";
 /** Step1: マイセカイで何をいくつ採るか。 */
 export function MySekaiStep({ result }: { result: CalculationResultV6 }) {
   const a = result.mySekaiAllocation;
+
+  // マイセカイOFF時もステップ①②③の連番を崩さないため、非表示にせず
+  // 「何も採取しない」ことを明示表示する（配分は全て0なのでグリッドは出さない）。
+  if (result.useMySekai === false) {
+    return (
+      <StepSection
+        unit="vs"
+        title="① マイセカイ配分"
+        footerLabel="このステップ完了時"
+        footerValue={result.currentPt}
+      >
+        <p className="text-sm text-slate-500">
+          マイセカイを使わない設定のため、このステップでは何も採取しません。
+        </p>
+      </StepSection>
+    );
+  }
+
   const items = [
     { label: "木・石", count: a.countA, memo: "1.0", pt: result.unitBasePt },
     { label: "キラキラ・樽", count: a.countB, memo: "0.5", pt: Math.floor(result.unitBasePt * 0.5) },

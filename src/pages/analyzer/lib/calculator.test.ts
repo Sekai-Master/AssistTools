@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   ENVY_ID,
+  calcLivePt,
   calculatePlanV6,
   calculateUnitBasePtEstimate,
   type MusicData,
 } from "./calculator";
+import { MAX_LIVE_BONUS, MAX_SCORE_N, SCORE_STEP } from "./constants";
 
 /**
  * トップレベル calculatePlanV6 の安全網。
@@ -188,4 +190,100 @@ describe("calculatePlanV6 — 性質", () => {
       expect(r.mySekaiAllocation.totalPt + r.liveAdjustment.requiredPt).toBe(r.adjustableDiff);
     }
   });
+});
+
+describe("calculatePlanV6 — マイセカイ不使用モード", () => {
+  /** 端数調整曲（独りんぼエンヴィー）の基礎点。 */
+  const ADJUST_BASE = 100;
+  /** 既存ゴールデンと同じ引数。ON経路のリグレッション凍結に使う。 */
+  const GOLDEN_ARGS = [
+    128_202_307,
+    128_311_005,
+    1005,
+    380_470,
+    435,
+    true,
+    ENVY_ID,
+    ENVY_MUSICS,
+  ] as const;
+
+  it("ON リグレッション凍結: options 省略と { useMySekai: true } 明示が完全一致する", () => {
+    const omitted = calculatePlanV6(...GOLDEN_ARGS);
+    const explicit = calculatePlanV6(...GOLDEN_ARGS, { useMySekai: true });
+    expect(explicit).toEqual(omitted);
+    expect(omitted.useMySekai).toBe(true);
+    // ON時の調整ライブは従来どおり LB 0〜1 に縛られる
+    expect(omitted.liveAdjustment.maxLiveBonus).toBe(1);
+    expect(omitted.liveAdjustment.maxAdjustablePt).toBe(
+      calcLivePt(ADJUST_BASE, 435, MAX_SCORE_N * SCORE_STEP, 1)
+    );
+  });
+
+  it("OFF・着地可能: マイセカイ0のまま調整ライブ1本で差分を吸収する", () => {
+    const current = 1_000_000;
+    const finalRunPt = 1005;
+    const bonus = 435;
+    // 調整ライブで到達可能なPtを式から導出する（LB2・スコア10万点。
+    // ON時ならマイセカイ配分が走る 100 Pt 超の差分にしてモード差を露出させる）
+    const adjustPt = calcLivePt(ADJUST_BASE, bonus, 100_000, 2);
+    expect(adjustPt).toBeGreaterThan(100);
+    const target = current + adjustPt + finalRunPt;
+
+    const r = calculatePlanV6(current, target, finalRunPt, 380_470, bonus, true, ENVY_ID, ENVY_MUSICS, {
+      useMySekai: false,
+    });
+    expect(r.useMySekai).toBe(false);
+    expect(r.mySekaiAllocation.totalPt).toBe(0);
+    // OFF時は liveRequired = adjustableDiff（マイセカイが何も吸収しない）
+    expect(r.liveAdjustment.requiredPt).toBe(r.adjustableDiff);
+    expect(r.adjustableDiff).toBe(adjustPt);
+    expect(r.liveAdjustment.status).toBe("OK");
+    expect(r.liveAdjustment.maxLiveBonus).toBe(MAX_LIVE_BONUS);
+    expect(r.isVerified).toBe(true);
+  });
+
+  it("OFF・着地不能: 上限超の差分は NG になり、吸収上限Pt が案内に使える", () => {
+    // adjustableDiff = 1,000,000 は調整ライブ1本の上限（LB10でも数万Pt）を大きく超える
+    const args = [1_000_000, 2_001_005, 1005, 380_470, 435, true, ENVY_ID, ENVY_MUSICS] as const;
+    const off = calculatePlanV6(...args, { useMySekai: false });
+    expect(off.liveAdjustment.status).toBe("NG");
+    expect(off.isVerified).toBe(false);
+    expect(off.liveAdjustment.maxAdjustablePt).toBeGreaterThan(0);
+    expect(off.liveAdjustment.maxAdjustablePt).toBe(
+      calcLivePt(ADJUST_BASE, 435, MAX_SCORE_N * SCORE_STEP, MAX_LIVE_BONUS)
+    );
+    expect(off.adjustableDiff).toBeGreaterThan(off.liveAdjustment.maxAdjustablePt);
+
+    // 同じ入力でも ON ならマイセカイが吸収して着地できる（モード差のコントラスト）
+    const on = calculatePlanV6(...args);
+    expect(on.isVerified).toBe(true);
+  });
+
+  it("OFF・ラストラン一本（adjustableDiff = 0）を NG にしない", () => {
+    // ON側の破壊者パステストと同じシナリオ。OFFでも主用途を壊さないこと
+    const r = calculatePlanV6(10_000_000, 10_000_946, 946, 350_000, 250, false, ENVY_ID, ENVY_MUSICS, {
+      useMySekai: false,
+    });
+    expect(r.adjustableDiff).toBe(0);
+    expect(r.mySekaiAllocation.totalPt).toBe(0);
+    expect(r.liveAdjustment.requiredPt).toBe(0);
+    expect(r.liveAdjustment.status).toBe("OK");
+    expect(r.isVerified).toBe(true);
+  });
+
+  it("OFF・恒等式: isVerified なら 現在Pt + 0 + ライブ調整 + ラストラン = 目標Pt", () => {
+    // LB解放域（2以上）を含む各消費数で、到達可能な差分を式から導出して着地させる
+    for (const lb of [0, 1, 5, 7, 10]) {
+      const adjustPt = calcLivePt(ADJUST_BASE, 435, 400_000, lb);
+      const target = 1_000_000 + adjustPt + 1005;
+      const r = calculatePlanV6(1_000_000, target, 1005, 380_470, 435, false, ENVY_ID, ENVY_MUSICS, {
+        useMySekai: false,
+      });
+      expect(r.isVerified).toBe(true);
+      expect(r.mySekaiAllocation.totalPt).toBe(0);
+      expect(
+        r.currentPt + r.mySekaiAllocation.totalPt + r.liveAdjustment.requiredPt + r.finalRunPt
+      ).toBe(r.targetPt);
+    }
+  }, 30_000);
 });
