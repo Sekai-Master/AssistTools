@@ -100,3 +100,12 @@ export const ENVY_ID = "074";
 
 /** 基礎点が取得できなかった場合のフォールバック。 */
 export const DEFAULT_BASE_POINT = 100;
+
+/**
+ * 調整ライブ1本あたりの曲外オーバーヘッド秒数（曲選択 → ライブ開始 → リザルト → 戻り）。
+ *
+ * 2026-07-23 のイベント実戦（docs/point-adjust-step2-ux-brief.md）で実測した値。
+ * マスタDBには存在しない実測定数なので、このファイル冒頭の「一次情報で裏を取る」
+ * ルールの例外にあたる（裏取り先は実戦の実測ログ）。
+ */
+export const ADJUST_LIVE_OVERHEAD_SEC = 47;

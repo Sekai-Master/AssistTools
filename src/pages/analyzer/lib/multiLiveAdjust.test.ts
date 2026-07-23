@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_ADJUST_LIVE_COUNT,
   type MultiLiveAdjustResult,
+  type MultiLivePlan,
   distinctBasePoints,
   planMultiLiveAdjustment,
 } from "./multiLiveAdjust";
@@ -358,6 +359,306 @@ describe("planMultiLiveAdjustment — 境界と NG の明示", () => {
     expect(r.reason).toBe("NO_EXACT");
     expect(r.minPtPerLive).toBe(535);
     expect(300).toBeLessThan(r.minPtPerLive);
+  });
+});
+
+/**
+ * ブリーフ（docs/point-adjust-step2-ux-brief.md 診断1）の実戦ケースをそのまま固定する
+ * 特性化テスト。R4 で sameCountVariants / 帯内全数チェックを足すにあたり、
+ * 「既存の plans が1Ptも1LBも変わっていない」ことを直接押さえるための網。
+ *
+ * 期待値はブリーフの実測表（2回/LB9・3回/LB8・10回/LB7・12回/LB6・37回/LB0）と一致する。
+ */
+const BRIEF_BASES = [
+  100, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120,
+  121, 122, 123, 124, 125, 126, 127, 128, 130,
+] as const;
+const BRIEF_BONUS = 990;
+const BRIEF_REQUIRED = 80_527;
+
+describe("planMultiLiveAdjustment — 実戦ケースの特性化（R4 の非退行網）", () => {
+  it("80,527 Pt / ボーナス990% の前線が (回数, LB) までブリーフ実測と一致する", () => {
+    const r = planMultiLiveAdjustment(BRIEF_REQUIRED, BRIEF_BONUS, BRIEF_BASES);
+    expect(r.status).toBe("OK");
+    expect(r.plans.map((p) => [p.liveCount, p.lbCost])).toEqual([
+      [2, 9],
+      [3, 8],
+      [10, 7],
+      [12, 6],
+      [37, 0],
+    ]);
+    expect(r.maxPtPerLive).toBe(calcLivePt(130, BRIEF_BONUS, CAP_SCORE, MAX_LIVE_BONUS));
+    expect(r.minPtPerLive).toBe(calcLivePt(100, BRIEF_BONUS, 0, 0));
+  });
+
+  it("主役プラン（先頭）の units が一意に固定される", () => {
+    // ブリーフの表示例そのもの: メルト級（基礎点130・7焚き）+ 基礎点123・2焚き。
+    const r = planMultiLiveAdjustment(BRIEF_REQUIRED, BRIEF_BONUS, BRIEF_BASES);
+    expect(r.plans[0].units).toEqual([
+      {
+        basePoint: 130,
+        liveBonus: 7,
+        minScore: 1_040_000,
+        maxScore: 1_059_999,
+        pt: calcLivePt(130, BRIEF_BONUS, 1_040_000, 7),
+        count: 1,
+      },
+      {
+        basePoint: 123,
+        liveBonus: 2,
+        minScore: 700_000,
+        maxScore: 719_999,
+        pt: calcLivePt(123, BRIEF_BONUS, 700_000, 2),
+        count: 1,
+      },
+    ]);
+    expect(r.plans[0].totalPt).toBe(BRIEF_REQUIRED);
+  });
+
+  it("全プランが厳密一致し、units の合計とも突き合う", () => {
+    const r = planMultiLiveAdjustment(BRIEF_REQUIRED, BRIEF_BONUS, BRIEF_BASES);
+    for (const plan of r.plans) {
+      expect(plan.totalPt).toBe(BRIEF_REQUIRED);
+      expect(plan.units.reduce((s, u) => s + u.pt * u.count, 0)).toBe(BRIEF_REQUIRED);
+      expect(plan.units.reduce((s, u) => s + u.count, 0)).toBe(plan.liveCount);
+      expect(plan.units.reduce((s, u) => s + u.liveBonus * u.count, 0)).toBe(plan.lbCost);
+    }
+  });
+});
+
+describe("planMultiLiveAdjustment — 同一本数内の代替内訳 sameCountVariants（R4）", () => {
+  // ブリーフ P0-2:「LB の選択肢は**同一本数の中でのみ**提示する」。
+  // plans（パレート前線）は本数違いの軸なので壊さず、同一本数の内訳違いを別枠で返す。
+  it("全 variant が主役と同じ liveCount で、厳密一致する", () => {
+    const r = planMultiLiveAdjustment(BRIEF_REQUIRED, BRIEF_BONUS, BRIEF_BASES);
+    expect(r.sameCountVariants.length).toBeGreaterThan(0);
+    for (const v of r.sameCountVariants) {
+      expect(v.liveCount).toBe(r.plans[0].liveCount);
+      expect(v.totalPt).toBe(BRIEF_REQUIRED);
+      expect(v.units.reduce((s, u) => s + u.pt * u.count, 0)).toBe(BRIEF_REQUIRED);
+      for (const u of v.units) {
+        expect(u.pt).toBe(calcLivePt(u.basePoint, BRIEF_BONUS, u.minScore, u.liveBonus));
+        expect(u.minScore).toBeLessThanOrEqual(DEFAULT_MAX_SCORE_N * SCORE_STEP);
+      }
+    }
+  });
+
+  it("lbCost 昇順・4件以下・主役自身は含まない", () => {
+    const r = planMultiLiveAdjustment(BRIEF_REQUIRED, BRIEF_BONUS, BRIEF_BASES);
+    expect(r.sameCountVariants.length).toBeLessThanOrEqual(4);
+    for (let i = 1; i < r.sameCountVariants.length; i += 1) {
+      expect(r.sameCountVariants[i].lbCost).toBeGreaterThanOrEqual(
+        r.sameCountVariants[i - 1].lbCost
+      );
+    }
+    // 署名は順序非依存で取る。units の並びはプランの意味に関係しないので、
+    // 順序込みで比べると「バルクと端数が入れ替わっただけの同案」を見逃す
+    // （実際に主役そのものが代替案として再掲される事故が出た）。
+    const sig = (p: MultiLivePlan) =>
+      p.units
+        .map((u) => JSON.stringify(u))
+        .sort()
+        .join("|");
+    const primary = sig(r.plans[0]);
+    const sigs = r.sameCountVariants.map(sig);
+    expect(sigs).not.toContain(primary);
+    expect(new Set(sigs).size).toBe(sigs.length);
+  });
+
+  it("units の並び替え違いを別案として数えない（重複排除の正規化）", () => {
+    // 同一本数の代替案は提示枠が4件しかないので、実質同じ案で埋めてはいけない。
+    // units の並びはプランの意味に関係しないため、順序非依存の署名で見る。
+    // 逆に「同じPt・同じLBだが曲（基礎点）とスコア帯が違う」案は別物として数える
+    // ＝ユーザーへの指示内容が変わるため（実測でこの区別が要ることを確認）。
+    for (const req of [BRIEF_REQUIRED, 250_000, 60_000]) {
+      const r = planMultiLiveAdjustment(req, BRIEF_BONUS, BRIEF_BASES);
+      const canonical = (p: MultiLivePlan) =>
+        p.units
+          .map((u) => JSON.stringify(u))
+          .sort()
+          .join("|");
+      const all = [r.plans[0], ...r.sameCountVariants].map(canonical);
+      expect(new Set(all).size).toBe(all.length);
+      expect(all.length).toBeGreaterThan(1);
+    }
+  });
+
+  it("1回で解ける値では「同じ1回・別LB/スコア帯」が出る（エビ詰めの主用途）", () => {
+    // 主用途は「独りんぼエンヴィーをソロ・LB0〜1で叩く端数調整」。
+    // 単発ケースこそ内訳の選択肢が要る（曲を変えずスコア帯だけ変える等）。
+    const req = calcLivePt(114, BRIEF_BONUS, 100_000, 2);
+    const r = planMultiLiveAdjustment(req, BRIEF_BONUS, BRIEF_BASES);
+    expect(r.plans[0].liveCount).toBe(1);
+    expect(r.sameCountVariants.length).toBeGreaterThan(0);
+    for (const v of r.sameCountVariants) {
+      expect(v.liveCount).toBe(1);
+      expect(v.totalPt).toBe(req);
+    }
+  });
+
+  it("plans が空の経路（調整不要・NG）では常に空配列", () => {
+    expect(planMultiLiveAdjustment(0, BONUS, REAL_BASES).sameCountVariants).toEqual([]);
+    expect(planMultiLiveAdjustment(-100, BONUS, REAL_BASES).sameCountVariants).toEqual([]);
+    expect(planMultiLiveAdjustment(1, BONUS, REAL_BASES).sameCountVariants).toEqual([]);
+    const over = planMultiLiveAdjustment(MAX_PT * MAX_ADJUST_LIVE_COUNT + 1, BONUS, REAL_BASES);
+    expect(over.reason).toBe("OVER_CAP");
+    expect(over.sameCountVariants).toEqual([]);
+  });
+
+  it("variants を足しても plans は1件も変わらない（前線の非侵襲性）", () => {
+    // 収集は frontier 確定後の後処理なので、best 選択に触れていないことを
+    // 代表入力の前線が特性化テストと一致することで確認する。
+    for (const req of [500_000, 250_000, 123_456, 60_000, 470_000]) {
+      const r = planMultiLiveAdjustment(req, BONUS, REAL_BASES);
+      expectExactPlans(r, req);
+      const frontier = expectedFrontier(req, REAL_BASES);
+      expect(r.plans[0].liveCount).toBe(frontier[0].liveCount);
+      expect(r.plans[0].lbCost).toBe(frontier[0].lbCost);
+    }
+  });
+});
+
+describe("planMultiLiveAdjustment — 着地可能性の断定 landability（R4 / P2-7）", () => {
+  /**
+   * ブリーフ診断5の「正しさの穴」。残額 < 4 × minPtPerLive の帯では、
+   * どの解も3本以内に収まる（k本の合計は必ず k × minPtPerLive 以上）ので、
+   * 3本以内を全数照合すれば「着地不能」を断定できる。
+   *
+   * ここでは実装から独立した素朴な全組合せ探索をオラクルにして突き合わせる。
+   */
+  function naiveReachableWithin3(req: number, bonus: number, bases: readonly number[]): boolean {
+    const pts = new Set<number>();
+    for (let lb = 0; lb <= MAX_LIVE_BONUS; lb += 1) {
+      for (const base of bases) {
+        for (let n = 0; n <= DEFAULT_MAX_SCORE_N; n += 1) {
+          const pt = calcLivePt(base, bonus, n * SCORE_STEP, lb);
+          if (pt > 0 && pt <= req) pts.add(pt);
+        }
+      }
+    }
+    const arr = [...pts];
+    if (pts.has(req)) return true;
+    for (const a of arr) {
+      if (pts.has(req - a)) return true;
+    }
+    for (const a of arr) {
+      for (const b of arr) {
+        const c = req - a - b;
+        if (c > 0 && pts.has(c)) return true;
+      }
+    }
+    return false;
+  }
+
+  /** 帯 [from, from+span) をオラクルと突き合わせ、食い違いを文字列で返す。 */
+  function scanBand(
+    from: number,
+    span: number,
+    bonus: number,
+    bases: readonly number[]
+  ): { broken: string[]; okCount: number } {
+    const broken: string[] = [];
+    let okCount = 0;
+    for (let req = from; req < from + span; req += 1) {
+      const r = planMultiLiveAdjustment(req, bonus, bases);
+      const reachable = naiveReachableWithin3(req, bonus, bases);
+      if (reachable && r.status !== "OK") {
+        broken.push(`req=${req}: reachable but ${r.status}/${r.landability}`);
+      }
+      if (!reachable && r.landability !== "UNREACHABLE") {
+        broken.push(`req=${req}: unreachable but landability=${r.landability}`);
+      }
+      if (r.status === "OK") {
+        okCount += 1;
+        if (r.plans[0].totalPt !== req) broken.push(`req=${req}: totalPt=${r.plans[0].totalPt}`);
+        if (r.plans[0].liveCount > 3) broken.push(`req=${req}: liveCount=${r.plans[0].liveCount}`);
+        const sum = r.plans[0].units.reduce((s, u) => s + u.pt * u.count, 0);
+        if (sum !== req) broken.push(`req=${req}: unitSum=${sum}`);
+      }
+    }
+    return { broken, okCount };
+  }
+
+  it("最小値直上の帯: 素朴な全組合せ探索と status/landability が一致する", () => {
+    const minPt = calcLivePt(100, 990, 0, 0);
+    expect(scanBand(minPt, 300, 990, [100, 130]).broken).toEqual([]);
+  }, 60_000);
+
+  it("帯の上端付近: 3値すべて異なる解を拾い、拾えない値だけを UNREACHABLE にする", () => {
+    // ここが本探索（1案のPt値2種まで）の穴。基礎点が2種以上ないと3値解が現れないので、
+    // 単一基礎点ではこの分岐を踏めない点に注意（実測: [100] のみだと発火0件）。
+    const minPt = calcLivePt(100, 990, 0, 0);
+    const { broken, okCount } = scanBand(3_600, 400, 990, [100, 130]);
+    expect(broken).toEqual([]);
+    expect(3_600).toBeGreaterThan(minPt);
+    expect(4_000).toBeLessThan((3 + 1) * minPt); // 全数照合が効く帯に収まっていること
+    expect(okCount).toBeGreaterThan(0);
+  }, 60_000);
+
+  it("従来 NG だった3値解が OK に昇格し、厳密一致する（診断5の穴埋め）", () => {
+    // 実測ケース: 3,663 = 1,473 + 1,100 + 1,090。同じ値を2回使う (v,v,r) 構造では
+    // 作れないため R3 までは NO_EXACT だった。回数3は下界を割っていない
+    // （n=1,2 は本探索が全数で見ており解なし）。
+    const r = planMultiLiveAdjustment(3_663, 990, [100, 130]);
+    expect(r.status).toBe("OK");
+    expect(r.plans).toHaveLength(1);
+    expect(r.plans[0].totalPt).toBe(3_663);
+    expect(r.plans[0].liveCount).toBe(3);
+    expect(r.plans[0].units.reduce((s, u) => s + u.pt * u.count, 0)).toBe(3_663);
+    for (const u of r.plans[0].units) {
+      expect(u.pt).toBe(calcLivePt(u.basePoint, 990, u.minScore, u.liveBonus));
+    }
+    // 2本以内では作れないこと（回数最小性の裏取り）
+    const pts = new Set<number>();
+    for (let lb = 0; lb <= MAX_LIVE_BONUS; lb += 1) {
+      for (const base of [100, 130]) {
+        for (let n = 0; n <= DEFAULT_MAX_SCORE_N; n += 1) {
+          const pt = calcLivePt(base, 990, n * SCORE_STEP, lb);
+          if (pt > 0) pts.add(pt);
+        }
+      }
+    }
+    expect(pts.has(3_663)).toBe(false);
+    expect([...pts].some((a) => pts.has(3_663 - a))).toBe(false);
+  }, 30_000);
+
+  it("最小値未満は UNREACHABLE と断定する（探索範囲の言い訳をしない）", () => {
+    const r = planMultiLiveAdjustment(300, BONUS, REAL_BASES);
+    expect(r.status).toBe("NG");
+    expect(r.reason).toBe("NO_EXACT");
+    expect(r.landability).toBe("UNREACHABLE");
+    expect(300).toBeLessThan(r.minPtPerLive);
+  });
+
+  it("閾値はボーナスに追随する（同じ残額でもボーナス次第で判定が変わる）", () => {
+    // ボーナス990%なら minPtPerLive=1090 なので 600 は着地不能。
+    // ボーナス0%なら minPtPerLive=100 まで下がるので着地しうる。
+    const high = planMultiLiveAdjustment(600, 990, [100]);
+    expect(high.landability).toBe("UNREACHABLE");
+    const low = planMultiLiveAdjustment(600, 0, [100]);
+    expect(low.minPtPerLive).toBeLessThan(600);
+    expect(low.status).toBe("OK");
+  });
+
+  it("安全域（4 × minPtPerLive 以上）の解なしは UNPROVEN に留める", () => {
+    // 全数照合していない帯で「不能」と断定すると、実際には解がある残額を
+    // 諦めさせてしまう。断定できるのは全数照合した帯だけ。
+    const bonus = 990;
+    const minPt = calcLivePt(100, bonus, 0, 0);
+    const broken: string[] = [];
+    for (let req = minPt * 4; req < minPt * 4 + 400; req += 1) {
+      const r = planMultiLiveAdjustment(req, bonus, [100]);
+      if (r.status === "NG" && r.landability !== "UNPROVEN") {
+        broken.push(`req=${req}: landability=${r.landability}`);
+      }
+    }
+    expect(broken).toEqual([]);
+  }, 60_000);
+
+  it("OK のときと負の要求では landability を付けない", () => {
+    expect(planMultiLiveAdjustment(0, BONUS, REAL_BASES).landability).toBeUndefined();
+    expect(planMultiLiveAdjustment(500_000, BONUS, REAL_BASES).landability).toBeUndefined();
+    expect(planMultiLiveAdjustment(-100, BONUS, REAL_BASES).landability).toBeUndefined();
   });
 });
 

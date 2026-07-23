@@ -6,12 +6,12 @@ import type { AliasEntry } from "../../bingo/useBingoMusics";
 import { PlanSelectionUI } from "../plan/PlanSelectionUI";
 import type { UniversalPlan } from "../plan/types";
 import { byBonusDesc, recommendPlans } from "../lib/recommendPlans";
-import { onJacketError } from "../../../lib/img";
 import type { CalculationResultV6 } from "../lib/calculator";
-import type { MultiLivePlan } from "../lib/multiLiveAdjust";
+import type { MultiLiveAdjustResult, MultiLivePlan, MultiLiveUnit } from "../lib/multiLiveAdjust";
 import type { FinalRunPlan } from "../lib/finalRun";
 import { drawPlanCanvas } from "../../refresh/lib/planCanvas";
 import { buildAdjustPlanCanvasData } from "../lib/adjustPlanCanvas";
+import { formatApproxMinutes, planDurationSec, type TimeForBase } from "../lib/planDuration";
 
 const ENVY_JACKET = `${import.meta.env.BASE_URL}MusicDatas/jacket/jacket_s_074.webp`;
 
@@ -23,50 +23,90 @@ interface SuggestMusic {
   title: string;
   basePoint: number;
   jacketLink: string;
+  /** 演奏秒数。0/欠損は「時間不明」として扱う（音源未確定曲などが該当）。 */
+  musicTime: number;
   pronunciation?: string;
   artistName?: string;
 }
 
 /**
- * 採択プランの1ユニットで実際に叩く曲。
- * 「基礎点113を叩け」だけでは実行できないので具体的な1曲を出し、
- * 候補が何曲あっても検索モーダルから選び直せるようにする（「他N曲」で切り捨てない）。
+ * 採択中プランの参照先。
+ * plans[0]（主役）・sameCountVariants（同一本数の内訳違い）・plans[1..]（本数違い）の
+ * どこを見ているかをこの1値だけで表す。参照時は範囲外クランプで壊れないようにする。
  */
-function UnitSong({
-  candidates,
-  basePoint,
-  chosen,
-  onPick,
-}: {
-  candidates: ReadonlyArray<SuggestMusic>;
-  basePoint: number;
-  chosen: SuggestMusic | undefined;
-  onPick: () => void;
-}) {
-  if (!chosen) {
-    return (
-      <p className="mt-2 text-xs text-amber-600">
-        基礎点 {basePoint} に一致する曲が見つかりません（配信停止曲は候補から除外しています）。
-      </p>
-    );
+type Adopted = { kind: "primary" } | { kind: "variant"; index: number } | { kind: "frontier"; index: number };
+
+/** 基礎点でフィルタした曲候補を「短い順（時間不明は末尾）・同値はid順」で返す。 */
+function candidatesForBase(
+  musics: ReadonlyArray<SuggestMusic>,
+  basePoint: number
+): SuggestMusic[] {
+  return musics
+    .filter((m) => m && m.basePoint === basePoint)
+    .slice()
+    .sort((a, b) => {
+      const at = a.musicTime > 0 ? a.musicTime : Infinity;
+      const bt = b.musicTime > 0 ? b.musicTime : Infinity;
+      if (at !== bt) return at - bt;
+      return a.id.localeCompare(b.id);
+    });
+}
+
+/** 採択曲があればそれ、なければ最短曲（候補ゼロなら undefined）。 */
+function resolveSong(
+  candidates: ReadonlyArray<SuggestMusic>,
+  songByBase: Record<number, string>,
+  basePoint: number
+): SuggestMusic | undefined {
+  return candidates.find((m) => m.id === songByBase[basePoint]) ?? candidates[0];
+}
+
+/** 採択中プランを Adopted から実体へ解決する。範囲外は primary へフォールバックする。 */
+function getAdoptedPlan(multi: MultiLiveAdjustResult, adopted: Adopted): MultiLivePlan | undefined {
+  if (multi.plans.length === 0) return undefined;
+  if (adopted.kind === "variant" && multi.sameCountVariants.length > 0) {
+    const i = Math.min(adopted.index, multi.sameCountVariants.length - 1);
+    return multi.sameCountVariants[i];
   }
+  if (adopted.kind === "frontier" && multi.plans.length > 1) {
+    const i = Math.min(Math.max(adopted.index, 1), multi.plans.length - 1);
+    return multi.plans[i];
+  }
+  return multi.plans[0];
+}
+
+/**
+ * 「同じN回で組み替える」「本数を増やしてLBを節約」で使うコンパクトカード。
+ * 主役カードと違い曲候補までは出さず、採択して昇格するための最小限の情報だけ出す。
+ */
+function CompactPlanCard({
+  plan,
+  timeLabel,
+  onAdopt,
+}: {
+  plan: MultiLivePlan;
+  /** 「約N分」や「約N分（主役比 +M分）」など、呼び出し側で組み立てた時間表示。 */
+  timeLabel: string;
+  onAdopt: () => void;
+}) {
   return (
-    <div className="mt-2 flex items-center gap-3 rounded-lg bg-neu p-2 shadow-neu-sm">
-      <img
-        src={`${JACKET_BASE}${chosen.jacketLink}`}
-        alt=""
-        className="h-11 w-11 shrink-0 rounded-lg object-cover shadow-neu-sm"
-        onError={onJacketError}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-bold text-slate-700">{chosen.title}</p>
-        <p className="text-[11px] text-slate-500">
-          基礎点 {basePoint} の曲 {candidates.length} 曲から選択
-        </p>
+    <div className="rounded-xl bg-neu p-3 shadow-neu-sm">
+      <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+        <span className="tabular-nums">
+          全{plan.liveCount}回 ・ LB合計{plan.lbCost}
+          <LbCostNote lbCost={plan.lbCost} /> ・ {timeLabel}
+        </span>
+        <NeuButton className="ml-auto !px-2.5 !py-1 !text-[11px]" onClick={onAdopt}>
+          この案にする
+        </NeuButton>
       </div>
-      <NeuButton className="!px-3 !py-1.5 !text-xs shrink-0" onClick={onPick}>
-        変更
-      </NeuButton>
+      <div className="space-y-0.5 text-xs text-slate-600">
+        {plan.units.map((u, j) => (
+          <div key={j}>
+            <UnitLine u={u} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -89,7 +129,7 @@ function LbCostNote({ lbCost }: { lbCost: number }) {
 }
 
 /** 1ユニット（同一条件でまとめて叩くライブ群）の要約行。 */
-function UnitLine({ u }: { u: MultiLivePlan["units"][number] }) {
+function UnitLine({ u }: { u: MultiLiveUnit }) {
   return (
     <span className="font-mono tabular-nums">
       基礎点{u.basePoint} ・ {u.liveBonus}炊き ・ スコア {u.minScore.toLocaleString()}〜
@@ -99,77 +139,60 @@ function UnitLine({ u }: { u: MultiLivePlan["units"][number] }) {
 }
 
 /**
- * 複数回プラン1件ぶんの選択カード。
- * 一覧では要約だけを出し、曲候補は採択したプランにだけ出す（一覧が曲名で埋まると選べないため）。
+ * 主役カードの1ユニット行（ブリーフP0-3）。
+ * 「基礎点130」で止めず「メルト（182秒）」まで曲名をインライン表示する。
+ * 曲が引けない場合のみ従来どおり基礎点表記に落ちる。
  */
-function MultiPlanCard({
-  plan,
-  index,
-  planCount,
-  selected,
-  onSelect,
+function AdoptedUnitLine({
+  u,
+  candidates,
+  chosen,
+  onPick,
 }: {
-  plan: MultiLivePlan;
-  index: number;
-  /** 前線全体の件数。両端バッジ（回数最少/LB最安）の判定に使う。 */
-  planCount: number;
-  selected: boolean;
-  onSelect: () => void;
+  u: MultiLiveUnit;
+  candidates: ReadonlyArray<SuggestMusic>;
+  chosen: SuggestMusic | undefined;
+  onPick: () => void;
 }) {
+  // 短い順の代替曲を副次表示する（同一基礎点、採択中の曲を除く先頭2件）。
+  const alternatives = candidates.filter((m) => m.id !== chosen?.id).slice(0, 2);
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-      className={`w-full rounded-xl bg-neu p-4 text-left transition ${
-        selected ? "shadow-neu-inset" : "shadow-neu-sm hover:shadow-neu"
-      }`}
-      style={
-        selected
-          ? { outline: "2px solid var(--unit-color)", outlineOffset: "-2px" }
-          : undefined
-      }
-    >
-      <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold text-slate-700">
-        <span
-          className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] text-white"
-          style={{ backgroundColor: selected ? "var(--unit-color)" : "#cbd5e1" }}
-          aria-hidden
-        >
-          {selected ? "✓" : ""}
-        </span>
-        プラン{index + 1}
-        {/* plans は回数昇順のパレート前線（R3-2）: 先頭＝回数最小案・末尾＝LB最安案。
-            1件しかない場合は両者が一致するので「回数最少」だけを出す。 */}
-        {index === 0 && (
-          <span
-            className="rounded px-1.5 py-0.5 text-[10px] text-white"
-            style={{ backgroundColor: "var(--unit-color)" }}
-          >
-            回数最少
+    <li>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-700">
+        {chosen ? (
+          <span className="font-bold">
+            {chosen.title}
+            {chosen.musicTime > 0 && (
+              <span className="ml-1 font-mono text-xs font-normal text-slate-500">
+                （{Math.round(chosen.musicTime)}秒）
+              </span>
+            )}
           </span>
+        ) : (
+          <span className="font-bold text-amber-600">基礎点{u.basePoint}（曲未確定）</span>
         )}
-        {index === planCount - 1 && planCount > 1 && (
-          <span
-            className="rounded px-1.5 py-0.5 text-[10px] text-white"
-            style={{ backgroundColor: "var(--unit-color)" }}
-          >
-            LB最安
-          </span>
-        )}
-        <span className="ml-auto tabular-nums text-slate-500">
-          全{plan.liveCount}回 ・ LB合計{plan.lbCost}
-          <LbCostNote lbCost={plan.lbCost} />
+        <span className="font-mono text-xs tabular-nums text-slate-500">
+          {u.liveBonus}炊き ・ スコア {u.minScore.toLocaleString()}〜{u.maxScore.toLocaleString()}
+          {" "}× {u.count}回（1回 {u.pt.toLocaleString()} Pt）
         </span>
+        <NeuButton className="!px-2.5 !py-1 !text-[11px]" onClick={onPick}>
+          変更
+        </NeuButton>
       </div>
-      <div className="space-y-0.5 text-xs text-slate-600">
-        {plan.units.map((u, j) => (
-          <div key={j}>
-            <UnitLine u={u} />
-          </div>
-        ))}
-      </div>
-    </button>
+      {!chosen && (
+        <p className="mt-1 text-xs text-amber-600">
+          基礎点 {u.basePoint} に一致する曲が見つかりません（配信停止曲は候補から除外しています）。
+        </p>
+      )}
+      {alternatives.length > 0 && (
+        <p className="mt-1 text-[11px] text-slate-400">
+          代替曲:{" "}
+          {alternatives
+            .map((m) => (m.musicTime > 0 ? `${m.title}（${Math.round(m.musicTime)}秒）` : m.title))
+            .join(" / ")}
+        </p>
+      )}
+    </li>
   );
 }
 
@@ -195,9 +218,9 @@ export function LiveAdjustStep({
   finalRunPlan?: FinalRunPlan;
 }) {
   const [selectedPlan, setSelectedPlan] = useState<UniversalPlan | null>(null);
-  // 採択中の複数回プラン。既定は0番＝回数最少（並びは回数昇順のパレート前線。R3-2）。
-  // 再計算でプラン数が減っても壊れないよう、参照時にクランプする。
-  const [multiIndex, setMultiIndex] = useState(0);
+  // 採択中の複数回プラン。既定は主役（plans[0]）。plans/variants が再計算で
+  // 減っても壊れないよう、参照は getAdoptedPlan 側でクランプする。
+  const [adopted, setAdopted] = useState<Adopted>({ kind: "primary" });
   // 基礎点ごとに「実際に叩く曲」の選択を覚える。基礎点をキーにすることで、
   // 同じ基礎点が複数ユニット・複数プランに出ても選択が引き継がれる。
   const [songByBase, setSongByBase] = useState<Record<number, string>>({});
@@ -216,6 +239,15 @@ export function LiveAdjustStep({
     result.currentPt +
     result.mySekaiAllocation.totalPt +
     (live.status === "OK" ? live.requiredPt : 0);
+
+  // 基礎点 → 採択曲の秒数（planDurationSec に渡す純関数）。曲が引けない/時間不明なら undefined。
+  const timeForBase: TimeForBase = (basePoint) => {
+    const chosen = resolveSong(candidatesForBase(musics, basePoint), songByBase, basePoint);
+    return chosen && chosen.musicTime > 0 ? chosen.musicTime : undefined;
+  };
+
+  const primaryPlan = multi && multi.plans.length > 0 ? multi.plans[0] : undefined;
+  const primaryDurationSec = primaryPlan ? planDurationSec(primaryPlan, timeForBase) : undefined;
 
   /**
    * 採択中の複数回プランをPNGで保存する（R3-5.1）。
@@ -238,10 +270,8 @@ export function LiveAdjustStep({
         currentPt: result.currentPt,
         maxScore: result.maxScore,
         songForBase: (basePoint) => {
-          // 画面の UnitSong と同じ解決規則: 選択済みがあればそれ、なければ先頭候補。
-          const candidates = musics.filter((m) => m && m.basePoint === basePoint);
-          const picked =
-            candidates.find((m) => m.id === songByBase[basePoint]) ?? candidates[0];
+          // 画面の曲解決と同じ規則: 選択済みがあればそれ、なければ短い順の先頭候補。
+          const picked = resolveSong(candidatesForBase(musics, basePoint), songByBase, basePoint);
           return picked
             ? { title: picked.title, jacketUrl: `${JACKET_BASE}${picked.jacketLink}` }
             : undefined;
@@ -350,111 +380,153 @@ export function LiveAdjustStep({
         </div>
       ) : null}
 
-      {multi && multi.status === "OK" && multi.plans.length > 0 && (
-        <div className="mb-6">
-          <div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-            複数回プラン（現在の編成のまま曲を選ぶ・第1候補）
-          </div>
-          <p className="mb-2 text-xs text-slate-500">
-            どれか1つを選ぶと、叩く曲の候補が下に出ます。
-            どのプランも合計は {live.requiredPt.toLocaleString()} Pt ちょうどです。
-          </p>
-          <div className="space-y-2">
-            {multi.plans.map((p, i) => (
-              <MultiPlanCard
-                key={i}
-                plan={p}
-                index={i}
-                planCount={multi.plans.length}
-                selected={i === Math.min(multiIndex, multi.plans.length - 1)}
-                onSelect={() => setMultiIndex(i)}
-              />
-            ))}
-          </div>
+      {multi && multi.status === "OK" && multi.plans.length > 0 && primaryPlan && (() => {
+        const chosen = getAdoptedPlan(multi, adopted);
+        if (!chosen) return null;
+        const isPrimary = adopted.kind === "primary" || chosen === primaryPlan;
+        const durationSec = planDurationSec(chosen, timeForBase);
 
-          {/* 採択したプランの実行手順。曲候補はここにだけ出す。 */}
-          {(() => {
-            const idx = Math.min(multiIndex, multi.plans.length - 1);
-            const chosen = multi.plans[idx];
-            return (
-              <div className="mt-3 rounded-xl bg-neu p-4 shadow-neu-inset">
-                <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1">
+        return (
+          <div className="mb-6">
+            <div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+              複数回プラン（現在の編成のまま曲を選ぶ・第1候補）
+            </div>
+
+            {/* 主役カード（ブリーフP0-2）。常時展開・採択中プランを常にここに描画する。 */}
+            <div className="rounded-xl bg-neu p-4 shadow-neu-inset">
+              <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-sm font-bold" style={{ color: "var(--unit-color)" }}>
+                  {isPrimary ? "▸ 主役" : "▸ 採択中"}
+                </span>
+                <span className="text-xs tabular-nums text-slate-500">
+                  {chosen.liveCount}回 ・{" "}
+                  {durationSec !== undefined ? formatApproxMinutes(durationSec) : "所要時間不明"}
+                  {" "}・ LB合計{chosen.lbCost}
+                  <LbCostNote lbCost={chosen.lbCost} /> ・ 合計{" "}
+                  {chosen.totalPt.toLocaleString()} Pt
+                </span>
+                {isPrimary && (
                   <span
-                    className="text-sm font-bold"
-                    style={{ color: "var(--unit-color)" }}
+                    className="rounded px-1.5 py-0.5 text-[10px] text-white"
+                    style={{ backgroundColor: "var(--unit-color)" }}
                   >
-                    採択: プラン{idx + 1}
+                    編成変更なし
                   </span>
-                  <span className="text-xs tabular-nums text-slate-500">
-                    全{chosen.liveCount}回 ・ ライブボーナス合計{chosen.lbCost}個
-                    <LbCostNote lbCost={chosen.lbCost} /> ・ 合計{" "}
-                    {chosen.totalPt.toLocaleString()} Pt
-                  </span>
-                </div>
-                {/* LB消費の現実コストを隠さない（R3-1）。所持上限10個・ラストラン側の
-                    消費（planFinalRun は LB 0〜10 を使う）まで含めた総量をここで開示する。 */}
-                {chosen.lbCost > 10 && (
-                  <p className="mb-2 text-xs text-amber-600">
-                    所持上限10個を超えるため、自然回復待ちまたはクリスタルでの補充が必要です
-                  </p>
                 )}
-                {result.finalRunPt > 0 && (
-                  <p className="mb-2 text-xs text-slate-500">
-                    ラストラン分（選ぶプランにより 0〜10）を含めた総LB消費は {chosen.lbCost}〜
-                    {chosen.lbCost + 10}
-                  </p>
-                )}
-                <ol className="space-y-3">
-                  {chosen.units.map((u, j) => {
-                    const candidates = musics.filter((m) => m && m.basePoint === u.basePoint);
-                    const picked =
-                      candidates.find((m) => m.id === songByBase[u.basePoint]) ?? candidates[0];
+              </div>
+              {/* LB消費の現実コストを隠さない（R3-1）。所持上限10個・ラストラン側の
+                  消費（planFinalRun は LB 0〜10 を使う）まで含めた総量をここで開示する。 */}
+              {chosen.lbCost > 10 && (
+                <p className="mb-2 text-xs text-amber-600">
+                  所持上限10個を超えるため、自然回復待ちまたはクリスタルでの補充が必要です
+                </p>
+              )}
+              {result.finalRunPt > 0 && (
+                <p className="mb-2 text-xs text-slate-500">
+                  ラストラン分（選ぶプランにより 0〜10）を含めた総LB消費は {chosen.lbCost}〜
+                  {chosen.lbCost + 10}
+                </p>
+              )}
+              <ol className="space-y-3">
+                {chosen.units.map((u, j) => {
+                  const candidates = candidatesForBase(musics, u.basePoint);
+                  const picked = resolveSong(candidates, songByBase, u.basePoint);
+                  return (
+                    <AdoptedUnitLine
+                      key={j}
+                      u={u}
+                      candidates={candidates}
+                      chosen={picked}
+                      onPick={() => setPickerBase(u.basePoint)}
+                    />
+                  );
+                })}
+              </ol>
+              {/* 「n回すべてで狙い撃つ」重さと、外したときの実損を明示する（R3-4 MEDIUM）。 */}
+              <p className="mt-3 text-[11px] text-slate-400">
+                全{chosen.liveCount}
+                回それぞれでスコア帯（2万点幅）を狙い撃つ必要があります。帯を外した回のLBは戻りません。
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <NeuButton
+                  className="!py-1.5 !text-xs"
+                  onClick={() => void copyAdoptedPlanImage(chosen)}
+                >
+                  画像をコピー
+                </NeuButton>
+                <NeuButton
+                  className="!py-1.5 !text-xs"
+                  onClick={() => void saveAdoptedPlanImage(chosen)}
+                >
+                  画像で保存
+                </NeuButton>
+                <span className="text-[11px] text-slate-400">
+                  {imageNotice ??
+                    (result.finalRunPt > 0 ? "ラストランも含めた1枚になります" : null)}
+                </span>
+              </div>
+            </div>
+
+            {/* 同じN回で組み替える（LB内訳違い）。既定で畳む。0件なら非表示（ブリーフP0-2）。 */}
+            {multi.sameCountVariants.length > 0 && (
+              <details className="mt-3 rounded-xl bg-neu p-3 shadow-neu-sm">
+                <summary className="cursor-pointer text-xs font-bold text-slate-600">
+                  同じ{primaryPlan.liveCount}回で組み替える（{multi.sameCountVariants.length}件）
+                </summary>
+                <div className="mt-2 space-y-2">
+                  {multi.sameCountVariants.map((v, i) => {
+                    const sec = planDurationSec(v, timeForBase);
                     return (
-                      <li key={j}>
-                        <div className="text-sm text-slate-700">
-                          <span className="mr-1.5 font-bold" style={{ color: "var(--unit-color)" }}>
-                            {j + 1}.
-                          </span>
-                          <UnitLine u={u} />
-                        </div>
-                        <UnitSong
-                          candidates={candidates}
-                          basePoint={u.basePoint}
-                          chosen={picked}
-                          onPick={() => setPickerBase(u.basePoint)}
-                        />
-                      </li>
+                      <CompactPlanCard
+                        key={i}
+                        plan={v}
+                        timeLabel={sec !== undefined ? formatApproxMinutes(sec) : "所要時間不明"}
+                        onAdopt={() => setAdopted({ kind: "variant", index: i })}
+                      />
                     );
                   })}
-                </ol>
-                {/* 「n回すべてで狙い撃つ」重さと、外したときの実損を明示する（R3-4 MEDIUM）。 */}
-                <p className="mt-3 text-[11px] text-slate-400">
-                  全{chosen.liveCount}
-                  回それぞれでスコア帯（2万点幅）を狙い撃つ必要があります。帯を外した回のLBは戻りません。
-                </p>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <NeuButton
-                    className="!py-1.5 !text-xs"
-                    onClick={() => void copyAdoptedPlanImage(chosen)}
-                  >
-                    画像をコピー
-                  </NeuButton>
-                  <NeuButton
-                    className="!py-1.5 !text-xs"
-                    onClick={() => void saveAdoptedPlanImage(chosen)}
-                  >
-                    画像で保存
-                  </NeuButton>
-                  <span className="text-[11px] text-slate-400">
-                    {imageNotice ??
-                      (result.finalRunPt > 0 ? "ラストランも含めた1枚になります" : null)}
-                  </span>
                 </div>
-              </div>
-            );
-          })()}
-        </div>
-      )}
+              </details>
+            )}
+
+            {/* 本数を増やしてLBを節約（非推奨）。畳んだうえで追加時間を明示する（ブリーフP0-2・診断1）。 */}
+            {multi.plans.length > 1 && (
+              <details className="mt-3 rounded-xl bg-neu p-3 shadow-neu-sm">
+                <summary className="cursor-pointer text-xs font-bold text-slate-600">
+                  本数を増やしてLBを節約（非推奨
+                  {(() => {
+                    const lastSec = planDurationSec(multi.plans[multi.plans.length - 1], timeForBase);
+                    if (primaryDurationSec === undefined || lastSec === undefined) return "";
+                    const deltaMin = Math.ceil((lastSec - primaryDurationSec) / 60);
+                    return deltaMin > 0 ? `・+${deltaMin}分〜` : "";
+                  })()}
+                  ）
+                </summary>
+                <div className="mt-2 space-y-2">
+                  {multi.plans.slice(1).map((p, i) => {
+                    const sec = planDurationSec(p, timeForBase);
+                    let timeLabel = sec !== undefined ? formatApproxMinutes(sec) : "所要時間不明";
+                    if (sec !== undefined && primaryDurationSec !== undefined) {
+                      const deltaMin = Math.ceil((sec - primaryDurationSec) / 60);
+                      timeLabel += deltaMin > 0 ? `（主役比 +${deltaMin}分）` : "";
+                    } else if (sec === undefined || primaryDurationSec === undefined) {
+                      timeLabel += "（主役比 時間増）";
+                    }
+                    return (
+                      <CompactPlanCard
+                        key={i}
+                        plan={p}
+                        timeLabel={timeLabel}
+                        onAdopt={() => setAdopted({ kind: "frontier", index: i + 1 })}
+                      />
+                    );
+                  })}
+                </div>
+              </details>
+            )}
+          </div>
+        );
+      })()}
 
       {multi && multi.reason === "OVER_CAP" && (
         <div className="mb-6 rounded-xl bg-rose-50 p-6 text-center text-sm text-rose-600">
@@ -471,30 +543,45 @@ export function LiveAdjustStep({
 
       {/* NO_EXACT でも第2候補が成立していれば着地はできる。その場合まで赤エラーを出すと
           「検証済み(isVerified)なのに失敗表示」という矛盾になるので、深刻度を出し分ける。 */}
-      {/* NO_EXACT は2ケースで出し分ける（R3-3）。
-          死角ケース: 必要調整量が1回の最小獲得Ptを下回り、原理的に着地不能。
-          「数ポイントずらす」では絶対に抜けられないため、必要なズラし幅を具体値で示す。
-          それ以外: 探索範囲内で見つからなかっただけなので、断定を避けた案内にする。 */}
+      {/* NO_EXACT は landability で出し分ける（R3-3 / P2-7）。
+          UNREACHABLE: 原理的に着地不能。「数ポイントずらす」では絶対に抜けられないため、
+          必要なズラし幅を具体値で断定形で示す。
+          UNPROVEN: 探索範囲内で見つからなかっただけなので、断定を避けた案内にする。 */}
       {multi && multi.reason === "NO_EXACT" && (
         <div
           className={`mb-6 rounded-xl p-6 text-center text-sm ${
             live.status === "OK" ? "bg-neu text-slate-500 shadow-neu-inset" : "bg-rose-50 text-rose-600"
           }`}
         >
-          {live.requiredPt > 0 && multi.minPtPerLive > 0 && live.requiredPt < multi.minPtPerLive ? (
-            <>
-              必要調整量{" "}
-              <span className="font-bold tabular-nums">{live.requiredPt.toLocaleString()} Pt</span>{" "}
-              は1回のライブの最小獲得{" "}
-              <span className="font-bold tabular-nums">
-                {multi.minPtPerLive.toLocaleString()} Pt
-              </span>{" "}
-              を下回るため着地できません。
-              <span className="mt-1 block">
-                目標を {live.requiredPt.toLocaleString()} Pt 下げて調整不要にするか、
-                {(multi.minPtPerLive - live.requiredPt).toLocaleString()} Pt 以上引き上げてください。
-              </span>
-            </>
+          {multi.landability === "UNREACHABLE" ? (
+            live.requiredPt > 0 && multi.minPtPerLive > 0 && live.requiredPt < multi.minPtPerLive ? (
+              <>
+                必要調整量{" "}
+                <span className="font-bold tabular-nums">{live.requiredPt.toLocaleString()} Pt</span>{" "}
+                は1回のライブの最小獲得{" "}
+                <span className="font-bold tabular-nums">
+                  {multi.minPtPerLive.toLocaleString()} Pt
+                </span>{" "}
+                を下回るため着地できません。
+                <span className="mt-1 block">
+                  目標を {live.requiredPt.toLocaleString()} Pt 下げて調整不要にするか、
+                  {(multi.minPtPerLive - live.requiredPt).toLocaleString()} Pt 以上引き上げてください。
+                </span>
+              </>
+            ) : (
+              <>
+                この残額はどの組合せでも着地できません（1回の最小獲得{" "}
+                <span className="font-bold tabular-nums">
+                  {multi.minPtPerLive.toLocaleString()} Pt
+                </span>
+                ・3回以内の全組合せを確認済み）。
+                <span className="mt-1 block">
+                  {live.status === "OK"
+                    ? "下の編成組み替え案（第2候補）で着地できます。"
+                    : "目標を見直して再計算するか、下の編成組み替え案（第2候補）を確認してください。"}
+                </span>
+              </>
+            )
           ) : (
             <>
               探索範囲（最大{multi.liveCountCap}回・Pt値2種類の組合せ）では厳密一致が

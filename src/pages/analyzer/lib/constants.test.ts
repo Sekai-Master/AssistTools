@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ADJUST_LIVE_OVERHEAD_SEC,
   DEFAULT_MAX_SCORE,
   DEFAULT_MAX_SCORE_N,
   MAX_SCORE_CLIP,
@@ -73,5 +74,13 @@ describe("maxScoreNOf", () => {
     // normalizeMaxScore を通さず巨大値を直接渡しても絶対上限で頭打ち
     expect(maxScoreNOf(100_000_000)).toBe(MAX_SCORE_N);
     expect(maxScoreNOf(MAX_SCORE_N * SCORE_STEP * 10)).toBe(MAX_SCORE_N);
+  });
+});
+
+describe("ADJUST_LIVE_OVERHEAD_SEC", () => {
+  it("実測値 47 秒で凍結されている", () => {
+    // 所要時間表示（planDuration.ts）の基準。ここが黙って動くと
+    // 「約N分」が全プランで一斉にズレるので、実測値そのものを固定する。
+    expect(ADJUST_LIVE_OVERHEAD_SEC).toBe(47);
   });
 });
