@@ -18,6 +18,13 @@ interface Props {
   bonus: number;
   selectedSong?: AnalyzerMusic;
   onChangeSong: (id: string) => void;
+  /**
+   * 採択中のラストランプラン。親が保持する（画像出力に同じ選択を反映するため）。
+   * ここを内部stateにすると、Step②の画像が「ユーザーが選んだ案」ではなく
+   * 常に先頭案を描いてしまう。
+   */
+  selectedPlan: UniversalPlan | null;
+  onSelectPlan: (plan: UniversalPlan | null) => void;
 }
 
 /** Step3: ラストラン。楽曲を変えると親で再計算し、推奨プランを出す。 */
@@ -29,8 +36,9 @@ export function FinalRunStep({
   bonus,
   selectedSong,
   onChangeSong,
+  selectedPlan,
+  onSelectPlan,
 }: Props) {
-  const [selectedPlan, setSelectedPlan] = useState<UniversalPlan | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
   const recommended = useMemo(
@@ -80,7 +88,7 @@ export function FinalRunStep({
           plans={result.finalRunPlans}
           recommendedPlans={recommended}
           selectedPlan={selectedPlan}
-          onSelectPlan={setSelectedPlan}
+          onSelectPlan={onSelectPlan}
           modalTitle="ラストラン 調整プラン一覧"
           jacketSrc={jacketSrc}
           songTitle={selectedSong?.title}
@@ -101,7 +109,7 @@ export function FinalRunStep({
           meta={(m) => `基礎点 ${m.basePoint}`}
           onSelect={(m) => {
             onChangeSong(m.id);
-            setSelectedPlan(null);
+            onSelectPlan(null);
             setModalOpen(false);
           }}
           onClose={() => setModalOpen(false)}

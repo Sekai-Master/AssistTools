@@ -36,6 +36,10 @@ export function buildAdjustPlanCanvasData(args: {
   plan: MultiLivePlan;
   /** ライブ調整で獲得する必要ポイント（liveAdjustment.requiredPt）。 */
   requiredPt: number;
+  /** 着地させる目標ポイント（result.targetPt）。画像の主役。 */
+  targetPt: number;
+  /** 起点の現在ポイント（result.currentPt）。 */
+  currentPt: number;
   /** 正規化済みのスコア上限（result.maxScore）。R3-0の前提を画像にも残す。 */
   maxScore: number;
   /** 基礎点 → 選択中の曲。LiveAdjustStep の songByBase 解決結果をそのまま渡す。 */
@@ -44,17 +48,19 @@ export function buildAdjustPlanCanvasData(args: {
   finalRun?: AdjustCanvasFinalRun;
   accent: string;
 }): PlanCanvasData {
-  const { plan, requiredPt, maxScore, songForBase, finalRun, accent } = args;
+  const { plan, requiredPt, targetPt, currentPt, maxScore, songForBase, finalRun, accent } = args;
 
+  // 左カラムは「何回 × 何炊き」に統一する。焚き数は実行時に一番間違えやすく、
+  // 間違えるとライボが無駄に飛ぶ数字なので、専用の位置に固定して読み落とさせない。
   const rows: PlanCanvasRow[] = plan.units.map((u) => {
     const song = songForBase(u.basePoint);
     return {
-      time: `${u.count}回`,
+      time: `${u.count}回 × ${u.liveBonus}炊き`,
       // 曲が未選択でも基礎点は必ず出す（画像だけ見ても何を叩くか分かるように）。
       label: song
         ? `${song.title}（基礎点${u.basePoint}）`
         : `基礎点${u.basePoint}の曲（候補なし）`,
-      sub: `${u.liveBonus}炊き ・ スコア ${u.minScore.toLocaleString()}〜${u.maxScore.toLocaleString()}（1回 ${u.pt.toLocaleString()} Pt）`,
+      sub: `スコア ${u.minScore.toLocaleString()}〜${u.maxScore.toLocaleString()}（1回 ${u.pt.toLocaleString()} Pt）`,
       percent: `+${(u.pt * u.count).toLocaleString()} Pt`,
       warn: false,
       jacket: song?.jacketUrl,
@@ -66,12 +72,12 @@ export function buildAdjustPlanCanvasData(args: {
     const p = finalRun.plan;
     const rest = finalRun.planCount - 1;
     rows.push({
-      time: "ラストラン",
+      time: p ? `ラストラン × ${p.liveBonus}炊き` : "ラストラン",
       label: finalRun.song
         ? `${finalRun.song.title}（基礎点${finalRun.basePoint}）`
         : `基礎点${finalRun.basePoint}の曲`,
       sub: p
-        ? `${p.liveBonus}炊き ・ ボーナス${p.bonus}% ・ スコア ${p.minScore.toLocaleString()}〜${p.maxScore.toLocaleString()}` +
+        ? `ボーナス${p.bonus}% ・ スコア ${p.minScore.toLocaleString()}〜${p.maxScore.toLocaleString()}` +
           (rest > 0 ? `（他${rest}案）` : "")
         : "条件を満たすプランが見つかりませんでした",
       percent: `+${finalRun.pt.toLocaleString()} Pt`,
@@ -87,13 +93,15 @@ export function buildAdjustPlanCanvasData(args: {
   const totalLb = plan.lbCost + finalLb;
 
   return {
-    heading: finalRun ? "ポイント調整 プラン（調整＋ラストラン）" : "ポイント調整 ライブ調整プラン",
-    songTitle: `全${totalLives}回 ・ LB合計${totalLb}`,
+    heading: "ポイント調整プラン",
+    // 主役は「どこに着地するか」。全ツール共通で songTitle が最大文字なのでここに置く。
+    songTitle: `目標 ${targetPt.toLocaleString()} Pt`,
+    // meta は2行までしか入らない（HEADER_H の都合）。詰め込みすぎない。
     meta: [
+      `現在 ${currentPt.toLocaleString()} → 差分 ${(targetPt - currentPt).toLocaleString()} Pt`,
       finalRun
-        ? `調整 ${requiredPt.toLocaleString()} Pt ＋ ラストラン ${finalRun.pt.toLocaleString()} Pt`
-        : `必要ポイント ${requiredPt.toLocaleString()} Pt`,
-      `スコア上限 ${maxScore.toLocaleString()}`,
+        ? `調整 ${requiredPt.toLocaleString()} ＋ ラストラン ${finalRun.pt.toLocaleString()} ・ スコア上限 ${maxScore.toLocaleString()}`
+        : `調整 ${requiredPt.toLocaleString()} Pt ・ スコア上限 ${maxScore.toLocaleString()}`,
     ],
     rows,
     summary: [

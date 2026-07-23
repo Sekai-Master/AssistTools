@@ -9,6 +9,7 @@ import { byBonusDesc, recommendPlans } from "../lib/recommendPlans";
 import { onJacketError } from "../../../lib/img";
 import type { CalculationResultV6 } from "../lib/calculator";
 import type { MultiLivePlan } from "../lib/multiLiveAdjust";
+import type { FinalRunPlan } from "../lib/finalRun";
 import { drawPlanCanvas } from "../../refresh/lib/planCanvas";
 import { buildAdjustPlanCanvasData } from "../lib/adjustPlanCanvas";
 
@@ -178,6 +179,7 @@ export function LiveAdjustStep({
   musics = [],
   aliases = [],
   finalSong,
+  finalRunPlan,
 }: {
   result: CalculationResultV6;
   /** 曲サジェスト用の楽曲リスト。省略時はサジェストなしで動く。 */
@@ -186,6 +188,11 @@ export function LiveAdjustStep({
   aliases?: AliasEntry[];
   /** ラストランの最終楽曲。画像にラストランを含めるために使う。 */
   finalSong?: SuggestMusic;
+  /**
+   * Step③で採択中のラストランプラン（未選択なら推奨順の先頭）。
+   * 画像が「ユーザーが選んだ案」を描くために親から受け取る。
+   */
+  finalRunPlan?: FinalRunPlan;
 }) {
   const [selectedPlan, setSelectedPlan] = useState<UniversalPlan | null>(null);
   // 採択中の複数回プラン。既定は0番＝回数最少（並びは回数昇順のパレート前線。R3-2）。
@@ -227,6 +234,8 @@ export function LiveAdjustStep({
       buildAdjustPlanCanvasData({
         plan: chosen,
         requiredPt: live.requiredPt,
+        targetPt: result.targetPt,
+        currentPt: result.currentPt,
         maxScore: result.maxScore,
         songForBase: (basePoint) => {
           // 画面の UnitSong と同じ解決規則: 選択済みがあればそれ、なければ先頭候補。
@@ -246,7 +255,7 @@ export function LiveAdjustStep({
                 song: finalSong
                   ? { title: finalSong.title, jacketUrl: `${JACKET_BASE}${finalSong.jacketLink}` }
                   : undefined,
-                plan: result.finalRunPlans[0],
+                plan: finalRunPlan,
                 planCount: result.finalRunPlans.length,
               }
             : undefined,
