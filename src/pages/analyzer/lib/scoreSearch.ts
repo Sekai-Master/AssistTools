@@ -1,5 +1,5 @@
 import { LIVE_BONUS_MULTIPLIERS, calcLivePt } from "./calcLivePt";
-import { MAX_SCORE_N, SCORE_STEP } from "./constants";
+import { DEFAULT_MAX_SCORE_N, SCORE_STEP } from "./constants";
 
 /**
  * スコア帯の逆算（共通ルーチン）。
@@ -39,6 +39,12 @@ export interface ScoreSearchOptions {
    * 獲得Ptは必ず倍率の倍数になるので結果は不変（finalRun の枝刈りを再現）。
    */
   pruneByMultiplier?: boolean;
+  /**
+   * 探索するスコア係数の上限（ユーザー設定のスコア上限から maxScoreNOf で導く）。
+   * 既定はスコア上限 1,100,000 相当。到達不能なスコアを要求するプランを
+   * 「検証済み」として出さないためのガードなので、無闇に上げないこと。
+   */
+  maxScoreN?: number;
 }
 
 /** 固定の base/bonus/lb で target になる最初のスコア帯 N を返す。無ければ -1。 */
@@ -46,9 +52,10 @@ export function findScoreStep(
   base: number,
   bonus: number,
   liveBonus: number,
-  target: number
+  target: number,
+  maxScoreN: number = DEFAULT_MAX_SCORE_N
 ): number {
-  for (let n = 0; n <= MAX_SCORE_N; n++) {
+  for (let n = 0; n <= maxScoreN; n++) {
     if (calcLivePt(base, bonus, n * SCORE_STEP, liveBonus) === target) return n;
   }
   return -1;
@@ -70,10 +77,11 @@ function planAt(liveBonus: number, bonus10x: number, n: number): ScorePlan {
 export function collectScorePlans(opts: ScoreSearchOptions): ScorePlan[] {
   const { base, target, liveBonuses, bonusMax10x, bonusStep10x, bonusOuter, pruneByMultiplier } =
     opts;
+  const maxScoreN = opts.maxScoreN ?? DEFAULT_MAX_SCORE_N;
   const plans: ScorePlan[] = [];
 
   const scan = (lb: number, b10: number) => {
-    for (let n = 0; n <= MAX_SCORE_N; n++) {
+    for (let n = 0; n <= maxScoreN; n++) {
       if (calcLivePt(base, b10 / 10, n * SCORE_STEP, lb) === target) {
         plans.push(planAt(lb, b10, n));
       }

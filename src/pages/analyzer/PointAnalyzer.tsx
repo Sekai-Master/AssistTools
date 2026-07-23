@@ -29,6 +29,9 @@ export default function PointAnalyzer() {
   const [hasWorldPass, setHasWorldPass] = useState(false);
   // マイセカイを使わない周回者向けモード。ONが従来挙動（既定）。
   const [useMySekai, setUseMySekai] = useState(true);
+  // スコア上限（詳細設定）。文字列のまま持ち、数値化は計算時に行う。
+  // 空欄・0以下・非数は undefined を渡し、lib 側の既定値（1,100,000）に正規化させる。
+  const [maxScoreInput, setMaxScoreInput] = useState("");
   const [songId, setSongId] = useState(ENVY_ID);
   const [songModalOpen, setSongModalOpen] = useState(false);
   const [result, setResult] = useState<CalculationResultV6 | null>(null);
@@ -36,6 +39,14 @@ export default function PointAnalyzer() {
   const resultRef = useRef<HTMLDivElement>(null);
   // 計算ボタン押下時だけ結果へスクロールする（Step3の曲変更での再計算では飛ばない）。
   const scrollOnResult = useRef(false);
+  // 計算実行時に適用したオプションのスナップショット。
+  // recalcWithSong（Step3の曲変更）が「いまの」state を読むと、計算後にトグルや
+  // スコア上限を触ってから曲を変えた場合に、計算ボタンを押していないのに
+  // モードごと結果が入れ替わってしまう（R3-4 LOW）。表示中の結果と同じ条件で
+  // 再計算するため、handleCalc 時点の値を固定して使う。
+  const appliedOptions = useRef<{ useMySekai: boolean; maxScore?: number }>({
+    useMySekai: true,
+  });
 
   const bonusNum = parseAmount(bonus, true);
 
@@ -76,10 +87,18 @@ export default function PointAnalyzer() {
     if (f > tv - c) return reject("最終獲得希望ポイントが差分を超えています。");
     setError(null);
     scrollOnResult.current = true;
-    setResult(calculatePlanV6(c, tv, f, tal, bon, hasWorldPass, songId, musicList, { useMySekai }));
+    // 0以下・非数（parseAmount は 0 を返す）は undefined にして lib 側の既定値に委ねる。
+    const ms = parseAmount(maxScoreInput);
+    const options = { useMySekai, maxScore: ms > 0 ? ms : undefined };
+    // Step3の曲変更再計算で同じ条件を使えるよう、適用オプションを固定する。
+    appliedOptions.current = options;
+    setResult(calculatePlanV6(c, tv, f, tal, bon, hasWorldPass, songId, musicList, options));
   };
 
   // Step3で楽曲を変えたときの再計算（検証済み前提・スクロールはしない）。
+  // オプションは「いまの」state ではなく handleCalc 時のスナップショットを使う。
+  // state を読むと、計算後にトグルや上限を変更してから曲を変えた場合に
+  // 表示中の結果と違う条件で黙って再計算されてしまうため（R3-4 LOW）。
   const recalcWithSong = (newId: string) => {
     setSongId(newId);
     if (!result) return;
@@ -93,7 +112,7 @@ export default function PointAnalyzer() {
         hasWorldPass,
         newId,
         musicList,
-        { useMySekai }
+        appliedOptions.current
       )
     );
   };
@@ -172,6 +191,19 @@ export default function PointAnalyzer() {
               placeholder="例: 250.5"
             />
           </Field>
+          <Field
+            label="スコア上限（詳細設定）"
+            htmlFor="pa-max-score"
+            hint="調整・ラストランで狙えるスコアの上限。空欄で既定値（内部上限 3,000,000）"
+          >
+            <NeuInput
+              id="pa-max-score"
+              inputMode="numeric"
+              value={maxScoreInput}
+              onChange={(e) => setMaxScoreInput(e.target.value)}
+              placeholder="既定 1,100,000"
+            />
+          </Field>
           <Switch checked={hasWorldPass} onChange={setHasWorldPass} label="ワールドパス 有効" />
           <Switch checked={useMySekai} onChange={setUseMySekai} label="マイセカイを利用する" />
           {/* OFF時は採取しないので単価表示は出さない（無関係な数字で混乱させないため）。 */}
@@ -247,14 +279,28 @@ export default function PointAnalyzer() {
                     マイセカイを利用する設定に切り替えるか、通常の周回で差分を縮めてから再計算してください。
                   </p>
                 ) : result.useMySekai === false && resultMulti?.reason === "NO_EXACT" ? (
-                  <p className="mt-1 text-xs">
-                    {result.liveAdjustment.requiredPt.toLocaleString()} Pt
-                    に厳密一致する調整ライブの組合せは
-                    {resultMulti.searchedUpToCount != null &&
-                      `最小回数から ${resultMulti.searchedUpToCount} 回まで`}
-                    探した範囲では見つかりませんでした。
-                    目標を数ポイントずらすか、ライブ調整の編成組み替え案（第2候補）を確認してください。
-                  </p>
+                  // 死角ケース（必要調整量が1回の最小獲得Ptを下回る）は「数ポイントずらす」では
+                  // 絶対に抜けられないため、実際に必要なズラし幅を具体的な数値で案内する（R3-3）。
+                  result.liveAdjustment.requiredPt > 0 &&
+                  resultMulti.minPtPerLive > 0 &&
+                  result.liveAdjustment.requiredPt < resultMulti.minPtPerLive ? (
+                    <p className="mt-1 text-xs">
+                      必要調整量 {result.liveAdjustment.requiredPt.toLocaleString()} Pt
+                      は1回のライブの最小獲得 {resultMulti.minPtPerLive.toLocaleString()} Pt
+                      を下回るため着地できません。 目標を{" "}
+                      {result.liveAdjustment.requiredPt.toLocaleString()} Pt
+                      下げて調整不要にするか、
+                      {(
+                        resultMulti.minPtPerLive - result.liveAdjustment.requiredPt
+                      ).toLocaleString()}{" "}
+                      Pt 以上引き上げてください。
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs">
+                      探索範囲（最大50回・Pt値2種類の組合せ）では厳密一致が見つかりませんでした。
+                      目標を見直して再計算するか、編成組み替え案（第2候補）を確認してください。
+                    </p>
+                  )
                 ) : (
                   <p className="mt-1 text-xs">
                     {(result.targetPt - result.finalEstimatedPt).toLocaleString()} Pt

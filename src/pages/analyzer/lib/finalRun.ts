@@ -1,4 +1,9 @@
-import { BONUS_STEP_10X, MAX_LIVE_BONUS, MAX_SEARCH_BONUS_10X } from "./constants";
+import {
+  BONUS_STEP_10X,
+  DEFAULT_MAX_SCORE_N,
+  MAX_LIVE_BONUS,
+  MAX_SEARCH_BONUS_10X,
+} from "./constants";
 import { type ScorePlan, collectScorePlans } from "./scoreSearch";
 
 /**
@@ -27,7 +32,8 @@ function searchedMaxBonus10x(bonus: number): number {
 export function planFinalRun(
   finalRunPt: number,
   base: number,
-  bonus: number
+  bonus: number,
+  maxScoreN: number = DEFAULT_MAX_SCORE_N
 ): FinalRunPlan[] {
   if (finalRunPt <= 0) return [];
 
@@ -39,6 +45,7 @@ export function planFinalRun(
     bonusStep10x: BONUS_STEP_10X,
     bonusOuter: true,
     pruneByMultiplier: true,
+    maxScoreN,
   });
 }
 

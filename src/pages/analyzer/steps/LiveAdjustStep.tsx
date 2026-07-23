@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { StepSection } from "./StepSection";
 import { NeuButton } from "../../../components/ui/NeuButton";
 import { SongSearchModal } from "../../../components/SongSearchModal";
@@ -9,6 +9,8 @@ import { byBonusDesc, recommendPlans } from "../lib/recommendPlans";
 import { onJacketError } from "../../../lib/img";
 import type { CalculationResultV6 } from "../lib/calculator";
 import type { MultiLivePlan } from "../lib/multiLiveAdjust";
+import { drawPlanCanvas } from "../../refresh/lib/planCanvas";
+import { buildAdjustPlanCanvasData } from "../lib/adjustPlanCanvas";
 
 const ENVY_JACKET = `${import.meta.env.BASE_URL}MusicDatas/jacket/jacket_s_074.webp`;
 
@@ -68,6 +70,23 @@ function UnitSong({
   );
 }
 
+/**
+ * LB消費の現実コスト換算（R3-1）。
+ * ゲーム仕様: 自然回復30分/個・クリスタル購入10個/個・所持上限10個。
+ * 生の個数だけでは重さが伝わらない（480個＝自然回復10日）ため、時間と
+ * クリスタルの両換算を併記する。lbCost 0 のときは換算不要なので出さない。
+ */
+function LbCostNote({ lbCost }: { lbCost: number }) {
+  if (lbCost <= 0) return null;
+  // 0.5刻みの時間は「7.5時間」のように小数で表示する。
+  return (
+    <>
+      （回復 約{(lbCost * 0.5).toLocaleString()}時間 ・ クリスタル約
+      {(lbCost * 10).toLocaleString()}個）
+    </>
+  );
+}
+
 /** 1ユニット（同一条件でまとめて叩くライブ群）の要約行。 */
 function UnitLine({ u }: { u: MultiLivePlan["units"][number] }) {
   return (
@@ -85,11 +104,14 @@ function UnitLine({ u }: { u: MultiLivePlan["units"][number] }) {
 function MultiPlanCard({
   plan,
   index,
+  planCount,
   selected,
   onSelect,
 }: {
   plan: MultiLivePlan;
   index: number;
+  /** 前線全体の件数。両端バッジ（回数最少/LB最安）の判定に使う。 */
+  planCount: number;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -116,7 +138,17 @@ function MultiPlanCard({
           {selected ? "✓" : ""}
         </span>
         プラン{index + 1}
+        {/* plans は回数昇順のパレート前線（R3-2）: 先頭＝回数最小案・末尾＝LB最安案。
+            1件しかない場合は両者が一致するので「回数最少」だけを出す。 */}
         {index === 0 && (
+          <span
+            className="rounded px-1.5 py-0.5 text-[10px] text-white"
+            style={{ backgroundColor: "var(--unit-color)" }}
+          >
+            回数最少
+          </span>
+        )}
+        {index === planCount - 1 && planCount > 1 && (
           <span
             className="rounded px-1.5 py-0.5 text-[10px] text-white"
             style={{ backgroundColor: "var(--unit-color)" }}
@@ -126,6 +158,7 @@ function MultiPlanCard({
         )}
         <span className="ml-auto tabular-nums text-slate-500">
           全{plan.liveCount}回 ・ LB合計{plan.lbCost}
+          <LbCostNote lbCost={plan.lbCost} />
         </span>
       </div>
       <div className="space-y-0.5 text-xs text-slate-600">
@@ -152,7 +185,7 @@ export function LiveAdjustStep({
   aliases?: AliasEntry[];
 }) {
   const [selectedPlan, setSelectedPlan] = useState<UniversalPlan | null>(null);
-  // 採択中の複数回プラン。既定は0番＝LB最安（並びは lbCost 昇順）。
+  // 採択中の複数回プラン。既定は0番＝回数最少（並びは回数昇順のパレート前線。R3-2）。
   // 再計算でプラン数が減っても壊れないよう、参照時にクランプする。
   const [multiIndex, setMultiIndex] = useState(0);
   // 基礎点ごとに「実際に叩く曲」の選択を覚える。基礎点をキーにすることで、
@@ -160,6 +193,8 @@ export function LiveAdjustStep({
   const [songByBase, setSongByBase] = useState<Record<number, string>>({});
   // 曲選択モーダルを開いている基礎点。null で閉じる。
   const [pickerBase, setPickerBase] = useState<number | null>(null);
+  // PNG書き出し専用のオフスクリーンcanvas（refresh の PlanTimeline と同じパターン）。
+  const exportCanvasRef = useRef<HTMLCanvasElement>(null);
   const live = result.liveAdjustment;
   const plans = live.adjustmentPlans ?? [];
   // 複数回プラン（曲側・第1候補）。calculator が OFF 時のみ設定するが、
@@ -169,6 +204,42 @@ export function LiveAdjustStep({
     result.currentPt +
     result.mySekaiAllocation.totalPt +
     (live.status === "OK" ? live.requiredPt : 0);
+
+  /**
+   * 採択中の複数回プランをPNGで保存する（R3-5.1）。
+   * 曲・LB・スコア帯・回数・合計Pt・総回数・LB合計が画像単体で読めること。
+   * canvas生成→toDataURL→ダウンロードの流れは refresh の PlanTimeline を踏襲。
+   */
+  const saveAdoptedPlanImage = async (chosen: MultiLivePlan) => {
+    const canvas = exportCanvasRef.current;
+    if (!canvas) return;
+    // 画面のユニットカラーを画像のアクセントにも使う（PlanTimeline と同じ取得方法。
+    // display:none だと --unit-color が取れないブラウザがあるため canvas は画面外配置）。
+    const accent =
+      getComputedStyle(canvas).getPropertyValue("--unit-color").trim() || "#ff9900";
+    await drawPlanCanvas(
+      canvas,
+      buildAdjustPlanCanvasData({
+        plan: chosen,
+        requiredPt: live.requiredPt,
+        maxScore: result.maxScore,
+        songForBase: (basePoint) => {
+          // 画面の UnitSong と同じ解決規則: 選択済みがあればそれ、なければ先頭候補。
+          const candidates = musics.filter((m) => m && m.basePoint === basePoint);
+          const picked =
+            candidates.find((m) => m.id === songByBase[basePoint]) ?? candidates[0];
+          return picked
+            ? { title: picked.title, jacketUrl: `${JACKET_BASE}${picked.jacketLink}` }
+            : undefined;
+        },
+        accent,
+      })
+    );
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/png");
+    a.download = "adjust-plan.png";
+    a.click();
+  };
 
   // 第2候補（編成組み替え・ボーナス掃引）。ON時は従来どおりこれが唯一の表示なので
   // マークアップは一切変えず、OFF時のみ小見出しの下に降格させる（R2-5: 現編成のまま解ける案が上）。
@@ -247,6 +318,7 @@ export function LiveAdjustStep({
                 key={i}
                 plan={p}
                 index={i}
+                planCount={multi.plans.length}
                 selected={i === Math.min(multiIndex, multi.plans.length - 1)}
                 onSelect={() => setMultiIndex(i)}
               />
@@ -267,10 +339,24 @@ export function LiveAdjustStep({
                     採択: プラン{idx + 1}
                   </span>
                   <span className="text-xs tabular-nums text-slate-500">
-                    全{chosen.liveCount}回 ・ ライブボーナス合計{chosen.lbCost}個 ・ 合計{" "}
+                    全{chosen.liveCount}回 ・ ライブボーナス合計{chosen.lbCost}個
+                    <LbCostNote lbCost={chosen.lbCost} /> ・ 合計{" "}
                     {chosen.totalPt.toLocaleString()} Pt
                   </span>
                 </div>
+                {/* LB消費の現実コストを隠さない（R3-1）。所持上限10個・ラストラン側の
+                    消費（planFinalRun は LB 0〜10 を使う）まで含めた総量をここで開示する。 */}
+                {chosen.lbCost > 10 && (
+                  <p className="mb-2 text-xs text-amber-600">
+                    所持上限10個を超えるため、自然回復待ちまたはクリスタルでの補充が必要です
+                  </p>
+                )}
+                {result.finalRunPt > 0 && (
+                  <p className="mb-2 text-xs text-slate-500">
+                    ラストラン分（選ぶプランにより 0〜10）を含めた総LB消費は {chosen.lbCost}〜
+                    {chosen.lbCost + 10}
+                  </p>
+                )}
                 <ol className="space-y-3">
                   {chosen.units.map((u, j) => {
                     const candidates = musics.filter((m) => m && m.basePoint === u.basePoint);
@@ -294,9 +380,19 @@ export function LiveAdjustStep({
                     );
                   })}
                 </ol>
+                {/* 「n回すべてで狙い撃つ」重さと、外したときの実損を明示する（R3-4 MEDIUM）。 */}
                 <p className="mt-3 text-[11px] text-slate-400">
-                  各回とも、表示されたスコア帯（2万点幅）に収める必要があります。
+                  全{chosen.liveCount}
+                  回それぞれでスコア帯（2万点幅）を狙い撃つ必要があります。帯を外した回のLBは戻りません。
                 </p>
+                <div className="mt-3">
+                  <NeuButton
+                    className="!py-1.5 !text-xs"
+                    onClick={() => void saveAdoptedPlanImage(chosen)}
+                  >
+                    画像で保存
+                  </NeuButton>
+                </div>
               </div>
             );
           })()}
@@ -318,21 +414,41 @@ export function LiveAdjustStep({
 
       {/* NO_EXACT でも第2候補が成立していれば着地はできる。その場合まで赤エラーを出すと
           「検証済み(isVerified)なのに失敗表示」という矛盾になるので、深刻度を出し分ける。 */}
+      {/* NO_EXACT は2ケースで出し分ける（R3-3）。
+          死角ケース: 必要調整量が1回の最小獲得Ptを下回り、原理的に着地不能。
+          「数ポイントずらす」では絶対に抜けられないため、必要なズラし幅を具体値で示す。
+          それ以外: 探索範囲内で見つからなかっただけなので、断定を避けた案内にする。 */}
       {multi && multi.reason === "NO_EXACT" && (
         <div
           className={`mb-6 rounded-xl p-6 text-center text-sm ${
             live.status === "OK" ? "bg-neu text-slate-500 shadow-neu-inset" : "bg-rose-50 text-rose-600"
           }`}
         >
-          <span className="font-bold tabular-nums">{live.requiredPt.toLocaleString()} Pt</span> に
-          厳密一致する複数回プランは
-          {multi.searchedUpToCount != null && <>最小回数から {multi.searchedUpToCount} 回まで</>}
-          探した範囲では見つかりませんでした。
-          <span className="mt-1 block">
-            {live.status === "OK"
-              ? "下の編成組み替え案（第2候補）で着地できます。"
-              : "目標を数ポイントずらすか、下の編成組み替え案を確認してください。"}
-          </span>
+          {live.requiredPt > 0 && multi.minPtPerLive > 0 && live.requiredPt < multi.minPtPerLive ? (
+            <>
+              必要調整量{" "}
+              <span className="font-bold tabular-nums">{live.requiredPt.toLocaleString()} Pt</span>{" "}
+              は1回のライブの最小獲得{" "}
+              <span className="font-bold tabular-nums">
+                {multi.minPtPerLive.toLocaleString()} Pt
+              </span>{" "}
+              を下回るため着地できません。
+              <span className="mt-1 block">
+                目標を {live.requiredPt.toLocaleString()} Pt 下げて調整不要にするか、
+                {(multi.minPtPerLive - live.requiredPt).toLocaleString()} Pt 以上引き上げてください。
+              </span>
+            </>
+          ) : (
+            <>
+              探索範囲（最大{multi.liveCountCap}回・Pt値2種類の組合せ）では厳密一致が
+              見つかりませんでした。
+              <span className="mt-1 block">
+                {live.status === "OK"
+                  ? "下の編成組み替え案（第2候補）で着地できます。"
+                  : "目標を見直して再計算するか、下の編成組み替え案（第2候補）を確認してください。"}
+              </span>
+            </>
+          )}
         </div>
       )}
 
@@ -348,6 +464,14 @@ export function LiveAdjustStep({
       ) : (
         secondCandidate
       )}
+
+      {/* 画像書き出し専用。display:none だと getComputedStyle が --unit-color を返さない
+          ブラウザがあるため、レンダリングは保つ画面外配置にする（PlanTimeline と同じ）。 */}
+      <canvas
+        ref={exportCanvasRef}
+        aria-hidden
+        className="pointer-events-none absolute -left-[9999px] top-0 h-px w-px"
+      />
 
       {pickerBase !== null && (
         <SongSearchModal

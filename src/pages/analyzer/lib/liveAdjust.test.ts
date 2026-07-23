@@ -5,7 +5,7 @@ import {
   planLiveAdjustment,
 } from "./liveAdjust";
 import { calcLivePt } from "./calcLivePt";
-import { MAX_LIVE_BONUS, MAX_SCORE_N, SCORE_STEP } from "./constants";
+import { DEFAULT_MAX_SCORE_N, MAX_LIVE_BONUS, SCORE_STEP } from "./constants";
 
 /**
  * planLiveAdjustment の第3引数（許可ライブボーナス）まわりの安全網。
@@ -45,7 +45,10 @@ describe("planLiveAdjustment — 既定挙動の凍結", () => {
 
 describe("maxLiveAdjustPt", () => {
   it("最大スコア係数 × 最大LB の calcLivePt と一致する（単調性による厳密上限）", () => {
-    const maxScore = MAX_SCORE_N * SCORE_STEP;
+    // R3-0 改訂: 探索上限が MAX_SCORE_N(=200, スコア400万) から
+    // DEFAULT_MAX_SCORE_N(=55, スコア110万) に変わった。400万点はソロライブで
+    // 人間に到達不能なため、既定の上限Ptもスコア110万基準で評価される。
+    const maxScore = DEFAULT_MAX_SCORE_N * SCORE_STEP;
     for (const bonus of [435, 120, 700]) {
       expect(maxLiveAdjustPt(bonus, ADJUST_LIVE_BONUSES)).toBe(
         calcLivePt(ADJUST_BASE, bonus, maxScore, 1)
@@ -75,10 +78,42 @@ describe("planLiveAdjustment — 上限超過の枝刈り", () => {
     expect(r.plans).toEqual([]);
     expect(r.targetScoreRange).toBeUndefined();
     // NG時の案内に使う上限Ptが式どおり返ること
+    // R3-0 改訂: 上限の基準を MAX_SCORE_N → DEFAULT_MAX_SCORE_N に変更（スコア上限110万の既定化）
     expect(r.maxAdjustablePt).toBe(
-      calcLivePt(ADJUST_BASE, bonus, MAX_SCORE_N * SCORE_STEP, 1)
+      calcLivePt(ADJUST_BASE, bonus, DEFAULT_MAX_SCORE_N * SCORE_STEP, 1)
     );
     expect(liveRequired).toBeGreaterThan(r.maxAdjustablePt);
+  });
+});
+
+describe("maxLiveAdjustPt — 小数ボーナスの丸め回帰（R3-4）", () => {
+  it("小数ボーナスでも上限が式（丸めない bonus での1点評価）と厳密一致する", () => {
+    // R3-4 回帰テスト: 旧実装は Math.floor(bonus * 10) / 10 で 0.1% 刻みに丸めてから
+    // 評価していたため、経路5.1（丸めない生の bonus で探索）より上限が過小評価され、
+    // 早期 return が解ける入力を誤って弾いていた。丸めなしの1点評価と一致すること。
+    const maxLbNarrow = Math.max(...ADJUST_LIVE_BONUSES);
+    const maxLbWide = Math.max(...ALL_LIVE_BONUSES);
+    for (const bonus of [200.34, 435.67, 0.05, 999.99]) {
+      for (const maxScoreN of [55, 200]) {
+        expect(maxLiveAdjustPt(bonus, ADJUST_LIVE_BONUSES, maxScoreN)).toBe(
+          calcLivePt(ADJUST_BASE, bonus, maxScoreN * SCORE_STEP, maxLbNarrow)
+        );
+        expect(maxLiveAdjustPt(bonus, ALL_LIVE_BONUSES, maxScoreN)).toBe(
+          calcLivePt(ADJUST_BASE, bonus, maxScoreN * SCORE_STEP, maxLbWide)
+        );
+      }
+    }
+  });
+
+  it("ブリーフ再現ケース: bonus 200.34% の 4505 Pt が誤NGにならない", () => {
+    // R3-4 の実害再現（docs のブリーフに記載の入力）。
+    // findScoreStep(100, 200.34, 1, 4505) === 200 なので N=200 まで探索できれば OK。
+    // 丸めガードは 4500 と過小評価して探索前に NG を返していた。
+    // maxScoreN=200 は旧上限（スコア400万）の再現用で、既定の 55 ではスコア帯が
+    // 探索範囲外になるため意図的に明示している。
+    const r = planLiveAdjustment(4505, 200.34, [0, 1], 200);
+    expect(r.status).toBe("OK");
+    expect(r.targetScoreRange).toBeDefined();
   });
 });
 
@@ -87,8 +122,10 @@ describe("planLiveAdjustment — LB解放で吸収幅が広がる", () => {
     // LB7（倍率29）の最大スコア到達点をターゲットにする。
     // 倍率29は 0〜1 の倍率（1, 5）の整数倍と衝突しにくく、かつこの値は
     // LB0〜1 の上限Pt（倍率5×最大係数）を超えるので、0〜1 では原理的に届かない。
+    // R3-0 改訂: 探索上限が DEFAULT_MAX_SCORE_N（スコア110万）基準になったため、
+    // ターゲットも同じ上限から導出する（性質自体は上限値に依らず成立する）。
     const bonus = 435;
-    const target = calcLivePt(ADJUST_BASE, bonus, MAX_SCORE_N * SCORE_STEP, 7);
+    const target = calcLivePt(ADJUST_BASE, bonus, DEFAULT_MAX_SCORE_N * SCORE_STEP, 7);
     expect(target).toBeGreaterThan(maxLiveAdjustPt(bonus, ADJUST_LIVE_BONUSES));
 
     const narrow = planLiveAdjustment(target, bonus);

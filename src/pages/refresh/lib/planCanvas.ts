@@ -26,6 +26,8 @@ export interface PlanCanvasData {
   accent: string;
   /** 左上の小見出し（既定「リフレッシュゲージ 周回プラン」）。 */
   heading?: string;
+  /** 右下の透かし（既定「Sekai-Master / リフレッシュゲージ計算機」）。他ツールが流用するときに差し替える。 */
+  footer?: string;
   /** 右カラム（percent）の確保幅px。大きい数字（累積pt等）を出すとき広げる。既定72。 */
   rightColW?: number;
 }
@@ -152,7 +154,7 @@ export async function drawPlanCanvas(canvas: HTMLCanvasElement, data: PlanCanvas
   ctx.textAlign = "right";
   ctx.fillStyle = MUTED;
   ctx.font = "11px sans-serif";
-  ctx.fillText("Sekai-Master / リフレッシュゲージ計算機", W - PAD, H - 12);
+  ctx.fillText(data.footer ?? "Sekai-Master / リフレッシュゲージ計算機", W - PAD, H - 12);
 }
 
 function roundedImage(

@@ -1,4 +1,9 @@
-import { DEFAULT_BASE_POINT, MAX_LIVE_BONUS, MAX_SCORE_N, SCORE_STEP } from "./constants";
+import {
+  DEFAULT_BASE_POINT,
+  DEFAULT_MAX_SCORE_N,
+  MAX_LIVE_BONUS,
+  SCORE_STEP,
+} from "./constants";
 import { calcLivePt } from "./calcLivePt";
 
 /**
@@ -17,14 +22,26 @@ import { calcLivePt } from "./calcLivePt";
  *
  * 複数回の「合計ちょうど」は subset-sum なので、liveRequired が百万級だと
  * 素朴なDP・全列挙は破綻する。ここでは
- *   1. 1回のライブで到達できるPt集合 S を列挙（28基礎点 × LB11 × スコア係数201 ≒ 6.2万）
- *   2. 必要最小回数 n = ceil(liveRequired / max(S)) を確定
- *   3. n-1 回を同一の「大きい到達値 v」で埋め、端数 r = liveRequired - (n-1)v を
- *      S への O(1) 照合で解く。v は S の降順に全掃引する
- * という分解で「S の要素数 × 定数回」に抑える。v を全掃引するため、
- * 端数が刻みの隙間に落ちても隣の v で拾える（±1摂動より取りこぼしが少ない）。
- * n = ceil は下界なので、その n で見つかった案は回数最小と証明できる
- * （n を増やして見つかった場合の最小性は保証されない。MultiLiveAdjustResult.plans を参照）。
+ *   1. 1回のライブで到達できるPt集合 S を列挙（基礎点 × LB11 × スコア係数）
+ *   2. 回数 n ごとに「n-1 回を同一の大きい到達値 v で埋め、端数
+ *      r = liveRequired - (n-1)v を S への O(1) 照合で解く」。v は S の降順に全掃引
+ * という分解で「S の要素数 × 回数上限」に抑える。v を全掃引するため、
+ * 端数が刻みの隙間に落ちても隣の v で拾える。
+ *
+ * ## なぜ回数 vs LB のトレードオフ曲線を返すか（R3-2）
+ *
+ * プロセカのライブは回数自体がほぼ無料（スタミナ消費なし）で、律速資源は
+ * ライブボーナス（所持上限10・自然回復30分/個・クリスタル10個/個）の方。
+ * 回数最小の1点だけを返すと「2回/LB10」の裏にある「6回/LB30 → 5回/LB38 より
+ * LB8個節約」のような実用的な選択肢が全部隠れる。そこで n を回数上限まで走査し、
+ * 「回数を増やすと LB 合計が真に減る」点だけを残したパレート前線を返す。
+ *
+ * ## スコア上限（R3-0）
+ *
+ * 探索は maxScoreN（ユーザー設定のスコア上限から導出。既定 1,100,000 点相当）
+ * までしか回さない。以前は 4,000,000 点固定で、回数最小化が必然的に上限へ
+ * 張り付くため「400万点のソロライブを6回」という実行不能プランを検証済みとして
+ * 出していた（docs/porting/03-analyzer.md:26 の既知リスクが顕在化したもの）。
  */
 
 /** 同一条件（曲・LB・スコア帯）で叩くライブのまとまり。 */
@@ -42,7 +59,7 @@ export interface MultiLiveUnit {
 export interface MultiLivePlan {
   units: MultiLiveUnit[];
   liveCount: number;
-  /** 消費ライブボーナスの合計。並び順（少ない方が上）に使う。 */
+  /** 消費ライブボーナスの合計。トレードオフ軸（回数と対）に使う。 */
   lbCost: number;
   totalPt: number;
 }
@@ -50,13 +67,14 @@ export interface MultiLivePlan {
 export interface MultiLiveAdjustResult {
   status: "OK" | "NG";
   /**
-   * 見つかった案。lbCost 昇順（同一 n の全候補を集めてから並べ替え・上位を返す）。
+   * 回数 vs LB のパレート前線（回数昇順・LB合計は真に減少）。
+   * 先頭が回数最小案、末尾がLB最小案。5件を超える場合は
+   * 「LB節約幅が大きい中間点」を優先して代表を間引いてある。
    *
-   * 回数最小性の厳密な条件: minCount = ceil(liveRequired / maxPtPerLive) は
-   * どんな組合せでも下回れない下界なので、liveCount === minCount の案は最小と証明できる。
-   * ただし探索は「1案あたりPt値2種類まで」に限っているため、minCount で解けず
-   * n を増やして見つかった案（liveCount > minCount）は、3種類以上のPt値を使えば
-   * より少ない回数で解けた可能性が残る＝最小性は保証されない。
+   * 回数最小性: minCount = ceil(liveRequired / maxPtPerLive) はどんな組合せでも
+   * 下回れない下界なので、先頭案が liveCount === minCount ならそれは最小と証明できる。
+   * 探索クラスは「1案あたりPt値2種類まで」なので、3種類以上を使えばより少ない
+   * LB で解ける可能性は残る（回数側の下界は影響を受けない）。
    */
   plans: MultiLivePlan[];
   /** NG の理由。UIは無言NGにせず、これに応じた案内を出すこと。 */
@@ -65,14 +83,24 @@ export interface MultiLiveAdjustResult {
   requiredLiveCount?: number;
   /**
    * NO_EXACT のとき: 実際に探索した最大ライブ回数。
-   * 探索は最小回数から数回ぶんの窓に限られ、かつ1案に使うPt値は2種類までなので、
+   * 探索は回数上限までの窓・1案に使うPt値2種類までの制約付きなので、
    * NO_EXACT は「解が存在しない」ではなく「この範囲では見つからなかった」を意味する。
    * UIはこの値を使い、断定を避けた案内を出すこと。
    */
   searchedUpToCount?: number;
   liveCountCap: number;
-  /** 1回のライブで到達できる上限Pt（現在ボーナス・全基礎点・LB10）。 */
+  /**
+   * 1回のライブで到達できる上限Pt（現在ボーナス・全基礎点・LB10・スコア上限まで）。
+   * 調整不要（liveRequired 0）で探索しなかった場合と、負の要求で探索を
+   * 打ち切った場合は 0（未計算の印。これで割らないこと）。
+   */
   maxPtPerLive: number;
+  /**
+   * 1回のライブで獲得しうる最小Pt。liveRequired がこれ未満だと原理的に
+   * 1回でも着地できない「死角」なので、UIは必要なズラし幅の案内に使う（R3-3）。
+   * maxPtPerLive と同じく、探索しなかった経路では 0。
+   */
+  minPtPerLive: number;
   logs: string[];
 }
 
@@ -83,22 +111,11 @@ export interface MultiLiveAdjustResult {
  */
 export const MAX_ADJUST_LIVE_COUNT = 50;
 
-/** 1回の計算で提示するプラン数の上限。多すぎても選べないので絞る。 */
+/** 提示するプラン数の上限。トレードオフ前線が長いときは代表点に間引く。 */
 const MAX_PLANS = 5;
 
-/** 同一Ptの実現手段を何通りまで覚えるか（単発一致時のバリエーション提示用）。 */
+/** 同一Ptの実現手段を何通りまで覚えるか（曲候補のバリエーション用）。 */
 const MAX_REPS_PER_PT = 8;
-
-/**
- * 最小回数 n で解けなかったときに n を何回まで増やして再試行するか。
- *
- * 探索は n ごとに到達値集合（約6.2万件）を1周するだけで、端数はMapのO(1)照合。
- * 1回あたりの追加コストは体感ゼロなので、ここを絞る理由は性能面には無い。
- * 一方この窓が狭いと「解はあるのに NO_EXACT」を返す取りこぼしが増えるため、
- * 実用的に広めに取る。なお下界 minCount から昇順に回すので、窓を広げても
- * 「見つかった案は回数最小」という保証は変わらない。
- */
-const EXTRA_COUNT_TRIES = 10;
 
 interface Rep {
   basePoint: number;
@@ -110,11 +127,13 @@ interface Rep {
  * musicsList から異なり基礎点を昇順で取り出す。
  * 楽曲データ未達などで空になった場合は既定基礎点（エンヴィーの100）に退避し、
  * 少なくとも従来の単発調整と同等の探索はできるようにする。
+ * 整数チェックは必須: 非整数（例 113.5）を通すと「基礎点113.5」という
+ * 実在曲ゼロのプランを作ってしまう（event_rate は整数のみ）。
  */
 export function distinctBasePoints(musics: readonly { basePoint: number }[]): number[] {
   const set = new Set<number>();
   for (const m of musics) {
-    if (m && Number.isFinite(m.basePoint) && m.basePoint > 0) set.add(m.basePoint);
+    if (m && Number.isInteger(m.basePoint) && m.basePoint > 0) set.add(m.basePoint);
   }
   if (set.size === 0) return [DEFAULT_BASE_POINT];
   return [...set].sort((a, b) => a - b);
@@ -143,24 +162,47 @@ function planOf(units: MultiLiveUnit[]): MultiLivePlan {
   return { units, liveCount, lbCost, totalPt };
 }
 
+/**
+ * パレート前線が MAX_PLANS を超えるときの代表点選び。
+ * 両端（回数最小・LB最小）は必ず残し、中間は「1つ手前の点からの LB 節約幅」が
+ * 大きい順に採る。節約幅の小さい点は「回数を増やしたのにほぼ得しない」案なので
+ * 落としても意思決定を歪めない。
+ */
+function pickRepresentatives(frontier: MultiLivePlan[]): MultiLivePlan[] {
+  if (frontier.length <= MAX_PLANS) return frontier;
+  const first = frontier[0];
+  const last = frontier[frontier.length - 1];
+  const middles = frontier
+    .slice(1, -1)
+    .map((plan, i) => ({ plan, saving: frontier[i].lbCost - plan.lbCost }))
+    .sort((a, b) => b.saving - a.saving)
+    .slice(0, MAX_PLANS - 2)
+    .map((x) => x.plan);
+  const picked = [first, ...middles, last];
+  picked.sort((a, b) => a.liveCount - b.liveCount);
+  return picked;
+}
+
 export function planMultiLiveAdjustment(
   liveRequired: number,
   bonus: number,
-  basePoints: readonly number[]
+  basePoints: readonly number[],
+  maxScoreN: number = DEFAULT_MAX_SCORE_N
 ): MultiLiveAdjustResult {
   const logs: string[] = [];
   const bases = basePoints.length > 0 ? basePoints : [DEFAULT_BASE_POINT];
+  const noSearch = { liveCountCap: MAX_ADJUST_LIVE_COUNT, maxPtPerLive: 0, minPtPerLive: 0 };
 
   if (liveRequired === 0) {
     // 調整不要。liveAdjust.ts の同ガードと同じ理由（0 Pt を獲得するスコアは存在しない）。
     logs.push("[Multi Live Adjustment] Required 0 Pt. No adjustment lives needed.");
-    return {
-      status: "OK",
-      plans: [],
-      liveCountCap: MAX_ADJUST_LIVE_COUNT,
-      maxPtPerLive: 0,
-      logs,
-    };
+    return { status: "OK", plans: [], ...noSearch, logs };
+  }
+
+  // 負の要求は列挙するだけ無駄なので、到達Pt集合を作る前に確定させる。
+  if (liveRequired < 0) {
+    logs.push(`[Multi Live Adjustment] Cannot adjust negative ${liveRequired} Pt.`);
+    return { status: "NG", plans: [], reason: "NO_EXACT", ...noSearch, logs };
   }
 
   // 1回のライブで到達できるPt → 実現手段（複数、LB昇順）。
@@ -168,7 +210,7 @@ export function planMultiLiveAdjustment(
   const reps = new Map<number, Rep[]>();
   for (let lb = 0; lb <= MAX_LIVE_BONUS; lb++) {
     for (const base of bases) {
-      for (let n = 0; n <= MAX_SCORE_N; n++) {
+      for (let n = 0; n <= maxScoreN; n++) {
         const pt = calcLivePt(base, bonus, n * SCORE_STEP, lb);
         if (pt <= 0) continue;
         const list = reps.get(pt);
@@ -183,20 +225,14 @@ export function planMultiLiveAdjustment(
 
   const sortedPts = [...reps.keys()].sort((a, b) => b - a);
   const maxPtPerLive = sortedPts.length > 0 ? sortedPts[0] : 0;
+  const minPtPerLive = sortedPts.length > 0 ? sortedPts[sortedPts.length - 1] : 0;
   logs.push(
-    `[Multi Live Adjustment] Reachable Pt values: ${reps.size} (${bases.length} base points, LB 0-${MAX_LIVE_BONUS}, max ${maxPtPerLive} Pt/live).`
+    `[Multi Live Adjustment] Reachable Pt values: ${reps.size} (${bases.length} base points, LB 0-${MAX_LIVE_BONUS}, score N <= ${maxScoreN}, ${minPtPerLive}-${maxPtPerLive} Pt/live).`
   );
 
-  if (liveRequired < 0 || maxPtPerLive <= 0) {
+  if (maxPtPerLive <= 0) {
     logs.push(`[Multi Live Adjustment] Cannot adjust ${liveRequired} Pt.`);
-    return {
-      status: "NG",
-      plans: [],
-      reason: "NO_EXACT",
-      liveCountCap: MAX_ADJUST_LIVE_COUNT,
-      maxPtPerLive,
-      logs,
-    };
+    return { status: "NG", plans: [], reason: "NO_EXACT", ...noSearch, logs };
   }
 
   // 必要最小回数。ceil は全戦略共通の下界なので、この n で見つかれば回数最小が保証される。
@@ -212,34 +248,27 @@ export function planMultiLiveAdjustment(
       requiredLiveCount: minCount,
       liveCountCap: MAX_ADJUST_LIVE_COUNT,
       maxPtPerLive,
+      minPtPerLive,
       logs,
     };
   }
 
-  // n を最小回数から少しずつ増やしながら探す。n が1増えるだけで端数の自由度が
-  // 大きく広がるので、EXTRA_COUNT_TRIES 回で見つからなければ諦めて理由を返す。
-  const lastCount = Math.min(MAX_ADJUST_LIVE_COUNT, minCount + EXTRA_COUNT_TRIES);
-  for (let n = minCount; n <= lastCount; n++) {
-    const plans: MultiLivePlan[] = [];
+  // 回数 n ごとに最安LBの案を求め、パレート前線（回数を増やすとLBが真に減る点列）を作る。
+  // n を1つ増やすごとの走査は sortedPts 1周（上限クリップ後は高々数万件）×O(1)照合
+  // なので、回数上限50まで全部回しても UI をブロックしない。
+  const frontier: MultiLivePlan[] = [];
+  for (let n = minCount; n <= MAX_ADJUST_LIVE_COUNT; n++) {
+    let best: MultiLivePlan | null = null;
 
     if (n === 1) {
-      // 単発でちょうど。実現手段のバリエーション（LB昇順）をそのまま案として出す。
-      const list = reps.get(liveRequired) ?? [];
-      for (const rep of list.slice(0, MAX_PLANS)) {
-        plans.push(planOf([unitOf(rep, liveRequired, 1)]));
-      }
+      // 単発でちょうど。実現手段リストはLB昇順なので先頭が最安。
+      const list = reps.get(liveRequired);
+      if (list) best = planOf([unitOf(list[0], liveRequired, 1)]);
     } else {
       // n-1 回を大きい到達値 v で埋め、端数 r を単発の厳密照合で解く。
       // v の降順掃引: v が下がるほど r = liveRequired - (n-1)v は単調に増えるので、
       // r が上限Ptを超えたらそれ以降は解なし＝そこで打ち切れる。
-      //
-      // 候補はここで絞らず全部拾うこと。以前は MAX_PLANS 件で break していたが、
-      // 掃引は v の降順（＝高Pt側＝高LB側）から始まるため「先頭5件だけを sort」
-      // することになり、より LB の安い案を construct できていたのに取りこぼしていた。
-      // 実測（ボーナス435%）で必要50万Pt時に lbCost 70 を提示（真の最小は63）など、
-      // 最大7個ぶんのライボを無駄にしていた。ライボは上限10・30分で1回復の希少資源で、
-      // 1個=クリスタル10個ぶんの価値があるため、この取りこぼしは実害が大きい。
-      // 掃引自体は上の break で窓が閉じるので、全件拾っても計算量は変わらない。
+      // 候補は全部見てから最安を採ること（先に件数で切ると最安LB案を落とす。R2で実害を確認済み）。
       for (const v of sortedPts) {
         const r = liveRequired - (n - 1) * v;
         if (r <= 0) continue;
@@ -252,38 +281,47 @@ export function planMultiLiveAdjustment(
           v === r
             ? [unitOf(bulkRep, v, n)] // 端数がバルクと同値なら1条件に畳む
             : [unitOf(bulkRep, v, n - 1), unitOf(remRep, r, 1)];
-        plans.push(planOf(units));
+        const plan = planOf(units);
+        if (!best || plan.lbCost < best.lbCost) best = plan;
       }
     }
 
-    if (plans.length > 0) {
-      // 回数は同一（n）なので、LB消費が安い順に提示する。
-      // 件数の絞り込みは必ず sort の後に行う（先に切ると最安案を落とす）。
-      plans.sort((a, b) => a.lbCost - b.lbCost);
-      const top = plans.slice(0, MAX_PLANS);
-      logs.push(
-        `[Multi Live Adjustment] Found ${plans.length} plans with ${n} lives (showing ${top.length}, min LB cost ${top[0].lbCost}).`
-      );
-      return {
-        status: "OK",
-        plans: top,
-        liveCountCap: MAX_ADJUST_LIVE_COUNT,
-        maxPtPerLive,
-        logs,
-      };
+    if (!best) continue;
+    // 前の点よりLBが安くならない案はトレードオフとして無意味（回数だけ増える）ので捨てる。
+    // これで「同じ回数・ほぼ同じLBの案でカードが埋まる」R2の見かけ倒しを解消する。
+    if (frontier.length === 0 || best.lbCost < frontier[frontier.length - 1].lbCost) {
+      frontier.push(best);
+      // LB 0 になったらこれ以上安くはならないので打ち切る。
+      if (best.lbCost === 0) break;
     }
   }
 
+  if (frontier.length > 0) {
+    const plans = pickRepresentatives(frontier);
+    logs.push(
+      `[Multi Live Adjustment] Tradeoff frontier: ${frontier.length} points (showing ${plans.length}), lives ${plans[0].liveCount}-${plans[plans.length - 1].liveCount}, LB ${plans[0].lbCost}-${plans[plans.length - 1].lbCost}.`
+    );
+    return {
+      status: "OK",
+      plans,
+      liveCountCap: MAX_ADJUST_LIVE_COUNT,
+      maxPtPerLive,
+      minPtPerLive,
+      logs,
+    };
+  }
+
   logs.push(
-    `[Multi Live Adjustment] No exact combination for ${liveRequired} Pt within ${lastCount} lives.`
+    `[Multi Live Adjustment] No exact combination for ${liveRequired} Pt within ${MAX_ADJUST_LIVE_COUNT} lives.`
   );
   return {
     status: "NG",
     plans: [],
     reason: "NO_EXACT",
-    searchedUpToCount: lastCount,
+    searchedUpToCount: MAX_ADJUST_LIVE_COUNT,
     liveCountCap: MAX_ADJUST_LIVE_COUNT,
     maxPtPerLive,
+    minPtPerLive,
     logs,
   };
 }

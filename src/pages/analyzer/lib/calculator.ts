@@ -1,7 +1,7 @@
-import { DEFAULT_BASE_POINT, MAX_LIVE_BONUS } from "./constants";
+import { DEFAULT_BASE_POINT, MAX_LIVE_BONUS, maxScoreNOf, normalizeMaxScore } from "./constants";
 import { calcLivePt } from "./calcLivePt";
 import { EMPTY_ALLOCATION, allocateMySekai, calculateUnitBasePt, isAllocationAttempted } from "./mySekai";
-import { type AdjustmentPlan, planLiveAdjustment } from "./liveAdjust";
+import { ADJUST_LIVE_BONUSES, type AdjustmentPlan, planLiveAdjustment } from "./liveAdjust";
 import {
   type MultiLiveAdjustResult,
   distinctBasePoints,
@@ -36,10 +36,16 @@ export interface MusicData {
   basePoint: number;
 }
 
-/** calculatePlanV6 の追加オプション。省略時は従来どおりの計算になる。 */
+/** calculatePlanV6 の追加オプション。省略時は既定値での計算になる。 */
 export interface CalculationOptionsV6 {
   /** false でマイセカイ採取を使わずに計画を組む。既定 true。 */
   useMySekai?: boolean;
+  /**
+   * 狙えるスコアの上限（ユーザー設定）。既定 1,100,000・内部で 3,000,000 にクリップ。
+   * すべてのスコア帯探索（調整ライブ・編成組み替え・ラストラン）がこの上限に従う。
+   * ON/OFF どちらのモードにも適用する（400万点が人間に不可能なのはモードと無関係）。
+   */
+  maxScore?: number;
 }
 
 export interface CalculationResultV6 {
@@ -51,6 +57,8 @@ export interface CalculationResultV6 {
   unitBasePt: number;
   /** この計算がマイセカイ採取を使う前提か（UIの表示出し分けに使う）。 */
   useMySekai: boolean;
+  /** この計算に使ったスコア上限（正規化後）。UIの表示・再現用。 */
+  maxScore: number;
   mySekaiAllocation: {
     countA: number;
     countB: number;
@@ -68,8 +76,6 @@ export interface CalculationResultV6 {
     multi?: MultiLiveAdjustResult;
     targetScoreRange?: { min: number; max: number };
     adjustmentPlans?: AdjustmentPlan[];
-    /** 調整ライブ1回で吸収できる上限Pt。マイセカイ不使用時のNG案内に使う。 */
-    maxAdjustablePt: number;
     /** 調整ライブに許したライブボーナス消費の上限（文言用）。 */
     maxLiveBonus: number;
     logMessage: string;
@@ -107,6 +113,9 @@ export function calculatePlanV6(
 ): CalculationResultV6 {
   // 既定は従来どおりマイセカイを使う。呼び出し側の後方互換のため省略可にしている。
   const useMySekai = options.useMySekai ?? true;
+  // スコア上限（既定1,100,000・3,000,000クリップ）。全スコア帯探索の共通ガード。
+  const maxScore = normalizeMaxScore(options.maxScore);
+  const maxScoreN = maxScoreNOf(maxScore);
   const musics = musicsList;
   const logs: string[] = [];
   const log = (title: string, msg: string) => logs.push(`[${title}] ${msg}`);
@@ -114,7 +123,7 @@ export function calculatePlanV6(
   log("Initial Settings", `Current: ${currentPt}, Target: ${targetPt}, Final: ${finalRunPt}`);
   log(
     "Environment",
-    `Talent: ${talent}, Bonus: ${bonus}%, World Pass: ${hasWorldPass ? "Active" : "Inactive"}`
+    `Talent: ${talent}, Bonus: ${bonus}%, World Pass: ${hasWorldPass ? "Active" : "Inactive"}, Max Score: ${maxScore}`
   );
 
   // 1. マイセカイ単価
@@ -160,13 +169,13 @@ export function calculatePlanV6(
   const liveRequired = adjustableDiff - allocation.totalPt;
   const multi = useMySekai
     ? undefined
-    : planMultiLiveAdjustment(liveRequired, bonus, distinctBasePoints(musics));
+    : planMultiLiveAdjustment(liveRequired, bonus, distinctBasePoints(musics), maxScoreN);
   if (multi) {
     logs.push(...multi.logs);
   }
   const live = useMySekai
-    ? planLiveAdjustment(liveRequired, bonus)
-    : planLiveAdjustment(liveRequired, bonus, NO_MYSEKAI_LIVE_BONUSES);
+    ? planLiveAdjustment(liveRequired, bonus, ADJUST_LIVE_BONUSES, maxScoreN)
+    : planLiveAdjustment(liveRequired, bonus, NO_MYSEKAI_LIVE_BONUSES, maxScoreN);
   logs.push(...live.logs);
   // 合成ステータス: OFF時は multi が解ければ第2候補がNGでも着地可能とみなす。
   // multi の plans は合計が liveRequired に厳密一致するので、
@@ -187,7 +196,7 @@ export function calculatePlanV6(
   }
   log("Final Run Plan", `Target: ${finalRunPt}, Song Base: ${finalBase} (ID: ${finalSongId})`);
 
-  const finalRunPlans = planFinalRun(finalRunPt, finalBase, bonus);
+  const finalRunPlans = planFinalRun(finalRunPt, finalBase, bonus, maxScoreN);
   if (finalRunPt > 0) {
     log(
       "Final Run Plan",
@@ -209,6 +218,7 @@ export function calculatePlanV6(
     adjustableDiff,
     unitBasePt,
     useMySekai,
+    maxScore,
     mySekaiAllocation: allocation,
     liveAdjustment: {
       requiredPt: liveRequired,
@@ -216,7 +226,6 @@ export function calculatePlanV6(
       multi,
       targetScoreRange: live.targetScoreRange,
       adjustmentPlans: live.plans,
-      maxAdjustablePt: live.maxAdjustablePt,
       // ON時は探索に許したLBが 0〜1 なので上限は 1（NG案内の文言用）。
       maxLiveBonus: useMySekai ? 1 : MAX_LIVE_BONUS,
       logMessage: liveStatus === "OK" ? `目標: ${liveRequired}` : `調整不可 ${liveRequired}`,

@@ -1,7 +1,7 @@
 import {
   BONUS_STEP_10X,
   DEFAULT_BASE_POINT,
-  MAX_SCORE_N,
+  DEFAULT_MAX_SCORE_N,
   MAX_SEARCH_BONUS_10X,
   SCORE_STEP,
 } from "./constants";
@@ -53,19 +53,28 @@ export const ADJUST_LIVE_BONUSES = [0, 1] as const;
 /**
  * 1回の調整ライブで到達できる上限Pt。
  * calcLivePt はスコア係数・ボーナス・LB倍率のすべてに単調非減少なので、
- * 「探索上限ボーナス × 最大スコア係数 × 最大LB」の1点評価で厳密な上限になる。
- * 探索前の枝刈りと、NG時に「最大◯Ptまで」と案内する両方に使う。
+ * 「上限ボーナス × 上限スコア係数 × 最大LB」の1点評価で厳密な上限になる。
+ * 探索前の枝刈りに使う。
+ *
+ * ボーナスは floor で 0.1% 刻みに落とさないこと。経路 5.1 は丸めない生の
+ * bonus で探索するため、ここだけ丸めると上限が過小評価され、旧コードなら
+ * 解けた入力（例: bonus 200.34% の 4505 Pt）を早期 return が誤って弾く。
  */
-export function maxLiveAdjustPt(bonus: number, liveBonuses: readonly number[]): number {
-  const maxBonus10x = Math.min(Math.max(0, Math.floor(bonus * 10)), MAX_SEARCH_BONUS_10X);
+export function maxLiveAdjustPt(
+  bonus: number,
+  liveBonuses: readonly number[],
+  maxScoreN: number = DEFAULT_MAX_SCORE_N
+): number {
+  const effectiveBonus = Math.min(Math.max(0, bonus), MAX_SEARCH_BONUS_10X / 10);
   const maxLb = Math.max(...liveBonuses);
-  return calcLivePt(ADJUST_BASE, maxBonus10x / 10, MAX_SCORE_N * SCORE_STEP, maxLb);
+  return calcLivePt(ADJUST_BASE, effectiveBonus, maxScoreN * SCORE_STEP, maxLb);
 }
 
 export function planLiveAdjustment(
   liveRequired: number,
   bonus: number,
-  liveBonuses: readonly number[] = ADJUST_LIVE_BONUSES
+  liveBonuses: readonly number[] = ADJUST_LIVE_BONUSES,
+  maxScoreN: number = DEFAULT_MAX_SCORE_N
 ): LiveAdjustResult {
   const logs: string[] = [];
   let status: "OK" | "NG" = "NG";
@@ -74,7 +83,7 @@ export function planLiveAdjustment(
 
   // ログとエラー文言用のLB範囲表記（既定 [0,1] では従来どおり "0-1"）。
   const lbLabel = `${Math.min(...liveBonuses)}-${Math.max(...liveBonuses)}`;
-  const maxAdjustablePt = maxLiveAdjustPt(bonus, liveBonuses);
+  const maxAdjustablePt = maxLiveAdjustPt(bonus, liveBonuses, maxScoreN);
 
   // 調整が不要ならここで確定させる。
   // calcLivePt の最小値は 100 なので「0 Pt を獲得するスコア」は存在せず、
@@ -108,7 +117,7 @@ export function planLiveAdjustment(
 
   // 5.1 現在のボーナスのまま着地できるか
   for (const lb of liveBonuses) {
-    const matchN = findScoreStep(ADJUST_BASE, bonus, lb, liveRequired);
+    const matchN = findScoreStep(ADJUST_BASE, bonus, lb, liveRequired, maxScoreN);
     if (matchN !== -1) {
       status = "OK";
       if (!targetScoreRange) {
@@ -135,6 +144,7 @@ export function planLiveAdjustment(
       bonusMax10x: maxBonus10x,
       bonusStep10x: BONUS_STEP_10X,
       bonusOuter: false,
+      maxScoreN,
     })
   );
 
