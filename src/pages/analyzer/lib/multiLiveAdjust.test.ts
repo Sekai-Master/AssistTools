@@ -496,6 +496,37 @@ describe("planMultiLiveAdjustment — 同一本数内の代替内訳 sameCountVa
     }
   });
 
+  it("全数照合経路（3値すべて異なる解）でも同回数の代替内訳が入る（弱点9の解消）", () => {
+    // req=3714・bonus990%・bases[100,130] は構成的に用意した実測ケース:
+    // フロンティア側の (v,v,r) 構造では作れず findExhaustiveExact だけが解く
+    // 「3値すべて異なる」帯で、かつ同じ合計を作る組が主役以外に3通りある
+    // （1090+1122+1502 / 1100+1155+1459 / 1111+1144+1459 / 1122+1133+1459、
+    //  いずれも lb=0 で並ぶため lbCost は同値、最初に見つかった組が主役になる）。
+    // 弱点9修正前はこの経路の sameCountVariants が常に [] だった。
+    const req = 3_714;
+    const r = planMultiLiveAdjustment(req, 990, [100, 130]);
+    expect(r.status).toBe("OK");
+    expect(r.plans).toHaveLength(1);
+    expect(r.plans[0].liveCount).toBe(3);
+    expect(r.sameCountVariants.length).toBe(3);
+    const primarySig = r.plans[0].units
+      .map((u) => `${u.pt}x${u.count}`)
+      .sort()
+      .join("|");
+    const seen = new Set<string>([primarySig]);
+    for (const v of r.sameCountVariants) {
+      expect(v.liveCount).toBe(3);
+      expect(v.totalPt).toBe(req);
+      expect(v.units.reduce((s, u) => s + u.pt * u.count, 0)).toBe(req);
+      const sig = v.units
+        .map((u) => `${u.pt}x${u.count}`)
+        .sort()
+        .join("|");
+      expect(seen.has(sig)).toBe(false); // 主役・他の代替と重複しない
+      seen.add(sig);
+    }
+  });
+
   it("plans が空の経路（調整不要・NG）では常に空配列", () => {
     expect(planMultiLiveAdjustment(0, BONUS, REAL_BASES).sameCountVariants).toEqual([]);
     expect(planMultiLiveAdjustment(-100, BONUS, REAL_BASES).sameCountVariants).toEqual([]);
@@ -719,3 +750,8 @@ describe("planMultiLiveAdjustment — 性質（サンプリング）", () => {
     expect(broken).toEqual([]);
   }, 30_000);
 });
+
+// 弱点3・5・6・7 のテストは multiLiveAdjustReachableTable.test.ts に分離してある
+// （本ファイルが800行キャップに達したため。テスト対象: buildReachablePtTable /
+// planFromReachablePtTable の等価性、MAX_PT_VALUES_PER_PLAN、sameCountVariants の
+// lbCost 昇順の非自明ケース、findExhaustiveExact の事前フィルタが結果を変えないこと）。

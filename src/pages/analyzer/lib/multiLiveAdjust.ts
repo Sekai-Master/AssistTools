@@ -152,6 +152,21 @@ const MAX_REPS_PER_PT = 8;
 const MAX_SAME_COUNT_VARIANTS = 4;
 
 /**
+ * 通常探索（frontier構築）1案が使うPt値の種類数の上限。
+ *
+ * 「n-1回をバルク値vで埋め、端数rを1回で払う」という分解なので、1案に登場する
+ * 実際のPt値は最大でも {v, r} の2種類まで（v===rなら1種類に畳まれる）。3種類
+ * 以上のPt値を混ぜた解はこの探索クラスの構造的な死角で、EXHAUSTIVE_MAX_LIVES
+ * 以内の帯だけ findExhaustiveExact が別枠で埋める（それも3値までで4値以上は
+ * 対象外）。
+ *
+ * export する理由（弱点5）: UI文言（「Pt値2種類の組合せ」）がこの上限を直書きして
+ * いた。定数を変えてもUIが黙って古い数字のまま残る事故を防ぐため、EXHAUSTIVE_MAX_LIVES
+ * と同じ理由でここから公開する。
+ */
+export const MAX_PT_VALUES_PER_PLAN = 2;
+
+/**
  * 全数照合で着地不能を断定できる本数の上限。
  *
  * k 本の合計は必ず k × minPtPerLive 以上になるので、
@@ -159,10 +174,14 @@ const MAX_SAME_COUNT_VARIANTS = 4;
  * 解は EXHAUSTIVE_MAX_LIVES 本以内にしか存在し得ない。
  * 3 は「a ≤ b の二重ループ + 残りをO(1)照合」で全数を回せる実用上の上限
  * （4本にすると三重ループになり UI をブロックする）。
+ *
+ * export する理由（弱点7）: UI文言（例:「3回以内」）がこの値をハードコードしていた。
+ * 定数を変えてもUIが黙って古い数字のまま残る事故を防ぐため、UI側が文言に
+ * 埋め込めるようにここから公開する。
  */
-const EXHAUSTIVE_MAX_LIVES = 3;
+export const EXHAUSTIVE_MAX_LIVES = 3;
 
-interface Rep {
+export interface Rep {
   basePoint: number;
   liveBonus: number;
   scoreN: number;
@@ -321,6 +340,13 @@ function unitsOfPts(pts: readonly number[], reps: ReadonlyMap<number, Rep[]>): M
     .map(([pt, count]) => unitOf((reps.get(pt) as Rep[])[0], pt, count));
 }
 
+/** findExhaustiveExact の戻り値。主役（最安LB）と、同回数の代替内訳（弱点9）を分けて返す。 */
+interface ExhaustiveResult {
+  best: MultiLivePlan;
+  /** 主役と同じ3回で作れる代替内訳。lbCost 昇順・最大 MAX_SAME_COUNT_VARIANTS 件・主役自身は含まない。 */
+  variants: MultiLivePlan[];
+}
+
 /**
  * EXHAUSTIVE_MAX_LIVES 本以内の厳密解を全数照合で探す（P2-7 の中核）。
  *
@@ -335,16 +361,35 @@ function unitsOfPts(pts: readonly number[], reps: ReadonlyMap<number, Rep[]>): M
  *
  * 走査は a・b とも降順に固定して決定的にする。複数解があれば lbCost 最小を採る
  * （各Ptの rep[0] が最安LBの手段なので、値の組が決まればLBも決まる）。
+ *
+ * 弱点9対応: この経路だけ sameCountVariants が常に空になっていた
+ * （呼び出し側が固定で [] を返していたため）。この帯はエビ詰め域＝主用途の中心
+ * なので、内訳の選択肢が消えるのは他の経路より実害が大きい。
+ * best 探索のループは既に全 (a,b,c) を舐めているので、見つけた候補を
+ * insertBounded で一緒に溜めるだけなら計算量のオーダーは変わらない
+ * （this帯は liveRequired < 4×minPtPerLive に限られるため候補数自体が小さい）。
+ * ここで集まるのは「3値すべてが異なる」変則解の中の代替であり、通常の
+ * sameCountVariants（バルク+端数の2値内訳）とは別の意味の多様性になる。
+ *
+ * 弱点7対応: lbCost は plan を組み立てる前に算術（lbB + lbOf(a) + lbOf(c)）だけで
+ * 求まる。以前は全候補で無条件に planOf + unitsSignature を生成していたが、
+ * best も variants（保持上限 MAX_SAME_COUNT_VARIANTS+1・lbCost昇順）も更新しない
+ * ことがこの時点で分かる候補（lbCost が best 以上、かつ variants 満杯の最悪値以上）
+ * はオブジェクト生成そのものを省く。判定結果（best・variants の中身）は一切変えず、
+ * 生成回数だけを候補全数から「更新の可能性がある候補」に絞る最適化。
  */
 function findExhaustiveExact(
   liveRequired: number,
   sortedPts: readonly number[],
   reps: ReadonlyMap<number, Rep[]>,
   maxPtPerLive: number
-): MultiLivePlan | null {
+): ExhaustiveResult | null {
   const cands = sortedPts.filter((pt) => pt <= liveRequired); // sortedPts は降順のまま
   const lbOf = (pt: number): number => (reps.get(pt) as Rep[])[0].liveBonus;
+  const variantsCapacity = MAX_SAME_COUNT_VARIANTS + 1;
   let best: MultiLivePlan | null = null;
+  const variants: MultiLivePlan[] = [];
+  const seen = new Set<string>();
 
   for (let i = 0; i < cands.length; i += 1) {
     const b = cands[i];
@@ -356,38 +401,62 @@ function findExhaustiveExact(
       if (c > maxPtPerLive) break; // c は j に対して単調増加なので、ここから先は全滅
       if (!reps.has(c)) continue;
       const lbCost = lbB + lbOf(a) + lbOf(c);
-      if (best && lbCost >= best.lbCost) continue;
-      best = planOf(unitsOfPts([b, a, c], reps));
+      // 事前フィルタ: この候補が best も variants も更新できないなら生成を省く。
+      const canImproveBest = !best || lbCost < best.lbCost;
+      const canImproveVariants =
+        variants.length < variantsCapacity || lbCost < variants[variants.length - 1].lbCost;
+      if (!canImproveBest && !canImproveVariants) continue;
+      const plan = planOf(unitsOfPts([b, a, c], reps));
+      const sig = unitsSignature(plan.units);
+      if (!seen.has(sig)) {
+        seen.add(sig);
+        // 主役分の余裕を持たせて確保し、主役確定後にその署名だけ除いて返す
+        // （ループの途中では最終的にどれが主役になるか確定しないため）。
+        insertBounded(variants, plan, variantsCapacity);
+      }
+      if (canImproveBest) best = plan;
     }
   }
-  return best;
+  if (!best) return null;
+  const bestSig = unitsSignature(best.units);
+  return {
+    best,
+    variants: variants.filter((v) => unitsSignature(v.units) !== bestSig).slice(0, MAX_SAME_COUNT_VARIANTS),
+  };
 }
 
-export function planMultiLiveAdjustment(
-  liveRequired: number,
+/**
+ * 到達可能Pt表。基礎点集合・bonus・maxScoreN が同じ間は使い回せる（弱点3対応）。
+ *
+ * scoreZeroFinish のように「同じ bonus・基礎点・スコア上限で liveRequired だけ
+ * 変えて何十〜何百回も探索する」呼び出しパターンでは、この表の再構築
+ * （bases.length × (MAX_LIVE_BONUS+1) × maxScoreN 回の calcLivePt 呼び出し）が
+ * 呼び出し回数だけ繰り返されるのがボトルネックだった（実測 619〜935ms/回、
+ * 締め値候補は最大 basePoints.length×11 通り）。表そのものは liveRequired に
+ * 依存しないので、1回構築して使い回せば探索1件あたりのコストは
+ * 「表引き＋frontier構築」だけに落ちる。
+ */
+export interface ReachablePtTable {
+  reps: ReadonlyMap<number, Rep[]>;
+  sortedPts: readonly number[];
+  maxPtPerLive: number;
+  minPtPerLive: number;
+  basesCount: number;
+  maxScoreN: number;
+}
+
+/**
+ * 1回のライブで到達できるPt → 実現手段（複数、LB昇順）の表を構築する。
+ * LBを外側ループの昇順にすることで、各Ptの先頭要素が常に「最もLB消費の安い手段」になる。
+ * planMultiLiveAdjustment 自身もこれを呼ぶので、表の作り方は1箇所にしか存在しない
+ * （使い回し経路と単発経路で挙動が割れる心配がない）。
+ */
+export function buildReachablePtTable(
   bonus: number,
   basePoints: readonly number[],
   maxScoreN: number = DEFAULT_MAX_SCORE_N
-): MultiLiveAdjustResult {
-  const logs: string[] = [];
+): ReachablePtTable {
   const bases = basePoints.length > 0 ? basePoints : [DEFAULT_BASE_POINT];
-  const noSearch = { liveCountCap: MAX_ADJUST_LIVE_COUNT, maxPtPerLive: 0, minPtPerLive: 0 };
-
-  if (liveRequired === 0) {
-    // 調整不要。liveAdjust.ts の同ガードと同じ理由（0 Pt を獲得するスコアは存在しない）。
-    logs.push("[Multi Live Adjustment] Required 0 Pt. No adjustment lives needed.");
-    return { status: "OK", plans: [], sameCountVariants: [], ...noSearch, logs };
-  }
-
-  // 負の要求は列挙するだけ無駄なので、到達Pt集合を作る前に確定させる。
-  // 到達可能性を論じる余地がない（そもそも入力が不正）ので landability は付けない。
-  if (liveRequired < 0) {
-    logs.push(`[Multi Live Adjustment] Cannot adjust negative ${liveRequired} Pt.`);
-    return { status: "NG", plans: [], sameCountVariants: [], reason: "NO_EXACT", ...noSearch, logs };
-  }
-
-  // 1回のライブで到達できるPt → 実現手段（複数、LB昇順）。
-  // LBを外側ループの昇順にすることで、各Ptの先頭要素が常に「最もLB消費の安い手段」になる。
   const reps = new Map<number, Rep[]>();
   for (let lb = 0; lb <= MAX_LIVE_BONUS; lb++) {
     for (const base of bases) {
@@ -403,12 +472,67 @@ export function planMultiLiveAdjustment(
       }
     }
   }
-
   const sortedPts = [...reps.keys()].sort((a, b) => b - a);
   const maxPtPerLive = sortedPts.length > 0 ? sortedPts[0] : 0;
   const minPtPerLive = sortedPts.length > 0 ? sortedPts[sortedPts.length - 1] : 0;
+  return { reps, sortedPts, maxPtPerLive, minPtPerLive, basesCount: bases.length, maxScoreN };
+}
+
+export function planMultiLiveAdjustment(
+  liveRequired: number,
+  bonus: number,
+  basePoints: readonly number[],
+  maxScoreN: number = DEFAULT_MAX_SCORE_N
+): MultiLiveAdjustResult {
+  const logs: string[] = [];
+  const noSearch = { liveCountCap: MAX_ADJUST_LIVE_COUNT, maxPtPerLive: 0, minPtPerLive: 0 };
+
+  if (liveRequired === 0) {
+    // 調整不要。liveAdjust.ts の同ガードと同じ理由（0 Pt を獲得するスコアは存在しない）。
+    logs.push("[Multi Live Adjustment] Required 0 Pt. No adjustment lives needed.");
+    return { status: "OK", plans: [], sameCountVariants: [], ...noSearch, logs };
+  }
+
+  // 負の要求は列挙するだけ無駄なので、到達Pt集合を作る前に確定させる。
+  // 到達可能性を論じる余地がない（そもそも入力が不正）ので landability は付けない。
+  if (liveRequired < 0) {
+    logs.push(`[Multi Live Adjustment] Cannot adjust negative ${liveRequired} Pt.`);
+    return { status: "NG", plans: [], sameCountVariants: [], reason: "NO_EXACT", ...noSearch, logs };
+  }
+
+  const table = buildReachablePtTable(bonus, basePoints, maxScoreN);
+  return planFromReachablePtTable(liveRequired, table);
+}
+
+/**
+ * 事前構築済みの到達可能Pt表を使って1件分の厳密着地探索を行う（弱点3対応）。
+ *
+ * planMultiLiveAdjustment の本体（frontier構築・best選択・全数照合フォールバック）は
+ * ここに1本化してあり、単発呼び出し（planMultiLiveAdjustment）も使い回し呼び出し
+ * （scoreZeroFinish 等）も同じロジックを通る。表を渡す側（呼び出し元）の責務は
+ * 「liveRequired が0以下なら呼ばない」こと（scoreZeroFinish の remaining は
+ * finish.pt <= liveRequired の判定を経ているので常に0以上。0のときは「締め1本の
+ * みで完了」を表す空プランとして扱う）。
+ */
+export function planFromReachablePtTable(
+  liveRequired: number,
+  table: ReachablePtTable
+): MultiLiveAdjustResult {
+  const logs: string[] = [];
+  const noSearch = { liveCountCap: MAX_ADJUST_LIVE_COUNT, maxPtPerLive: 0, minPtPerLive: 0 };
+
+  if (liveRequired === 0) {
+    logs.push("[Multi Live Adjustment] Required 0 Pt. No adjustment lives needed.");
+    return { status: "OK", plans: [], sameCountVariants: [], ...noSearch, logs };
+  }
+  if (liveRequired < 0) {
+    logs.push(`[Multi Live Adjustment] Cannot adjust negative ${liveRequired} Pt.`);
+    return { status: "NG", plans: [], sameCountVariants: [], reason: "NO_EXACT", ...noSearch, logs };
+  }
+
+  const { reps, sortedPts, maxPtPerLive, minPtPerLive } = table;
   logs.push(
-    `[Multi Live Adjustment] Reachable Pt values: ${reps.size} (${bases.length} base points, LB 0-${MAX_LIVE_BONUS}, score N <= ${maxScoreN}, ${minPtPerLive}-${maxPtPerLive} Pt/live).`
+    `[Multi Live Adjustment] Reachable Pt values: ${reps.size} (${table.basesCount} base points, LB 0-${MAX_LIVE_BONUS}, score N <= ${table.maxScoreN}, ${minPtPerLive}-${maxPtPerLive} Pt/live).`
   );
 
   if (maxPtPerLive <= 0) {
@@ -521,12 +645,14 @@ export function planMultiLiveAdjustment(
       // 本探索の「Pt値2種まで」制約が取りこぼしていた解。n=1,2 は本探索が
       // 全数で見ているので、この解の回数（3）は最小性を保つ。
       logs.push(
-        `[Multi Live Adjustment] Exhaustive <=${EXHAUSTIVE_MAX_LIVES}-live check found a plan (${exact.liveCount} lives, LB ${exact.lbCost}).`
+        `[Multi Live Adjustment] Exhaustive <=${EXHAUSTIVE_MAX_LIVES}-live check found a plan (${exact.best.liveCount} lives, LB ${exact.best.lbCost}), same-count variants: ${exact.variants.length}.`
       );
       return {
         status: "OK",
-        plans: [exact],
-        sameCountVariants: [],
+        plans: [exact.best],
+        // 弱点9: この経路だけ常に空だった。findExhaustiveExact 側で主役探索と
+        // 同じループから収集しているので、この帯（エビ詰め域）でも内訳選択肢が出る。
+        sameCountVariants: exact.variants,
         liveCountCap: MAX_ADJUST_LIVE_COUNT,
         maxPtPerLive,
         minPtPerLive,

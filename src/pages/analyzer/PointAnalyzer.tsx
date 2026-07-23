@@ -9,6 +9,7 @@ import { Switch } from "../../components/ui/Switch";
 import { SongSearchModal } from "../../components/SongSearchModal";
 import { useAnalyzerMusics } from "./useAnalyzerMusics";
 import { calculatePlanV6, ENVY_ID, type CalculationResultV6 } from "./lib/calculator";
+import { MAX_PT_VALUES_PER_PLAN } from "./lib/multiLiveAdjust";
 import { calculateUnitBasePt } from "./lib/mySekai";
 import { parseAmount, completeTargetSuffix } from "./lib/inputParsing";
 import { byDistanceTo, recommendPlans } from "./lib/recommendPlans";
@@ -51,6 +52,14 @@ export default function PointAnalyzer() {
   const appliedOptions = useRef<{ useMySekai: boolean; maxScore?: number }>({
     useMySekai: true,
   });
+  // 計算実行時のボーナスのスナップショット（弱点1対応）。LiveAdjustStep/FinalRunStep は
+  // これを受け取って、result.requiredPt（計算時ボーナスで導出済み）と同じ条件で
+  // 独立探索（findSameBasePlans/planScoreZeroFinish）や表示用ソートを行う。
+  // 計算後に入力欄のボーナスだけ書き換えてからトグルを押すと、表示中 result に対し
+  // 別ボーナスで計算したプランを「厳密着地」として出してしまう事故（appliedOptions
+  // と同じ穴のbonus版）をここで塞ぐ。appliedOptions（useMySekai/maxScore）と同じ
+  // スナップショット方式に揃える。
+  const appliedBonus = useRef(0);
 
   const bonusNum = parseAmount(bonus, true);
 
@@ -72,9 +81,14 @@ export default function PointAnalyzer() {
 
   // ラストランの採択プラン。Step③の選択をStep②の画像出力にも反映させるため親で持つ。
   // 未選択のときは推奨順の先頭＝画面で最初に薦めている案を実効値として使う。
+  // 弱点1対応: ソートも appliedBonus（result計算時のボーナス）で行う。bonusNum
+  // （入力欄のライブ値）のままだと、FinalRunStep内部の同種のソート（同じく
+  // appliedBonus化済み）と選ぶ先頭案がずれる事故になる。appliedBonus.current は
+  // handleCalc/recalcWithSong が result を差し替える直前に必ず同期更新するので、
+  // このメモが再計算されるタイミング（result の変化）では常に対応済みの値になる。
   const finalRecommended = useMemo(
-    () => (result ? recommendPlans(result.finalRunPlans, byDistanceTo(bonusNum)) : []),
-    [result, bonusNum]
+    () => (result ? recommendPlans(result.finalRunPlans, byDistanceTo(appliedBonus.current)) : []),
+    [result]
   );
   const effectiveFinalPlan = finalPlan ?? finalRecommended[0];
 
@@ -104,6 +118,8 @@ export default function PointAnalyzer() {
     const options = { useMySekai, maxScore: ms > 0 ? ms : undefined };
     // Step3の曲変更再計算で同じ条件を使えるよう、適用オプションを固定する。
     appliedOptions.current = options;
+    // 弱点1対応: この計算に実際使ったボーナスを固定する（appliedOptions と同じ理由）。
+    appliedBonus.current = bon;
     // 前回の採択プランは新しい候補一覧に存在しない可能性があるので捨てる
     // （残すと画像に古い条件のラストランが載る）。
     setFinalPlan(null);
@@ -119,6 +135,11 @@ export default function PointAnalyzer() {
     if (!result) return;
     // 曲が変わると基礎点が変わり候補一覧も総入れ替えになるため、採択も破棄する。
     setFinalPlan(null);
+    // このパスは bonus を「いまの」state（bonusNum）で再計算する既存仕様（R3-4）。
+    // その代わり、実際に使ったボーナス値を appliedBonus に反映しておく
+    // （弱点1対応: 子コンポーネントに渡す bonus は常に「result 計算に実際使った値」
+    // であるという不変条件を、この再計算パスでも保つ）。
+    appliedBonus.current = bonusNum;
     setResult(
       calculatePlanV6(
         parseAmount(current),
@@ -325,7 +346,8 @@ export default function PointAnalyzer() {
                     </p>
                   ) : (
                     <p className="mt-1 text-xs">
-                      探索範囲（最大50回・Pt値2種類の組合せ）では厳密一致が見つかりませんでした。
+                      探索範囲（最大{resultMulti.liveCountCap}回・Pt値{MAX_PT_VALUES_PER_PLAN}
+                      種類の組合せ）では厳密一致が見つかりませんでした。
                       目標を見直して再計算するか、編成組み替え案（第2候補）を確認してください。
                     </p>
                   )
@@ -340,6 +362,7 @@ export default function PointAnalyzer() {
             <MySekaiStep result={result} />
             <LiveAdjustStep
               result={result}
+              bonus={appliedBonus.current}
               musics={musics}
               aliases={aliases}
               finalSong={selectedSong}
@@ -351,7 +374,7 @@ export default function PointAnalyzer() {
                 musics={musics}
                 aliases={aliases}
                 jacketBase={JACKET_BASE}
-                bonus={bonusNum}
+                bonus={appliedBonus.current}
                 selectedSong={selectedSong}
                 onChangeSong={recalcWithSong}
                 selectedPlan={finalPlan}

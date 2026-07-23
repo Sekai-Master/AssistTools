@@ -56,3 +56,45 @@ export function calcLivePt(
   const multiplier = LIVE_BONUS_MULTIPLIERS[liveBonusVal] || 1;
   return step3 * multiplier;
 }
+
+/**
+ * 「1LBあたり倍率」が最大となる最大の焚き数（P2-8のハードコード解消）。
+ *
+ * 2024-09-28 改定前は3焚き（15/3=5.00）を境に効率が下がったため「3焚きまで」が
+ * 定石だったが、改定後は4焚き（20/4=5.00）・5焚き（25/5=5.00）まで効率が横ばいで、
+ * 6焚き（27/6=4.50）から下がる。この「横ばいの終わり」を LIVE_BONUS_MULTIPLIERS
+ * から機械的に導出する。表が将来また改定されても、UIの文言はここを経由する限り
+ * 追随する（弱点7と同型の「3焚き/5焚きのハードコード」を再発させないための関数）。
+ *
+ * 0炊きは「1LBあたり」という概念に当てはまらない（消費0のため）ので除外する。
+ * 複数の焚き数が同じ最大効率で並ぶ場合、その中で最大の焚き数を返す
+ * （「その効率のまま伸ばせる限界」を示すのが本関数の目的のため）。
+ *
+ * 浮動小数点誤差対策: 倍率は整数だが割り算で比較するため、極小の差は
+ * 同値とみなす（このテーブルの値では実害はないが、将来の改定で割り切れない
+ * 倍率が入っても壊れないようにする防御）。
+ */
+export function maxEfficientLiveBonus(
+  multipliers: Readonly<Record<number, number>> = LIVE_BONUS_MULTIPLIERS
+): number {
+  const lbValues = Object.keys(multipliers)
+    .map(Number)
+    .filter((lb) => lb > 0)
+    .sort((a, b) => a - b);
+  if (lbValues.length === 0) return 0;
+
+  const EPSILON = 1e-9;
+  let maxEfficiency = -Infinity;
+  for (const lb of lbValues) {
+    const efficiency = multipliers[lb] / lb;
+    if (efficiency > maxEfficiency) maxEfficiency = efficiency;
+  }
+
+  let result = lbValues[0];
+  for (const lb of lbValues) {
+    // 昇順走査なので、最大効率に並ぶ最後（＝最大）の焚き数が残る。
+    const efficiency = multipliers[lb] / lb;
+    if (Math.abs(efficiency - maxEfficiency) < EPSILON) result = lb;
+  }
+  return result;
+}
