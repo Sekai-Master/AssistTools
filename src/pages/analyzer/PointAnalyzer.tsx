@@ -249,7 +249,10 @@ export default function PointAnalyzer() {
                 ) : result.useMySekai === false && resultMulti?.reason === "NO_EXACT" ? (
                   <p className="mt-1 text-xs">
                     {result.liveAdjustment.requiredPt.toLocaleString()} Pt
-                    に厳密一致する調整ライブの組合せが見つかりませんでした。
+                    に厳密一致する調整ライブの組合せは
+                    {resultMulti.searchedUpToCount != null &&
+                      `最小回数から ${resultMulti.searchedUpToCount} 回まで`}
+                    探した範囲では見つかりませんでした。
                     目標を数ポイントずらすか、ライブ調整の編成組み替え案（第2候補）を確認してください。
                   </p>
                 ) : (

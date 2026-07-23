@@ -177,8 +177,10 @@ export function LiveAdjustStep({
 
       {multi && multi.reason === "NO_EXACT" && (
         <div className="mb-6 rounded-xl bg-rose-50 p-6 text-center text-sm text-rose-600">
-          <span className="font-bold tabular-nums">{live.requiredPt.toLocaleString()} Pt</span>{" "}
-          に厳密一致する組合せが見つかりませんでした。
+          <span className="font-bold tabular-nums">{live.requiredPt.toLocaleString()} Pt</span> に
+          厳密一致する組合せは
+          {multi.searchedUpToCount != null && <>最小回数から {multi.searchedUpToCount} 回まで</>}
+          探した範囲では見つかりませんでした。
           <span className="mt-1 block">
             目標を数ポイントずらすか、下の編成組み替え案を確認してください。
           </span>

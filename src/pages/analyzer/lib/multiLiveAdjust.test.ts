@@ -130,6 +130,20 @@ describe("planMultiLiveAdjustment — 境界と NG の明示", () => {
     expect(r.requiredLiveCount!).toBeGreaterThan(MAX_ADJUST_LIVE_COUNT);
   });
 
+  it("NO_EXACT は探索した回数範囲を返す（「解なし」と断定させない）", () => {
+    // 1 Pt は到達可能な最小Pt（基礎点100・LB0・スコア係数0でも三桁）を下回るので、
+    // どの回数でも厳密一致しない＝探索ループを最後まで回って NO_EXACT に落ちる。
+    const r = planMultiLiveAdjustment(1, BONUS, REAL_BASES);
+    expect(r.status).toBe("NG");
+    expect(r.reason).toBe("NO_EXACT");
+    expect(r.plans).toEqual([]);
+    // 探索は「最小回数から数回ぶんの窓」かつ「1案のPt値は2種類まで」に限られるため、
+    // NO_EXACT は解の非存在を意味しない。UIが断定を避けられるよう範囲を必ず添える。
+    expect(r.searchedUpToCount).toBeDefined();
+    expect(r.searchedUpToCount!).toBeGreaterThanOrEqual(Math.ceil(1 / r.maxPtPerLive));
+    expect(r.searchedUpToCount!).toBeLessThanOrEqual(MAX_ADJUST_LIVE_COUNT);
+  });
+
   it("負の liveRequired は NG・reason 付き（無言NGにしない）", () => {
     const r = planMultiLiveAdjustment(-100, BONUS, REAL_BASES);
     expect(r.status).toBe("NG");

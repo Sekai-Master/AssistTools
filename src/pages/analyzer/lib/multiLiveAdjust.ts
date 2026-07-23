@@ -54,6 +54,13 @@ export interface MultiLiveAdjustResult {
   reason?: "OVER_CAP" | "NO_EXACT";
   /** OVER_CAP のとき: 理論上必要な最小ライブ回数。 */
   requiredLiveCount?: number;
+  /**
+   * NO_EXACT のとき: 実際に探索した最大ライブ回数。
+   * 探索は最小回数から数回ぶんの窓に限られ、かつ1案に使うPt値は2種類までなので、
+   * NO_EXACT は「解が存在しない」ではなく「この範囲では見つからなかった」を意味する。
+   * UIはこの値を使い、断定を避けた案内を出すこと。
+   */
+  searchedUpToCount?: number;
   liveCountCap: number;
   /** 1回のライブで到達できる上限Pt（現在ボーナス・全基礎点・LB10）。 */
   maxPtPerLive: number;
@@ -73,8 +80,16 @@ const MAX_PLANS = 5;
 /** 同一Ptの実現手段を何通りまで覚えるか（単発一致時のバリエーション提示用）。 */
 const MAX_REPS_PER_PT = 8;
 
-/** 最小回数 n で解けなかったときに n を何回まで増やして再試行するか。 */
-const EXTRA_COUNT_TRIES = 3;
+/**
+ * 最小回数 n で解けなかったときに n を何回まで増やして再試行するか。
+ *
+ * 探索は n ごとに到達値集合（約6.2万件）を1周するだけで、端数はMapのO(1)照合。
+ * 1回あたりの追加コストは体感ゼロなので、ここを絞る理由は性能面には無い。
+ * 一方この窓が狭いと「解はあるのに NO_EXACT」を返す取りこぼしが増えるため、
+ * 実用的に広めに取る。なお下界 minCount から昇順に回すので、窓を広げても
+ * 「見つかった案は回数最小」という保証は変わらない。
+ */
+const EXTRA_COUNT_TRIES = 10;
 
 interface Rep {
   basePoint: number;
@@ -246,6 +261,7 @@ export function planMultiLiveAdjustment(
     status: "NG",
     plans: [],
     reason: "NO_EXACT",
+    searchedUpToCount: lastCount,
     liveCountCap: MAX_ADJUST_LIVE_COUNT,
     maxPtPerLive,
     logs,
