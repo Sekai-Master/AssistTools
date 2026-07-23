@@ -23,7 +23,8 @@ import { calcLivePt } from "./calcLivePt";
  *      S への O(1) 照合で解く。v は S の降順に全掃引する
  * という分解で「S の要素数 × 定数回」に抑える。v を全掃引するため、
  * 端数が刻みの隙間に落ちても隣の v で拾える（±1摂動より取りこぼしが少ない）。
- * n = ceil が下界なので、n 回で見つかった案は回数最小であることも保証される。
+ * n = ceil は下界なので、その n で見つかった案は回数最小と証明できる
+ * （n を増やして見つかった場合の最小性は保証されない。MultiLiveAdjustResult.plans を参照）。
  */
 
 /** 同一条件（曲・LB・スコア帯）で叩くライブのまとまり。 */
@@ -48,7 +49,15 @@ export interface MultiLivePlan {
 
 export interface MultiLiveAdjustResult {
   status: "OK" | "NG";
-  /** 回数最小の n で見つかった案。lbCost 昇順。 */
+  /**
+   * 見つかった案。lbCost 昇順（同一 n の全候補を集めてから並べ替え・上位を返す）。
+   *
+   * 回数最小性の厳密な条件: minCount = ceil(liveRequired / maxPtPerLive) は
+   * どんな組合せでも下回れない下界なので、liveCount === minCount の案は最小と証明できる。
+   * ただし探索は「1案あたりPt値2種類まで」に限っているため、minCount で解けず
+   * n を増やして見つかった案（liveCount > minCount）は、3種類以上のPt値を使えば
+   * より少ない回数で解けた可能性が残る＝最小性は保証されない。
+   */
   plans: MultiLivePlan[];
   /** NG の理由。UIは無言NGにせず、これに応じた案内を出すこと。 */
   reason?: "OVER_CAP" | "NO_EXACT";
@@ -223,6 +232,14 @@ export function planMultiLiveAdjustment(
       // n-1 回を大きい到達値 v で埋め、端数 r を単発の厳密照合で解く。
       // v の降順掃引: v が下がるほど r = liveRequired - (n-1)v は単調に増えるので、
       // r が上限Ptを超えたらそれ以降は解なし＝そこで打ち切れる。
+      //
+      // 候補はここで絞らず全部拾うこと。以前は MAX_PLANS 件で break していたが、
+      // 掃引は v の降順（＝高Pt側＝高LB側）から始まるため「先頭5件だけを sort」
+      // することになり、より LB の安い案を construct できていたのに取りこぼしていた。
+      // 実測（ボーナス435%）で必要50万Pt時に lbCost 70 を提示（真の最小は63）など、
+      // 最大7個ぶんのライボを無駄にしていた。ライボは上限10・30分で1回復の希少資源で、
+      // 1個=クリスタル10個ぶんの価値があるため、この取りこぼしは実害が大きい。
+      // 掃引自体は上の break で窓が閉じるので、全件拾っても計算量は変わらない。
       for (const v of sortedPts) {
         const r = liveRequired - (n - 1) * v;
         if (r <= 0) continue;
@@ -236,17 +253,20 @@ export function planMultiLiveAdjustment(
             ? [unitOf(bulkRep, v, n)] // 端数がバルクと同値なら1条件に畳む
             : [unitOf(bulkRep, v, n - 1), unitOf(remRep, r, 1)];
         plans.push(planOf(units));
-        if (plans.length >= MAX_PLANS) break;
       }
     }
 
     if (plans.length > 0) {
       // 回数は同一（n）なので、LB消費が安い順に提示する。
+      // 件数の絞り込みは必ず sort の後に行う（先に切ると最安案を落とす）。
       plans.sort((a, b) => a.lbCost - b.lbCost);
-      logs.push(`[Multi Live Adjustment] Found ${plans.length} plans with ${n} lives.`);
+      const top = plans.slice(0, MAX_PLANS);
+      logs.push(
+        `[Multi Live Adjustment] Found ${plans.length} plans with ${n} lives (showing ${top.length}, min LB cost ${top[0].lbCost}).`
+      );
       return {
         status: "OK",
-        plans,
+        plans: top,
         liveCountCap: MAX_ADJUST_LIVE_COUNT,
         maxPtPerLive,
         logs,

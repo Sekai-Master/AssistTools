@@ -54,6 +54,36 @@ function expectExactPlans(r: MultiLiveAdjustResult, liveRequired: number) {
   }
 }
 
+/**
+ * 同じ回数・同じ「バルク+端数」構造で到達しうる lbCost の真の最小値を総当たりで出す。
+ *
+ * 「返り値が昇順か」だけでは、候補を絞ってから並べ替える実装のバグを検出できない。
+ * 実際 MAX_PLANS 件で打ち切ってから sort していた頃は、掃引が高Pt側＝高LB側から
+ * 始まる都合で最安案を取りこぼしていた（50万Pt で lbCost 70 を提示、真の最小は63）。
+ * ライボは希少資源なのでこの差は実害。ここは「全候補中で最安か」を直接押さえる。
+ */
+function trueMinLbCost(liveRequired: number, n: number, bases: readonly number[]): number {
+  const lbOf = new Map<number, number>();
+  for (let lb = 0; lb <= MAX_LIVE_BONUS; lb += 1) {
+    for (const base of bases) {
+      for (let s = 0; s <= MAX_SCORE_N; s += 1) {
+        const pt = calcLivePt(base, BONUS, s * SCORE_STEP, lb);
+        // LB 昇順に回しているので、最初に入った値がその Pt の最安 LB。
+        if (pt > 0 && !lbOf.has(pt)) lbOf.set(pt, lb);
+      }
+    }
+  }
+  let best = Infinity;
+  for (const [v, lbv] of lbOf) {
+    const r = liveRequired - (n - 1) * v;
+    if (r <= 0) continue;
+    const lbr = lbOf.get(r);
+    if (lbr === undefined) continue;
+    best = Math.min(best, lbv * (n - 1) + lbr);
+  }
+  return best;
+}
+
 describe("planMultiLiveAdjustment — 厳密一致と回数最小性", () => {
   it("単発で解ける値: 1回・ちょうど・S内の実現手段が返る", () => {
     // 到達Pt集合の要素を式から作れば、必ず1回で解けるはず
@@ -107,6 +137,17 @@ describe("planMultiLiveAdjustment — 厳密一致と回数最小性", () => {
     const r = planMultiLiveAdjustment(liveRequired, BONUS, [100]);
     expect(r.maxPtPerLive).toBe(calcLivePt(100, BONUS, MAX_SCORE, MAX_LIVE_BONUS));
     expectExactPlans(r, liveRequired);
+  });
+});
+
+describe("planMultiLiveAdjustment — 提示するのは全候補中で最も LB の安い案", () => {
+  // 候補を絞ってから並べ替えると最安案を落とす。回帰したらここが落ちる。
+  it.each([500_000, 250_000, 123_456, 60_000])("%i Pt で lbCost が真の最小と一致する", (req) => {
+    const r = planMultiLiveAdjustment(req, BONUS, REAL_BASES);
+    expect(r.status).toBe("OK");
+    expect(r.plans.length).toBeGreaterThan(0);
+    const n = r.plans[0].liveCount;
+    expect(r.plans[0].lbCost).toBe(trueMinLbCost(req, n, REAL_BASES));
   });
 });
 
