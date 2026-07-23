@@ -177,12 +177,15 @@ export function LiveAdjustStep({
   result,
   musics = [],
   aliases = [],
+  finalSong,
 }: {
   result: CalculationResultV6;
   /** 曲サジェスト用の楽曲リスト。省略時はサジェストなしで動く。 */
   musics?: ReadonlyArray<SuggestMusic>;
   /** 曲検索モーダルの絞り込み用エイリアス。 */
   aliases?: AliasEntry[];
+  /** ラストランの最終楽曲。画像にラストランを含めるために使う。 */
+  finalSong?: SuggestMusic;
 }) {
   const [selectedPlan, setSelectedPlan] = useState<UniversalPlan | null>(null);
   // 採択中の複数回プラン。既定は0番＝回数最少（並びは回数昇順のパレート前線。R3-2）。
@@ -193,6 +196,8 @@ export function LiveAdjustStep({
   const [songByBase, setSongByBase] = useState<Record<number, string>>({});
   // 曲選択モーダルを開いている基礎点。null で閉じる。
   const [pickerBase, setPickerBase] = useState<number | null>(null);
+  // 画像コピー/保存の結果表示（他ツールと同じ挙動）。
+  const [imageNotice, setImageNotice] = useState<string | null>(null);
   // PNG書き出し専用のオフスクリーンcanvas（refresh の PlanTimeline と同じパターン）。
   const exportCanvasRef = useRef<HTMLCanvasElement>(null);
   const live = result.liveAdjustment;
@@ -210,9 +215,9 @@ export function LiveAdjustStep({
    * 曲・LB・スコア帯・回数・合計Pt・総回数・LB合計が画像単体で読めること。
    * canvas生成→toDataURL→ダウンロードの流れは refresh の PlanTimeline を踏襲。
    */
-  const saveAdoptedPlanImage = async (chosen: MultiLivePlan) => {
+  const renderAdoptedPlanImage = async (chosen: MultiLivePlan) => {
     const canvas = exportCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return null;
     // 画面のユニットカラーを画像のアクセントにも使う（PlanTimeline と同じ取得方法。
     // display:none だと --unit-color が取れないブラウザがあるため canvas は画面外配置）。
     const accent =
@@ -232,9 +237,42 @@ export function LiveAdjustStep({
             ? { title: picked.title, jacketUrl: `${JACKET_BASE}${picked.jacketLink}` }
             : undefined;
         },
+        // ラストランは別ステップだが、共有したいのは「この1枚で完結するプラン」なので同じ画像に載せる。
+        finalRun:
+          result.finalRunPt > 0
+            ? {
+                pt: result.finalRunPt,
+                basePoint: result.finalBase,
+                song: finalSong
+                  ? { title: finalSong.title, jacketUrl: `${JACKET_BASE}${finalSong.jacketLink}` }
+                  : undefined,
+                plan: result.finalRunPlans[0],
+                planCount: result.finalRunPlans.length,
+              }
+            : undefined,
         accent,
       })
     );
+    return canvas;
+  };
+
+  const copyAdoptedPlanImage = async (chosen: MultiLivePlan) => {
+    const canvas = await renderAdoptedPlanImage(chosen);
+    if (!canvas) return;
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        setImageNotice("画像をコピーしました。");
+      } catch {
+        setImageNotice("コピーに失敗しました（保存をお使いください）。");
+      }
+    }, "image/png");
+  };
+
+  const saveAdoptedPlanImage = async (chosen: MultiLivePlan) => {
+    const canvas = await renderAdoptedPlanImage(chosen);
+    if (!canvas) return;
     const a = document.createElement("a");
     a.href = canvas.toDataURL("image/png");
     a.download = "adjust-plan.png";
@@ -385,13 +423,23 @@ export function LiveAdjustStep({
                   全{chosen.liveCount}
                   回それぞれでスコア帯（2万点幅）を狙い撃つ必要があります。帯を外した回のLBは戻りません。
                 </p>
-                <div className="mt-3">
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <NeuButton
+                    className="!py-1.5 !text-xs"
+                    onClick={() => void copyAdoptedPlanImage(chosen)}
+                  >
+                    画像をコピー
+                  </NeuButton>
                   <NeuButton
                     className="!py-1.5 !text-xs"
                     onClick={() => void saveAdoptedPlanImage(chosen)}
                   >
                     画像で保存
                   </NeuButton>
+                  <span className="text-[11px] text-slate-400">
+                    {imageNotice ??
+                      (result.finalRunPt > 0 ? "ラストランも含めた1枚になります" : null)}
+                  </span>
                 </div>
               </div>
             );
