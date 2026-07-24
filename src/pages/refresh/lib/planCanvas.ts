@@ -33,6 +33,12 @@ export interface PlanCanvasRow {
   lb?: number;
   /** 編成組み替え（目標ボーナス変更）を伴う行の強調テキスト（例:「目標ボーナス 500%」）。 */
   bonusLabel?: string;
+  /**
+   * scoreBand を持たない強調行の、下段先頭に出す代替テキスト（例「叩かない（スコア0）」）。
+   * scoreBand と scoreText はどちらか一方だけを使う（両方あれば scoreBand 優先）。
+   * これにより「スコア0で締める」行も他行と同じ横一列レイアウトに揃う。
+   */
+  scoreText?: string;
 }
 
 export interface PlanCanvasData {
@@ -49,7 +55,21 @@ export interface PlanCanvasData {
   rightColW?: number;
   /** 焚き数アイコン（LB.png）のURL。lb を持つ行が1つでもあるときだけ使う。 */
   lbIconUrl?: string;
+  /**
+   * 獲得Pt・フッター数値の色。省略時は accent（＝ユニットカラー。refresh 従来どおり）。
+   * 明るいユニットカラーは薄グレー背景でコントラストが弱いため、ポイント調整の
+   * 統合画像は濃い緑（ANALYZER_GREEN）を渡してPtの視認性を上げる。
+   */
+  valueColor?: string;
+  /**
+   * ヘッダーの目標の直下に緑・太字で大きく出す差分行（例「差分 80,527 Pt」）。
+   * ユーザーが一番知りたい「あといくつか」を視線の起点にする。省略時は出さない。
+   */
+  diffLabel?: string;
 }
+
+/** 明るいユニットカラーより視認性の高い、Pt強調用の濃い緑（薄グレー背景で十分なコントラスト）。 */
+export const ANALYZER_GREEN = "#2e9e4f";
 
 const W = 700;
 const PAD = 24;
@@ -123,6 +143,13 @@ export async function drawPlanCanvas(canvas: HTMLCanvasElement, data: PlanCanvas
   ctx.fillText(data.heading ?? "リフレッシュゲージ 周回プラン", PAD, 30);
   ctx.font = "bold 22px sans-serif";
   ctx.fillText(truncate(ctx, data.songTitle, W - PAD * 2), PAD, 60);
+  // 差分（あといくつか）を目標の右に緑・太字で添え、視線の起点にする。
+  if (data.diffLabel) {
+    const tw = ctx.measureText(truncate(ctx, data.songTitle, W - PAD * 2)).width;
+    ctx.font = "bold 16px sans-serif";
+    ctx.fillStyle = data.valueColor ?? data.accent;
+    ctx.fillText(data.diffLabel, PAD + tw + 16, 61);
+  }
   ctx.font = "13px sans-serif";
   ctx.fillStyle = MUTED;
   data.meta.forEach((m, i) => ctx.fillText(m, PAD, 88 + i * 20));
@@ -155,7 +182,7 @@ export async function drawPlanCanvas(canvas: HTMLCanvasElement, data: PlanCanvas
     ctx.fillStyle = MUTED;
     ctx.font = "11px sans-serif";
     ctx.fillText(s.label, cx, fy + 20);
-    ctx.fillStyle = data.accent;
+    ctx.fillStyle = data.valueColor ?? data.accent;
     ctx.font = "bold 18px sans-serif";
     ctx.fillText(s.value, cx, fy + 44);
   });
@@ -209,8 +236,13 @@ function drawNormalRow(
 }
 
 /**
- * 強調行（84px・2段組）。実行時に確認すべき情報（スコア帯・焚き数・目標ボーナス）を
- * 上段の時刻/獲得Ptより大きく下段に描く。
+ * 強調行（84px・グリッド）。依頼者の構成案どおり4ブロックに固定する:
+ *   [左] ジャケット（縦センター・大）
+ *   [中央 上段] 種別ラベル（小・灰）＋ 曲名（大）
+ *   [中央 下段] 目標スコア帯 or「叩かない」｜ 🔋焚き数 ｜ ボーナス% を横一列
+ *   [右] 獲得Pt（縦センター・右端揃え・濃い緑）
+ * どの行も同じ座標系で描くので、スコア0行（scoreBand なし）も他行とレイアウトが揃う。
+ * ジャケットの上には一切テキストを描かない（旧実装のオーバーラップを解消）。
  */
 function drawEmphasisRow(
   ctx: CanvasRenderingContext2D,
@@ -221,61 +253,69 @@ function drawEmphasisRow(
   imgs: Map<string, HTMLImageElement>,
   lbImg: HTMLImageElement | undefined
 ): void {
-  const topY = y + 16;
-  // 上段: 時刻 ... 獲得Pt
-  ctx.textAlign = "left";
-  ctx.fillStyle = MUTED;
-  ctx.font = "12px sans-serif";
-  ctx.fillText(r.time, PAD + 4, topY);
-  ctx.textAlign = "right";
-  ctx.fillStyle = r.warn ? WARN : data.accent;
-  ctx.font = "bold 15px sans-serif";
-  ctx.fillText(r.percent, W - PAD - 4, topY);
+  const cy = y + rh / 2;
+  const valueColor = data.valueColor ?? data.accent;
+  const rightColW = data.rightColW ?? 110;
 
-  // ジャケット＋曲名
-  let labelX = PAD + 4;
+  // [左] ジャケット（縦センター）。以降のテキストはすべてこの右側にしか描かない。
+  let textX = PAD + 8;
   const jimg = r.jacket ? imgs.get(r.jacket) : undefined;
-  const midY = y + 32;
   if (jimg) {
-    roundedImage(ctx, jimg, labelX, midY - JACKET_EMPHASIS / 2, JACKET_EMPHASIS, 6);
-    labelX += JACKET_EMPHASIS + 8;
+    roundedImage(ctx, jimg, PAD + 8, cy - JACKET_EMPHASIS / 2, JACKET_EMPHASIS, 8);
+    textX = PAD + 8 + JACKET_EMPHASIS + 12;
   }
-  const labelMax = W - PAD - 4 - labelX;
-  ctx.textAlign = "left";
-  ctx.fillStyle = r.warn ? WARN : INK;
-  ctx.font = "bold 12px sans-serif";
-  ctx.fillText(truncate(ctx, r.label, labelMax), labelX, midY);
+  const textMax = W - PAD - rightColW - textX;
 
-  // 下段: スコア帯 → 焚き数(LBアイコン) → 目標ボーナス の順に横並び。ここが主役。
-  let cx = labelX;
-  const bigY = y + rh - (r.sub ? 22 : 12);
+  // [右] 獲得Pt（縦センター・右端揃え・濃い緑）。右端の縦ラインを全行で揃える。
+  ctx.textAlign = "right";
+  ctx.fillStyle = r.warn ? WARN : valueColor;
+  ctx.font = "bold 18px sans-serif";
+  ctx.fillText(r.percent, W - PAD - 4, cy);
+
+  // [中央 上段] 種別ラベル（灰・小）＋ 曲名（大）。曲名の位置は全行で統一。
+  ctx.textAlign = "left";
+  const topY = y + 26;
+  let tx = textX;
+  if (r.time) {
+    ctx.fillStyle = r.warn ? WARN : MUTED;
+    ctx.font = "12px sans-serif";
+    ctx.fillText(r.time, tx, topY);
+    tx += ctx.measureText(r.time).width + 8;
+  }
+  ctx.fillStyle = r.warn ? WARN : INK;
+  ctx.font = "bold 15px sans-serif";
+  ctx.fillText(truncate(ctx, r.label, textX + textMax - tx), tx, topY);
+
+  // [中央 下段] スコア帯(or 叩かない) → 焚き数 → ボーナス を横一列。ここが主役。
+  const botY = y + 58;
+  let cx = textX;
   if (r.scoreBand) {
     ctx.fillStyle = r.warn ? WARN : INK;
-    ctx.font = "bold 18px monospace";
+    ctx.font = "bold 17px monospace";
     const text = `${r.scoreBand.min.toLocaleString()}〜${r.scoreBand.max.toLocaleString()}`;
-    ctx.fillText(text, cx, bigY);
-    cx += ctx.measureText(text).width + 14;
+    ctx.fillText(text, cx, botY);
+    cx += ctx.measureText(text).width + 16;
+  } else if (r.scoreText) {
+    ctx.fillStyle = r.warn ? WARN : INK;
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillText(r.scoreText, cx, botY);
+    cx += ctx.measureText(r.scoreText).width + 16;
   }
   if (r.lb !== undefined) {
     if (lbImg) {
-      ctx.drawImage(lbImg, cx, bigY - LB_ICON / 2, LB_ICON, LB_ICON);
-      cx += LB_ICON + 4;
+      ctx.drawImage(lbImg, cx, botY - LB_ICON / 2, LB_ICON, LB_ICON);
+      cx += LB_ICON + 3;
     }
-    ctx.fillStyle = r.warn ? WARN : data.accent;
-    ctx.font = "bold 17px sans-serif";
+    ctx.fillStyle = r.warn ? WARN : valueColor;
+    ctx.font = "bold 16px sans-serif";
     const lbText = `×${r.lb}`;
-    ctx.fillText(lbText, cx, bigY);
-    cx += ctx.measureText(lbText).width + 14;
+    ctx.fillText(lbText, cx, botY);
+    cx += ctx.measureText(lbText).width + 16;
   }
   if (r.bonusLabel) {
-    ctx.fillStyle = r.warn ? WARN : data.accent;
-    ctx.font = "bold 15px sans-serif";
-    ctx.fillText(truncate(ctx, r.bonusLabel, W - PAD - 4 - cx), cx, bigY);
-  }
-  if (r.sub) {
-    ctx.fillStyle = r.warn ? WARN : MUTED;
-    ctx.font = "10px sans-serif";
-    ctx.fillText(truncate(ctx, r.sub, labelMax), labelX, y + rh - 8);
+    ctx.fillStyle = r.warn ? WARN : valueColor;
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillText(truncate(ctx, r.bonusLabel, W - PAD - rightColW - cx), cx, botY);
   }
 }
 

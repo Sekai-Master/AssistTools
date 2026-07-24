@@ -89,8 +89,10 @@ describe("buildAdjustPlanCanvasData — 行数・行順・スキップ", () => {
   it("Step2 sweep は1行、Step3 なしなら Step3 行も無い", () => {
     const d = buildAdjustPlanCanvasData({ ...COMMON, mySekai: MYSEKAI, step2: STEP2_SWEEP });
     expect(d.rows).toHaveLength(2); // マイセカイ + sweep1行
-    expect(d.rows[1].time).toContain("調整ライブ");
-    expect(d.rows[1].sub).toContain("目標ボーナス");
+    // 種別は「調整」、曲名は label、目標ボーナスは bonusLabel に1回だけ（sub 重複を排除）。
+    expect(d.rows[1].time).toBe("調整");
+    expect(d.rows[1].bonusLabel).toContain("目標ボーナス");
+    expect(d.rows[1].sub).toBeUndefined();
   });
 
   it("Step2 なし・Step3 earn のみ（マイセカイもなし）は1行", () => {
@@ -106,11 +108,14 @@ describe("buildAdjustPlanCanvasData — 行数・行順・スキップ", () => {
 });
 
 describe("buildAdjustPlanCanvasData — scoreZero の「叩かない」表示", () => {
-  it("label に「叩かずにクリア（スコア0）」を出し、sub にスコア帯を出さない", () => {
+  it("label に曲名を統一し、「叩かない」は scoreText・scoreBand は出さない", () => {
     const d = buildAdjustPlanCanvasData({ ...COMMON, mySekai: MYSEKAI, step2: STEP2_MULTI, finalRun: FINAL_ZERO });
     const last = d.rows[d.rows.length - 1];
-    expect(last.label).toBe("叩かずにクリア（スコア0）");
-    expect(last.sub).not.toContain("スコア"); // スコア帯を出さない
+    // 曲名は他行と同じく label に（種別は time="ラストプレイ"）。位置を統一。
+    expect(last.time).toBe("ラストプレイ");
+    expect(last.label).toContain(SONG.title);
+    expect(last.scoreText).toBe("叩かない（スコア0）"); // 下段先頭に横一列で置く
+    expect(last.scoreBand).toBeUndefined(); // 叩かないのでスコア帯なし
     expect(last.jacket).toBe(SONG.jacketUrl); // ジャケットは載る
     expect(last.warn).toBe(false);
   });
@@ -126,7 +131,9 @@ describe("buildAdjustPlanCanvasData — R6 Step2消失バグ修正（sweep plan=
     };
     const d = buildAdjustPlanCanvasData({ ...COMMON, step2 });
     expect(d.rows).toHaveLength(1);
-    expect(d.rows[0].label).toContain("編成そのまま");
+    // 曲名は label、「編成そのまま」は種別 time 側へ（曲名位置を全行で統一）。
+    expect(d.rows[0].label).toBe(SONG.title);
+    expect(d.rows[0].time).toContain("編成そのまま");
     expect(d.rows[0].scoreBand).toEqual({ min: 800_000, max: 819_999 });
     expect(d.rows[0].lb).toBe(1);
     expect(d.rows[0].percent).toBe("+1,234 Pt");

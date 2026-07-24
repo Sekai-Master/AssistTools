@@ -19,7 +19,7 @@
  * 編成組み替え（モードA）のときはそこに目標ボーナスが加わる。
  */
 import { CRYSTALS_PER_LIVE_BONUS, MAX_LIVE_BONUS } from "./constants";
-import type { PlanCanvasData, PlanCanvasRow } from "../../refresh/lib/planCanvas";
+import { ANALYZER_GREEN, type PlanCanvasData, type PlanCanvasRow } from "../../refresh/lib/planCanvas";
 import type { MultiLivePlan } from "./multiLiveAdjust";
 import { ADJUST_LIVE_BONUSES, type AdjustmentPlan } from "./liveAdjust";
 import type { FinalRunPlan } from "./finalRun";
@@ -149,14 +149,16 @@ function multiRows(
   return plan.units.map((u) => {
     const song = songForBase(u.basePoint);
     return {
-      time: `${u.count}回 × ${u.liveBonus}炊き`,
+      // 種別ラベルは焚き数を含めない（焚き数は lb で下段に1回だけ描く＝重複排除）。
+      // 複数回のときだけ回数を添える。
+      time: u.count > 1 ? `調整 ${u.count}回` : "調整",
       label: song ? `${song.title}（基礎点${u.basePoint}）` : `基礎点${u.basePoint}の曲（候補なし）`,
-      sub: `1回 ${u.pt.toLocaleString()} Pt`,
       percent: `+${(u.pt * u.count).toLocaleString()} Pt`,
       warn: false,
       jacket: song?.jacketUrl,
       scoreBand: { min: u.minScore, max: u.maxScore },
       lb: u.liveBonus,
+      // u.bonus はモードA複数回化＝編成組み替えのときだけ付く（目標ボーナス）。
       ...(u.bonus !== undefined ? { bonusLabel: `目標ボーナス ${u.bonus}%` } : {}),
     };
   });
@@ -170,10 +172,11 @@ function multiRows(
 function sweepRow(step2: Extract<AdjustCanvasStep2, { kind: "sweep" }>): PlanCanvasRow {
   const { plan, requiredPt, song, current } = step2;
   if (plan) {
+    // 種別「調整」＋曲名を上段に、焚き数は lb・目標ボーナスは bonusLabel に1回だけ
+    // （旧実装は sub と bonusLabel の二重表示だった）。
     return {
-      time: `調整ライブ × ${plan.liveBonus}炊き`,
-      label: song ? `${song.title}（調整）` : "調整ライブ",
-      sub: `目標ボーナス ${plan.bonus}%`,
+      time: "調整",
+      label: song ? song.title : "調整ライブ",
       percent: `+${requiredPt.toLocaleString()} Pt`,
       warn: false,
       jacket: song?.jacketUrl,
@@ -183,8 +186,8 @@ function sweepRow(step2: Extract<AdjustCanvasStep2, { kind: "sweep" }>): PlanCan
     };
   }
   return {
-    time: current?.lb !== undefined ? `調整ライブ × ${current.lb}炊き` : "調整ライブ",
-    label: song ? `${song.title}（編成そのまま）` : "調整ライブ（編成そのまま）",
+    time: "調整（編成そのまま）",
+    label: song ? song.title : "調整ライブ",
     percent: `+${requiredPt.toLocaleString()} Pt`,
     warn: false,
     jacket: song?.jacketUrl,
@@ -204,20 +207,22 @@ function step2Rows(step2: AdjustCanvasStep2 | undefined): PlanCanvasRow[] {
  */
 function finalRunRow(fr: AdjustCanvasFinalRun): PlanCanvasRow {
   if (fr.kind === "scoreZero") {
+    // 種別「ラストプレイ」＋曲名を上段に統一。「叩かない」は scoreText で下段先頭に
+    // 置き、焚き数(lb)と横一列に揃える（他行とレイアウトを統一）。
     return {
-      time: `ラストプレイ × ${fr.finishLb}炊き`,
-      label: "叩かずにクリア（スコア0）",
-      sub: fr.song ? `${fr.song.title}（基礎点${fr.basePoint}）` : `基礎点${fr.basePoint}の曲`,
+      time: "ラストプレイ",
+      label: fr.song ? `${fr.song.title}（基礎点${fr.basePoint}）` : `基礎点${fr.basePoint}の曲`,
       percent: `+${fr.pt.toLocaleString()} Pt`,
       warn: false,
       jacket: fr.song?.jacketUrl,
+      scoreText: "叩かない（スコア0）",
       lb: fr.finishLb,
     };
   }
   const p = fr.plan;
   const rest = fr.planCount - 1;
   return {
-    time: p ? `ラストプレイ × ${p.liveBonus}炊き` : "ラストプレイ",
+    time: "ラストプレイ",
     label: fr.song ? `${fr.song.title}（基礎点${fr.basePoint}）` : `基礎点${fr.basePoint}の曲`,
     sub: p ? (rest > 0 ? `（他${rest}案）` : undefined) : "条件を満たすプランが見つかりませんでした",
     percent: `+${fr.pt.toLocaleString()} Pt`,
@@ -291,9 +296,11 @@ export function buildAdjustPlanCanvasData(args: {
   return {
     heading: "ポイント調整プラン",
     songTitle: `目標 ${targetPt.toLocaleString()} Pt`,
+    // 差分（あといくつか）は目標の右に緑・太字で強調（diffLabel）。meta には出さず重複を避ける。
+    diffLabel: `差分 ${(targetPt - currentPt).toLocaleString()} Pt`,
     // meta は2行までしか入らない（HEADER_H の都合）。詰め込みすぎない。
     meta: [
-      `現在 ${currentPt.toLocaleString()} → 差分 ${(targetPt - currentPt).toLocaleString()} Pt`,
+      `現在 ${currentPt.toLocaleString()} Pt`,
       finalRun
         ? `調整 ${requiredPt.toLocaleString()} ＋ ラストプレイ ${(finalRun.pt).toLocaleString()} ・ スコア上限 ${maxScore.toLocaleString()}`
         : `調整 ${requiredPt.toLocaleString()} Pt ・ スコア上限 ${maxScore.toLocaleString()}`,
@@ -306,6 +313,8 @@ export function buildAdjustPlanCanvasData(args: {
       { label: "LB合計", value: `${totalLb}（クリスタル約${totalLb * CRYSTALS_PER_LIVE_BONUS}個）` },
     ],
     accent,
+    // 獲得Pt・フッター・差分は濃い緑で（明るいユニットカラーはコントラストが弱いため）。
+    valueColor: ANALYZER_GREEN,
     footer: "Sekai-Master / ポイント調整アナライザー",
     // 「+470,000 Pt」級の累積Ptを右カラムに出すため既定72pxでは足りない。
     rightColW: 110,
