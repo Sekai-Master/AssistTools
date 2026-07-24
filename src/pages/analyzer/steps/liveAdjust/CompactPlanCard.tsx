@@ -11,7 +11,6 @@ import { scoreBandBadge } from "../../lib/scoreBandBadge";
 export function CompactPlanCard({
   plan,
   timeLabel,
-  maxScore,
   adopted,
   singleSong,
   onAdopt,
@@ -19,7 +18,6 @@ export function CompactPlanCard({
   plan: MultiLivePlan;
   /** 「約N分」や「約N分（主役比 +M分）」など、呼び出し側で組み立てた時間表示。 */
   timeLabel: string;
-  maxScore: number;
   /** このカードが現在の採択中プランそのものか（弱点10）。 */
   adopted: boolean;
   /** 全ユニットが同一基礎点か（P1-6。同一曲縛りトグルで探す対象の目印）。 */
@@ -56,7 +54,7 @@ export function CompactPlanCard({
         {plan.units.map((u, j) => (
           <div key={j} className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <UnitLine u={u} />
-            <ScoreBandTag band={scoreBandBadge(u, maxScore)} />
+            <ScoreBandTag band={scoreBandBadge(u)} />
           </div>
         ))}
       </div>

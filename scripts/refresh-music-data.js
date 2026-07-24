@@ -14,6 +14,8 @@ const SEKAI_BEST_BASE = 'https://storage.sekai.best';
 const musicsUrl = `${MASTER_DB_BASE}/musics.json`;
 const artistsUrl = `${MASTER_DB_BASE}/musicArtists.json`;
 const metasUrl = `${SEKAI_BEST_BASE}/sekai-best-assets/music_metas.json`;
+// イベント限定開催でソロ常設プレイ不可のメドレー等を判定する。
+const limitedTimeMusicsUrl = `${MASTER_DB_BASE}/limitedTimeMusics.json`;
 const jacketRemoteUrl = (id) =>
   `${SEKAI_BEST_BASE}/sekai-jp-assets/music/jacket/jacket_s_${id}/jacket_s_${id}.webp`;
 
@@ -36,11 +38,26 @@ async function toThumbnail(input) {
 }
 
 (async () => {
-  const [musics, artists, metas] = await Promise.all([
+  const [musics, artists, metas, limitedTimeMusics] = await Promise.all([
     fetchJson(musicsUrl),
     fetchJson(artistsUrl),
     fetchJson(metasUrl),
+    fetchJson(limitedTimeMusicsUrl),
   ]);
+
+  // メドレー等の除外（調整候補の母集合から落とす）。
+  // 判定は limitedTimeMusics.json の「collaborationModeId を持たないエントリ」に一本化する。
+  //   - collaborationModeId 無し = イベント限定開催でソロ常設に無い（メドレー 674/675/676・
+  //     初音ミクの激唱 388）。これらは調整曲として選べないので published=false を焼き込む。
+  //   - collaborationModeId 有り = コラボ楽曲（707/708/709）で常設プレイ可なので残す。
+  // categories / Unit / isFullLength / タイトル文字列は判定不可・誤爆（380 スターダストメドレー
+  // は limitedTimeMusics に無く published のまま）のため使わない。musicDifficulties での
+  // 独立クロスチェックは検証済みだが、フェッチを増やさないため判定はここに一本化する。
+  const limitedExcludedIds = new Set(
+    limitedTimeMusics
+      .filter((e) => e && e.collaborationModeId === undefined)
+      .map((e) => String(e.musicId).padStart(3, '0'))
+  );
 
   let deletedSongs = [];
   const deletedPath = path.join(DATA_DIR, 'deletedSongs.json');
@@ -76,6 +93,8 @@ async function toThumbnail(input) {
     const meta = metas.find((x) => x.music_id === m.id);
     let published = m.publishedAt <= now;
     if (deletedIds.has(id)) published = false;
+    // メドレー等（イベント限定・ソロ常設なし）は調整候補から除外する。
+    if (limitedExcludedIds.has(id)) published = false;
     return {
       id,
       title: m.title,

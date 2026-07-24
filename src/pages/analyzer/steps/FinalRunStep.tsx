@@ -1,46 +1,40 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { StepSection } from "./StepSection";
-import { NeuButton } from "../../../components/ui/NeuButton";
-import { SongSearchModal } from "../../../components/SongSearchModal";
 import { PlanSelectionUI } from "../plan/PlanSelectionUI";
 import type { UniversalPlan } from "../plan/types";
 import { byDistanceTo, recommendPlans } from "../lib/recommendPlans";
 import type { CalculationResultV6 } from "../lib/calculator";
+import type { LastPlayOutcome } from "../lib/lastPlay";
 import type { AnalyzerMusic } from "../useAnalyzerMusics";
-import type { AliasEntry } from "../../bingo/useBingoMusics";
 import { onJacketError } from "../../../lib/img";
 
 interface Props {
   result: CalculationResultV6;
-  musics: AnalyzerMusic[];
-  aliases: AliasEntry[];
-  jacketBase: string;
+  /** Step3の確定結果（none/earn/scoreZero）。曲・Ptの表示出し分けに使う。 */
+  lastPlay: LastPlayOutcome;
   bonus: number;
+  jacketBase: string;
   selectedSong?: AnalyzerMusic;
-  onChangeSong: (id: string) => void;
-  /**
-   * 採択中のラストランプラン。親が保持する（画像出力に同じ選択を反映するため）。
-   * ここを内部stateにすると、Step②の画像が「ユーザーが選んだ案」ではなく
-   * 常に先頭案を描いてしまう。
-   */
+  /** 採択中のラストプレイプラン（earn モードのみ使う）。 */
   selectedPlan: UniversalPlan | null;
   onSelectPlan: (plan: UniversalPlan | null) => void;
 }
 
-/** Step3: ラストラン。楽曲を変えると親で再計算し、推奨プランを出す。 */
+/**
+ * Step3: ラストプレイ。R5でモードにより表示を出し分ける
+ *   earn      … 従来のラストラン（希望Ptのプラン一覧から選ぶ）
+ *   scoreZero … 締め値・LBを自動算出して1枚のカードで見せる（叩かない）
+ * mode "none" は PointAnalyzer 側でそもそもこのコンポーネントを描画しない。
+ */
 export function FinalRunStep({
   result,
-  musics,
-  aliases,
-  jacketBase,
+  lastPlay,
   bonus,
+  jacketBase,
   selectedSong,
-  onChangeSong,
   selectedPlan,
   onSelectPlan,
 }: Props) {
-  const [modalOpen, setModalOpen] = useState(false);
-
   const recommended = useMemo(
     () => recommendPlans(result.finalRunPlans, byDistanceTo(bonus)),
     [result.finalRunPlans, bonus]
@@ -54,10 +48,54 @@ export function FinalRunStep({
 
   const jacketSrc = selectedSong ? `${jacketBase}${selectedSong.jacketLink}` : undefined;
 
+  if (lastPlay.mode === "scoreZero") {
+    return (
+      <StepSection
+        unit="n25"
+        title="③ ラストプレイ（スコア0でクリア）"
+        footerLabel="このステップ完了時"
+        footerValue={reached}
+      >
+        {lastPlay.status === "OK" ? (
+          <div className="flex items-center gap-4 rounded-xl bg-neu p-4 shadow-neu-inset">
+            {jacketSrc ? (
+              <img
+                src={jacketSrc}
+                alt=""
+                className="h-12 w-12 rounded-lg object-cover shadow-neu-sm shrink-0"
+                onError={onJacketError}
+              />
+            ) : (
+              <div className="h-12 w-12 rounded-lg bg-neu shadow-neu-inset shrink-0" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-bold text-slate-700">
+                {selectedSong ? selectedSong.title : "楽曲"}
+              </p>
+              <p className="text-xs text-slate-500">
+                叩かずにクリア（スコア0固定）・LB {lastPlay.finishLb}炊き
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-lg font-bold tabular-nums" style={{ color: "var(--unit-color)" }}>
+                +{lastPlay.pt.toLocaleString()} Pt
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl bg-rose-50 p-6 text-center text-sm text-rose-600">
+            この楽曲・目標ではスコア0クリアで締められませんでした。別の楽曲を試すか、
+            「希望Ptを稼ぐ」モードに切り替えてください。
+          </div>
+        )}
+      </StepSection>
+    );
+  }
+
   return (
     <StepSection
       unit="n25"
-      title={`③ ラストラン（${result.finalRunPt.toLocaleString()} Pt）`}
+      title={`③ ラストプレイ（${result.finalRunPt.toLocaleString()} Pt）`}
       footerLabel="このステップ完了時"
       footerValue={reached}
     >
@@ -78,9 +116,6 @@ export function FinalRunStep({
           </p>
           <p className="text-xs text-slate-500">基礎点 {result.finalBase}</p>
         </div>
-        <NeuButton className="!px-3 !py-1.5 !text-xs shrink-0" onClick={() => setModalOpen(true)}>
-          曲を変更
-        </NeuButton>
       </div>
 
       {result.finalRunPlans.length > 0 ? (
@@ -89,31 +124,15 @@ export function FinalRunStep({
           recommendedPlans={recommended}
           selectedPlan={selectedPlan}
           onSelectPlan={onSelectPlan}
-          modalTitle="ラストラン 調整プラン一覧"
+          modalTitle="ラストプレイ 調整プラン一覧"
           jacketSrc={jacketSrc}
           songTitle={selectedSong?.title}
         />
       ) : (
         <div className="rounded-xl bg-rose-50 p-6 text-center text-sm text-rose-600">
           この楽曲で {result.finalRunPt.toLocaleString()} Pt を獲得するプランは見つかりませんでした
-          （ボーナス 0〜{bonus}% で探索）。別の楽曲を試してください。
+          （ボーナス 0〜{bonus}% で探索）。入力フォームで別の楽曲を試してください。
         </div>
-      )}
-
-      {modalOpen && (
-        <SongSearchModal
-          musics={musics}
-          aliases={aliases}
-          jacketBase={jacketBase}
-          title="ラストランの楽曲を選択"
-          meta={(m) => `基礎点 ${m.basePoint}`}
-          onSelect={(m) => {
-            onChangeSong(m.id);
-            onSelectPlan(null);
-            setModalOpen(false);
-          }}
-          onClose={() => setModalOpen(false)}
-        />
       )}
     </StepSection>
   );

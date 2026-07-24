@@ -51,6 +51,18 @@ import { calcLivePt } from "./calcLivePt";
  * までしか回さない。以前は 4,000,000 点固定で、回数最小化が必然的に上限へ
  * 張り付くため「400万点のソロライブを6回」という実行不能プランを検証済みとして
  * 出していた（docs/porting/03-analyzer.md:26 の既知リスクが顕在化したもの）。
+ *
+ * ## この探索クラスの構造的な死角（旧 sameBaseAdjust.ts から要約移植）
+ *
+ * n=1・n=2 は前線側が全数照合（v の全掃引）なので、1〜2値の解は単一基礎点でも
+ * 複数基礎点でも常に正しく見つかる。3値の解は EXHAUSTIVE_MAX_LIVES 本以内の帯
+ * （liveRequired < (EXHAUSTIVE_MAX_LIVES+1) × minPtPerLive）でのみ
+ * findExhaustiveExact が拾う。**この帯の外の3値解、および4本以上を要する解
+ * （3値以上の組合せ）は原理的に存在しても見つからない**（破壊者レポート実測:
+ * 52,817件中167件・0.32%、すべて「4本以上×3値以上」。例 9,465 = 1100+1100+1220+6045）。
+ * この限界の拡張は禁じ手（frontier/exhaustive の探索クラス変更）なので、
+ * landability（"UNREACHABLE" | "UNPROVEN"）で「無い」と「この範囲では見つからない」を
+ * 区別するに留める。UNPROVEN のとき UI は断定表現を避けること。
  */
 
 /** 同一条件（曲・LB・スコア帯）で叩くライブのまとまり。 */
@@ -63,6 +75,13 @@ export interface MultiLiveUnit {
   pt: number;
   /** この条件で叩く回数。 */
   count: number;
+  /**
+   * モードA（曲固定・ボーナス可変）用の目標イベントボーナス（%・生値）。
+   * モードB経路（曲可変・現ボーナス固定）では **undefined のまま**にし、
+   * unitOf の条件付きスプレッドでキー自体を出さない（既存ゴールデン・凍結の
+   * オブジェクト形状をバイト単位で維持するため。R6 §1-1）。
+   */
+  bonus?: number;
 }
 
 export interface MultiLivePlan {
@@ -145,8 +164,14 @@ export const MAX_ADJUST_LIVE_COUNT = 50;
 /** 提示するプラン数の上限。トレードオフ前線が長いときは代表点に間引く。 */
 const MAX_PLANS = 5;
 
-/** 同一Ptの実現手段を何通りまで覚えるか（曲候補のバリエーション用）。 */
-const MAX_REPS_PER_PT = 8;
+/**
+ * 同一Ptの実現手段を何通りまで覚えるか（曲候補のバリエーション用）。
+ *
+ * export する理由（R6 §1-2）: モードA複数化の modeAMulti.ts が
+ * buildBonusSweepTable（buildReachablePtTable の鏡）で同じ上限を使う。
+ * 表の作り方が2箇所に割れて挙動が食い違わないよう、値・用途を変えずに公開する。
+ */
+export const MAX_REPS_PER_PT = 8;
 
 /** 「同じN回で組み替える」の提示上限。MAX_PLANS と同種の提示ポリシー定数。 */
 const MAX_SAME_COUNT_VARIANTS = 4;
@@ -185,6 +210,11 @@ export interface Rep {
   basePoint: number;
   liveBonus: number;
   scoreN: number;
+  /**
+   * モードA（ボーナス掃引）でこの手段が使う目標ボーナス（生値）。
+   * モードB経路（buildReachablePtTable）では常に undefined。
+   */
+  bonus?: number;
 }
 
 /**
@@ -211,6 +241,9 @@ function unitOf(rep: Rep, pt: number, count: number): MultiLiveUnit {
     maxScore: (rep.scoreN + 1) * SCORE_STEP - 1,
     pt,
     count,
+    // bonus は rep が持つときだけキーを出す（モードB経路は undefined なので
+    // スプレッドが空になり、オブジェクト形状が従来とバイト単位で一致する）。
+    ...(rep.bonus !== undefined ? { bonus: rep.bonus } : {}),
   };
 }
 

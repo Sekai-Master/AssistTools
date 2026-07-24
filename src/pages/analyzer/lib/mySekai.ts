@@ -58,20 +58,33 @@ export function calculateUnitBasePt(
 
 /**
  * 埋めるべき差分に対して、マイセカイの採取物を最大限割り当てる。
- * ライブ端数調整のために最低 LIVE_ADJUST_RESERVE Pt を残す。
+ * ライブ端数調整のために最低 reserve Pt を残す（既定 LIVE_ADJUST_RESERVE）。
+ *
+ * ## reserve を defaulted 引数にした理由（R5・逆算構造）
+ *
+ * 固定 LIVE_ADJUST_RESERVE=100 は「エビの基礎点＝モードAで確保すべき額」として
+ * 正しい値だが、モードB（ボーナス固定・曲可変）では 1本の最小獲得Pt未満になり、
+ * Step1 が取りすぎて Step2 が着地不能になる（docs/point-adjust-step3-and-envy-brief.md §2）。
+ * 確保額は Step2 のモードとボーナスで動的に決まるべきなので、呼び出し側
+ * （dynamicReserve.ts 経由の calculator.integrated）が算出値を渡せるようにする。
+ * **既定引数を省略した経路は従来と bit 単位で同一**（凍結テスト mySekai.test.ts が担保）。
  *
  * 配分できない条件（差分が小さい / 単価が0）のときは何も採らない。
  * 単価0のガードは無限ループ防止も兼ねている。0 だと capacity が Infinity になり、
  * `for (let a = Infinity; a >= Math.max(0, Infinity - 1); a--)` の条件が
  * `Infinity - 1 === Infinity` により永久に真になる。
  */
-export function allocateMySekai(adjustableDiff: number, unitBasePt: number): MySekaiAllocation {
-  if (!(adjustableDiff > LIVE_ADJUST_RESERVE && unitBasePt > 0)) {
+export function allocateMySekai(
+  adjustableDiff: number,
+  unitBasePt: number,
+  reserve: number = LIVE_ADJUST_RESERVE
+): MySekaiAllocation {
+  if (!(adjustableDiff > reserve && unitBasePt > 0)) {
     return { ...EMPTY_ALLOCATION };
   }
 
   // Capacity in 0.1 units
-  const capacity = Math.floor(((adjustableDiff - LIVE_ADJUST_RESERVE) * 10) / unitBasePt);
+  const capacity = Math.floor(((adjustableDiff - reserve) * 10) / unitBasePt);
 
   let bestTotalVal = -1;
   let bestA = 0;
@@ -113,6 +126,10 @@ export function allocateMySekai(adjustableDiff: number, unitBasePt: number): MyS
 }
 
 /** 配分が実行されたか（ログの出し分けに使う。totalPt===0 では判定できない）。 */
-export function isAllocationAttempted(adjustableDiff: number, unitBasePt: number): boolean {
-  return adjustableDiff > LIVE_ADJUST_RESERVE && unitBasePt > 0;
+export function isAllocationAttempted(
+  adjustableDiff: number,
+  unitBasePt: number,
+  reserve: number = LIVE_ADJUST_RESERVE
+): boolean {
+  return adjustableDiff > reserve && unitBasePt > 0;
 }

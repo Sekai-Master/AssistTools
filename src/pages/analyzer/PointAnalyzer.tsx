@@ -4,159 +4,236 @@ import { Panel } from "../../components/ui/Panel";
 import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { ActionButton } from "../../components/ui/ActionButton";
-import { NeuButton } from "../../components/ui/NeuButton";
 import { Switch } from "../../components/ui/Switch";
-import { SongSearchModal } from "../../components/SongSearchModal";
 import { useAnalyzerMusics } from "./useAnalyzerMusics";
-import { calculatePlanV6, ENVY_ID, type CalculationResultV6 } from "./lib/calculator";
-import { MAX_PT_VALUES_PER_PLAN } from "./lib/multiLiveAdjust";
+import { ENVY_ID, type CalculationOptionsV6, type CalculationResultV6 } from "./lib/calculator";
+import { DEFAULT_BASE_POINT } from "./lib/constants";
 import { calculateUnitBasePt } from "./lib/mySekai";
 import { parseAmount, completeTargetSuffix } from "./lib/inputParsing";
-import { byDistanceTo, recommendPlans } from "./lib/recommendPlans";
+import { byBonusDesc, byDistanceTo, recommendPlans } from "./lib/recommendPlans";
+import {
+  earnFinalPtError,
+  planWithLastPlay,
+  type LastPlayMode,
+  type LastPlayOutcome,
+} from "./lib/lastPlay";
 import type { UniversalPlan } from "./plan/types";
 import { MySekaiStep } from "./steps/MySekaiStep";
 import { LiveAdjustStep } from "./steps/LiveAdjustStep";
 import { FinalRunStep } from "./steps/FinalRunStep";
-import { onJacketError } from "../../lib/img";
+import { LastPlaySettings } from "./steps/LastPlaySettings";
+import { PlanExportPanel } from "./steps/PlanExportPanel";
+import type { Adopted, Step2Mode } from "./steps/liveAdjust/types";
+import { JACKET_BASE } from "./assetPaths";
 
-const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
+/**
+ * 計算実行時に固定した全入力のスナップショット（R6 §6-1）。
+ *
+ * 旧 appliedOptions / appliedBonus の2本の ref を1本に統合した。Step2の曲/モード変更
+ * による再計算（recalcWithStep2Song / recalcWithStep2Mode）は、生の state を読まず
+ * **必ずこのスナップショットだけ**から入力を組み立てる。生 state の読み取りを
+ * handleCalc 以外で禁止することで、「計算後にトグルだけ触ってから曲を変える」ような
+ * 操作で表示中の結果と違う条件が黙って混ざるのを防ぐ。
+ */
+interface AppliedInputs {
+  current: number;
+  target: number;
+  talent: number;
+  bonus: number;
+  hasWorldPass: boolean;
+  lastPlaySongId: string;
+  lastPlayMode: LastPlayMode;
+  finalText: string;
+  options: CalculationOptionsV6;
+}
 
 export default function PointAnalyzer() {
   const { musics, aliases, loading, error: dataError } = useAnalyzerMusics();
 
   const [current, setCurrent] = useState("");
   const [target, setTarget] = useState("");
-  const [final, setFinal] = useState("");
   const [talent, setTalent] = useState("");
   const [bonus, setBonus] = useState("");
   const [hasWorldPass, setHasWorldPass] = useState(false);
-  // マイセカイを使わない周回者向けモード。ONが従来挙動（既定）。
-  const [useMySekai, setUseMySekai] = useState(true);
-  // スコア上限（詳細設定）。文字列のまま持ち、数値化は計算時に行う。
-  // 空欄・0以下・非数は undefined を渡し、lib 側の既定値（1,100,000）に正規化させる。
+  // R5: マイセカイ既定OFF（周回者の主用途に合わせる）。
+  const [useMySekai, setUseMySekai] = useState(false);
+  // スコア上限（詳細設定）。空欄・0以下・非数は undefined を渡し、lib 側の既定値に正規化させる。
   const [maxScoreInput, setMaxScoreInput] = useState("");
-  // ラストランの採択プラン（Step③の選択）。画像出力にも同じ選択を使うため親で保持する。
+
+  // Step3（ラストプレイ）。3択の既定は「指定しない」。
+  const [lastPlayMode, setLastPlayMode] = useState<LastPlayMode>("none");
+  const [finalText, setFinalText] = useState("");
+  const [lastPlaySongId, setLastPlaySongId] = useState(ENVY_ID);
   const [finalPlan, setFinalPlan] = useState<UniversalPlan | null>(null);
-  const [songId, setSongId] = useState(ENVY_ID);
-  const [songModalOpen, setSongModalOpen] = useState(false);
-  const [result, setResult] = useState<CalculationResultV6 | null>(null);
+
+  // Step2（ライブ調整）。既定はモードA（任意の曲＋ボーナス選択）。
+  const [step2Mode, setStep2Mode] = useState<Step2Mode>("songFixed");
+  const [step2SongId, setStep2SongId] = useState(ENVY_ID);
+  const [sweepPlan, setSweepPlan] = useState<UniversalPlan | null>(null);
+  const [adopted, setAdopted] = useState<Adopted>({ kind: "primary" });
+  const [songByBase, setSongByBase] = useState<Record<number, string>>({});
+
+  const [state, setState] = useState<{ result: CalculationResultV6; lastPlay: LastPlayOutcome } | null>(
+    null
+  );
   const [error, setError] = useState<string | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
-  // 計算ボタン押下時だけ結果へスクロールする（Step3の曲変更での再計算では飛ばない）。
   const scrollOnResult = useRef(false);
-  // 計算実行時に適用したオプションのスナップショット。
-  // recalcWithSong（Step3の曲変更）が「いまの」state を読むと、計算後にトグルや
-  // スコア上限を触ってから曲を変えた場合に、計算ボタンを押していないのに
-  // モードごと結果が入れ替わってしまう（R3-4 LOW）。表示中の結果と同じ条件で
-  // 再計算するため、handleCalc 時点の値を固定して使う。
-  const appliedOptions = useRef<{ useMySekai: boolean; maxScore?: number }>({
-    useMySekai: true,
-  });
-  // 計算実行時のボーナスのスナップショット（弱点1対応）。LiveAdjustStep/FinalRunStep は
-  // これを受け取って、result.requiredPt（計算時ボーナスで導出済み）と同じ条件で
-  // 独立探索（findSameBasePlans/planScoreZeroFinish）や表示用ソートを行う。
-  // 計算後に入力欄のボーナスだけ書き換えてからトグルを押すと、表示中 result に対し
-  // 別ボーナスで計算したプランを「厳密着地」として出してしまう事故（appliedOptions
-  // と同じ穴のbonus版）をここで塞ぐ。appliedOptions（useMySekai/maxScore）と同じ
-  // スナップショット方式に揃える。
-  const appliedBonus = useRef(0);
+  // 計算実行時に固定した全入力のスナップショット（R6 §6-1）。null は「未計算」。
+  const appliedInputs = useRef<AppliedInputs | null>(null);
 
   const bonusNum = parseAmount(bonus, true);
 
   useEffect(() => {
-    if (!result || !scrollOnResult.current) return;
+    if (!state || !scrollOnResult.current) return;
     scrollOnResult.current = false;
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     resultRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
-  }, [result]);
+  }, [state]);
 
-  // 入力中のマイセカイ単価ヒント
+  // 致命傷対策: 新しい計算結果が来るたびに Step2 の採択状態を初期化する。
+  // 残額が変わった新しい結果に対して古い代替案の index が無言で横滑りするのを防ぐ。
+  useEffect(() => {
+    setAdopted({ kind: "primary" });
+    setSweepPlan(null);
+  }, [state]);
+
   const unitHint = useMemo(
     () => calculateUnitBasePt(parseAmount(talent), bonusNum, hasWorldPass),
     [talent, bonusNum, hasWorldPass]
   );
 
-  // OFF時の複数回プラン結果（ON時は undefined）。NGバナーの理由別文言に使う。
-  const resultMulti = result?.liveAdjustment.multi;
-
-  // ラストランの採択プラン。Step③の選択をStep②の画像出力にも反映させるため親で持つ。
-  // 未選択のときは推奨順の先頭＝画面で最初に薦めている案を実効値として使う。
-  // 弱点1対応: ソートも appliedBonus（result計算時のボーナス）で行う。bonusNum
-  // （入力欄のライブ値）のままだと、FinalRunStep内部の同種のソート（同じく
-  // appliedBonus化済み）と選ぶ先頭案がずれる事故になる。appliedBonus.current は
-  // handleCalc/recalcWithSong が result を差し替える直前に必ず同期更新するので、
-  // このメモが再計算されるタイミング（result の変化）では常に対応済みの値になる。
-  const finalRecommended = useMemo(
-    () => (result ? recommendPlans(result.finalRunPlans, byDistanceTo(appliedBonus.current)) : []),
-    [result]
-  );
-  const effectiveFinalPlan = finalPlan ?? finalRecommended[0];
-
-  const selectedSong = musics.find((m) => m.id === songId);
   const musicList = useMemo(
     () => musics.map((m) => ({ id: m.id, basePoint: m.basePoint })),
     [musics]
   );
+
+  const step2Song = musics.find((m) => m.id === step2SongId);
+  const finalSong = musics.find((m) => m.id === lastPlaySongId);
+
+  const sweepRecommended = useMemo(
+    () =>
+      state
+        ? recommendPlans(state.result.liveAdjustment.adjustmentPlans ?? [], byBonusDesc)
+        : [],
+    [state]
+  );
+  const effectiveSweepPlan = sweepPlan ?? sweepRecommended[0] ?? null;
+
+  const finalRecommended = useMemo(
+    () =>
+      state
+        ? recommendPlans(state.result.finalRunPlans, byDistanceTo(appliedInputs.current?.bonus ?? 0))
+        : [],
+    [state]
+  );
+  const effectiveFinalPlan = finalPlan ?? finalRecommended[0] ?? null;
+
+  const resolveBasePoint = (songId: string): number =>
+    musicList.find((m) => m.id === songId)?.basePoint ?? DEFAULT_BASE_POINT;
+
+  /**
+   * Step2 モードAの基礎点の組み立て規則（R6 §6-2・弱点6の是正）。
+   *
+   * モードB（bonusFixed）表示中は隠れた曲選択（step2SongId）が計算に届かないよう、
+   * songFixed のときだけ選択曲の基礎点を読む1本の funnel にする。
+   * これで「モードB・非既定の step2SongId」でも既定曲と同じ計算条件になる。
+   */
+  const computeStep2ABase = (mode: Step2Mode, songId: string): number =>
+    mode === "songFixed" ? resolveBasePoint(songId) : DEFAULT_BASE_POINT;
+
+  /** appliedInputs スナップショットから calculatePlanV6 を1回呼び、結果を state に反映する。 */
+  const recalcFromSnapshot = (snap: AppliedInputs, options: CalculationOptionsV6) => {
+    appliedInputs.current = { ...snap, options };
+    const { result, lastPlay } = planWithLastPlay(
+      {
+        currentPt: snap.current,
+        targetPt: snap.target,
+        talent: snap.talent,
+        bonus: snap.bonus,
+        hasWorldPass: snap.hasWorldPass,
+        lastPlaySongId: snap.lastPlaySongId,
+        musicsList: musicList,
+        options,
+      },
+      snap.lastPlayMode,
+      snap.finalText
+    );
+    setState({ result, lastPlay });
+  };
 
   const handleCalc = () => {
     if (musics.length === 0)
       return reject("楽曲データを読み込み中です。少し待ってから再度お試しください。");
     const c = parseAmount(current);
     const tv = parseAmount(target);
-    const f = parseAmount(final);
     const tal = parseAmount(talent);
     const bon = parseAmount(bonus, true);
     if (tv <= c) return reject("目標ポイントは現在ポイントより大きくしてください。");
     if (!Number.isFinite(tal) || tal < 0) return reject("総合力は0以上で入力してください。");
     if (!Number.isFinite(bon) || bon < 0 || bon > 1000)
       return reject("イベントボーナスは0〜1000%で入力してください。");
-    if (f > tv - c) return reject("最終獲得希望ポイントが差分を超えています。");
+    // 希望Ptの入力バリデーションは「希望Ptを稼ぐ」モードのときだけ意味を持つ（弱点5）。
+    if (lastPlayMode === "earn") {
+      const err = earnFinalPtError(finalText, tv - c);
+      if (err) return reject(err);
+    }
     setError(null);
     scrollOnResult.current = true;
-    // 0以下・非数（parseAmount は 0 を返す）は undefined にして lib 側の既定値に委ねる。
     const ms = parseAmount(maxScoreInput);
-    const options = { useMySekai, maxScore: ms > 0 ? ms : undefined };
-    // Step3の曲変更再計算で同じ条件を使えるよう、適用オプションを固定する。
-    appliedOptions.current = options;
-    // 弱点1対応: この計算に実際使ったボーナスを固定する（appliedOptions と同じ理由）。
-    appliedBonus.current = bon;
-    // 前回の採択プランは新しい候補一覧に存在しない可能性があるので捨てる
-    // （残すと画像に古い条件のラストランが載る）。
+    const options: CalculationOptionsV6 = {
+      useMySekai,
+      maxScore: ms > 0 ? ms : undefined,
+      integrated: { step2ABase: computeStep2ABase(step2Mode, step2SongId) },
+    };
     setFinalPlan(null);
-    setResult(calculatePlanV6(c, tv, f, tal, bon, hasWorldPass, songId, musicList, options));
-  };
-
-  // Step3で楽曲を変えたときの再計算（検証済み前提・スクロールはしない）。
-  // オプションは「いまの」state ではなく handleCalc 時のスナップショットを使う。
-  // state を読むと、計算後にトグルや上限を変更してから曲を変えた場合に
-  // 表示中の結果と違う条件で黙って再計算されてしまうため（R3-4 LOW）。
-  const recalcWithSong = (newId: string) => {
-    setSongId(newId);
-    if (!result) return;
-    // 曲が変わると基礎点が変わり候補一覧も総入れ替えになるため、採択も破棄する。
-    setFinalPlan(null);
-    // このパスは bonus を「いまの」state（bonusNum）で再計算する既存仕様（R3-4）。
-    // その代わり、実際に使ったボーナス値を appliedBonus に反映しておく
-    // （弱点1対応: 子コンポーネントに渡す bonus は常に「result 計算に実際使った値」
-    // であるという不変条件を、この再計算パスでも保つ）。
-    appliedBonus.current = bonusNum;
-    setResult(
-      calculatePlanV6(
-        parseAmount(current),
-        parseAmount(target),
-        parseAmount(final),
-        parseAmount(talent),
-        bonusNum,
+    setSweepPlan(null);
+    // 全入力をここで一括固定する（handleCalc がスナップショットの唯一の書き手）。
+    recalcFromSnapshot(
+      {
+        current: c,
+        target: tv,
+        talent: tal,
+        bonus: bon,
         hasWorldPass,
-        newId,
-        musicList,
-        appliedOptions.current
-      )
+        lastPlaySongId,
+        lastPlayMode,
+        finalText,
+        options,
+      },
+      options
     );
   };
 
+  // Step2モードAで曲を変えたときの再計算（検証済み前提・スクロールはしない）。
+  // appliedInputs のみから読み、options.integrated.step2ABase だけ差し替える。
+  const recalcWithStep2Song = (newId: string) => {
+    setStep2SongId(newId);
+    const snap = appliedInputs.current;
+    if (!snap) return; // 未計算なら no-op（曲IDのstateだけ更新して終わる）
+    const options: CalculationOptionsV6 = {
+      ...snap.options,
+      integrated: { step2ABase: computeStep2ABase(step2Mode, newId) },
+    };
+    setSweepPlan(null);
+    recalcFromSnapshot(snap, options);
+  };
+
+  // Step2モード切替時の再計算（R6 §6-2）。表示中モードと計算条件を必ず一致させる。
+  const recalcWithStep2Mode = (newMode: Step2Mode) => {
+    setStep2Mode(newMode);
+    const snap = appliedInputs.current;
+    if (!snap) return; // 未計算なら no-op
+    const options: CalculationOptionsV6 = {
+      ...snap.options,
+      integrated: { step2ABase: computeStep2ABase(newMode, step2SongId) },
+    };
+    setSweepPlan(null);
+    recalcFromSnapshot(snap, options);
+  };
+
   function reject(msg: string) {
-    setResult(null);
+    setState(null);
     setError(msg);
   }
 
@@ -197,15 +274,6 @@ export default function PointAnalyzer() {
               placeholder="例: 13,000,000"
             />
           </Field>
-          <Field label="最終獲得希望ポイント（任意）" htmlFor="pa-final">
-            <NeuInput
-              id="pa-final"
-              inputMode="numeric"
-              value={final}
-              onChange={(e) => setFinal(e.target.value)}
-              placeholder="例: 1005（無ければ0）"
-            />
-          </Field>
         </div>
       </Panel>
 
@@ -232,7 +300,7 @@ export default function PointAnalyzer() {
           <Field
             label="スコア上限（詳細設定）"
             htmlFor="pa-max-score"
-            hint="調整・ラストランで狙えるスコアの上限。空欄で既定値（内部上限 3,000,000）"
+            hint="調整・ラストプレイで狙えるスコアの上限。空欄で既定値（内部上限 3,000,000）"
           >
             <NeuInput
               id="pa-max-score"
@@ -242,9 +310,11 @@ export default function PointAnalyzer() {
               placeholder="既定 1,100,000"
             />
           </Field>
-          <Switch checked={hasWorldPass} onChange={setHasWorldPass} label="ワールドパス 有効" />
           <Switch checked={useMySekai} onChange={setUseMySekai} label="マイセカイを利用する" />
-          {/* OFF時は採取しないので単価表示は出さない（無関係な数字で混乱させないため）。 */}
+          {/* R5: ワールドパスはマイセカイ利用時のみ意味を持つので、ON時だけ表示する。 */}
+          {useMySekai && (
+            <Switch checked={hasWorldPass} onChange={setHasWorldPass} label="ワールドパス 有効" />
+          )}
           {useMySekai && (
             <div className="text-sm text-slate-500">
               <p>
@@ -256,7 +326,6 @@ export default function PointAnalyzer() {
                   β
                 </span>
               </p>
-              {/* 単価の根拠が揃っていない点を隠さない。詳細は docs/mysekai-unit-pt-open-questions.md */}
               <p className="mt-1 text-xs text-amber-700">
                 マイセカイの単価は未確定要素があります。通常スタミナ（水色）とブーストスタミナ（オレンジ）で
                 獲得ポイントが変わるという情報があり、現在の計算はこれを区別していません。
@@ -264,43 +333,21 @@ export default function PointAnalyzer() {
               </p>
             </div>
           )}
-          <Field label="最終楽曲" hint={loading ? "楽曲データ読込中…" : `${musics.length}曲から選択`}>
-            <div className="flex items-center gap-3">
-              {selectedSong ? (
-                <img
-                  src={`${JACKET_BASE}${selectedSong.jacketLink}`}
-                  alt=""
-                  className="h-12 w-12 rounded-lg object-cover shadow-neu-sm shrink-0"
-                  onError={onJacketError}
-                />
-              ) : (
-                <div className="h-12 w-12 rounded-lg bg-neu shadow-neu-inset shrink-0" />
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="truncate font-bold text-slate-700">
-                  {selectedSong ? selectedSong.title : "未選択"}
-                </p>
-                {selectedSong && (
-                  <p className="text-xs text-slate-500">
-                    基礎点 {selectedSong.basePoint}
-                    {selectedSong.basePointSource === "verified" && (
-                      <span
-                        className="ml-1.5 rounded px-1 py-0.5 text-[10px] font-bold text-white"
-                        style={{ backgroundColor: "var(--unit-color)" }}
-                        title="実機計測で確定した基礎点（event_rate の系統誤差を補正）"
-                      >
-                        実測
-                      </span>
-                    )}
-                  </p>
-                )}
-              </div>
-              <NeuButton className="!px-3 !py-1.5 !text-xs shrink-0" onClick={() => setSongModalOpen(true)}>
-                曲を選択
-              </NeuButton>
-            </div>
-          </Field>
         </div>
+      </Panel>
+
+      <Panel title="ラストプレイ">
+        <LastPlaySettings
+          mode={lastPlayMode}
+          onModeChange={setLastPlayMode}
+          finalText={finalText}
+          onFinalTextChange={setFinalText}
+          songId={lastPlaySongId}
+          onSongChange={setLastPlaySongId}
+          musics={musics}
+          aliases={aliases}
+          jacketBase={JACKET_BASE}
+        />
       </Panel>
 
       <ActionButton onClick={handleCalc} disabled={loading} className="w-full text-base">
@@ -314,92 +361,64 @@ export default function PointAnalyzer() {
       )}
 
       <div ref={resultRef} className="scroll-mt-20 space-y-6 empty:hidden">
-        {result && (
+        {state && (
           <>
-            {!result.isVerified && result.targetPt - result.finalEstimatedPt > 0 && (
+            {!state.result.isVerified && (
               <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
                 <p className="font-bold">この条件では目標ちょうどに着地できません</p>
-                {/* マイセカイOFF時は複数回プラン（multi）のNG理由に沿って案内を出し分ける。
-                    OVER_CAP: 回数上限超過。NO_EXACT: 厳密一致なし。それ以外はON時と同じ汎用文言。 */}
-                {result.useMySekai === false && resultMulti?.reason === "OVER_CAP" ? (
-                  <p className="mt-1 text-xs">
-                    調整には最低 {(resultMulti.requiredLiveCount ?? 0).toLocaleString()}{" "}
-                    回のライブが必要で、上限 {resultMulti.liveCountCap} 回を超えます。
-                    マイセカイを利用する設定に切り替えるか、通常の周回で差分を縮めてから再計算してください。
-                  </p>
-                ) : result.useMySekai === false && resultMulti?.reason === "NO_EXACT" ? (
-                  // 死角ケース（必要調整量が1回の最小獲得Ptを下回る）は「数ポイントずらす」では
-                  // 絶対に抜けられないため、実際に必要なズラし幅を具体的な数値で案内する（R3-3）。
-                  result.liveAdjustment.requiredPt > 0 &&
-                  resultMulti.minPtPerLive > 0 &&
-                  result.liveAdjustment.requiredPt < resultMulti.minPtPerLive ? (
-                    <p className="mt-1 text-xs">
-                      必要調整量 {result.liveAdjustment.requiredPt.toLocaleString()} Pt
-                      は1回のライブの最小獲得 {resultMulti.minPtPerLive.toLocaleString()} Pt
-                      を下回るため着地できません。 目標を{" "}
-                      {result.liveAdjustment.requiredPt.toLocaleString()} Pt
-                      下げて調整不要にするか、
-                      {(
-                        resultMulti.minPtPerLive - result.liveAdjustment.requiredPt
-                      ).toLocaleString()}{" "}
-                      Pt 以上引き上げてください。
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-xs">
-                      探索範囲（最大{resultMulti.liveCountCap}回・Pt値{MAX_PT_VALUES_PER_PLAN}
-                      種類の組合せ）では厳密一致が見つかりませんでした。
-                      目標を見直して再計算するか、編成組み替え案（第2候補）を確認してください。
-                    </p>
-                  )
-                ) : (
-                  <p className="mt-1 text-xs">
-                    {(result.targetPt - result.finalEstimatedPt).toLocaleString()} Pt
-                    の差が埋まりません。目標を数ポイントずらすか、ボーナスを調整してください。
-                  </p>
-                )}
+                <p className="mt-1 text-xs">
+                  Step②の案内（もう一方のモードで組めるか）を確認するか、目標ポイントや
+                  ボーナスを見直して再計算してください。
+                </p>
               </div>
             )}
-            <MySekaiStep result={result} />
+            <MySekaiStep result={state.result} />
             <LiveAdjustStep
-              result={result}
-              bonus={appliedBonus.current}
+              result={state.result}
               musics={musics}
               aliases={aliases}
-              finalSong={selectedSong}
-              finalRunPlan={effectiveFinalPlan}
+              jacketBase={JACKET_BASE}
+              step2Mode={step2Mode}
+              onStep2ModeChange={recalcWithStep2Mode}
+              step2Song={step2Song}
+              onChangeStep2Song={recalcWithStep2Song}
+              sweepSelectedPlan={sweepPlan}
+              onSweepSelectPlan={setSweepPlan}
+              adopted={adopted}
+              onAdopt={setAdopted}
+              songByBase={songByBase}
+              onSongByBaseChange={(basePoint, songId) =>
+                setSongByBase((prev) => ({ ...prev, [basePoint]: songId }))
+              }
             />
-            {result.finalRunPt > 0 && (
+            {state.lastPlay.mode !== "none" && (
               <FinalRunStep
-                result={result}
-                musics={musics}
-                aliases={aliases}
+                result={state.result}
+                lastPlay={state.lastPlay}
+                bonus={appliedInputs.current?.bonus ?? 0}
                 jacketBase={JACKET_BASE}
-                bonus={appliedBonus.current}
-                selectedSong={selectedSong}
-                onChangeSong={recalcWithSong}
+                selectedSong={finalSong}
                 selectedPlan={finalPlan}
                 onSelectPlan={setFinalPlan}
               />
             )}
+            <PlanExportPanel
+              result={state.result}
+              lastPlay={state.lastPlay}
+              step2Mode={step2Mode}
+              musics={musics}
+              songByBase={songByBase}
+              adopted={adopted}
+              step2Song={step2Song}
+              sweepPlan={effectiveSweepPlan}
+              finalSong={finalSong}
+              finalPlan={effectiveFinalPlan}
+              jacketBase={JACKET_BASE}
+              bonus={appliedInputs.current?.bonus ?? 0}
+            />
           </>
         )}
       </div>
-
-      {songModalOpen && (
-        <SongSearchModal
-          musics={musics}
-          aliases={aliases}
-          jacketBase={JACKET_BASE}
-          title="最終楽曲を選択"
-          meta={(m) => `基礎点 ${m.basePoint}`}
-          onSelect={(m) => {
-            setSongId(m.id);
-            setSongModalOpen(false);
-          }}
-          onClose={() => setSongModalOpen(false)}
-        />
-      )}
     </ToolPage>
   );
 }
-

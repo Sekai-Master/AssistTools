@@ -63,18 +63,27 @@ export const ADJUST_LIVE_BONUSES = [0, 1] as const;
 export function maxLiveAdjustPt(
   bonus: number,
   liveBonuses: readonly number[],
-  maxScoreN: number = DEFAULT_MAX_SCORE_N
+  maxScoreN: number = DEFAULT_MAX_SCORE_N,
+  base: number = ADJUST_BASE
 ): number {
   const effectiveBonus = Math.min(Math.max(0, bonus), MAX_SEARCH_BONUS_10X / 10);
   const maxLb = Math.max(...liveBonuses);
-  return calcLivePt(ADJUST_BASE, effectiveBonus, maxScoreN * SCORE_STEP, maxLb);
+  return calcLivePt(base, effectiveBonus, maxScoreN * SCORE_STEP, maxLb);
 }
 
+/**
+ * @param base 端数調整に使う曲の基礎点。既定はエビ（ADJUST_BASE=100）。
+ *   Step2 モードA（曲固定・ボーナス掃引）で別基礎点の曲を選んだ場合のみ
+ *   integrated 経路が明示的に渡す。**既定値の経路は従来と完全同一**
+ *   （凍結テスト liveAdjust.test.ts が担保。base は logs に現れないので
+ *   ログ文言・順序も不変）。掃引ループ（5.1/5.2）そのものは1行も変えていない。
+ */
 export function planLiveAdjustment(
   liveRequired: number,
   bonus: number,
   liveBonuses: readonly number[] = ADJUST_LIVE_BONUSES,
-  maxScoreN: number = DEFAULT_MAX_SCORE_N
+  maxScoreN: number = DEFAULT_MAX_SCORE_N,
+  base: number = ADJUST_BASE
 ): LiveAdjustResult {
   const logs: string[] = [];
   let status: "OK" | "NG" = "NG";
@@ -83,7 +92,7 @@ export function planLiveAdjustment(
 
   // ログとエラー文言用のLB範囲表記（既定 [0,1] では従来どおり "0-1"）。
   const lbLabel = `${Math.min(...liveBonuses)}-${Math.max(...liveBonuses)}`;
-  const maxAdjustablePt = maxLiveAdjustPt(bonus, liveBonuses, maxScoreN);
+  const maxAdjustablePt = maxLiveAdjustPt(bonus, liveBonuses, maxScoreN, base);
 
   // 調整が不要ならここで確定させる。
   // calcLivePt の最小値は 100 なので「0 Pt を獲得するスコア」は存在せず、
@@ -117,7 +126,7 @@ export function planLiveAdjustment(
 
   // 5.1 現在のボーナスのまま着地できるか
   for (const lb of liveBonuses) {
-    const matchN = findScoreStep(ADJUST_BASE, bonus, lb, liveRequired, maxScoreN);
+    const matchN = findScoreStep(base, bonus, lb, liveRequired, maxScoreN);
     if (matchN !== -1) {
       status = "OK";
       if (!targetScoreRange) {
@@ -138,7 +147,7 @@ export function planLiveAdjustment(
   // ライブボーナス外側の並びを保つ（提示順が変わらないよう bonusOuter:false）。
   plans.push(
     ...collectScorePlans({
-      base: ADJUST_BASE,
+      base,
       target: liveRequired,
       liveBonuses,
       bonusMax10x: maxBonus10x,

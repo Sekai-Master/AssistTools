@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   ADJUST_LIVE_OVERHEAD_SEC,
+  CRYSTALS_PER_LIVE_BONUS,
   DEFAULT_MAX_SCORE,
   DEFAULT_MAX_SCORE_N,
+  LIVE_ADJUST_RESERVE,
   MAX_SCORE_CLIP,
   MAX_SCORE_N,
   SCORE_STEP,
@@ -82,5 +84,17 @@ describe("ADJUST_LIVE_OVERHEAD_SEC", () => {
     // 所要時間表示（planDuration.ts）の基準。ここが黙って動くと
     // 「約N分」が全プランで一斉にズレるので、実測値そのものを固定する。
     expect(ADJUST_LIVE_OVERHEAD_SEC).toBe(47);
+  });
+});
+
+describe("確保額・クリスタル換算の定数", () => {
+  it("LIVE_ADJUST_RESERVE はレガシー既定値 100（削除禁止）", () => {
+    // allocateMySekai / isAllocationAttempted の既定引数。これが動くと
+    // integrated を渡さないレガシー経路（凍結）の確保額が変わる。
+    expect(LIVE_ADJUST_RESERVE).toBe(100);
+  });
+
+  it("CRYSTALS_PER_LIVE_BONUS はライブボーナス1個=クリスタル10個", () => {
+    expect(CRYSTALS_PER_LIVE_BONUS).toBe(10);
   });
 });

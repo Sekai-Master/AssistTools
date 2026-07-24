@@ -1,12 +1,20 @@
 import { DEFAULT_BASE_POINT, MAX_LIVE_BONUS, maxScoreNOf, normalizeMaxScore } from "./constants";
 import { calcLivePt } from "./calcLivePt";
-import { EMPTY_ALLOCATION, allocateMySekai, calculateUnitBasePt, isAllocationAttempted } from "./mySekai";
+import {
+  EMPTY_ALLOCATION,
+  type MySekaiAllocation,
+  allocateMySekai,
+  calculateUnitBasePt,
+  isAllocationAttempted,
+} from "./mySekai";
+import { chooseDynamicReserve } from "./dynamicReserve";
 import { ADJUST_LIVE_BONUSES, type AdjustmentPlan, planLiveAdjustment } from "./liveAdjust";
 import {
   type MultiLiveAdjustResult,
   distinctBasePoints,
   planMultiLiveAdjustment,
 } from "./multiLiveAdjust";
+import { planModeAMulti } from "./modeAMulti";
 import { type FinalRunPlan, finalRunSearchedMaxBonus, planFinalRun } from "./finalRun";
 
 /**
@@ -46,6 +54,21 @@ export interface CalculationOptionsV6 {
    * ON/OFF どちらのモードにも適用する（400万点が人間に不可能なのはモードと無関係）。
    */
   maxScore?: number;
+  /**
+   * 統合モード（R5・Step1〜3 再編）。**省略時はレガシー経路で bit 単位に従来と同一**
+   * （凍結テスト calculator.test.ts はこのフィールドを渡さないので無変更で通る）。
+   *
+   * 指定時の変更点（docs/point-adjust-step3-and-envy-brief.md）:
+   *   - Step1 の確保額を dynamicReserve で動的化（ON経路の配分結果は変わるが、
+   *     これは §2 が明示的に要求する実バグ修正。凍結＝レガシー既定経路は不変）。
+   *   - Step2 の A（曲固定・ボーナス掃引 = adjustmentPlans）と B（曲可変・複数回 = multi）を
+   *     ON/OFF に関わらず両方計算し、合成 status を A∨B にする（Aの「第2候補」降格を是正）。
+   *   - mySekaiAllocation.appliedReserve に採用した確保額を載せる。
+   */
+  integrated?: {
+    /** Step2 モードAで選択中の曲の基礎点。既定 DEFAULT_BASE_POINT（エビ100）。 */
+    step2ABase: number;
+  };
 }
 
 export interface CalculationResultV6 {
@@ -64,16 +87,28 @@ export interface CalculationResultV6 {
     countB: number;
     countC: number;
     totalPt: number;
+    /**
+     * integrated 経路で採用した確保額（dynamicReserve が動的に決めた reserve）。
+     * レガシー経路では undefined（optional なので従来の結果形は不変）。UI・テスト用。
+     */
+    appliedReserve?: number;
   };
   liveAdjustment: {
     requiredPt: number;
     status: "OK" | "NG";
     /**
-     * OFF時の第1候補（曲側・複数回）。現在の編成を維持したまま、
-     * 調整ライブの楽曲（基礎点）とLB 0〜10を動かして厳密着地を狙う。
-     * ON時は undefined（従来経路のみ）。
+     * 曲側・複数回の探索結果（Step2 モードB = 曲可変・現ボーナス固定）。
+     * レガシー OFF 経路では第1候補として設定、レガシー ON 経路では undefined。
+     * integrated 経路では ON/OFF に関わらず必ず設定する（A/Bを対等に扱うため）。
      */
     multi?: MultiLiveAdjustResult;
+    /**
+     * ボーナス側・複数回の探索結果（Step2 モードA = 曲固定・ボーナス可変・複数回）。
+     * integrated 経路でのみ設定する（R6 §1-3）。レガシー経路では
+     * **キー自体を出さない**（条件付きスプレッド）ので凍結ゴールデンの形状は不変。
+     * 単発の adjustmentPlans（1プレイ掃引）と対で、Aの着地手段を複数回に広げる。
+     */
+    multiA?: MultiLiveAdjustResult;
     targetScoreRange?: { min: number; max: number };
     adjustmentPlans?: AdjustmentPlan[];
     /** 調整ライブに許したライブボーナス消費の上限（文言用）。 */
@@ -142,46 +177,92 @@ export function calculatePlanV6(
     log("Error", "Target is lower than Current + Final Run. Impossible to adjust.");
   }
 
+  // 統合モードの共通ローカル。integrated が無いレガシー経路では step2ABase は使わない。
+  const integrated = options.integrated;
+  const distinctBases = distinctBasePoints(musics);
+  // Step2 モードA（曲固定・ボーナス掃引）に許すLB。現行ポリシー維持（ON:0〜1 / OFF:0〜10）。
+  const liveBonusesA = useMySekai ? ADJUST_LIVE_BONUSES : NO_MYSEKAI_LIVE_BONUSES;
+  // モードAで叩く曲の基礎点。integrated は選択曲、レガシーは従来どおりエビ(100)固定。
+  const liveBase = integrated ? integrated.step2ABase : DEFAULT_BASE_POINT;
+
   // 3. マイセカイ配分
   // OFF時は採取を計画に入れず、差分の吸収はすべて調整ライブに委ねる。
-  // 「diff <= 100 でスキップ」のログと紛らわしくならないよう、
+  // 「diff <= reserve でスキップ」のログと紛らわしくならないよう、
   // isAllocationAttempted の分岐は通さず専用の文言を出す。
-  const allocation = useMySekai
-    ? allocateMySekai(adjustableDiff, unitBasePt)
-    : { ...EMPTY_ALLOCATION };
-  if (!useMySekai) {
-    log("MySekai Allocation", "Disabled by user setting.");
-  } else if (isAllocationAttempted(adjustableDiff, unitBasePt)) {
+  let allocation: MySekaiAllocation;
+  let appliedReserve: number | undefined;
+  if (useMySekai && integrated) {
+    // integrated ON: 確保額を動的化する。Step2 が着地不能にならない最小の確保額を
+    // 実探索（dynamicReserve）で選ぶ。レガシー既定経路（下の else）は bit 単位で不変。
+    const dyn = chooseDynamicReserve({
+      adjustableDiff,
+      unitBasePt,
+      bonus,
+      basePoints: distinctBases,
+      maxScoreN,
+      step2ABase: integrated.step2ABase,
+      liveBonusesA,
+    });
+    allocation = dyn.allocation;
+    appliedReserve = dyn.reserve;
+    logs.push(...dyn.logs);
     log(
       "MySekai Allocation",
-      `Wood/Rock(1.0):${allocation.countA}, Glitter(0.5):${allocation.countB}, Flower(0.2):${allocation.countC} -> Total ${allocation.totalPt} Pt`
+      isAllocationAttempted(adjustableDiff, unitBasePt, dyn.reserve)
+        ? `Wood/Rock(1.0):${allocation.countA}, Glitter(0.5):${allocation.countB}, Flower(0.2):${allocation.countC} -> Total ${allocation.totalPt} Pt (reserve ${dyn.reserve})`
+        : `Adjustable diff <= reserve ${dyn.reserve} Pt, skipped MySekai calc.`
     );
   } else {
-    log("MySekai Allocation", "Adjustable diff <= 100 Pt, skipped MySekai calc.");
+    // レガシー経路（従来と完全同一）。凍結テストはここを通る。
+    allocation = useMySekai ? allocateMySekai(adjustableDiff, unitBasePt) : { ...EMPTY_ALLOCATION };
+    if (!useMySekai) {
+      log("MySekai Allocation", "Disabled by user setting.");
+    } else if (isAllocationAttempted(adjustableDiff, unitBasePt)) {
+      log(
+        "MySekai Allocation",
+        `Wood/Rock(1.0):${allocation.countA}, Glitter(0.5):${allocation.countB}, Flower(0.2):${allocation.countC} -> Total ${allocation.totalPt} Pt`
+      );
+    } else {
+      log("MySekai Allocation", "Adjustable diff <= 100 Pt, skipped MySekai calc.");
+    }
   }
 
   // 4-5. ライブ端数調整
-  // OFF時は調整ライブが唯一の吸収役。第1候補は「現在の編成を維持したまま
-  // 曲側（基礎点28通り）× LB 0〜10 × 複数回」で解く multi 経路。
-  // 従来の「編成を組み替えて別ボーナスにする」経路（planLiveAdjustment ＋
-  // NO_MYSEKAI_LIVE_BONUSES）は、編成の組み替えという実作業が重いため
-  // 第2候補に降格して残す（結果は従来どおり adjustmentPlans 等に入る）。
+  // A（モードA = 曲固定・ボーナス掃引 = planLiveAdjustment）と
+  // B（モードB = 曲可変・複数回 = multi）は対等な2モード。
+  //   - レガシー OFF: B を第1候補、A（編成組み替え）を第2候補として残す（従来挙動）。
+  //   - レガシー ON : A のみ（multi は undefined）。従来挙動。
+  //   - integrated  : ON/OFF に関わらず A/B を両方計算し、合成 status を A∨B にする
+  //                   （Aの「第2候補」降格を是正。docs §3）。探索本体は不変で呼び出しを足すだけ。
   const liveRequired = adjustableDiff - allocation.totalPt;
-  const multi = useMySekai
-    ? undefined
-    : planMultiLiveAdjustment(liveRequired, bonus, distinctBasePoints(musics), maxScoreN);
+  const multi =
+    integrated || !useMySekai
+      ? planMultiLiveAdjustment(liveRequired, bonus, distinctBases, maxScoreN)
+      : undefined;
   if (multi) {
     logs.push(...multi.logs);
   }
-  const live = useMySekai
-    ? planLiveAdjustment(liveRequired, bonus, ADJUST_LIVE_BONUSES, maxScoreN)
-    : planLiveAdjustment(liveRequired, bonus, NO_MYSEKAI_LIVE_BONUSES, maxScoreN);
+  const live = planLiveAdjustment(liveRequired, bonus, liveBonusesA, maxScoreN, liveBase);
   logs.push(...live.logs);
-  // 合成ステータス: OFF時は multi が解ければ第2候補がNGでも着地可能とみなす。
-  // multi の plans は合計が liveRequired に厳密一致するので、
-  // 恒等式 currentPt + allocation + liveRequired + finalRunPt === targetPt は保たれる。
-  const liveStatus: "OK" | "NG" =
-    (!useMySekai && multi?.status === "OK") ? "OK" : live.status;
+  // モードA複数回化（R6 §1-3）。integrated 経路のみ、単発 live を複数回に広げた探索を足す。
+  // ON時の liveBonusesA=[0,1] 縛りはそのまま渡す（ONの吸収役ポリシーと矛盾させない）。
+  const multiA =
+    integrated
+      ? planModeAMulti(liveRequired, liveBase, bonus, liveBonusesA, maxScoreN)
+      : undefined;
+  if (multiA) {
+    logs.push(...multiA.logs);
+  }
+  // 合成ステータス。A（単発 live ∨ 複数回 multiA）と B（multi）はいずれも
+  // plans 合計が liveRequired に厳密一致するので、恒等式
+  // currentPt + allocation + liveRequired + finalRunPt === targetPt は保たれる。
+  const liveStatus: "OK" | "NG" = integrated
+    ? live.status === "OK" || multiA?.status === "OK" || multi?.status === "OK"
+      ? "OK"
+      : "NG"
+    : (!useMySekai && multi?.status === "OK")
+      ? "OK"
+      : live.status;
 
   // 6. ラストラン
   // 基礎点はどの曲も同じ経路（musicsList → 見つからなければ既定値）で引く。
@@ -219,11 +300,17 @@ export function calculatePlanV6(
     unitBasePt,
     useMySekai,
     maxScore,
-    mySekaiAllocation: allocation,
+    // appliedReserve はレガシー経路では undefined。optional キーを混ぜないことで
+    // 凍結テストの mySekaiAllocation === {countA,countB,countC,totalPt} 比較を保つ。
+    mySekaiAllocation:
+      appliedReserve === undefined ? allocation : { ...allocation, appliedReserve },
     liveAdjustment: {
       requiredPt: liveRequired,
       status: liveStatus,
       multi,
+      // multiA はレガシー経路では undefined。条件付きスプレッドでキー自体を出さず、
+      // 凍結ゴールデンの liveAdjustment 形状を維持する（appliedReserve と同じ様式）。
+      ...(multiA !== undefined ? { multiA } : {}),
       targetScoreRange: live.targetScoreRange,
       adjustmentPlans: live.plans,
       // ON時は探索に許したLBが 0〜1 なので上限は 1（NG案内の文言用）。

@@ -82,8 +82,25 @@ export const TALENT_COEF_DIVISOR = 450000;
 export const MYSEKAI_MULTIPLIER = 100;
 export const MYSEKAI_MULTIPLIER_WORLD_PASS = 500;
 
-/** マイセカイ配分後にライブ端数調整用として残すポイント。 */
+/**
+ * マイセカイ配分後にライブ端数調整用として残すポイント（レガシー既定値）。
+ *
+ * この値は「エビの基礎点＝Step2 モードA（曲固定・ボーナス掃引）で確保すべき額」
+ * として正しい。integrated 経路では dynamicReserve が Step2 のモードと
+ * ボーナスから確保額を動的導出する（docs/point-adjust-step3-and-envy-brief.md §2）が、
+ * この定数は allocateMySekai / isAllocationAttempted の既定引数として残す（削除禁止）。
+ * 削除するとレガシー経路（凍結テスト）が既定確保額を失う。
+ */
 export const LIVE_ADJUST_RESERVE = 100;
+
+/**
+ * ライブボーナス1個あたりのクリスタル購入換算個数。
+ *
+ * 「今すぐ回復させるなら幾ら払うか」の意思決定材料（自然回復＝待てば無料の時間とは違う）。
+ * badges.tsx と adjustPlanCanvas.ts に散在していた ×10 のマジックナンバーを一元化する。
+ * 出典: ゲーム内のライブボーナス回復クリスタル 10個/個。
+ */
+export const CRYSTALS_PER_LIVE_BONUS = 10;
 
 /**
  * マイセカイ採取物のメモリ値（10倍整数表現）。

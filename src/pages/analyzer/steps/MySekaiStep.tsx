@@ -66,6 +66,12 @@ export function MySekaiStep({ result }: { result: CalculationResultV6 }) {
         </span>{" "}
         Pt（単価 {result.unitBasePt} Pt/個）
       </p>
+      {/* R5: Step2が着地不能にならないよう動的に確保した額（dynamicReserve）。 */}
+      {a.appliedReserve !== undefined && (
+        <p className="mt-1 text-xs text-slate-500">
+          ライブ調整用に {a.appliedReserve.toLocaleString()} Pt を確保しています。
+        </p>
+      )}
       {/* 単価の未確定要素を明示する。実測が取れるまでこの注記は外さないこと。
           未解決点の一覧は docs/mysekai-unit-pt-open-questions.md。 */}
       <p className="mt-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-700">

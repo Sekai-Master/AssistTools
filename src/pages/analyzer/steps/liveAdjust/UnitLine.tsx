@@ -1,6 +1,8 @@
 import { NeuButton } from "../../../../components/ui/NeuButton";
+import { onJacketError } from "../../../../lib/img";
 import { scoreBandBadge } from "../../lib/scoreBandBadge";
 import type { MultiLiveUnit } from "../../lib/multiLiveAdjust";
+import { JACKET_BASE } from "../../assetPaths";
 import { FinishBadge, ScoreBandTag } from "./badges";
 import type { SuggestMusic } from "./types";
 
@@ -18,22 +20,21 @@ export function UnitLine({ u }: { u: MultiLiveUnit }) {
  * 主役カードの1ユニット行（ブリーフP0-3）。
  * 「基礎点130」で止めず「メルト（182秒）」まで曲名をインライン表示する。
  * 曲が引けない場合のみ従来どおり基礎点表記に落ちる。
+ * R5: スマホ片手で縦密度を落とさない 32px（h-8 w-8）のジャケットサムネイルを行頭に追加。
  */
 export function AdoptedUnitLine({
   u,
   candidates,
   chosen,
-  maxScore,
   isFinish = false,
   onPick,
 }: {
   u: MultiLiveUnit;
   candidates: ReadonlyArray<SuggestMusic>;
   chosen: SuggestMusic | undefined;
-  maxScore: number;
   /**
-   * スコア0イベ乙の締め1本かどうか。true のときは ScoreBandTag の代わりに
-   * FinishBadge を出し、区切り線で他ユニットと視覚的に区別する（ブリーフのUI要件）。
+   * スコア0クリア（叩かない）の締め1本かどうか。true のときは ScoreBandTag の
+   * 代わりに FinishBadge を出し、区切り線で他ユニットと視覚的に区別する。
    */
   isFinish?: boolean;
   onPick: () => void;
@@ -43,6 +44,16 @@ export function AdoptedUnitLine({
   return (
     <li className={isFinish ? "border-t border-dashed border-slate-300 pt-3" : undefined}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-700">
+        {chosen ? (
+          <img
+            src={`${JACKET_BASE}${chosen.jacketLink}`}
+            alt=""
+            className="h-8 w-8 shrink-0 rounded object-cover shadow-neu-sm"
+            onError={onJacketError}
+          />
+        ) : (
+          <div className="h-8 w-8 shrink-0 rounded bg-neu shadow-neu-inset" />
+        )}
         {chosen ? (
           <span className="font-bold">
             {chosen.title}
@@ -59,7 +70,7 @@ export function AdoptedUnitLine({
           {u.liveBonus}炊き ・ スコア {u.minScore.toLocaleString()}〜{u.maxScore.toLocaleString()}
           {" "}× {u.count}回（1回 {u.pt.toLocaleString()} Pt）
         </span>
-        {isFinish ? <FinishBadge /> : <ScoreBandTag band={scoreBandBadge(u, maxScore)} />}
+        {isFinish ? <FinishBadge /> : <ScoreBandTag band={scoreBandBadge(u)} />}
         <NeuButton className="!px-2.5 !py-1 !text-[11px]" onClick={onPick}>
           変更
         </NeuButton>
