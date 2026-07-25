@@ -81,9 +81,23 @@ function newHistoryId(): string {
 /** 半角数字のみ残す（現行の「非数値で全消去」より穏当に）。 */
 const digitsOnly = (v: string) => convertToHalfWidth(v).replace(/[^0-9]/g, "");
 
+/**
+ * クリップボードへのコピー。X の投稿インテントは環境（特に Safari）によって
+ * 本文が反映されないことがあるため、貼り付けで確実に投稿できる代替手段として使う。
+ */
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export default function TweetGenerator() {
   const [s, setS] = useState<TweetState>(DEFAULT_TWEET_STATE);
   const [history, setHistory] = useState<HistoryItem[]>(() => loadHistory());
+  const [copyNotice, setCopyNotice] = useState<string | null>(null);
 
   const set = <K extends keyof TweetState>(key: K, value: TweetState[K]) =>
     setS((prev) => ({ ...prev, [key]: value }));
@@ -107,6 +121,12 @@ export default function TweetGenerator() {
     );
 
   const tweetHref = tweetIntentUrl(preview);
+
+  const handleCopy = async () => {
+    const ok = await copyToClipboard(preview);
+    setCopyNotice(ok ? "コピーしました" : "コピーに失敗しました（本文を選択してコピーしてください）");
+    setTimeout(() => setCopyNotice(null), 2500);
+  };
 
   return (
     <ToolPage wide unit="vs" title="ついぼジェネレーター" icon="campaign">
@@ -401,16 +421,18 @@ export default function TweetGenerator() {
                   placeholder="ルームIDを入力"
                 />
               </Field>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <a
                   href={tweetHref}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener"
                   className="neu-cta inline-block rounded-lg px-5 py-2.5 text-sm font-bold"
                 >
                   ツイートする
                 </a>
+                <NeuButton onClick={handleCopy}>テキストをコピー</NeuButton>
                 <NeuButton onClick={saveHistory}>入力を保存</NeuButton>
+                {copyNotice && <span className="text-xs text-slate-500">{copyNotice}</span>}
               </div>
             </div>
           </Panel>
@@ -426,6 +448,8 @@ export default function TweetGenerator() {
         preview={preview}
         tweetHref={tweetHref}
         onSave={saveHistory}
+        onCopy={handleCopy}
+        copyNotice={copyNotice}
       />
     </ToolPage>
   );
@@ -438,12 +462,16 @@ function MobileActionBar({
   preview,
   tweetHref,
   onSave,
+  onCopy,
+  copyNotice,
 }: {
   roomId: string;
   onRoomId: (v: string) => void;
   preview: string;
   tweetHref: string;
   onSave: () => void;
+  onCopy: () => void;
+  copyNotice: string | null;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   return (
@@ -454,6 +482,9 @@ function MobileActionBar({
             {preview}
           </pre>
         </div>
+      )}
+      {copyNotice && (
+        <div className="mx-auto max-w-3xl px-3 pb-1 text-right text-xs text-slate-500">{copyNotice}</div>
       )}
       <div className="border-t border-black/5 bg-neu/95 backdrop-blur px-3 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         <div className="mx-auto flex max-w-3xl items-center gap-2">
@@ -478,10 +509,13 @@ function MobileActionBar({
           <NeuButton className="!px-3" onClick={onSave} aria-label="入力を保存">
             <span className="material-icons text-base">bookmark_add</span>
           </NeuButton>
+          <NeuButton className="!px-3" onClick={onCopy} aria-label="テキストをコピー">
+            <span className="material-icons text-base">content_copy</span>
+          </NeuButton>
           <a
             href={tweetHref}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener"
             className="neu-cta shrink-0 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-bold"
           >
             ツイート
@@ -521,5 +555,4 @@ function SkillRow({
         />
       )}
     </div>
-  );
-}
+  ]
