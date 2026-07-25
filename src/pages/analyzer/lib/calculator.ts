@@ -14,7 +14,7 @@ import {
   distinctBasePoints,
   planMultiLiveAdjustment,
 } from "./multiLiveAdjust";
-import { planModeAMulti } from "./modeAMulti";
+import { planModeAKeepMulti, planModeAMulti } from "./modeAMulti";
 import { type FinalRunPlan, finalRunSearchedMaxBonus, planFinalRun } from "./finalRun";
 
 /**
@@ -109,6 +109,14 @@ export interface CalculationResultV6 {
      * 単発の adjustmentPlans（1プレイ掃引）と対で、Aの着地手段を複数回に広げる。
      */
     multiA?: MultiLiveAdjustResult;
+    /**
+     * 現在ボーナス固定・複数回の探索結果（Step2 モードA「編成そのまま・回数で吸収」）。
+     * integrated 経路でのみ設定する（R6 モードA選択肢提示型 §1-3）。レガシー経路では
+     * **キー自体を出さない**（条件付きスプレッド）ので凍結ゴールデンの形状は不変。
+     * multiA（現ボーナス列を含むボーナス可変表）の到達Pt集合の部分集合を掃くので、
+     * multiAKeep.status==="OK" ⇒ multiA.status==="OK"。合成 status には新情報を足さない。
+     */
+    multiAKeep?: MultiLiveAdjustResult;
     targetScoreRange?: { min: number; max: number };
     adjustmentPlans?: AdjustmentPlan[];
     /** 調整ライブに許したライブボーナス消費の上限（文言用）。 */
@@ -253,6 +261,16 @@ export function calculatePlanV6(
   if (multiA) {
     logs.push(...multiA.logs);
   }
+  // モードA選択肢提示型（R6 §1-3）。現在ボーナス固定・複数回の探索を足す。
+  // 「編成そのまま・回数で吸収」案（choices の keep 複数回）の探索元。
+  // ON時の liveBonusesA=[0,1] 縛りはそのまま渡す（multiA と同じ吸収役ポリシー）。
+  const multiAKeep =
+    integrated
+      ? planModeAKeepMulti(liveRequired, liveBase, bonus, liveBonusesA, maxScoreN)
+      : undefined;
+  if (multiAKeep) {
+    logs.push(...multiAKeep.logs);
+  }
   // 合成ステータス。A（単発 live ∨ 複数回 multiA）と B（multi）はいずれも
   // plans 合計が liveRequired に厳密一致するので、恒等式
   // currentPt + allocation + liveRequired + finalRunPt === targetPt は保たれる。
@@ -311,6 +329,10 @@ export function calculatePlanV6(
       // multiA はレガシー経路では undefined。条件付きスプレッドでキー自体を出さず、
       // 凍結ゴールデンの liveAdjustment 形状を維持する（appliedReserve と同じ様式）。
       ...(multiA !== undefined ? { multiA } : {}),
+      // multiAKeep も同様に条件付きスプレッド。合成 liveStatus には足さない:
+      // keep 表の到達Pt集合は multiA 表（現ボーナス列を含む）の部分集合なので、
+      // multiAKeep.status==="OK" ⇒ multiA.status==="OK"。status に新情報は無い。
+      ...(multiAKeep !== undefined ? { multiAKeep } : {}),
       targetScoreRange: live.targetScoreRange,
       adjustmentPlans: live.plans,
       // ON時は探索に許したLBが 0〜1 なので上限は 1（NG案内の文言用）。

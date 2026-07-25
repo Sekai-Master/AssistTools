@@ -22,10 +22,20 @@ function tierOf(bonus: number): 0 | 1 | 2 {
   return 2;
 }
 
+/**
+ * おすすめプランの既定提示件数。
+ *
+ * export する理由（R6 モードA選択肢提示型 §3）: モードA組み替え案の折りたたみ
+ * （ModeAChoicePanel）が「下げ幅が小さい順の先頭 N 件」を出すのに同じ件数を使う。
+ * recommendPlans の既定引数とUIの折りたたみ件数を単一ソースにして、片方だけ
+ * 古い数字が残る事故（マジックナンバー禁止）を防ぐ。
+ */
+export const RECOMMEND_LIMIT = 4;
+
 export function recommendPlans<T extends PlanLike>(
   plans: readonly T[],
   compare: (a: T, b: T) => number,
-  limit = 4
+  limit = RECOMMEND_LIMIT
 ): T[] {
   const tiers: T[][] = [[], [], []];
   for (const plan of plans) {

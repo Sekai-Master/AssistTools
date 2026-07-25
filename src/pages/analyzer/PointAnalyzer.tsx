@@ -10,7 +10,8 @@ import { ENVY_ID, type CalculationOptionsV6, type CalculationResultV6 } from "./
 import { DEFAULT_BASE_POINT } from "./lib/constants";
 import { calculateUnitBasePt } from "./lib/mySekai";
 import { parseAmount, completeTargetSuffix } from "./lib/inputParsing";
-import { byBonusDesc, byDistanceTo, recommendPlans } from "./lib/recommendPlans";
+import { byDistanceTo, recommendPlans } from "./lib/recommendPlans";
+import { buildModeAChoices, type ModeAChoice } from "./lib/modeAChoices";
 import {
   earnFinalPtError,
   planWithLastPlay,
@@ -69,7 +70,7 @@ export default function PointAnalyzer() {
   // Step2（ライブ調整）。既定はモードA（任意の曲＋ボーナス選択）。
   const [step2Mode, setStep2Mode] = useState<Step2Mode>("songFixed");
   const [step2SongId, setStep2SongId] = useState(ENVY_ID);
-  const [sweepPlan, setSweepPlan] = useState<UniversalPlan | null>(null);
+  const [modeAChoice, setModeAChoice] = useState<ModeAChoice | null>(null);
   const [adopted, setAdopted] = useState<Adopted>({ kind: "primary" });
   const [songByBase, setSongByBase] = useState<Record<number, string>>({});
 
@@ -95,7 +96,7 @@ export default function PointAnalyzer() {
   // 残額が変わった新しい結果に対して古い代替案の index が無言で横滑りするのを防ぐ。
   useEffect(() => {
     setAdopted({ kind: "primary" });
-    setSweepPlan(null);
+    setModeAChoice(null);
   }, [state]);
 
   const unitHint = useMemo(
@@ -111,14 +112,22 @@ export default function PointAnalyzer() {
   const step2Song = musics.find((m) => m.id === step2SongId);
   const finalSong = musics.find((m) => m.id === lastPlaySongId);
 
-  const sweepRecommended = useMemo(
+  // モードA選択肢提示型（R6 §1-4・§2）: 候補は state（liveAdjustment）と選択曲の基礎点から
+  // 構築する純関数（buildModeAChoices）。既定選択（先頭＝編成そのまま）へのフォールバックは
+  // effectiveModeAChoice で行う（旧 effectiveSweepPlan と同一パターン）。
+  const modeAChoices = useMemo(
     () =>
       state
-        ? recommendPlans(state.result.liveAdjustment.adjustmentPlans ?? [], byBonusDesc)
+        ? buildModeAChoices({
+            live: state.result.liveAdjustment,
+            bonus: appliedInputs.current?.bonus ?? 0,
+            base: step2Song?.basePoint ?? DEFAULT_BASE_POINT,
+            useMySekai: state.result.useMySekai,
+          })
         : [],
-    [state]
+    [state, step2Song]
   );
-  const effectiveSweepPlan = sweepPlan ?? sweepRecommended[0] ?? null;
+  const effectiveModeAChoice = modeAChoice ?? modeAChoices[0] ?? null;
 
   const finalRecommended = useMemo(
     () =>
@@ -187,7 +196,7 @@ export default function PointAnalyzer() {
       integrated: { step2ABase: computeStep2ABase(step2Mode, step2SongId) },
     };
     setFinalPlan(null);
-    setSweepPlan(null);
+    setModeAChoice(null);
     // 全入力をここで一括固定する（handleCalc がスナップショットの唯一の書き手）。
     recalcFromSnapshot(
       {
@@ -215,7 +224,7 @@ export default function PointAnalyzer() {
       ...snap.options,
       integrated: { step2ABase: computeStep2ABase(step2Mode, newId) },
     };
-    setSweepPlan(null);
+    setModeAChoice(null);
     recalcFromSnapshot(snap, options);
   };
 
@@ -228,7 +237,7 @@ export default function PointAnalyzer() {
       ...snap.options,
       integrated: { step2ABase: computeStep2ABase(newMode, step2SongId) },
     };
-    setSweepPlan(null);
+    setModeAChoice(null);
     recalcFromSnapshot(snap, options);
   };
 
@@ -382,8 +391,9 @@ export default function PointAnalyzer() {
               onStep2ModeChange={recalcWithStep2Mode}
               step2Song={step2Song}
               onChangeStep2Song={recalcWithStep2Song}
-              sweepSelectedPlan={sweepPlan}
-              onSweepSelectPlan={setSweepPlan}
+              modeAChoices={modeAChoices}
+              modeAChoice={effectiveModeAChoice}
+              onSelectModeAChoice={setModeAChoice}
               adopted={adopted}
               onAdopt={setAdopted}
               songByBase={songByBase}
@@ -410,11 +420,10 @@ export default function PointAnalyzer() {
               songByBase={songByBase}
               adopted={adopted}
               step2Song={step2Song}
-              sweepPlan={effectiveSweepPlan}
+              modeAChoice={effectiveModeAChoice}
               finalSong={finalSong}
               finalPlan={effectiveFinalPlan}
               jacketBase={JACKET_BASE}
-              bonus={appliedInputs.current?.bonus ?? 0}
             />
           </>
         )}

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildBonusSweepTable, planModeAMulti } from "./modeAMulti";
+import {
+  buildBonusSweepTable,
+  buildKeepBonusTable,
+  planModeAKeepMulti,
+  planModeAMulti,
+} from "./modeAMulti";
 import { calcLivePt } from "./calcLivePt";
 import { MAX_LIVE_BONUS } from "./constants";
 
@@ -79,6 +84,58 @@ describe("buildBonusSweepTable — 表構築の不変条件", () => {
         expect(rp.basePoint).toBe(114);
         expect(rp.bonus).not.toBeUndefined();
       }
+    }
+  });
+});
+
+describe("buildKeepBonusTable — 現ボーナス1点・bonus キーなし（編成そのまま様式）", () => {
+  it("全 rep が bonus キーを持たない（画像に目標ボーナスが付かない構造保証）", () => {
+    const t = buildKeepBonusTable(100, 990, LB_ALL, MAX_SCORE_N);
+    expect(t.basesCount).toBe(1);
+    for (const reps of t.reps.values()) {
+      for (const rp of reps) {
+        expect(rp.basePoint).toBe(100);
+        expect(rp.bonus).toBeUndefined();
+      }
+    }
+  });
+
+  it("到達Pt集合は現ボーナス990を含むボーナス掃引表の部分集合（keep ⊆ sweep）", () => {
+    const keep = buildKeepBonusTable(100, 990, LB_ALL, MAX_SCORE_N);
+    const sweep = buildBonusSweepTable(100, 990, LB_ALL, MAX_SCORE_N);
+    for (const pt of keep.sortedPts) {
+      expect(sweep.reps.has(pt)).toBe(true);
+    }
+  });
+
+  it("各Ptの先頭 rep が最安LB（LB昇順の外側ループが効いている）", () => {
+    const t = buildKeepBonusTable(100, 990, LB_ALL, MAX_SCORE_N);
+    for (const pt of t.sortedPts.slice(0, 200)) {
+      const reps = t.reps.get(pt)!;
+      expect(reps[0].liveBonus).toBe(Math.min(...reps.map((rp) => rp.liveBonus)));
+    }
+  });
+});
+
+describe("planModeAKeepMulti — 現ボーナス固定・複数回で吸収", () => {
+  it("7,809 は現ボーナス990のまま複数回で厳密着地（全 unit が現ボーナス＝bonus キーなし）", () => {
+    const r = planModeAKeepMulti(7_809, 100, 990, LB_ALL, MAX_SCORE_N);
+    expect(r.status).toBe("OK");
+    expect(r.plans[0].liveCount).toBeGreaterThanOrEqual(2);
+    for (const plan of r.plans) {
+      expect(plan.units.every((u) => u.bonus === undefined)).toBe(true);
+      expect(plan.units.reduce((s, u) => s + u.pt * u.count, 0)).toBe(7_809);
+    }
+  });
+
+  it("liveBonuses 縛りが効く: ON [0,1] は OFF [0..10] より本数が増える", () => {
+    const off = planModeAKeepMulti(7_809, 100, 990, LB_ALL, MAX_SCORE_N);
+    const on = planModeAKeepMulti(7_809, 100, 990, LB_ON, MAX_SCORE_N);
+    expect(off.status).toBe("OK");
+    // ON も着地できることを明示アサート（NG だと無言で通る穴を塞ぐ）。
+    expect(on.status).toBe("OK");
+    if (on.status === "OK") {
+      expect(on.plans[0].liveCount).toBeGreaterThanOrEqual(off.plans[0].liveCount);
     }
   });
 });

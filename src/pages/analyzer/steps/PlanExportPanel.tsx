@@ -3,15 +3,13 @@ import { NeuButton } from "../../../components/ui/NeuButton";
 import { drawPlanCanvas } from "../../refresh/lib/planCanvas";
 import {
   buildAdjustPlanCanvasData,
-  deriveCurrentLb,
   type AdjustCanvasFinalRun,
   type AdjustCanvasStep2,
 } from "../lib/adjustPlanCanvas";
 import type { CalculationResultV6 } from "../lib/calculator";
-import { DEFAULT_BASE_POINT } from "../lib/constants";
 import type { FinalRunPlan } from "../lib/finalRun";
 import type { LastPlayOutcome } from "../lib/lastPlay";
-import type { UniversalPlan } from "../plan/types";
+import { canvasStep2FromChoice, type ModeAChoice } from "../lib/modeAChoices";
 import { candidatesForBase, resolveSong } from "./liveAdjust/musicHelpers";
 import { getAdoptedPlan } from "./liveAdjust/planSelection";
 import type { Adopted, Step2Mode, SuggestMusic } from "./liveAdjust/types";
@@ -34,11 +32,10 @@ export function PlanExportPanel({
   songByBase,
   adopted,
   step2Song,
-  sweepPlan,
+  modeAChoice,
   finalSong,
   finalPlan,
   jacketBase,
-  bonus,
 }: {
   result: CalculationResultV6;
   lastPlay: LastPlayOutcome;
@@ -47,16 +44,11 @@ export function PlanExportPanel({
   songByBase: Record<number, string>;
   adopted: Adopted;
   step2Song?: SuggestMusic;
-  sweepPlan?: UniversalPlan | null;
+  /** モードA（songFixed）の採択候補（R6 モードA選択肢提示型 §4）。既定選択込みの effective 値を渡す。 */
+  modeAChoice?: ModeAChoice | null;
   finalSong?: SuggestMusic;
   finalPlan?: FinalRunPlan | null;
   jacketBase: string;
-  /**
-   * 現在の生イベントボーナス（%）。「編成そのままで着地」行の締めLB表示に使う
-   * （deriveCurrentLb）。省略時はスコア帯のみ表示しLB表示を省く（呼び出し元の
-   * 未配線を壊さないためのフォールバック。親側の1行配線は次ラウンドで追加予定）。
-   */
-  bonus?: number;
 }) {
   const [notice, setNotice] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -65,34 +57,13 @@ export function PlanExportPanel({
     const live = result.liveAdjustment;
     if (live.requiredPt <= 0 || live.status !== "OK") return undefined;
     if (step2Mode === "songFixed") {
+      // 選択候補 → 画像の詰め替えは lib 側に一本化済み（R6 モードA選択肢提示型 §4）。
+      // 旧3分岐（sweepPlan固定 / targetScoreRange / multiA.plans[0]固定）は
+      // effective 候補（modeAChoice）が全ケースを包含するため、選択が反映されない穴が塞がる。
       const song = step2Song
         ? { title: step2Song.title, jacketUrl: `${jacketBase}${step2Song.jacketLink}` }
         : undefined;
-      if (sweepPlan) {
-        return { kind: "sweep", plan: sweepPlan, requiredPt: live.requiredPt, song };
-      }
-      // 「編成そのままでOK」（現在ボーナスの単発で着地: liveAdjust.ts 5.1）。
-      // 従来はここで sweepPlan=null として行ごと消していた（R6 バグ修正の本丸）。
-      if (live.targetScoreRange) {
-        const base = step2Song?.basePoint ?? DEFAULT_BASE_POINT;
-        const lb =
-          bonus !== undefined
-            ? deriveCurrentLb(base, bonus, live.requiredPt, live.targetScoreRange.min, result.useMySekai)
-            : undefined;
-        return {
-          kind: "sweep",
-          requiredPt: live.requiredPt,
-          song,
-          current: { scoreRange: live.targetScoreRange, lb },
-        };
-      }
-      // 単発では届かないが複数回なら着地できる（R6 モードA複数回化・multiA）。
-      const multiA = live.multiA;
-      const plan = multiA?.status === "OK" ? multiA.plans[0] : undefined;
-      if (plan) {
-        return { kind: "multi", plan, songForBase: () => song };
-      }
-      return undefined;
+      return modeAChoice ? canvasStep2FromChoice(modeAChoice, live.requiredPt, song) : undefined;
     }
     const multi = live.multi;
     if (!multi || multi.status !== "OK") return undefined;

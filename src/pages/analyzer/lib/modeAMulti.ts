@@ -129,3 +129,81 @@ export function planModeAMulti(
   const table = bonusSweepTableMemo(base, bonus, liveBonuses, maxScoreN);
   return planFromReachablePtTable(liveRequired, table);
 }
+
+/**
+ * 現在ボーナス1点・LB×スコアのみを掃く表（R6 モードA選択肢提示型 §1-2）。
+ *
+ * buildBonusSweepTable のボーナス列を [bonus] の1点に絞った版。
+ * buildReachablePtTable は LB を 0..MAX_LIVE_BONUS 固定で回すため liveBonuses 縛り
+ * （ON時 [0,1]）を渡せず流用できない。そこで掃引手順（LB外側昇順 → scoreN、
+ * reps.set/push 同順、MAX_REPS_PER_PT 尊重）は buildBonusSweepTable と同一のまま、
+ * ボーナス列だけを1点にした新関数として書く（既存関数は改変しない＝禁じ手回避）。
+ *
+ * **Rep に bonus キーを付けない**のが設計の要点。これで keep 複数回プランの units は
+ * bonus 無し＝UI/canvas が自然に「現在のボーナス」表示になり、multiRows の
+ * 「目標ボーナス X%」ラベルが付かない（編成そのまま案への誤ラベルを構造的に防ぐ）。
+ */
+export function buildKeepBonusTable(
+  base: number,
+  bonus: number,
+  liveBonuses: readonly number[],
+  maxScoreN: number = DEFAULT_MAX_SCORE_N
+): ReachablePtTable {
+  const sortedLb = [...liveBonuses].sort((a, b) => a - b);
+  const reps = new Map<number, Rep[]>();
+  for (const lb of sortedLb) {
+    for (let n = 0; n <= maxScoreN; n++) {
+      const pt = calcLivePt(base, bonus, n * SCORE_STEP, lb);
+      if (pt <= 0) continue;
+      const list = reps.get(pt);
+      if (!list) {
+        // bonus キーは付けない（モードB様式）。units が「現在のボーナス」表示になる。
+        reps.set(pt, [{ basePoint: base, liveBonus: lb, scoreN: n }]);
+      } else if (list.length < MAX_REPS_PER_PT) {
+        list.push({ basePoint: base, liveBonus: lb, scoreN: n });
+      }
+    }
+  }
+  const sortedPts = [...reps.keys()].sort((a, b) => b - a);
+  const maxPtPerLive = sortedPts.length > 0 ? sortedPts[0] : 0;
+  const minPtPerLive = sortedPts.length > 0 ? sortedPts[sortedPts.length - 1] : 0;
+  return { reps, sortedPts, maxPtPerLive, minPtPerLive, basesCount: 1, maxScoreN };
+}
+
+/**
+ * keep 表専用のメモ化スロット（cache とは別スロット）。
+ *
+ * scoreZero（§3）が finalRunPt だけ変えてパイプラインを最大11回回すとき、
+ * bonusSweepTableMemo の cache と共有すると keep 表とボーナス掃引表が交互に
+ * 上書きし合ってスラッシングする。別スロットにして両方をキャッシュに載せる。
+ */
+let keepCache: { key: string; table: ReachablePtTable } | null = null;
+
+function keepBonusTableMemo(
+  base: number,
+  bonus: number,
+  liveBonuses: readonly number[],
+  maxScoreN: number
+): ReachablePtTable {
+  const key = `${base}|${bonus}|${maxScoreN}|${[...liveBonuses].join(",")}`;
+  if (keepCache && keepCache.key === key) return keepCache.table;
+  const table = buildKeepBonusTable(base, bonus, liveBonuses, maxScoreN);
+  keepCache = { key, table };
+  return table;
+}
+
+/**
+ * 現在ボーナス固定・複数回の着地探索（R6 モードA選択肢提示型 §1-2）。
+ * keep 表をメモ化して planFromReachablePtTable に渡すだけ。frontier/best 選択は無改変。
+ * 「編成そのまま・回数で吸収」案（choices の keep 複数回）の探索元になる。
+ */
+export function planModeAKeepMulti(
+  liveRequired: number,
+  base: number,
+  bonus: number,
+  liveBonuses: readonly number[],
+  maxScoreN: number = DEFAULT_MAX_SCORE_N
+): MultiLiveAdjustResult {
+  const table = keepBonusTableMemo(base, bonus, liveBonuses, maxScoreN);
+  return planFromReachablePtTable(liveRequired, table);
+}

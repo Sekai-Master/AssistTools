@@ -29,6 +29,15 @@ describe("integrated — レガシー経路の不変", () => {
     expect(legacyOn.liveAdjustment.multi).toBeUndefined();
     expect(legacyOn.mySekaiAllocation.appliedReserve).toBeUndefined();
   });
+
+  it("レガシー経路では multiAKeep キー自体が存在しない（凍結ゴールデン形状の維持）", () => {
+    const args = [1_000_000, 1_101_005, 1005, 380_470, 990, false, ENVY_ID, ENVY_MUSICS] as const;
+    // 条件付きスプレッドなので undefined ではなく「キー欠如」を確認する
+    expect("multiAKeep" in calculatePlanV6(...args).liveAdjustment).toBe(false);
+    expect(
+      "multiAKeep" in calculatePlanV6(...args, { useMySekai: false }).liveAdjustment
+    ).toBe(false);
+  });
 });
 
 describe("integrated — A/B 両方の計算と合成status", () => {
@@ -48,6 +57,9 @@ describe("integrated — A/B 両方の計算と合成status", () => {
     expect(r.liveAdjustment.multi).toBeDefined();
     // A（曲固定・ボーナス掃引）の結果も同居する
     expect(r.liveAdjustment.adjustmentPlans).toBeDefined();
+    // モードA複数回化（現ボーナス固定）の結果も載る（R6 §1-3）
+    expect(r.liveAdjustment.multiA).toBeDefined();
+    expect(r.liveAdjustment.multiAKeep).toBeDefined();
     // 動的確保額が載る
     expect(typeof r.mySekaiAllocation.appliedReserve).toBe("number");
     expect(r.mySekaiAllocation.appliedReserve!).toBeGreaterThan(0);

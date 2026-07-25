@@ -3,8 +3,8 @@ import { StepSection } from "./StepSection";
 import { NeuButton } from "../../../components/ui/NeuButton";
 import { SongSearchModal } from "../../../components/SongSearchModal";
 import type { AliasEntry } from "../../bingo/useBingoMusics";
-import type { UniversalPlan } from "../plan/types";
 import type { CalculationResultV6 } from "../lib/calculator";
+import type { ModeAChoice } from "../lib/modeAChoices";
 import { candidatesForBase, resolveSong } from "./liveAdjust/musicHelpers";
 import { BonusSweepPanel } from "./liveAdjust/BonusSweepPanel";
 import { PrimaryPlanPanel } from "./liveAdjust/PrimaryPlanPanel";
@@ -21,7 +21,7 @@ const STEP2_MODE_LABEL: Record<Step2Mode, string> = {
 /**
  * Step2: ライブでの端数調整。R5でモードA（曲固定・ボーナス掃引）とモードB（曲可変・
  * 複数回）を排他2択に再編した（旧「同一曲縛り」「スコア0イベ乙」トグルは削除）。
- * 採択状態（adopted・songByBase・sweepSelectedPlan）は統合画像出力が必要とするため
+ * 採択状態（adopted・songByBase・modeAChoice）は統合画像出力が必要とするため
  * 親（PointAnalyzer）が保持する。
  */
 export function LiveAdjustStep({
@@ -33,8 +33,9 @@ export function LiveAdjustStep({
   onStep2ModeChange,
   step2Song,
   onChangeStep2Song,
-  sweepSelectedPlan,
-  onSweepSelectPlan,
+  modeAChoices,
+  modeAChoice,
+  onSelectModeAChoice,
   adopted,
   onAdopt,
   songByBase,
@@ -48,8 +49,9 @@ export function LiveAdjustStep({
   onStep2ModeChange: (mode: Step2Mode) => void;
   step2Song?: SuggestMusic;
   onChangeStep2Song: (id: string) => void;
-  sweepSelectedPlan: UniversalPlan | null;
-  onSweepSelectPlan: (plan: UniversalPlan | null) => void;
+  modeAChoices: ModeAChoice[];
+  modeAChoice: ModeAChoice | null;
+  onSelectModeAChoice: (choice: ModeAChoice | null) => void;
   adopted: Adopted;
   onAdopt: (a: Adopted) => void;
   songByBase: Record<number, string>;
@@ -105,14 +107,14 @@ export function LiveAdjustStep({
 
       {step2Mode === "songFixed" ? (
         <BonusSweepPanel
-          live={live}
           musics={musics}
           aliases={aliases}
           jacketBase={jacketBase}
           song={step2Song}
           onChangeSong={onChangeStep2Song}
-          selectedPlan={sweepSelectedPlan}
-          onSelectPlan={onSweepSelectPlan}
+          choices={modeAChoices}
+          selectedChoice={modeAChoice}
+          onSelectChoice={onSelectModeAChoice}
         />
       ) : (
         multi &&
