@@ -555,4 +555,5 @@ function SkillRow({
         />
       )}
     </div>
-  ]
+  );
+}
