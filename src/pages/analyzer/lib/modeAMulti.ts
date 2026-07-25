@@ -102,7 +102,15 @@ export function buildBonusSweepTable(
  */
 let cache: { key: string; table: ReachablePtTable } | null = null;
 
-function bonusSweepTableMemo(
+/**
+ * ボーナス掃引表のメモ化取得（R6 モードA バルク＋端数 §1-2）。
+ *
+ * export する理由: モードA「バルクN回＋端数1回」の候補構築（modeABulkFraction.ts）が
+ * UI 側から同一表を引く。calculator が同一キー（base/bonus/liveBonuses/maxScoreN）で
+ * 先に呼んでいるため常にキャッシュヒットし、表の再構築は起きない。
+ * **関数本体・キャッシュスロット・キー式は1文字も変えない**（禁じ手回避）。
+ */
+export function getBonusSweepTableMemo(
   base: number,
   bonus: number,
   liveBonuses: readonly number[],
@@ -126,7 +134,7 @@ export function planModeAMulti(
   liveBonuses: readonly number[],
   maxScoreN: number = DEFAULT_MAX_SCORE_N
 ): MultiLiveAdjustResult {
-  const table = bonusSweepTableMemo(base, bonus, liveBonuses, maxScoreN);
+  const table = getBonusSweepTableMemo(base, bonus, liveBonuses, maxScoreN);
   return planFromReachablePtTable(liveRequired, table);
 }
 
@@ -179,7 +187,11 @@ export function buildKeepBonusTable(
  */
 let keepCache: { key: string; table: ReachablePtTable } | null = null;
 
-function keepBonusTableMemo(
+/**
+ * keep 表（現ボーナス固定・LB×スコア）のメモ化取得（R6 モードA バルク＋端数 §1-2）。
+ * export 理由・不改変制約は getBonusSweepTableMemo と同じ（別スロットのキャッシュ）。
+ */
+export function getKeepBonusTableMemo(
   base: number,
   bonus: number,
   liveBonuses: readonly number[],
@@ -204,6 +216,6 @@ export function planModeAKeepMulti(
   liveBonuses: readonly number[],
   maxScoreN: number = DEFAULT_MAX_SCORE_N
 ): MultiLiveAdjustResult {
-  const table = keepBonusTableMemo(base, bonus, liveBonuses, maxScoreN);
+  const table = getKeepBonusTableMemo(base, bonus, liveBonuses, maxScoreN);
   return planFromReachablePtTable(liveRequired, table);
 }

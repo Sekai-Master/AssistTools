@@ -12,12 +12,15 @@ export function PlanListModal({
   title,
   plans,
   onSelect,
+  annotate,
 }: {
   isOpen: boolean;
   onClose: () => void;
   title: string;
   plans: UniversalPlan[];
   onSelect: (plan: UniversalPlan) => void;
+  /** 各行に添える補足（例: 「合計◯回」）。undefined を返せば何も表示しない。省略時は既存挙動と同一。 */
+  annotate?: (plan: UniversalPlan) => string | undefined;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("bonus");
   const [asc, setAsc] = useState(true);
@@ -113,6 +116,11 @@ export function PlanListModal({
                   </div>
                 </div>
               </div>
+              {annotate?.(plan) && (
+                <div className="mt-1 text-center text-[10px] tabular-nums text-slate-500">
+                  {annotate(plan)}
+                </div>
+              )}
             </div>
           ))}
         </div>

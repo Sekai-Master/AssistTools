@@ -115,17 +115,21 @@ export default function PointAnalyzer() {
   // モードA選択肢提示型（R6 §1-4・§2）: 候補は state（liveAdjustment）と選択曲の基礎点から
   // 構築する純関数（buildModeAChoices）。既定選択（先頭＝編成そのまま）へのフォールバックは
   // effectiveModeAChoice で行う（旧 effectiveSweepPlan と同一パターン）。
+  // モードB（bonusFixed）表示中は構築しない。calculator の base(=DEFAULT_BASE_POINT) と
+  // UI の base(step2Song) が食い違うと sweep 表(~120万 calcLivePt)を UI スレッドで再構築し
+  // 単一スロットキャッシュを奪う（破壊者 MEDIUM-3）。songFixed のときだけ構築する。
   const modeAChoices = useMemo(
     () =>
-      state
+      state && step2Mode === "songFixed"
         ? buildModeAChoices({
             live: state.result.liveAdjustment,
             bonus: appliedInputs.current?.bonus ?? 0,
             base: step2Song?.basePoint ?? DEFAULT_BASE_POINT,
             useMySekai: state.result.useMySekai,
+            maxScore: state.result.maxScore,
           })
         : [],
-    [state, step2Song]
+    [state, step2Song, step2Mode]
   );
   const effectiveModeAChoice = modeAChoice ?? modeAChoices[0] ?? null;
 

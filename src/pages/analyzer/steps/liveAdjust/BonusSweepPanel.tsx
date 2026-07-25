@@ -63,15 +63,7 @@ export function BonusSweepPanel({
         </NeuButton>
       </div>
 
-      {effective && (
-        <ModeAChoicePanel
-          choices={choices}
-          selected={effective}
-          onSelect={onSelectChoice}
-          jacketSrc={jacketSrc}
-          songTitle={song?.title}
-        />
-      )}
+      {effective && <ModeAChoicePanel choices={choices} selected={effective} onSelect={onSelectChoice} />}
 
       {modalOpen && (
         <SongSearchModal

@@ -169,6 +169,29 @@ describe("buildAdjustPlanCanvasData — R6 Step2消失バグ修正（sweep plan=
     const lives = d.summary.find((s) => s.label === "総ライブ回数")!.value;
     expect(lives).toBe("2回");
   });
+
+  it("バルク（bonus無し）＋端数（bonus有り）の2unitで bonusLabel は端数行のみに付く（R6 モードA バルク＋端数 §5）", () => {
+    // バルク unit は現編成様式（bonus キー無し）→「調整 N回」・目標ボーナス表記なし。
+    // 端数 unit は bonus 有り → 目標ボーナス表記あり・1回。既存 multiRows の描き分けを固定。
+    const plan: MultiLivePlan = {
+      units: [
+        { basePoint: 100, liveBonus: 0, minScore: 20_000, maxScore: 39_999, pt: 1_100, count: 6 },
+        { basePoint: 100, liveBonus: 0, minScore: 1_040_000, maxScore: 1_059_999, pt: 1_654, bonus: 988.5, count: 1 },
+      ],
+      liveCount: 7,
+      lbCost: 0,
+      totalPt: 8_254,
+    };
+    const step2: AdjustCanvasStep2 = { kind: "multi", plan, songForBase: () => SONG };
+    const d = buildAdjustPlanCanvasData({ ...COMMON, step2 });
+    expect(d.rows).toHaveLength(2);
+    // バルク行（1行目）: 目標ボーナス表記なし・「調整 6回」
+    expect(d.rows[0].bonusLabel).toBeUndefined();
+    expect(d.rows[0].time).toBe("調整 6回");
+    // 端数行（2行目）: 目標ボーナス表記あり・「調整」（1回）
+    expect(d.rows[1].bonusLabel).toBe("目標ボーナス 988.5%");
+    expect(d.rows[1].time).toBe("調整");
+  });
 });
 
 describe("deriveCurrentLb — 5.1（現在ボーナスのまま着地）の締めLB逆引き", () => {
