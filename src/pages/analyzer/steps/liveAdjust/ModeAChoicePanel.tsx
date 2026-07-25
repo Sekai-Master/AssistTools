@@ -43,9 +43,13 @@ function bulkFractionFormOf(choice: ModeAChoice): BulkFractionForm {
   return choice.form;
 }
 
-/** 端数 unit のボーナス表記（bonus キー無し＝現ボーナスのまま）。 */
+/**
+ * 端数 unit のボーナス表記。bonus キー無し＝現ボーナスのまま＝編成をいじらない。
+ * バルク行の「編成そのまま」と用語を揃える（「現在の編成」と「現在のボーナス」の
+ * 不統一が同じものを違うものに見せていた）。組み替え時のみボーナス値を出す。
+ */
 function fractionBonusLabel(unit: MultiLiveUnit): string {
-  return unit.bonus !== undefined ? `${unit.bonus}%` : "現在のボーナス";
+  return unit.bonus !== undefined ? `ボーナス${unit.bonus}%に組み替え` : "編成そのまま";
 }
 
 /** UniversalPlan への変換（PlanListModal 用）。bonus は fractionBonus を採用（現ボーナスでも数値）。 */
@@ -74,12 +78,15 @@ function BulkFractionBody({ choice }: { choice: ModeAChoice }) {
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-700">
           <FormationUnchangedBadge />
           <span className="font-bold" style={{ color: "var(--unit-color)" }}>
-            現在の編成で{form.bulkCount}回
+            編成そのままで{form.bulkCount}回
           </span>
           <span className="font-mono text-xs tabular-nums text-slate-500">
             {bulk.liveBonus}炊き ・ スコア {bulk.minScore.toLocaleString()}〜{bulk.maxScore.toLocaleString()}
             {" "}・ 1回 {bulk.pt.toLocaleString()} Pt
           </span>
+          {/* バルク行も実行難易度を出す（端数行と対称）。0炊きで中間帯を狙う行の
+              「狙い撃ち」が隠れると、一番手加減が要る行の難しさが伝わらない。 */}
+          <ScoreBandTag band={scoreBandBadge(bulk)} />
         </div>
       )}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-700">
@@ -116,7 +123,7 @@ function MultiChoiceBody({ plan, kind }: { plan: MultiLivePlan; kind: ModeAChoic
         {plan.units.map((u, i) => (
           <li key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-700">
             <span className="font-bold tabular-nums" style={{ color: "var(--unit-color)" }}>
-              {u.bonus !== undefined ? `${u.bonus}%` : "現在のボーナス"}
+              {fractionBonusLabel(u)}
             </span>
             <span className="font-mono text-xs tabular-nums text-slate-500">
               {u.liveBonus}炊き ・ スコア {u.minScore.toLocaleString()}〜{u.maxScore.toLocaleString()}
