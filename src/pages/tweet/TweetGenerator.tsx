@@ -106,8 +106,15 @@ export default function TweetGenerator() {
       )
     );
 
+  const tweetHref = tweetIntentUrl(preview);
+
   return (
-    <ToolPage unit="vs" title="ついぼジェネレーター" icon="campaign">
+    <ToolPage wide unit="vs" title="ついぼジェネレーター" icon="campaign">
+      {/* PC は 2カラム（左=入力／右=sticky なプレビュー＋アクション）。
+          lg 未満は通常フローで縦積みし、アクションは画面下の固定バーが担う。 */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6 lg:items-start">
+        {/* 左カラム: 入力フォーム。スマホは下部固定バーに隠れないよう余白を足す。 */}
+        <div className="space-y-6 pb-28 lg:pb-0">
       <Panel title="募集内容">
         <div className="space-y-4">
           <Field label="TL放流">
@@ -331,23 +338,6 @@ export default function TweetGenerator() {
         />
       </Panel>
 
-      <Panel title="プレビュー">
-        <pre className="whitespace-pre-wrap break-words rounded-lg bg-neu p-4 shadow-neu-inset text-sm text-slate-700">
-          {preview}
-        </pre>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <a
-            href={tweetIntentUrl(preview)}
-            target="_blank"
-            rel="noreferrer"
-            className="neu-cta inline-block rounded-lg px-5 py-2.5 text-sm font-bold"
-          >
-            ツイートする
-          </a>
-          <NeuButton onClick={saveHistory}>入力を保存</NeuButton>
-        </div>
-      </Panel>
-
       {history.length > 0 && (
         <Panel title="履歴">
           <ul className="space-y-2">
@@ -390,7 +380,115 @@ export default function TweetGenerator() {
           </div>
         </Panel>
       )}
+        </div>
+
+        {/* 右カラム（PCのみ）: プレビュー＋ルームID即編集＋アクション。
+            スクロールに追従させ、履歴から再利用したあと一番上に戻らず
+            ここでルームIDを直してそのままツイートできるようにする。 */}
+        <div className="hidden lg:block lg:sticky lg:top-6">
+          <Panel title="プレビュー">
+            <pre className="whitespace-pre-wrap break-words rounded-lg bg-neu p-4 shadow-neu-inset text-sm text-slate-700">
+              {preview}
+            </pre>
+            <div className="mt-4 space-y-3">
+              <Field label="ルームID" htmlFor="tg-roomid-side">
+                <NeuInput
+                  id="tg-roomid-side"
+                  inputMode="numeric"
+                  maxLength={5}
+                  value={s.roomId}
+                  onChange={(e) => set("roomId", digitsOnly(e.target.value))}
+                  placeholder="ルームIDを入力"
+                />
+              </Field>
+              <div className="flex flex-wrap gap-3">
+                <a
+                  href={tweetHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="neu-cta inline-block rounded-lg px-5 py-2.5 text-sm font-bold"
+                >
+                  ツイートする
+                </a>
+                <NeuButton onClick={saveHistory}>入力を保存</NeuButton>
+              </div>
+            </div>
+          </Panel>
+        </div>
+      </div>
+
+      {/* スマホ: 画面下に固定したアクションバー。
+          ルームID→ツイートまで従来 1600px 超スクロールしていたのを、
+          どこにいてもこのバーで完結できるようにする。 */}
+      <MobileActionBar
+        roomId={s.roomId}
+        onRoomId={(v) => set("roomId", digitsOnly(v))}
+        preview={preview}
+        tweetHref={tweetHref}
+        onSave={saveHistory}
+      />
     </ToolPage>
+  );
+}
+
+/** スマホ用の画面下固定アクションバー（lg 未満のみ表示）。 */
+function MobileActionBar({
+  roomId,
+  onRoomId,
+  preview,
+  tweetHref,
+  onSave,
+}: {
+  roomId: string;
+  onRoomId: (v: string) => void;
+  preview: string;
+  tweetHref: string;
+  onSave: () => void;
+}) {
+  const [previewOpen, setPreviewOpen] = useState(false);
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-40 lg:hidden">
+      {previewOpen && (
+        <div className="mx-auto max-w-3xl px-3 pb-2">
+          <pre className="max-h-52 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-neu p-3 text-xs text-slate-700 shadow-neu-inset">
+            {preview}
+          </pre>
+        </div>
+      )}
+      <div className="border-t border-black/5 bg-neu/95 backdrop-blur px-3 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
+        <div className="mx-auto flex max-w-3xl items-center gap-2">
+          <button
+            type="button"
+            aria-label="プレビューを表示"
+            aria-expanded={previewOpen}
+            onClick={() => setPreviewOpen((v) => !v)}
+            className="material-icons shrink-0 rounded-lg px-2 py-2 text-slate-500 shadow-neu active:shadow-neu-inset"
+          >
+            {previewOpen ? "expand_more" : "expand_less"}
+          </button>
+          <NeuInput
+            aria-label="ルームID"
+            inputMode="numeric"
+            maxLength={5}
+            value={roomId}
+            onChange={(e) => onRoomId(e.target.value)}
+            placeholder="ルームID"
+            className="flex-1 !min-w-0"
+          />
+          <NeuButton className="!px-3" onClick={onSave} aria-label="入力を保存">
+            <span className="material-icons text-base">bookmark_add</span>
+          </NeuButton>
+          <a
+            href={tweetHref}
+            target="_blank"
+            rel="noreferrer"
+            className="neu-cta shrink-0 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-bold"
+          >
+            ツイート
+          </a>
+        </div>
+      </div>
+    </div>
   );
 }
 
