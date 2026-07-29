@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { EfficiencyEntry } from "./lib/efficiency";
+import { SKILL_SLOTS, type EfficiencyEntry } from "./lib/efficiency";
 
 /**
  * ランキング用に、楽曲を「1曲1難易度」の粒度へ展開して読み込む。
@@ -11,8 +11,14 @@ import type { EfficiencyEntry } from "./lib/efficiency";
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const isStr = (v: unknown): v is string => typeof v === "string" && v.length > 0;
+
+/**
+ * スキル枠の重み配列。長さは必ず6（ソロ・協力・オートとも発動枠は6つ）。
+ * 長さを見ずに通すと、短い配列が来たときに足りない枠を0として黙って計算し、
+ * 「それらしいが低いスコア」で順位に紛れ込む。欠けた曲は落とす方が安全。
+ */
 const numArr = (v: unknown): number[] | null =>
-  Array.isArray(v) && v.length > 0 && v.every(isNum) ? (v as number[]) : null;
+  Array.isArray(v) && v.length === SKILL_SLOTS && v.every(isNum) ? (v as number[]) : null;
 
 /** 表示順を固定するための難易度の並び。 */
 export const DIFFICULTY_ORDER = ["easy", "normal", "hard", "expert", "master", "append"] as const;
@@ -27,6 +33,19 @@ export const DIFFICULTY_LABEL: Record<Difficulty, string> = {
   append: "APPEND",
 };
 
+/**
+ * ゲーム内の難易度色。表の中で難易度を色で見分けられるようにするためのもの。
+ * 白抜き文字を載せる前提なので、原色より少し沈めて可読性を取っている。
+ */
+export const DIFFICULTY_COLOR: Record<Difficulty, string> = {
+  easy: "#3fae52",
+  normal: "#2c96cf",
+  hard: "#d99a12",
+  expert: "#d6425f",
+  master: "#9448cc",
+  append: "#e065ae",
+};
+
 interface RawDifficulty {
   playLevel?: unknown;
   noteCount?: unknown;
@@ -34,6 +53,8 @@ interface RawDifficulty {
   skillScoreSolo?: unknown;
   baseScoreAuto?: unknown;
   skillScoreAuto?: unknown;
+  skillScoreMulti?: unknown;
+  feverScore?: unknown;
 }
 
 interface RawMusic {
@@ -87,6 +108,8 @@ function parse(rawMusics: unknown, rawScores: unknown): RankingMusic[] {
         skillScoreSolo,
         baseScoreAuto: isNum(d.baseScoreAuto) ? d.baseScoreAuto : null,
         skillScoreAuto: numArr(d.skillScoreAuto),
+        skillScoreMulti: numArr(d.skillScoreMulti),
+        feverScore: isNum(d.feverScore) ? d.feverScore : null,
         musicTime,
         eventRate,
         jacketLink: isStr(m.jacketLink) ? m.jacketLink : `jacket_s_${m.id}.webp`,

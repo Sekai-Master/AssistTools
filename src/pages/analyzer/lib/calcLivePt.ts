@@ -45,16 +45,66 @@ export function calcLivePt(
   score: number,
   liveBonusVal: number
 ): number {
-  const step1 = Math.floor(score / SCORE_STEP);
+  return livePtFromCoefficient(soloScoreCoefficient(score), base, bonus, liveBonusVal);
+}
 
+/**
+ * スコア係数（＝上式の「スコア係数 + 100」に当たる整数）から獲得ポイントを出す共通部。
+ *
+ * 丸めの作法（小数第1位保持）はライブ種別によらず同じで、違うのは係数の作り方だけ。
+ * 実測で確定させたこの丸めを種別ごとに書き写すと必ず片方だけ古くなるので、
+ * 係数を差し替える口だけ開けて本体は1つに保つ。
+ */
+export function livePtFromCoefficient(
+  coefficient: number,
+  base: number,
+  bonus: number,
+  liveBonusVal: number
+): number {
   // ボーナスは 0.5% 刻みを取りうるので 100 倍して整数化する
   const bonus100x = Math.round(bonus * 100);
-  const numerator = (step1 + 100) * (bonus100x + 10000); // = val2 * 10000
+  const numerator = coefficient * (bonus100x + 10000); // = val2 * 10000
   const step2x10 = Math.floor(numerator / 1000); // = floor(val2 * 10)
   const step3 = Math.floor((step2x10 * base) / 1000); // = floor(step2 * base / 100)
 
   const multiplier = LIVE_BONUS_MULTIPLIERS[liveBonusVal] || 1;
   return step3 * multiplier;
+}
+
+/** ひとりでライブ／オートのスコア係数。 */
+export function soloScoreCoefficient(score: number): number {
+  return 100 + Math.floor(score / SCORE_STEP);
+}
+
+/**
+ * 協力ライブ（みんなでライブ）のスコア係数。ソロとは式そのものが違う。
+ *
+ *   110 + floor(自分のスコア / 17000) + min(13, floor(他4人の合計スコア / 340000))
+ *
+ * 他4人ぶんが式に入るのが要点で、これが「支援を厚くすると単価が上がる」の正体。
+ * 上限13に張り付くのは他4人合計が442万点からなので、同格の部屋ならすぐ飽和する。
+ * 他人のスコアが分からないときは参照実装（xfl03/sekai-calculator）に合わせて
+ * 自分と同じ実力の4人＝自分のスコア×4 で置く。
+ */
+export function multiScoreCoefficient(selfScore: number, otherScore?: number): number {
+  const other = otherScore != null && otherScore > 0 ? otherScore : 4 * selfScore;
+  return 110 + Math.floor(selfScore / 17000) + Math.min(13, Math.floor(other / 340000));
+}
+
+/** 協力ライブでの獲得イベントポイント。丸めは calcLivePt と共通、係数だけ協力用。 */
+export function calcMultiLivePt(
+  base: number,
+  bonus: number,
+  selfScore: number,
+  liveBonusVal: number,
+  otherScore?: number
+): number {
+  return livePtFromCoefficient(
+    multiScoreCoefficient(selfScore, otherScore),
+    base,
+    bonus,
+    liveBonusVal
+  );
 }
 
 /**

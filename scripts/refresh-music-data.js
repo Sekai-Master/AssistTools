@@ -87,21 +87,37 @@ async function toThumbnail(input) {
   // 難易度別データを music_id で引けるようにまとめる。
   //
   // event_rate と music_time は難易度によらず同じ値なので曲の直下に置く（従来どおり）。
-  // base_score と skill_score_solo は難易度ごとに違うので、ここで難易度別に持つ。
+  // base_score と skill_score_* は難易度ごとに違うので、ここで難易度別に持つ。
   //
-  //   base_score       : スキル無しでAPしたときのスコア率（曲×難易度で固定）
-  //   skill_score_solo : スキル発動6枠それぞれが曲全体スコアに占める重み（長さ6）
-  //                      ソロ／チャレンジライブ用。6枠目はリーダーのアンコール。
+  //   base_score        : スキル無しでAPしたときのスコア率（曲×難易度で固定）
+  //   skill_score_solo  : スキル発動6枠それぞれが曲全体スコアに占める重み（長さ6）
+  //                       ソロ／チャレンジライブ用。6枠目はリーダーのアンコール。
+  //   skill_score_multi : 同じく協力ライブ（みんなでライブ）用。6枠目が重い。
+  //   fever_score       : 協力ライブのフィーバー加点ぶん。base_score に 0.5 倍で足す。
   //
   // スコアは次式で出せる（sekai-calculator の高速版と同じ）:
-  //   rate  = base_score + Σ(各枠のスコアアップ% × skill_score_solo[i] / 100)
+  //   rate  = base + Σ(各枠のスコアアップ% × skill_score[i] / 100)
   //   score = floor(rate × 総合力 × 4)
+  // ライブ種別ごとに base と skill_score の組が変わる（sekai-calculator と同じ対応）:
+  //   ソロ/チャレライ : base_score                     × skill_score_solo
+  //   協力ライブ      : base_score + fever_score × 0.5 × skill_score_multi
+  //   オート          : base_score_auto                × skill_score_auto
   const DIFFICULTIES = ['easy', 'normal', 'hard', 'expert', 'master', 'append'];
   const diffByMusic = new Map();
+  // append が後から増えた前例があるので、知らない難易度が来たら気づけるようにする。
+  // 黙って落とすと「生成物には無いが画面にも出ない」で誰も気づかないまま数か月経つ。
+  const unknownDifficulties = new Set();
   for (const d of musicDifficulties) {
     if (!d || d.musicId == null) continue;
+    if (!DIFFICULTIES.includes(d.musicDifficulty)) unknownDifficulties.add(d.musicDifficulty);
     if (!diffByMusic.has(d.musicId)) diffByMusic.set(d.musicId, {});
     diffByMusic.get(d.musicId)[d.musicDifficulty] = d;
+  }
+  if (unknownDifficulties.size > 0) {
+    console.warn(
+      `⚠ 未知の難易度 ${[...unknownDifficulties].join(', ')} を検出。` +
+        'scripts/refresh-music-data.js の DIFFICULTIES と src/pages/ranking/useRankingMusics.ts の DIFFICULTY_ORDER に追加が必要です。'
+    );
   }
   const metaByMusic = new Map();
   for (const x of metas) {
@@ -109,6 +125,13 @@ async function toThumbnail(input) {
     if (!metaByMusic.has(x.music_id)) metaByMusic.set(x.music_id, {});
     metaByMusic.get(x.music_id)[x.difficulty] = x;
   }
+
+  // スコア率は倍精度のまま書くと1値18文字になり、ブラウザに配る JSON が倍近く膨らむ。
+  // score = floor(rate × 総合力 × 4) なので、1e-6 の丸め誤差は総合力30万でも 1.2 点。
+  // 数百万点のスコアに対して無視できるので6桁で切る。
+  const RATE_DIGITS = 6;
+  const round = (v) => (typeof v === 'number' && Number.isFinite(v) ? Number(v.toFixed(RATE_DIGITS)) : null);
+  const roundAll = (a) => (Array.isArray(a) ? a.map(round) : null);
 
   /** 1曲ぶんの難易度別データ。存在する難易度だけを持つ。 */
   function buildDifficulties(musicId) {
@@ -122,12 +145,15 @@ async function toThumbnail(input) {
       out[key] = {
         playLevel: d ? d.playLevel : null,
         noteCount: d ? d.totalNoteCount : null,
-        baseScore: meta ? meta.base_score : null,
-        skillScoreSolo: meta ? meta.skill_score_solo : null,
+        baseScore: meta ? round(meta.base_score) : null,
+        skillScoreSolo: meta ? roundAll(meta.skill_score_solo) : null,
         // オートは判定が全て auto(0.7) になるため専用の値が要る。
         // ソロ値から比で近似すると順位が狂うので実データを持つ。
-        baseScoreAuto: meta ? meta.base_score_auto : null,
-        skillScoreAuto: meta ? meta.skill_score_auto : null,
+        baseScoreAuto: meta ? round(meta.base_score_auto) : null,
+        skillScoreAuto: meta ? roundAll(meta.skill_score_auto) : null,
+        // 協力ライブ用。ソロと 1〜5枠から違う曲が7割あるので別に持つ。
+        skillScoreMulti: meta ? roundAll(meta.skill_score_multi) : null,
+        feverScore: meta ? round(meta.fever_score) : null,
       };
     }
     return out;
