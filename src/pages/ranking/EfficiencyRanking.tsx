@@ -16,6 +16,7 @@ import {
 } from "./useRankingMusics";
 import {
   rankSongs,
+  multiEffectiveSkill,
   DEFAULT_PARAMS,
   type RankingMode,
   type EfficiencyParams,
@@ -42,21 +43,21 @@ const MODE_NOTE: Record<
     body: "手で叩くので律速は時間。短い曲ほど有利になります。フィーバー込みの協力ライブの式で計算しています。",
     metricLabel: "Pt/時",
     skillHint:
-      "協力ライブで自分のスコアに乗るのは自分の編成だけです。リーダー（編成の一番左）が100%、サブ4枚が各20%の割合で合算され、その実効値が6枠すべてに同じだけ掛かります。他人のスキルは自分のスコアには乗りません。強い人を呼ぶと単価が上がるのは、イベントポイントの式に他4人の合計スコアが入るからです。",
+      "協力ライブは1曲のなかで6回スキルが発動します（参加5人が1回ずつ＋アンコール1回）。各発動で乗るのが実効値です。強い人を呼ぶと単価が上がるのは、イベントポイントの式に他4人の合計スコアが入るからで、曲の順位そのものは部屋の顔ぶれでは変わりません。",
   },
   auto: {
     headline: "オート・1プレイあたりのイベントポイント",
     body: "放置するので時間はコストになりません。律速はライブボーナスなので、1回で多く稼げる長尺・高基礎点の曲が有利です。手動とは最適解が逆になります。",
     metricLabel: "Pt/回",
     skillHint:
-      "ソロは編成5枚が1枠ずつ発動し、6枠目にリーダー（編成の一番左）がもう1回発動します。1〜5枠の発動順は選べないので、5枚は平均値で計算しています。リーダーだけ2回ぶん効きます。",
+      "ソロは1曲のなかで6回スキルが発動します（編成5枚が1回ずつ＋最後にリーダーがもう1回）。1〜5回目の発動順は選べないので、5枚は内部値÷5の平均で計算し、6回目だけリーダーの値を当てています。",
   },
   challenge: {
     headline: "チャレンジライブ・1プレイあたりのスコア",
     body: "1日1回なので時間もライボも関係ありません。イベント基礎点も無関係で、純粋にスコアだけを見ます。",
     metricLabel: "スコア",
     skillHint:
-      "ソロは編成5枚が1枠ずつ発動し、6枠目にリーダー（編成の一番左）がもう1回発動します。1〜5枠の発動順は選べないので、5枚は平均値で計算しています。リーダーだけ2回ぶん効きます。",
+      "ソロは1曲のなかで6回スキルが発動します（編成5枚が1回ずつ＋最後にリーダーがもう1回）。1〜5回目の発動順は選べないので、5枚は内部値÷5の平均で計算し、6回目だけリーダーの値を当てています。",
   },
 };
 
@@ -73,6 +74,10 @@ function hhmm(totalSec: number): string {
   return h > 0 ? `${h}時間${String(m % 60).padStart(2, "0")}分` : `${m}分`;
 }
 
+/** 譜面レベルの取りうる範囲。上限が伸びてもフィルタが取りこぼさないよう広めに取る。 */
+const LEVEL_MIN = 1;
+const LEVEL_MAX = 40;
+
 interface Stored {
   v?: number;
   custom?: boolean;
@@ -80,9 +85,11 @@ interface Stored {
   bonus?: string;
   taki?: number;
   skillLeader?: string;
-  skillSub?: string;
+  skillTotal?: string;
   overhead?: string;
   plays?: string;
+  lvMin?: number;
+  lvMax?: number;
 }
 
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
@@ -104,6 +111,10 @@ function loadStored(): Stored {
       typeof s.taki === "number" && Number.isInteger(s.taki) && s.taki >= 0 && s.taki <= 10
         ? s.taki
         : undefined;
+    const lv = (v: unknown) =>
+      typeof v === "number" && Number.isInteger(v) && v >= LEVEL_MIN && v <= LEVEL_MAX
+        ? v
+        : undefined;
     return {
       v: STORE_VERSION,
       custom: typeof s.custom === "boolean" ? s.custom : undefined,
@@ -111,9 +122,11 @@ function loadStored(): Stored {
       bonus: str(s.bonus),
       taki,
       skillLeader: str(s.skillLeader),
-      skillSub: str(s.skillSub),
+      skillTotal: str(s.skillTotal),
       overhead: str(s.overhead),
       plays: str(s.plays),
+      lvMin: lv(s.lvMin),
+      lvMax: lv(s.lvMax),
     };
   } catch {
     return {};
@@ -138,6 +151,73 @@ function DifficultyBadge({ difficulty, level }: { difficulty: string; level: num
           {level}
         </span>
       )}
+    </span>
+  );
+}
+
+/** クリックで開く補足。用語の説明を本文に混ぜず、知っている人の邪魔をしない。 */
+function InfoNote({ label, children }: { label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-neu text-[10px] font-bold text-slate-500 shadow-neu-sm neu-tactile"
+        title={label}
+      >
+        ?
+      </button>
+      {open && (
+        <div className="mt-2 rounded-xl bg-neu p-3 text-xs leading-relaxed text-slate-500 shadow-neu-inset">
+          {children}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** 譜面レベルの小さな数値入力。±で1ずつ動かせる。 */
+function LevelInput({
+  value,
+  onChange,
+  label,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  label: string;
+}) {
+  const clamp = (v: number) => Math.max(LEVEL_MIN, Math.min(LEVEL_MAX, v));
+  const btn =
+    "neu-raised neu-tactile flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 disabled:opacity-40";
+  return (
+    <span className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        className={btn}
+        disabled={value <= LEVEL_MIN}
+        onClick={() => onChange(clamp(value - 1))}
+        aria-label={`${label}を下げる`}
+      >
+        −
+      </button>
+      <input
+        inputMode="numeric"
+        value={String(value)}
+        onChange={(e) => onChange(clamp(Math.floor(Number(e.target.value) || LEVEL_MIN)))}
+        className="w-10 rounded-lg bg-neu px-1 py-1 text-center tabular-nums text-slate-800 shadow-neu-inset outline-none"
+        aria-label={`譜面レベルの${label}`}
+      />
+      <button
+        type="button"
+        className={btn}
+        disabled={value >= LEVEL_MAX}
+        onClick={() => onChange(clamp(value + 1))}
+        aria-label={`${label}を上げる`}
+      >
+        ＋
+      </button>
     </span>
   );
 }
@@ -168,9 +248,13 @@ export default function EfficiencyRanking() {
   const [skillLeader, setSkillLeader] = useState(
     stored.skillLeader ?? String(DEFAULT_PARAMS.skillLeader),
   );
-  const [skillSub, setSkillSub] = useState(stored.skillSub ?? String(DEFAULT_PARAMS.skillSub));
+  const [skillTotal, setSkillTotal] = useState(
+    stored.skillTotal ?? String(DEFAULT_PARAMS.skillTotal),
+  );
   const [overhead, setOverhead] = useState(stored.overhead ?? String(DEFAULT_PARAMS.overheadSec));
   const [plays, setPlays] = useState(stored.plays ?? "100");
+  const [lvMin, setLvMin] = useState(stored.lvMin ?? LEVEL_MIN);
+  const [lvMax, setLvMax] = useState(stored.lvMax ?? LEVEL_MAX);
 
   // 入力は毎回同じものを打ち直させない。次回開いたときの初期値にする。
   const persist = (patch: Stored) => {
@@ -193,16 +277,25 @@ export default function EfficiencyRanking() {
       bonus: Number(bonus) || 0,
       taki,
       skillLeader: Number(skillLeader) || 0,
-      skillSub: Number(skillSub) || 0,
+      skillTotal: Number(skillTotal) || 0,
       overheadSec: Number(overhead) || 0,
     };
-  }, [custom, power, bonus, taki, skillLeader, skillSub, overhead]);
+  }, [custom, power, bonus, taki, skillLeader, skillTotal, overhead]);
+
+  // 入力の前後がひっくり返っていても素直に受ける（下限>上限で空表にしない）。
+  const [loLv, hiLv] = lvMin <= lvMax ? [lvMin, lvMax] : [lvMax, lvMin];
+  const levelFiltered = loLv > LEVEL_MIN || hiLv < LEVEL_MAX;
 
   const ranked = useMemo(() => {
     if (diffs.size === 0) return [];
-    const filtered = entries.filter((e) => diffs.has(e.difficulty as Difficulty));
+    const filtered = entries.filter(
+      (e) =>
+        diffs.has(e.difficulty as Difficulty) &&
+        // Lv が不明な譜面は、範囲を絞っているときだけ落とす
+        (e.playLevel == null ? !levelFiltered : e.playLevel >= loLv && e.playLevel <= hiLv),
+    );
     return rankSongs(filtered, params, mode).slice(0, ROW_LIMIT);
-  }, [entries, params, mode, diffs]);
+  }, [entries, params, mode, diffs, loLv, hiLv, levelFiltered]);
 
   const toggleDiff = (d: Difficulty) =>
     setDiffs((prev) => {
@@ -245,6 +338,42 @@ export default function EfficiencyRanking() {
           <NeuButton className="px-3 py-1.5 text-xs" onClick={() => setDiffs(new Set())}>
             選択を外す
           </NeuButton>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+          <span className="mr-1 font-bold text-slate-500">譜面レベル</span>
+          <LevelInput
+            value={lvMin}
+            onChange={(v) => {
+              setLvMin(v);
+              persist({ lvMin: v });
+            }}
+            label="下限"
+          />
+          <span className="text-slate-400">〜</span>
+          <LevelInput
+            value={lvMax}
+            onChange={(v) => {
+              setLvMax(v);
+              persist({ lvMax: v });
+            }}
+            label="上限"
+          />
+          {levelFiltered && (
+            <NeuButton
+              className="px-3 py-1.5 text-xs"
+              onClick={() => {
+                setLvMin(LEVEL_MIN);
+                setLvMax(LEVEL_MAX);
+                persist({ lvMin: LEVEL_MIN, lvMax: LEVEL_MAX });
+              }}
+            >
+              解除
+            </NeuButton>
+          )}
+          <span className="text-slate-400">
+            叩けるレベルに絞ると、AP前提の理論値が実際の選曲に近づきます
+          </span>
         </div>
       </Panel>
 
@@ -325,8 +454,8 @@ export default function EfficiencyRanking() {
               <>下の条件で計算しています。</>
             ) : (
               <>
-                総合力 {fmt(DEFAULT_PARAMS.power)}／リーダー {DEFAULT_PARAMS.skillLeader}%・サブ{" "}
-                {DEFAULT_PARAMS.skillSub}%
+                {DEFAULT_PARAMS.skillLeader}/{DEFAULT_PARAMS.skillTotal}/
+                {(DEFAULT_PARAMS.power / 10000).toFixed(1)}
                 {mode !== "challenge" && `／ボーナス ${DEFAULT_PARAMS.bonus}%／${taki}焚き`}
                 {mode === "manual" && `／ロス ${DEFAULT_PARAMS.overheadSec}秒`}
                 {" を前提にした一般的な順位です。"}
@@ -447,10 +576,7 @@ export default function EfficiencyRanking() {
                   />
                 </Field>
               )}
-              <Field
-                label="リーダーのスコアアップ（%）"
-                hint="編成の一番左のカード。スキル発動時の最大値を入れる"
-              >
+              <Field label="リーダー（%）" hint="ついぼ表記の1つ目。編成の一番左のカード">
                 <NeuInput
                   inputMode="numeric"
                   value={skillLeader}
@@ -461,14 +587,14 @@ export default function EfficiencyRanking() {
                   }}
                 />
               </Field>
-              <Field label="サブ4枚の平均スコアアップ（%）" hint="リーダー以外の4枚の平均">
+              <Field label="内部値" hint="ついぼ表記の2つ目。編成5枚のスコアアップ合計">
                 <NeuInput
                   inputMode="numeric"
-                  value={skillSub}
+                  value={skillTotal}
                   onChange={(e) => {
                     const v = onlyDigits(e.target.value);
-                    setSkillSub(v);
-                    persist({ skillSub: v });
+                    setSkillTotal(v);
+                    persist({ skillTotal: v });
                   }}
                 />
               </Field>
@@ -505,7 +631,36 @@ export default function EfficiencyRanking() {
               )}
             </div>
 
-            <p className="mt-4 text-xs leading-relaxed text-slate-500">{note.skillHint}</p>
+            <div className="mt-4">
+              <span className="text-xs text-slate-500">
+                この編成の実効値は{" "}
+                <span className="font-bold text-slate-700 tabular-nums">
+                  {multiEffectiveSkill(Number(skillLeader) || 0, Number(skillTotal) || 0).toFixed(1)}
+                </span>
+                {mode === "manual" ? "（協力ライブで発動する値）" : "（協力ライブ用。このタブでは使いません）"}
+              </span>
+              <InfoNote label="内部値と実効値について">
+                <p>
+                  ついぼの「<span className="font-bold text-slate-600">150/710/31.3</span>」表記は、
+                  リーダー150%／内部値710／総合力31.3万 の意味です。
+                  <span className="font-bold text-slate-600">内部値</span>
+                  はリーダーを含む編成5枚のスコアアップ合計。
+                </p>
+                <p className="mt-2">
+                  <span className="font-bold text-slate-600">実効値</span>
+                  は協力ライブで実際に発動する値で、
+                  <code>リーダー + (内部値 − リーダー) × 0.2</code> で出ます。
+                  リーダーは100%、サブ4枚は各20%しか効かないためです。
+                  この例なら 150 + 560 × 0.2 = <span className="font-bold text-slate-600">262</span>。
+                </p>
+                <p className="mt-2">
+                  ソロ（オート・チャレライ）は別勘定で、編成5枚が1回ずつ発動するので
+                  内部値 ÷ 5 が平均、最後の6回目だけリーダーがもう1回発動します。
+                  そのため<span className="font-bold text-slate-600">ソロでは内部値が、協力ではリーダーが効きます</span>。
+                </p>
+              </InfoNote>
+            </div>
+            <p className="mt-3 text-xs leading-relaxed text-slate-500">{note.skillHint}</p>
             {mode !== "challenge" && (
               <p className="mt-2 text-xs leading-relaxed text-slate-500">
                 イベントポイントの式にスコアが入るため、
@@ -535,9 +690,21 @@ export default function EfficiencyRanking() {
             実際の部屋の顔ぶれで単価は動くので、並び順の比較に使ってください。
           </li>
           <li>
+            スキルは1曲のなかで<span className="font-bold text-slate-600">6回</span>発動します。
+            カードは5枚・部屋も5人ですが、最後にもう1回あるので6回です
+            （ソロならリーダーがもう1回、協力ならアンコール）。
+            skill_score_* のデータが長さ6の配列なのもそのためです。
+          </li>
+          <li>
             全ノーツPERFECT（AP）を前提にした理論値です。判定係数は GREAT で 0.7 まで落ちるので、
             <span className="font-bold text-slate-600">叩けない譜面は表より不利になります</span>。
-            自分が安定して取れる難易度に絞って見てください。
+            上の譜面レベルで自分が安定してAPできる範囲に絞ると、実際の選曲に近づきます。
+          </li>
+          <li>
+            スキルの発動位置は楽曲ごとに決まっていますが、
+            <span className="font-bold text-slate-600">1〜5回目に誰のスキルが来るかはランダム</span>
+            で選べません。そのため平均で計算しており、
+            発動順を厳選しても曲どうしの順位は変わりません（全曲に同じ係数が掛かるだけ）。
           </li>
           <li>
             協力ライブの活躍ボーナス（スコアに少し足される加点）は入れていません。

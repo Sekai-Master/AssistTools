@@ -23,15 +23,23 @@
  *
  * ## スキルの効き方がソロと協力でまるで違う（ここが混乱の元）
  *
- * どちらも1曲につき6枠発動するが、その中身が別物:
+ * 編成は5枚・部屋は5人だが、**1曲のなかにスキルの発動タイミングは6箇所ある**。
+ * skill_score_* が長さ6の配列なのはそのため。中身はソロと協力で別物:
  *
- *   ソロ  … 編成5枚が1枠ずつ ＋ 6枠目にリーダー（編成の一番左）がもう1回。
- *           1〜5枠の発動順は選べないので、5枚は平均値（期待値）で置く。
- *   協力  … 自分の編成の「リーダー100% ＋ サブ4枚が各20%」を合算した1つの実効値が、
- *           6枠すべてに同じだけ掛かる。**他人のスキルは自分のスコアには乗らない**。
+ *   ソロ  … 編成5枚が1回ずつ ＋ 最後にリーダー（編成の一番左）がもう1回 = 6回。
+ *           1〜5回目の発動順は選べないので、5枚は平均値（期待値）で置く。
+ *   協力  … 参加5人が1回ずつ ＋ アンコールで1回 = 6回。各発動で乗るのは
+ *           「実効値」＝ リーダー100% ＋ サブ4枚が各20% を合算した値。
+ *
+ * 実効値はコミュニティで使われている概念そのままで、ついぼの「150/710/31.3」表記なら
+ * リーダー150%・内部値（5枚合計）710・総合力31.3万 なので 150 + (710-150)×0.2 = 262。
+ *
+ * 協力の実効値は本来「その発動枠を取った人の値」だが、部屋の顔ぶれは曲によらないので
+ * 6枠すべてに同じ値を置いても**曲の順位は変わらない**（全曲に同じ係数が掛かるだけ）。
+ * 変わるのは表示される絶対Ptの方だけ。
  *
  * 協力で他人が効くのはスコアではなくイベントPtの側（下記）。「ついぼで強い人を呼ぶと
- * 単価が上がる」のは、自分のスコアが伸びるからではなく他4人の合計スコアが伸びるから。
+ * 単価が上がる」のは、イベントPtの式に他4人の合計スコアが入るから。
  *
  * ## イベントポイント
  *
@@ -65,8 +73,22 @@ export const FEVER_RATE = 0.5;
 /** 協力ライブでサブ（リーダー以外の4枚）のスキルが効く割合。 */
 export const MULTI_SUB_RATE = 0.2;
 
-/** スキル発動枠の数。ソロも協力も6。 */
+/** 編成のカード枚数。 */
+export const DECK_SIZE = 5;
+
+/** 1曲あたりのスキル発動回数。カードは5枚だが発動は6回（最後の1回はリーダー／アンコール）。 */
 export const SKILL_SLOTS = 6;
+
+/**
+ * 協力ライブの「実効値」。ついぼで交換しているあの数字。
+ *
+ *   実効値 = リーダー + (内部値 - リーダー) × 0.2
+ *
+ * 内部値は編成5枚のスコアアップ合計。「150/710/31.3」なら 150 + 560×0.2 = 262。
+ */
+export function multiEffectiveSkill(skillLeader: number, skillTotal: number): number {
+  return skillLeader + Math.max(0, skillTotal - skillLeader) * MULTI_SUB_RATE;
+}
 
 /** 1曲1難易度ぶんの入力。 */
 export interface EfficiencyEntry {
@@ -100,10 +122,10 @@ export interface EfficiencyParams {
   bonus: number;
   /** 焚き数（0〜10）。 */
   taki: number;
-  /** リーダー（編成の一番左）のスコアアップ（%）。 */
+  /** リーダー（編成の一番左）のスコアアップ（%）。「150/710/31.3」の 150。 */
   skillLeader: number;
-  /** サブ4枚の平均スコアアップ（%）。 */
-  skillSub: number;
+  /** 内部値＝編成5枚のスコアアップ合計（%）。「150/710/31.3」の 710。 */
+  skillTotal: number;
   /** ロード・リザルト等の固定オーバーヘッド（秒）。 */
   overheadSec: number;
 }
@@ -117,8 +139,8 @@ export const DEFAULT_PARAMS: EfficiencyParams = {
   power: 250_000,
   bonus: 400,
   taki: 5,
-  skillLeader: 130,
-  skillSub: 110,
+  skillLeader: 150,
+  skillTotal: 650,
   overheadSec: 20,
 };
 
@@ -159,8 +181,8 @@ export function skillWeights(e: EfficiencyEntry, live: LiveType): number[] | nul
 /**
  * スコアを出す。データが欠けていれば null。
  *
- * ソロ: 1〜5枠は発動順が選べないので5枚の平均、6枠目だけリーダー。
- * 協力: リーダー100%＋サブ各20%を合算した実効値が6枠すべてに同じだけ掛かる。
+ * ソロ: 1〜5回目は発動順が選べないので内部値の平均、6回目だけリーダー。
+ * 協力: 実効値が6回すべてに同じだけ掛かる。
  */
 export function calcScore(e: EfficiencyEntry, params: EfficiencyParams, live: LiveType): number | null {
   const base = baseRate(e, live);
@@ -169,12 +191,12 @@ export function calcScore(e: EfficiencyEntry, params: EfficiencyParams, live: Li
 
   let skillTerm: number;
   if (live === "multi") {
-    const effective = params.skillLeader + 4 * params.skillSub * MULTI_SUB_RATE;
+    const effective = multiEffectiveSkill(params.skillLeader, params.skillTotal);
     skillTerm = effective * weights.reduce((s, w) => s + w, 0);
   } else {
-    const avgFive = (params.skillLeader + 4 * params.skillSub) / 5;
-    const head = weights.slice(0, 5).reduce((s, w) => s + w, 0);
-    skillTerm = avgFive * head + params.skillLeader * weights[5];
+    const avgOfDeck = params.skillTotal / DECK_SIZE;
+    const head = weights.slice(0, DECK_SIZE).reduce((s, w) => s + w, 0);
+    skillTerm = avgOfDeck * head + params.skillLeader * weights[DECK_SIZE];
   }
 
   return Math.floor((base + skillTerm / 100) * params.power * 4);

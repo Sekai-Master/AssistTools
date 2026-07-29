@@ -6,8 +6,9 @@ import {
   baseRate,
   skillWeights,
   rankSongs,
+  multiEffectiveSkill,
   FEVER_RATE,
-  MULTI_SUB_RATE,
+  DECK_SIZE,
   type EfficiencyEntry,
   type EfficiencyParams,
 } from "./efficiency";
@@ -55,10 +56,25 @@ const PARAMS: EfficiencyParams = {
   power: 300_000,
   bonus: 700,
   taki: 5,
-  skillLeader: 130,
-  skillSub: 110,
+  skillLeader: 150,
+  skillTotal: 710,
   overheadSec: 20,
 };
+
+describe("multiEffectiveSkill — ついぼの「実効値」", () => {
+  it("150/710 の実効値は 262（コミュニティ表記と一致する）", () => {
+    expect(multiEffectiveSkill(150, 710)).toBe(262);
+  });
+
+  it("リーダー100% + サブ各20% の合算になっている", () => {
+    // サブ4枚が全部リーダーと同じ値なら 内部値 = 5×L、実効値 = L + 4L×0.2 = 1.8L
+    expect(multiEffectiveSkill(100, 500)).toBeCloseTo(180, 10);
+  });
+
+  it("内部値がリーダーを下回る入力でもマイナスに振れない", () => {
+    expect(multiEffectiveSkill(150, 100)).toBe(150);
+  });
+});
 
 describe("baseRate — ライブ種別で base が変わる", () => {
   it("ソロは baseScore そのまま", () => {
@@ -92,41 +108,41 @@ describe("skillWeights — 長さ6でなければ使わない", () => {
 });
 
 describe("calcScore", () => {
-  it("ソロは5枚の平均を1〜5枠に、リーダーを6枠目に掛ける", () => {
+  it("ソロは内部値の平均を1〜5回目に、リーダーを6回目に掛ける", () => {
     const w = ENVY.skillScoreSolo!;
-    const avgFive = (PARAMS.skillLeader + 4 * PARAMS.skillSub) / 5;
-    const head = w.slice(0, 5).reduce((s, x) => s + x, 0);
-    const rate = ENVY.baseScore! + (avgFive * head + PARAMS.skillLeader * w[5]) / 100;
+    const avgOfDeck = PARAMS.skillTotal / DECK_SIZE;
+    const head = w.slice(0, DECK_SIZE).reduce((s, x) => s + x, 0);
+    const rate = ENVY.baseScore! + (avgOfDeck * head + PARAMS.skillLeader * w[DECK_SIZE]) / 100;
     expect(calcScore(ENVY, PARAMS, "solo")).toBe(Math.floor(rate * 300_000 * 4));
   });
 
-  it("協力はリーダー100%＋サブ各20%の実効値が6枠すべてに同じだけ掛かる", () => {
+  it("協力は実効値が6回すべてに同じだけ掛かる", () => {
     const w = ENVY.skillScoreMulti!;
-    const effective = PARAMS.skillLeader + 4 * PARAMS.skillSub * MULTI_SUB_RATE;
     const base = ENVY.baseScore! + ENVY.feverScore! * FEVER_RATE;
-    const rate = base + (effective * w.reduce((s, x) => s + x, 0)) / 100;
+    const rate = base + (262 * w.reduce((s, x) => s + x, 0)) / 100; // 150/710 の実効値
     expect(calcScore(ENVY, PARAMS, "multi")).toBe(Math.floor(rate * 300_000 * 4));
   });
 
-  it("協力ではサブを上げてもリーダーを上げたときの1/5しか効かない", () => {
+  it("協力ではリーダーを上げるほうが内部値を同じだけ上げるより効く", () => {
+    const base = calcScore(ENVY, PARAMS, "multi")!;
+    // 内部値だけ+50（サブが強くなる）は 0.2 倍しか乗らない
+    const bySub = calcScore(ENVY, { ...PARAMS, skillTotal: PARAMS.skillTotal + 50 }, "multi")! - base;
+    // リーダーを+50すると内部値も一緒に+50される（合計値なので）
     const byLeader =
-      calcScore(ENVY, { ...PARAMS, skillLeader: PARAMS.skillLeader + 50 }, "multi")! -
-      calcScore(ENVY, PARAMS, "multi")!;
-    const bySub =
-      calcScore(ENVY, { ...PARAMS, skillSub: PARAMS.skillSub + 50 }, "multi")! -
-      calcScore(ENVY, PARAMS, "multi")!;
-    // サブ4枚 × 20% = 80% ぶんなので、リーダー1枚ぶんの 0.8 倍
-    expect(bySub / byLeader).toBeCloseTo(4 * MULTI_SUB_RATE, 3);
+      calcScore(
+        ENVY,
+        { ...PARAMS, skillLeader: PARAMS.skillLeader + 50, skillTotal: PARAMS.skillTotal + 50 },
+        "multi",
+      )! - base;
+    expect(byLeader).toBeGreaterThan(bySub);
   });
 
-  it("ソロではサブを上げるほうがリーダーより効く（サブ4枚ぶんあるので）", () => {
-    const byLeader =
-      calcScore(ENVY, { ...PARAMS, skillLeader: PARAMS.skillLeader + 50 }, "solo")! -
-      calcScore(ENVY, PARAMS, "solo")!;
-    const bySub =
-      calcScore(ENVY, { ...PARAMS, skillSub: PARAMS.skillSub + 50 }, "solo")! -
-      calcScore(ENVY, PARAMS, "solo")!;
-    expect(bySub).toBeGreaterThan(byLeader);
+  it("ソロで内部値を据え置いてリーダーだけ上げると、6回目の重みぶんだけ伸びる", () => {
+    const a = calcScore(ENVY, PARAMS, "solo")!;
+    const b = calcScore(ENVY, { ...PARAMS, skillLeader: PARAMS.skillLeader + 50 }, "solo")!;
+    const expected = ((50 * ENVY.skillScoreSolo![DECK_SIZE]) / 100) * 300_000 * 4;
+    // 両側に floor が掛かるので誤差は最大1点
+    expect(Math.abs(b - a - expected)).toBeLessThanOrEqual(1);
   });
 
   it("オートは判定係数のぶん必ずソロより低い", () => {
