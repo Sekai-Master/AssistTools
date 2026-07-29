@@ -88,6 +88,17 @@ export const TOOLS: ToolDef[] = [
     status: "ready",
   },
   {
+    id: "ranking",
+    path: "/ranking",
+    name: "効率曲ランキング",
+    shortName: "ランキング",
+    description:
+      "手動周回・オート周回・チャレンジライブの3つで効率曲を順位表示。用途で最適解が変わるので分けています。総合力とボーナスを入れると自分用の順位になります。",
+    icon: "leaderboard",
+    unit: "ln",
+    status: "ready",
+  },
+  {
     id: "efficiency",
     path: "/efficiency",
     name: "効率難易度検索",

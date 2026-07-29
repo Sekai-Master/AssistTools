@@ -124,6 +124,10 @@ async function toThumbnail(input) {
         noteCount: d ? d.totalNoteCount : null,
         baseScore: meta ? meta.base_score : null,
         skillScoreSolo: meta ? meta.skill_score_solo : null,
+        // オートは判定が全て auto(0.7) になるため専用の値が要る。
+        // ソロ値から比で近似すると順位が狂うので実データを持つ。
+        baseScoreAuto: meta ? meta.base_score_auto : null,
+        skillScoreAuto: meta ? meta.skill_score_auto : null,
       };
     }
     return out;
@@ -159,9 +163,19 @@ async function toThumbnail(input) {
       jacketLink: `jacket_s_${id}.webp`,
       music_time: meta ? meta.music_time : null,
       event_rate: meta ? meta.event_rate : null,
-      difficulties: buildDifficulties(m.id),
     };
   });
+
+  // 難易度別データは別ファイルにする。
+  // 曲単位のデータ（transformedMusics.json）はほぼ全ツールが読むのに対し、
+  // 難易度別データを使うのはランキングだけ。同梱すると 340KB → 2.5MB になり、
+  // 難易度データを使わないツールにまで転送量を押し付けることになる。
+  const scoreData = {};
+  for (const m of musics) {
+    const id = String(m.id).padStart(3, '0');
+    const d = buildDifficulties(m.id);
+    if (Object.keys(d).length > 0) scoreData[id] = d;
+  }
 
   // 欠落検知: マスタの曲が全てスナップショットに入ったか
   const masterIds = new Set(musics.map((m) => String(m.id).padStart(3, '0')));
@@ -174,9 +188,7 @@ async function toThumbnail(input) {
 
   // 難易度データの欠落は警告にとどめる（配信直後は音源解析が追いつかず
   // music_metas 側に載っていないことがあり、そこで更新全体を落としたくない）。
-  const noDifficulty = transformed.filter(
-    (m) => m.published && Object.keys(m.difficulties).length === 0
-  );
+  const noDifficulty = transformed.filter((m) => m.published && !scoreData[m.id]);
   if (noDifficulty.length > 0) {
     console.warn(
       `⚠ 難易度データが無い公開曲 ${noDifficulty.length}件:`,
@@ -184,7 +196,7 @@ async function toThumbnail(input) {
     );
   }
   const noBaseScore = transformed.filter(
-    (m) => m.published && m.difficulties.master && m.difficulties.master.baseScore == null
+    (m) => m.published && scoreData[m.id]?.master && scoreData[m.id].master.baseScore == null
   );
   if (noBaseScore.length > 0) {
     console.warn(
@@ -198,7 +210,15 @@ async function toThumbnail(input) {
     JSON.stringify(transformed, null, 2),
     'utf-8'
   );
-  console.log(`変換完了: ${transformed.length}曲`);
+  // ランキングでしか使わないので整形せずに書く（転送量を優先）。
+  fs.writeFileSync(
+    path.join(DATA_DIR, 'musicScoreData.json'),
+    JSON.stringify(scoreData),
+    'utf-8'
+  );
+  console.log(
+    `変換完了: ${transformed.length}曲 / 難易度データ ${Object.keys(scoreData).length}曲`
+  );
 
   // ジャケット: 既存はローカルで256px縮小、無い曲だけリモート取得
   fs.mkdirSync(JACKET_DIR, { recursive: true });

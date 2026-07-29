@@ -14,6 +14,7 @@ const BingoGenerator = lazy(() => import("./pages/bingo/BingoGenerator"));
 const RefreshGaugeCalculator = lazy(() => import("./pages/refresh/RefreshGaugeCalculator"));
 const PlanPage = lazy(() => import("./pages/refresh/PlanPage"));
 const WorkTimeCalculator = lazy(() => import("./pages/worktime/WorkTimeCalculator"));
+const EfficiencyRanking = lazy(() => import("./pages/ranking/EfficiencyRanking"));
 
 function PageFallback() {
   return <div className="p-8 text-center text-slate-500">読み込み中…</div>;
@@ -33,6 +34,7 @@ export function App() {
             <Route path="/refresh" element={<RefreshGaugeCalculator />} />
             <Route path="/plan" element={<PlanPage />} />
             <Route path="/worktime" element={<WorkTimeCalculator />} />
+            <Route path="/ranking" element={<EfficiencyRanking />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
