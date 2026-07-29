@@ -16,6 +16,8 @@ const artistsUrl = `${MASTER_DB_BASE}/musicArtists.json`;
 const metasUrl = `${SEKAI_BEST_BASE}/sekai-best-assets/music_metas.json`;
 // イベント限定開催でソロ常設プレイ不可のメドレー等を判定する。
 const limitedTimeMusicsUrl = `${MASTER_DB_BASE}/limitedTimeMusics.json`;
+// 譜面レベルとノーツ数（難易度別）。スコア計算のレベル係数に効く。
+const musicDifficultiesUrl = `${MASTER_DB_BASE}/musicDifficulties.json`;
 const jacketRemoteUrl = (id) =>
   `${SEKAI_BEST_BASE}/sekai-jp-assets/music/jacket/jacket_s_${id}/jacket_s_${id}.webp`;
 
@@ -38,11 +40,12 @@ async function toThumbnail(input) {
 }
 
 (async () => {
-  const [musics, artists, metas, limitedTimeMusics] = await Promise.all([
+  const [musics, artists, metas, limitedTimeMusics, musicDifficulties] = await Promise.all([
     fetchJson(musicsUrl),
     fetchJson(artistsUrl),
     fetchJson(metasUrl),
     fetchJson(limitedTimeMusicsUrl),
+    fetchJson(musicDifficultiesUrl),
   ]);
 
   // メドレー等の除外（調整候補の母集合から落とす）。
@@ -81,6 +84,51 @@ async function toThumbnail(input) {
   };
   const now = Date.now();
 
+  // 難易度別データを music_id で引けるようにまとめる。
+  //
+  // event_rate と music_time は難易度によらず同じ値なので曲の直下に置く（従来どおり）。
+  // base_score と skill_score_solo は難易度ごとに違うので、ここで難易度別に持つ。
+  //
+  //   base_score       : スキル無しでAPしたときのスコア率（曲×難易度で固定）
+  //   skill_score_solo : スキル発動6枠それぞれが曲全体スコアに占める重み（長さ6）
+  //                      ソロ／チャレンジライブ用。6枠目はリーダーのアンコール。
+  //
+  // スコアは次式で出せる（sekai-calculator の高速版と同じ）:
+  //   rate  = base_score + Σ(各枠のスコアアップ% × skill_score_solo[i] / 100)
+  //   score = floor(rate × 総合力 × 4)
+  const DIFFICULTIES = ['easy', 'normal', 'hard', 'expert', 'master', 'append'];
+  const diffByMusic = new Map();
+  for (const d of musicDifficulties) {
+    if (!d || d.musicId == null) continue;
+    if (!diffByMusic.has(d.musicId)) diffByMusic.set(d.musicId, {});
+    diffByMusic.get(d.musicId)[d.musicDifficulty] = d;
+  }
+  const metaByMusic = new Map();
+  for (const x of metas) {
+    if (!x || x.music_id == null) continue;
+    if (!metaByMusic.has(x.music_id)) metaByMusic.set(x.music_id, {});
+    metaByMusic.get(x.music_id)[x.difficulty] = x;
+  }
+
+  /** 1曲ぶんの難易度別データ。存在する難易度だけを持つ。 */
+  function buildDifficulties(musicId) {
+    const dm = diffByMusic.get(musicId) ?? {};
+    const mm = metaByMusic.get(musicId) ?? {};
+    const out = {};
+    for (const key of DIFFICULTIES) {
+      const d = dm[key];
+      const meta = mm[key];
+      if (!d && !meta) continue;
+      out[key] = {
+        playLevel: d ? d.playLevel : null,
+        noteCount: d ? d.totalNoteCount : null,
+        baseScore: meta ? meta.base_score : null,
+        skillScoreSolo: meta ? meta.skill_score_solo : null,
+      };
+    }
+    return out;
+  }
+
   const transformed = musics.map((m) => {
     const id = String(m.id).padStart(3, '0');
     const artist = artists.find((a) => a.id === m.creatorArtistId);
@@ -111,6 +159,7 @@ async function toThumbnail(input) {
       jacketLink: `jacket_s_${id}.webp`,
       music_time: meta ? meta.music_time : null,
       event_rate: meta ? meta.event_rate : null,
+      difficulties: buildDifficulties(m.id),
     };
   });
 
@@ -121,6 +170,27 @@ async function toThumbnail(input) {
   if (missing.length > 0) {
     console.error('マスタにあるがスナップショットに無い曲:', missing);
     process.exit(1);
+  }
+
+  // 難易度データの欠落は警告にとどめる（配信直後は音源解析が追いつかず
+  // music_metas 側に載っていないことがあり、そこで更新全体を落としたくない）。
+  const noDifficulty = transformed.filter(
+    (m) => m.published && Object.keys(m.difficulties).length === 0
+  );
+  if (noDifficulty.length > 0) {
+    console.warn(
+      `⚠ 難易度データが無い公開曲 ${noDifficulty.length}件:`,
+      noDifficulty.map((m) => `${m.id} ${m.title}`).join(', ')
+    );
+  }
+  const noBaseScore = transformed.filter(
+    (m) => m.published && m.difficulties.master && m.difficulties.master.baseScore == null
+  );
+  if (noBaseScore.length > 0) {
+    console.warn(
+      `⚠ MASTERの base_score が無い公開曲 ${noBaseScore.length}件:`,
+      noBaseScore.map((m) => `${m.id} ${m.title}`).join(', ')
+    );
   }
 
   fs.writeFileSync(
