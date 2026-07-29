@@ -1,0 +1,98 @@
+name: Refresh music data
+
+# 楽曲マスタ（Sekai-World/sekai-master-db-diff・sekai.best）を取り込み、
+# 差分があれば PR を立てる。
+#
+# 自動コミットにしない理由:
+#   - 取得元は第三者のリポジトリで、こちらの都合と無関係に構造が変わりうる
+#   - 新曲の混入や既存曲の消失を人が見てからマージしたい
+#
+# 日次で回す理由:
+#   refresh-music-data.js は `published = publishedAt <= now` を実行時に焼き込む。
+#   未公開曲は published:false になってアプリ側で除外されるが、この判定は
+#   スナップショット作成時点で固定されるため、公開日を跨いでも自動では true にならない。
+#   日次で回しておけば、公開の翌日には反映される。
+
+on:
+  schedule:
+    # 03:00 JST（= 18:00 UTC）。イベント開始の 20:00 JST より後、朝より前。
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 差分の中身を PR 本文に出すため、更新前のスナップショットを退避しておく。
+      - name: Snapshot current data
+        run: cp public/MusicDatas/transformedMusics.json /tmp/before.json
+
+      - name: Refresh
+        run: npm run data:refresh
+
+      - name: Detect changes
+        id: diff
+        run: |
+          if git diff --quiet -- public/MusicDatas/; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "楽曲データに差分なし"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- public/MusicDatas/
+          fi
+
+      # 曲数の増減と、追加・公開状態が変わった曲を洗い出して PR 本文にする。
+      - name: Summarize
+        if: steps.diff.outputs.changed == 'true'
+        run: node scripts/summarize-music-diff.mjs /tmp/before.json public/MusicDatas/transformedMusics.json > /tmp/summary.md
+
+      # データが壊れていないかを PR を立てる前に確かめる。
+      # GITHUB_TOKEN で作った PR では CI が起動しないため、ここで実行しておく。
+      - name: Test
+        if: steps.diff.outputs.changed == 'true'
+        run: npm test
+
+      - name: Build
+        if: steps.diff.outputs.changed == 'true'
+        run: npm run build
+
+      - name: Create pull request
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH="data/refresh-music-$(date -u +%Y%m%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # 同日に再実行したときは既存ブランチへ上書きする（PR が乱立しないように）。
+          git checkout -B "$BRANCH"
+          git add public/MusicDatas/
+          git commit -m "chore(data): 楽曲マスタを更新"
+          git push --force-with-lease origin "$BRANCH"
+
+          if gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
+            echo "既存の PR を更新した"
+            gh pr edit "$BRANCH" --body-file /tmp/summary.md
+          else
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "chore(data): 楽曲マスタを更新 ($(date -u +%Y-%m-%d))" \
+              --body-file /tmp/summary.md
+          fi

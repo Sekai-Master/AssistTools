@@ -13402,6 +13402,25 @@
     "event_rate": 115
   },
   {
+    "id": "765",
+    "title": "レム",
+    "pronunciation": "れむ",
+    "creatorArtistId": 11,
+    "artistName": "バルーン",
+    "default": 2767301,
+    "Unit": "9_oth",
+    "categories": [
+      "mv_2d"
+    ],
+    "publishedAt": 1785323700000,
+    "published": true,
+    "isNewlyWrittenMusic": true,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_765.webp",
+    "music_time": 95,
+    "event_rate": 106
+  },
+  {
     "id": "790",
     "title": "ピッコーン！！",
     "pronunciation": "ぴっこーん",
@@ -13413,7 +13432,7 @@
       "image"
     ],
     "publishedAt": 1784786400000,
-    "published": false,
+    "published": true,
     "isNewlyWrittenMusic": false,
     "isFullLength": false,
     "jacketLink": "jacket_s_790.webp",
@@ -13432,7 +13451,7 @@
       "image"
     ],
     "publishedAt": 1784700000000,
-    "published": false,
+    "published": true,
     "isNewlyWrittenMusic": false,
     "isFullLength": false,
     "jacketLink": "jacket_s_791.webp",
