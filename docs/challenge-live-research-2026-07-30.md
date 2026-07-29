@@ -290,6 +290,10 @@ Lv26 = 1.105 / Lv30 = 1.125 / Lv40 = 1.175（上限）
 | allium-deck | — | あり（枝刈りなし全探索） | MIT/Apache-2.0 | Rust製。最も新しく厳密 |
 | sekai.best (Sekai Viewer) | — | **なし**（手動編成のみ） | GPL-3.0 | Music Recommender はAP固定・ボーナス0%固定の理論値 |
 
+**xfl03 本人のフロントエンド 33Kit は死んでいる**（`33kit.xyz` が GoDaddy の売却ページに転じているのを確認）。つまり **`sekai-calculator` の実用フロントエンドが実質的に空席**。
+
+**`api.sekai.best` はスコア計算に使えない。** OpenAPI spec を実際に取得して確認したところ、**全エンドポイントがイベントランキング専用**で、カード・スキル・楽曲のエンドポイントは存在しない。マスタデータは GitHub Pages の静的JSON（CORS全開・APIキー不要）から取る。
+
 ### ライセンス上の注意
 
 - **`sekai-master-db-diff` には LICENSE も README も存在しない**（実測で両方404）。中身はゲームから抽出したセガ／Colorful Palette の著作物であり、**リポジトリ所有者に許諾を出す権限自体がない**。「公開されているから自由に使える」は成立しない
@@ -298,6 +302,87 @@ Lv26 = 1.105 / Lv30 = 1.125 / Lv40 = 1.175（上限）
 - `sekai-viewer` は GPL-3.0 で**参考は可、コピー不可**
 - `sekai-calculator` は LGPL-2.1 で**npm依存として使う分には安全**
 - `music_metas.json` は sekai.best の自前サーバー配信。**直リンクは帯域のタダ乗り**になるため、取得して自リポジトリに保存する現行の方式（`refresh-music-data.js`）が正しい
+
+**公式ガイドラインの確認結果**（`pjsekai.sega.jp`）:
+- [二次創作利用に関するガイドライン](https://pjsekai.sega.jp/guideline/index.html)は存在するが、**対象はファンアート・同人誌・コスプレ等の創作物**で、個人による非営利であることが条件
+- **ゲームデータの抽出・再配布・ツール制作を明示的に許可した条項は見つからない**（＝黙認されている領域であって、許諾されているわけではない）
+- 実務上の線引き: ①データを自前で再ホストしない ②画像アセットは数値データより慎重に ③非営利・広告なし ④「非公式ファンツール。セガ／Colorful Palette とは無関係」の免責表示（sekai.best 等が実際にやっている慣行）
+
+---
+
+## 9.5 実装時の落とし穴（一次ソースを読んで判明）
+
+### base_score の中身は分解できる（実測検証済み）
+
+```
+base_score = Σ(ノーツ係数 × コンボ係数) ÷ Σ(ノーツ係数) × 難易度係数
+```
+
+検証: 曲49 master（Lv35・1666ノーツ）→ コンボ係数の加重平均 1.0670 × `ingamePlayLevels[35]=1.15` = **1.2271**、実データ `base_score = 1.2277`（**誤差0.05%**）。曲1 easy でも一致。
+
+**つまり `base_score` には難易度係数が既に畳み込まれている。**
+
+### `sekai-calculator` の精密版は難易度係数を掛けていない
+
+`live-exact-calculator.ts`（1ノーツ単位）は `ingamePlayLevels.scoreCoefficient` を掛けていない。一方 `base_score`（高速版）には含まれている。**2つの実装は同じ値にならない。** 精密版を使うなら難易度係数を自分で掛ける必要がある。
+
+### 最適スキル順は並べ替え不等式で求まる
+
+`sekai-calculator` の実装:
+1. カードのスキル効果を**昇順**ソート
+2. `skill_score_solo` の先頭 `cardLength` 個も**昇順**ソート
+3. ペアリング
+
+**並べ替え不等式により、これが編成順を入れ替えて到達できる最大値**になる。6枠目はC位固定。
+
+→ **この実装は「編成順で発動順が決まる」前提**であり、第4節の対立において「制御可能」説を支持する材料になる。
+
+### マスタデータのフィールド名にtypoがある
+
+`ingameNoteJudges.json` のフィールドは **`ingameNoteJadgeType`**（Judge の綴り間違い）。ゲーム側のtypoがそのまま出ているので、実装時に注意。
+
+### 総合力計算には `Math.fround` が要る
+
+ゲーム本体が**単精度浮動小数**で計算しているため、`Math.fround()`（float32 への丸め）を再現しないと1〜数点ずれる。エリアアイテムは3次元それぞれで計算 → 各次元 floor → 合算、という丸めの順序も守る必要がある。
+
+### `skills.json` は22件しかない
+
+全カードが22種類のスキル定義を共有し、`cards.json.skillId` で参照する構造。カードごとにスキルが定義されているわけではない。
+
+`skillEffectType` の種類:
+
+| 値 | 意味 |
+|---|---|
+| `score_up` | 通常のスコアアップ |
+| `score_up_condition_life` | ライフ条件 |
+| `score_up_keep` | 効果継続型 |
+| `life_recovery` | ライフ回復 |
+| `score_up_character_rank` | ブルフェス覚醒後（キャラランク閾値） |
+| `other_member_score_up_reference_rate` | ブルフェス覚醒前（**他メンバーのスキルを参照**） |
+| `score_up_unit_count` | 編成のユニット数で変動 |
+
+### 目標逆算に使えるデータ
+
+- **`challengeLiveHighScoreRewards.json`**（3146件）: `{characterId, highScore, resourceBoxId}` — **ハイスコア報酬の閾値表**
+- **`playLevelScores.json`**（280件）: `liveType: "challenge_live"` を含む **S/A/B/C ランクのスコア閾値**。例) Lv1 → S:1,040,000 / A:840,000 / B:400,000 / C:4,000
+
+**この2つを組み合わせると「次の報酬まであと何点」が出せる。既存ツールが誰もやっていない。**
+
+### 実装の最大のハードルは手持ちカードの入力
+
+`sekai-calculator` は `userCards`（カードID・レベル・覚醒・マスターランク・スキルレベル・エピソード解放）、`userCharacters`（キャラランク）、`userAreaItems`、`userHonors` を要求する。既存ツールは**ゲームAPIから吸い出す（規約的にアウト寄り）か、手入力させるかの二択**。ここのUX設計が成否をほぼ決める。
+
+### 想定アーキテクチャ
+
+```
+計算  : npm i sekai-calculator（LGPL-2.1・依存として使う。フォークして中身を書き換えない）
+データ: DataProvider を1つ実装するだけで丸ごと動く
+        getMasterData(key) → sekai-world.github.io/sekai-master-db-diff/${key}.json
+        getMusicMeta()     → storage.sekai.best/sekai-best-assets/music_metas.json
+        getUserData(key)   → localStorage / IndexedDB
+```
+
+`cards.json` は **34MB** あるので初期ロード設計は必須。
 
 ---
 
