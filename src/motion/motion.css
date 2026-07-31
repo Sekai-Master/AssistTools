@@ -4,11 +4,16 @@
  * duration の正本は TS(MotionPlan)。html の --stage-sink / --stage-rise に
  * 流し込まれるので、ここには ms を1つも書かない（TS と CSS の二重管理をしない）。
  *
+ * ★ keyframes ではなく transition を使う。
+ *   keyframes は 0% の値がリテラルなので、浮上(rise)の途中で次のページへ移ると
+ *   --neu-lift が補間途中の値（例 0.58）から 1.0 へ跳ね上がってから沈み直す
+ *   ＝画面全体が一瞬フル輝度・フル影になるストロボが出る（実測で確認）。
+ *   transition は「現在の計算値」から次の値へ向かうので、割り込まれても連続する。
+ *
  * ★ transform は1箇所も使わない（.stage-wait のつまみだけは例外で、これは
  *   ステージの外の小さな固定要素）。.stage に transform が乗ると position:fixed の
  *   包含ブロックが .stage へ切り替わり、TweetGenerator のモバイル常設アクションバー
- *   （fixed inset-x-0 bottom-0）や、ポータルを使っていないページ内モーダル
- *   （SongSearchModal / PlanListModal の fixed inset-0）の位置が壊れる。
+ *   や、ポータルを使っていないページ内モーダルの位置が壊れる。
  *   opacity は包含ブロックを変えないので安全。
  *
  * ★ isolation / stacking context も作らない。常設のスタッキングコンテキストを
@@ -19,82 +24,69 @@
   outline: none;
 }
 
-/* --- 沈む: 先に影が潰れて素材と面一になり、そのあと平らな中身が溶ける --- */
-@keyframes neu-lift-down {
-  0% {
-    --neu-lift: 1;
-  }
-  70% {
-    --neu-lift: 0;
-  }
-  100% {
-    --neu-lift: 0;
-  }
-}
-@keyframes stage-fade-out {
-  0% {
-    opacity: 1;
-  }
-  /* 影が潰れきるまで中身は見えている＝「浮きが消えて沈んだ」に読める */
-  55% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
-}
+/* ===== リッチ: 沈む → 無地で待つ → 浮く ===== */
 
-/* --- 浮く: 先に中身が読めるようになり、影だけが遅れて育つ＝押し出されてくる --- */
-@keyframes neu-lift-up {
-  0% {
-    --neu-lift: 0;
-  }
-  100% {
-    --neu-lift: 1;
-  }
-}
-@keyframes stage-fade-in {
-  0% {
-    opacity: 0;
-  }
-  /* 影の成長より先に可読になる。読めた後も影が育ち続けるのが「押し出し」の要点 */
-  45% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-/* リッチ: 沈む → 無地で待つ → 浮く */
+/* 沈み: 影が先に潰れて素材と面一になり、そのあと平らな中身が溶ける。
+   opacity の遅延(55%)＋短い duration(45%) がその「先に影」を作っている。 */
 html[data-motion="rich"][data-stage="sink"] {
-  animation: neu-lift-down var(--stage-sink) var(--ease-in-soft) both;
+  --neu-lift: 0;
+  transition: --neu-lift var(--stage-sink) var(--ease-in-soft);
 }
 html[data-motion="rich"][data-stage="sink"] .stage {
-  animation: stage-fade-out var(--stage-sink) var(--ease-in-soft) both;
+  opacity: 0;
   pointer-events: none;
+  transition: opacity calc(var(--stage-sink) * 0.45) var(--ease-in-soft)
+    calc(var(--stage-sink) * 0.55);
 }
+
+/* 無地: 待っている間。ここでの値の確定は瞬時（沈みで既に 0 に達している）。 */
 html[data-motion="rich"][data-stage="blank"] {
   --neu-lift: 0;
+  transition: none;
 }
 html[data-motion="rich"][data-stage="blank"] .stage {
   opacity: 0;
   pointer-events: none;
+  transition: none;
 }
 
-/* リッチ・控えめ共通の浮上。控えめは沈み/無地が無く、ここだけが走る。 */
-html[data-motion="rich"][data-stage="rise"],
+/* 浮上: 中身が先に読めるようになり(45%で不透明度1)、影だけが遅れて育つ
+   ＝表面へ押し出されてくる。 */
+html[data-motion="rich"][data-stage="rise"] {
+  --neu-lift: 1;
+  transition: --neu-lift var(--stage-rise) var(--ease-out);
+}
+html[data-motion="rich"][data-stage="rise"] .stage {
+  opacity: 1;
+  transition: opacity calc(var(--stage-rise) * 0.45) var(--ease-out);
+}
+
+/* ===== 控えめ: 沈まない。新しいページの影だけが育つ ===== */
+
+/* 中身は消さない（opacity を一切触らない）。だから「沈まない」と説明できる。
+   影だけ瞬時に 0 にしてから、浮上で育てる。 */
+html[data-motion="subtle"][data-stage="blank"] {
+  --neu-lift: 0;
+  transition: none;
+}
 html[data-motion="subtle"][data-stage="rise"] {
-  animation: neu-lift-up var(--stage-rise) var(--ease-out) both;
-}
-html[data-motion="rich"][data-stage="rise"] .stage,
-html[data-motion="subtle"][data-stage="rise"] .stage {
-  animation: stage-fade-in var(--stage-rise) var(--ease-out) both;
+  --neu-lift: 1;
+  transition: --neu-lift var(--stage-rise) var(--ease-out);
 }
 
-/* オフ / 控えめの blank では何も指定しない。前ページを出したまま、操作可能な
+/* オフはどのフェーズにも規則を置かない。前ページを出したまま、操作可能な
    まま新しい木を待つ。inert も pointer-events:none も付けない
    ＝「見えているのにタップが効かない」状態を作らない。 */
+
+/*
+ * 遷移中は .neu-tactile / .neu-cta の box-shadow トランジション(140ms)を止める。
+ * 止めないと、ステージ外にあるヘッダーのロゴや設定ボタンだけが本体の沈み・浮きに
+ * 140ms 遅れて追随し、沈み込みの途中で逆方向へ動く瞬間まで出る（実測で確認）。
+ */
+html:not([data-stage="idle"]) .neu-tactile,
+html:not([data-stage="idle"]) .neu-cta {
+  transition: none;
+}
 
 /*
  * 待たされているときのインジケータ。溝の中をつまみが往復する＝この製品が既に
@@ -128,7 +120,8 @@ html[data-motion="subtle"][data-stage="rise"] .stage {
   width: 36px;
   height: 6px;
   border-radius: 999px;
-  background-color: color-mix(in srgb, var(--unit-color) 70%, #ffffff);
+  /* ステージ外なのでページのユニット色は届かない。ここは意図的に中立色。 */
+  background-color: #9aa;
   box-shadow:
     1px 1px 2px #bebebe,
     -1px -1px 2px #ffffff;
@@ -160,7 +153,7 @@ html[data-motion="subtle"][data-stage="rise"] .stage {
   display: grid;
   place-items: center;
   font-size: 0.875rem;
-  color: #7b7b85;
+  color: #6b6b75;
   opacity: 0;
   animation: stage-hint 200ms var(--ease-out) 450ms forwards;
 }
@@ -172,6 +165,14 @@ html[data-motion="subtle"][data-stage="rise"] .stage {
   box-shadow:
     5px 5px 10px #bebebe,
     -5px -5px 10px #ffffff;
+}
+/* 失敗カードのボタンもトークン由来の影だと、まさに出したい無地の場面で
+   平らになってしまう。ここだけリテラルで浮かせる。 */
+.neu-static .neu-cta {
+  box-shadow:
+    5px 5px 10px #bebebe,
+    -5px -5px 10px #ffffff,
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.45);
 }
 
 /*

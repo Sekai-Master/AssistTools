@@ -11,9 +11,15 @@ import {
 } from "../../motion/plan";
 import { setMotionSetting, useMotionSetting } from "../../motion/settingsStore";
 import { useStage } from "../../motion/stageContext";
-import { useReducedMotion } from "../../motion/useReducedMotion";
+import { useReducedMotion, useTouchOnly } from "../../motion/environment";
 
 const OPTIONS = MOTION_SETTINGS.map((v) => ({ value: v, label: MOTION_LABEL[v] }));
+
+const LEVEL_LABEL: Record<string, string> = {
+  off: "オフ",
+  subtle: "控えめ",
+  rich: "リッチ",
+};
 
 /**
  * 設定画面。
@@ -26,7 +32,8 @@ const OPTIONS = MOTION_SETTINGS.map((v) => ({ value: v, label: MOTION_LABEL[v] }
 export function SettingsPage() {
   const setting = useMotionSetting();
   const osReduce = useReducedMotion();
-  const plan = resolvePlan(setting, osReduce);
+  const touchOnly = useTouchOnly();
+  const plan = resolvePlan(setting, { osReduce, touchOnly });
   const { preview } = useStage();
 
   return (
@@ -53,8 +60,14 @@ export function SettingsPage() {
           />
 
           <p className="mt-3 text-sm text-slate-600">{MOTION_NOTE[setting]}</p>
-          {/* slate-400 は #f0f0f0 上で約 2.5:1 しかなく AA を割るので slate-500 にする。 */}
+          {/* 「自動」が何に解決されたかを必ず見せる。裏で勝手に決めない。 */}
           <p className="mt-1 text-xs text-slate-500">
+            {setting === "auto" && (
+              <>
+                この端末では<strong className="font-bold">「{LEVEL_LABEL[plan.level]}」</strong>
+                で動いています ／{" "}
+              </>
+            )}
             遷移にかかる時間: 約 {totalMs(plan)} ミリ秒
           </p>
 
