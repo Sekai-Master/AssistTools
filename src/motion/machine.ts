@@ -201,8 +201,13 @@ export function reduce(state: StageState, event: StageEvent, plan: MotionPlan): 
 
     case "FAILED": {
       if (event.key !== state.targetKey || state.failed) return stay(state);
+      // 沈んでいる途中で失敗が来たら blank へ落とす。phase を動かさないと
+      // 沈み込みアニメーションが fill:both で保持されたまま固まり、
+      // 「たまたま無地に見えているだけ」の状態になる。
+      // commit はしない（失敗したルートを描画させない）ので、表示中の木は
+      // 前のページのまま無地の裏に留まる。
       return {
-        state: { ...state, failed: true, slow: false },
+        state: { ...state, failed: true, slow: false, phase: "blank", since: event.at },
         effects: [
           { type: "cancelTimers" },
           { type: "announce", kind: "failed", path: state.targetPath },
