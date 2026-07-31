@@ -35,7 +35,11 @@ describe("loadRoute", () => {
     expect(loadRoute("/settings", {})).toBeUndefined();
   });
 
-  it("失敗したらキャッシュを捨てて再試行できる", async () => {
+  // ★ このテストは「自前キャッシュが reject を握り続けないこと」だけを見ている。
+  //   loader をモックしているのでブラウザの module map を通らず、実ブラウザでの
+  //   再試行可能性は保証しない（実際、実ブラウザでは再試行できない。routes.ts の
+  //   コメント参照）。テスト名でその範囲を明示しておく。
+  it("失敗しても自前キャッシュに reject を残さない（実ブラウザでの再試行可否とは別）", async () => {
     let attempt = 0;
     const loader = vi.fn(async () => {
       attempt += 1;

@@ -10,9 +10,11 @@ import {
 } from "./machine";
 import { resolvePlan } from "./plan";
 
-const RICH = resolvePlan("rich", false); // sink130 / floor40 / patience320 / rise210
-const SUBTLE = resolvePlan("subtle", false); // sink0 / floor0 / rise160
-const OFF = resolvePlan("off", false);
+const DESKTOP = { osReduce: false, touchOnly: false };
+
+const RICH = resolvePlan("rich", DESKTOP); // sink130 / floor40 / patience320 / rise210
+const SUBTLE = resolvePlan("subtle", DESKTOP); // sink0 / floor0 / rise160
+const OFF = resolvePlan("off", DESKTOP);
 
 function run(events: StageEvent[], plan = RICH, start: StageState = initialState("k0", "/")) {
   const steps: Step[] = [];
@@ -240,8 +242,8 @@ describe("失敗", () => {
     });
   });
 
-  // phase を動かさないと沈み込みアニメーションが fill:both で保持されたまま
-  // 固まり、「たまたま無地に見えているだけ」の状態になる。
+  // phase を動かさないと沈み込みの演出が保持されたまま固まり、
+  // 「たまたま無地に見えているだけ」の状態になる。
   it("沈んでいる途中で失敗したら無地へ落とす（沈みかけで固まらない）", () => {
     const { state, steps } = run([
       { type: "NAVIGATE", key: "k1", path: "/analyzer", pop: false, at: 0 },
@@ -287,15 +289,17 @@ describe("失敗", () => {
     expect(state.failed).toBe(false);
   });
 
-  it("失敗後に届いた READY で浮上しない（失敗表示が消えない）", () => {
+  // FAILSAFE(10s) のあとに実際はチャンクが届くことがある（遅いモバイル回線）。
+  // ここで捨てると、届いているページを隠したまま無地の画面が永久に固まる。
+  it("失敗表示のあとに遅れて届いたら復帰する（無地のまま固まらない）", () => {
     const { state } = run([
       { type: "NAVIGATE", key: "k1", path: "/analyzer", pop: false, at: 0 },
       { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "FAILED", key: "k1", at: 200 },
-      { type: "READY", key: "k1", at: 300 },
+      { type: "TIMER", kind: "FAILSAFE", at: 10_130 },
+      { type: "READY", key: "k1", at: 12_000 },
     ]);
-    expect(state.failed).toBe(true);
-    expect(state.phase).toBe("blank");
+    expect(state.failed).toBe(false);
+    expect(state.phase).toBe("rise");
   });
 
   it("失敗中でも別ページへ逃げられる（失敗が解除される）", () => {
@@ -408,6 +412,31 @@ describe("stageAttrs", () => {
     expect(stageAttrs(steps[0].state, RICH).busy).toBe(false); // 沈み中はまだ
     expect(stageAttrs(steps[1].state, RICH).busy).toBe(true);
     expect(stageAttrs(steps[2].state, RICH).busy).toBe(false); // 届いたら下ろす
+  });
+
+  // opacity:0 の間 DOM は残るので、これが無いと「画面には何も見えないのに
+  // Tab で前ページのボタンを押せる」状態になる。
+  it("リッチで見えていない間だけ hidden（inert）が立つ", () => {
+    const { steps } = run([
+      { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
+      { type: "TIMER", kind: "SINK_END", at: 130 },
+      { type: "READY", key: "k1", at: 200 },
+    ]);
+    expect(stageAttrs(steps[0].state, RICH).hidden).toBe(true); // sink
+    expect(stageAttrs(steps[1].state, RICH).hidden).toBe(true); // blank
+    expect(stageAttrs(steps[2].state, RICH).hidden).toBe(false); // rise
+  });
+
+  // オフ/控えめは中身が見えているので絶対に inert しない
+  //（＝「見えているのに操作できない」を作らない）。
+  it("オフ・控えめでは hidden が立たない", () => {
+    for (const plan of [OFF, SUBTLE]) {
+      const { steps } = run(
+        [{ type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 }],
+        plan
+      );
+      expect(stageAttrs(steps[0].state, plan).hidden).toBe(false);
+    }
   });
 
   it("失敗中は busy にしない（永久に読み込み中と読ませない）", () => {
