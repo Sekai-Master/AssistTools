@@ -53,7 +53,8 @@ export function SettingsPage() {
           />
 
           <p className="mt-3 text-sm text-slate-600">{MOTION_NOTE[setting]}</p>
-          <p className="mt-1 text-xs text-slate-400">
+          {/* slate-400 は #f0f0f0 上で約 2.5:1 しかなく AA を割るので slate-500 にする。 */}
+          <p className="mt-1 text-xs text-slate-500">
             遷移にかかる時間: 約 {totalMs(plan)} ミリ秒
           </p>
 

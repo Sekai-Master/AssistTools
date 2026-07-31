@@ -1,0 +1,189 @@
+/*
+ * 画面遷移の振り付け。
+ *
+ * duration の正本は TS(MotionPlan)。html の --stage-sink / --stage-rise に
+ * 流し込まれるので、ここには ms を1つも書かない（TS と CSS の二重管理をしない）。
+ *
+ * ★ transform は1箇所も使わない（.stage-wait のつまみだけは例外で、これは
+ *   ステージの外の小さな固定要素）。.stage に transform が乗ると position:fixed の
+ *   包含ブロックが .stage へ切り替わり、TweetGenerator のモバイル常設アクションバー
+ *   （fixed inset-x-0 bottom-0）や、ポータルを使っていないページ内モーダル
+ *   （SongSearchModal / PlanListModal の fixed inset-0）の位置が壊れる。
+ *   opacity は包含ブロックを変えないので安全。
+ *
+ * ★ isolation / stacking context も作らない。常設のスタッキングコンテキストを
+ *   作ると、上記モーダル(z-50)が Layout の sticky ヘッダー(z-40)の下に潜る。
+ */
+
+.stage {
+  outline: none;
+}
+
+/* --- 沈む: 先に影が潰れて素材と面一になり、そのあと平らな中身が溶ける --- */
+@keyframes neu-lift-down {
+  0% {
+    --neu-lift: 1;
+  }
+  70% {
+    --neu-lift: 0;
+  }
+  100% {
+    --neu-lift: 0;
+  }
+}
+@keyframes stage-fade-out {
+  0% {
+    opacity: 1;
+  }
+  /* 影が潰れきるまで中身は見えている＝「浮きが消えて沈んだ」に読める */
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* --- 浮く: 先に中身が読めるようになり、影だけが遅れて育つ＝押し出されてくる --- */
+@keyframes neu-lift-up {
+  0% {
+    --neu-lift: 0;
+  }
+  100% {
+    --neu-lift: 1;
+  }
+}
+@keyframes stage-fade-in {
+  0% {
+    opacity: 0;
+  }
+  /* 影の成長より先に可読になる。読めた後も影が育ち続けるのが「押し出し」の要点 */
+  45% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* リッチ: 沈む → 無地で待つ → 浮く */
+html[data-motion="rich"][data-stage="sink"] {
+  animation: neu-lift-down var(--stage-sink) var(--ease-in-soft) both;
+}
+html[data-motion="rich"][data-stage="sink"] .stage {
+  animation: stage-fade-out var(--stage-sink) var(--ease-in-soft) both;
+  pointer-events: none;
+}
+html[data-motion="rich"][data-stage="blank"] {
+  --neu-lift: 0;
+}
+html[data-motion="rich"][data-stage="blank"] .stage {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* リッチ・控えめ共通の浮上。控えめは沈み/無地が無く、ここだけが走る。 */
+html[data-motion="rich"][data-stage="rise"],
+html[data-motion="subtle"][data-stage="rise"] {
+  animation: neu-lift-up var(--stage-rise) var(--ease-out) both;
+}
+html[data-motion="rich"][data-stage="rise"] .stage,
+html[data-motion="subtle"][data-stage="rise"] .stage {
+  animation: stage-fade-in var(--stage-rise) var(--ease-out) both;
+}
+
+/* オフ / 控えめの blank では何も指定しない。前ページを出したまま、操作可能な
+   まま新しい木を待つ。inert も pointer-events:none も付けない
+   ＝「見えているのにタップが効かない」状態を作らない。 */
+
+/*
+ * 待たされているときのインジケータ。溝の中をつまみが往復する＝この製品が既に
+ * 持っている語彙（.seg-thumb と同じ）。汎用スピナーは使わない。
+ * 装飾ではなく機能フィードバックなので「オフ」でも出る。
+ *
+ * ★ ここだけ影をリテラルで書く。無地の間は --shadow-neu* が意図的に 0 へ潰れて
+ *   いるので、トークンを使うと見えなくなる。
+ */
+.stage-wait {
+  position: fixed;
+  left: 50%;
+  top: 42%;
+  z-index: 30;
+  margin-left: -60px;
+  width: 120px;
+  height: 10px;
+  padding: 2px;
+  border-radius: 999px;
+  background-color: #f0f0f0;
+  box-shadow:
+    inset 2px 2px 4px #bebebe,
+    inset -2px -2px 4px #ffffff;
+  opacity: 0;
+  pointer-events: none;
+  animation: stage-hint 200ms var(--ease-out) 120ms forwards;
+}
+.stage-wait::after {
+  content: "";
+  display: block;
+  width: 36px;
+  height: 6px;
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--unit-color) 70%, #ffffff);
+  box-shadow:
+    1px 1px 2px #bebebe,
+    -1px -1px 2px #ffffff;
+  animation: stage-wait-slide 1400ms var(--ease-out) infinite;
+}
+@keyframes stage-hint {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes stage-wait-slide {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(76px);
+  }
+}
+
+/*
+ * 直リンク/リロードのときだけ出る本物の Suspense fallback。
+ * 最初は文字なしの無地面で、450ms 経ってから文言が出る（速い回線では文言を
+ * 見ずに終わる）。fallback が「無地に戻った状態」と同じ見た目なので、
+ * 無地→fallback→無地 の差が視覚的に存在しない。
+ */
+.stage-fallback {
+  min-height: 60svh;
+  display: grid;
+  place-items: center;
+  font-size: 0.875rem;
+  color: #7b7b85;
+  opacity: 0;
+  animation: stage-hint 200ms var(--ease-out) 450ms forwards;
+}
+
+/* 無地の間もトークンが潰れない固定影。失敗カードなど「常に浮いていてほしい」もの用。 */
+.neu-static {
+  background-color: #f0f0f0;
+  border-radius: 1rem;
+  box-shadow:
+    5px 5px 10px #bebebe,
+    -5px -5px 10px #ffffff;
+}
+
+/*
+ * ローディングインジケータは「装飾」ではなく「機能フィードバック」なので、
+ * 既存の .neu-tactile / .neu-cta と同じく OS の設定を絶対とする。
+ * 遷移演出（＝装飾）は設定画面での明示選択が OS より優先される、という
+ * 非対称は意図的。線引きは docs/porting/design.md に記載。
+ */
+@media (prefers-reduced-motion: reduce) {
+  .stage-wait::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.55;
+  }
+}

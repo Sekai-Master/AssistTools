@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* 画面遷移の演出。★ @import は @import "tailwindcss" の直後に置くこと。
+   CSS 仕様上 @import は他のどの規則よりも前にしか書けないので、ファイル末尾に
+   足すとブラウザ/Lightning CSS が黙って落とす。 */
+@import "./motion/motion.css";
 
 /*
  * SekaiMaster デザイン言語（legacy/common.css から継承。不可侵ライン）。
@@ -7,19 +11,63 @@
  *  - ユニットカラー: プロセカ6ユニット＋メンバー色。ページ毎に --unit-color を差し替える
  *  - フォント: M PLUS Rounded 1c
  */
+
+/*
+ * --neu-lift: 素材からの「浮きの量」。1 = 通常 / 0 = 素材と面一（＝影が消える）。
+ * この 1 変数の補間だけで、影を持つ全要素が同時に沈み、同時に浮く。
+ *
+ * ★★ 必ず html(:root) 上で動かすこと。子孫に置いても効かない。 ★★
+ *   カスタムプロパティの var() は「宣言された要素」で computed-value 時に置換される。
+ *   --shadow-neu は @theme により :root, :host に宣言されるため、:root の時点で
+ *   --neu-lift = 1 が焼き付いた文字列が確定し、子孫はそれを継承するだけになる。
+ *   よって子要素に --neu-lift: 0 を置くと
+ *     .neu-panel { box-shadow: var(--shadow-neu) }          → 追随しない
+ *     .shadow-neu { --tw-shadow: calc(... var(--neu-lift)) } → 追随する（要素側で宣言のため）
+ *   となり、「パネルの影は据え置きで中のボタンだけ平ら」という真逆の絵になる。
+ *   html 上で動かせば :root の --shadow-neu 自体が再計算され、両系統が揃う。
+ *
+ * ★ @property 未対応環境（Safari 16.3 以前 / Firefox 127 以前）では影が補間されず
+ *   離散的に切り替わるだけ。全参照に var(--neu-lift, 1) のフォールバックを書いて
+ *   あるので、影が消えたまま戻らない事故は起きない。
+ */
+@property --neu-lift {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
 @theme {
   --font-sans: "M PLUS Rounded 1c", ui-sans-serif, system-ui, sans-serif;
 
-  /* ニューモーフィズムの土台と影 */
+  /* ニューモーフィズムの土台と影。
+     値は --neu-lift = 1 のとき従来と完全に等価（calc 化しただけ）。 */
   --color-neu: #f0f0f0;
   --color-neu-ink: #333333;
-  --shadow-neu: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff;
-  --shadow-neu-sm: 3px 3px 6px #bebebe, -3px -3px 6px #ffffff;
-  --shadow-neu-lg: 7px 7px 14px #bebebe, -7px -7px 14px #ffffff;
-  --shadow-neu-inset: inset 3px 3px 6px #bebebe, inset -3px -3px 6px #ffffff;
+  --shadow-neu:
+    calc(5px * var(--neu-lift, 1)) calc(5px * var(--neu-lift, 1))
+      calc(10px * var(--neu-lift, 1)) #bebebe,
+    calc(-5px * var(--neu-lift, 1)) calc(-5px * var(--neu-lift, 1))
+      calc(10px * var(--neu-lift, 1)) #ffffff;
+  --shadow-neu-sm:
+    calc(3px * var(--neu-lift, 1)) calc(3px * var(--neu-lift, 1))
+      calc(6px * var(--neu-lift, 1)) #bebebe,
+    calc(-3px * var(--neu-lift, 1)) calc(-3px * var(--neu-lift, 1))
+      calc(6px * var(--neu-lift, 1)) #ffffff;
+  --shadow-neu-lg:
+    calc(7px * var(--neu-lift, 1)) calc(7px * var(--neu-lift, 1))
+      calc(14px * var(--neu-lift, 1)) #bebebe,
+    calc(-7px * var(--neu-lift, 1)) calc(-7px * var(--neu-lift, 1))
+      calc(14px * var(--neu-lift, 1)) #ffffff;
+  --shadow-neu-inset:
+    inset calc(3px * var(--neu-lift, 1)) calc(3px * var(--neu-lift, 1))
+      calc(6px * var(--neu-lift, 1)) #bebebe,
+    inset calc(-3px * var(--neu-lift, 1)) calc(-3px * var(--neu-lift, 1))
+      calc(6px * var(--neu-lift, 1)) #ffffff;
 
   /* 強めの ease-out（標準カーブは弱い）。触覚モーションに使う。 */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  /* --ease-out の対。素材に吸い込まれる沈み込み用。 */
+  --ease-in-soft: cubic-bezier(0.4, 0, 1, 1);
 
   /* ユニット代表色 */
   --color-vs: #33ccbb;
@@ -62,7 +110,7 @@ body {
    * 触覚インタラクション。ニューモーフィズムの「押すとへこむ」物理感を出す。
    *  - ホバー: わずかに浮上（ポインタ環境のみ＝タッチ誤爆防止）
    *  - 押下: scale(0.97) で沈み込み、影を inset にして本当にへこませる
-   *  - transform 主体でGPU任せ。box-shadow の inset 切替は瞬時でも「カチッ」と気持ちよい
+   *  - transform 主体でGPU任せ。box-shadow の inset 切替は瞬時でも「カチッと」気持ちよい
    * scale は 0.95〜0.98 の範囲（Emil の指針）。100〜160ms。
    */
   .neu-tactile {
