@@ -3,6 +3,9 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { Hub } from "./pages/Hub";
 import { NotFound } from "./pages/NotFound";
+// 設定は数百バイトで、かつ「演出が重いから切りたい」人が最短で辿り着くべき画面。
+// 遅延ロードで待たせるのは本末転倒なので lazy にしない。
+import { SettingsPage } from "./pages/settings/SettingsPage";
 
 // 各ツールは重い（データや計算を抱える）ので遅延ロードし、ハブの初期表示を軽くする。
 const TweetGenerator = lazy(() => import("./pages/tweet/TweetGenerator"));
@@ -35,6 +38,7 @@ export function App() {
             <Route path="/plan" element={<PlanPage />} />
             <Route path="/worktime" element={<WorkTimeCalculator />} />
             <Route path="/ranking" element={<EfficiencyRanking />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>

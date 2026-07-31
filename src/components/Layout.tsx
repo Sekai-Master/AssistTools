@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, X } from "lucide-react";
+import { Menu, Settings2, X } from "lucide-react";
 import { READY_TOOLS } from "../tools";
 
 /**
@@ -53,17 +53,30 @@ export function Layout({ children }: { children: ReactNode }) {
             })}
           </nav>
 
-          {/* モバイル: ハンバーガー */}
-          <button
-            type="button"
-            aria-label={menuOpen ? "メニューを閉じる" : "メニューを開く"}
-            aria-expanded={menuOpen}
-            aria-controls="mobile-nav"
-            onClick={() => setMenuOpen((v) => !v)}
-            className="md:hidden neu-raised neu-tactile p-2 text-slate-600"
-          >
-            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
+          <div className="flex items-center gap-2">
+            {/* 設定。ツールではないので READY_TOOLS のナビには入れない。 */}
+            <Link
+              to="/settings"
+              aria-label="設定"
+              title="設定"
+              onClick={() => setMenuOpen(false)}
+              className="neu-raised neu-tactile p-2 text-slate-600"
+            >
+              <Settings2 className="h-5 w-5" />
+            </Link>
+
+            {/* モバイル: ハンバーガー */}
+            <button
+              type="button"
+              aria-label={menuOpen ? "メニューを閉じる" : "メニューを開く"}
+              aria-expanded={menuOpen}
+              aria-controls="mobile-nav"
+              onClick={() => setMenuOpen((v) => !v)}
+              className="md:hidden neu-raised neu-tactile p-2 text-slate-600"
+            >
+              {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
 
         {/* モバイルメニュー */}
