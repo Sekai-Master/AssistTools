@@ -26,8 +26,20 @@ const cache = new Map<string, Promise<Mod>>();
 
 /**
  * 同一パスは1回しか import しない。
- * 失敗したらキャッシュを捨て、次に来たときに再試行できるようにする
- * （デプロイ直後の一時的な失敗をキャッシュに焼き付けないため）。
+ *
+ * ★ 失敗したチャンクは、このアプリ内では再試行できない。ページ全体のリロードが要る。
+ *   自前キャッシュを捨てても効かない。理由は2つあり、どちらもこのコードの外にある:
+ *     1. ブラウザの module map が失敗した specifier をページ寿命の間キャッシュする。
+ *        同じ URL の import() は実際のネットワークに出ない（Chromium で実測確認）。
+ *     2. React.lazy は payload に reject を焼き付け（_status = 2）、以後は
+ *        ローダを呼ばず同じエラーを投げ直す。RoutePages はモジュールスコープで
+ *        1回だけ生成されるので、この payload を作り直す経路が無い。
+ *   URL に世代クエリを足せば 1 は回避できるが、本命の事故（再デプロイ後の
+ *   stale チャンク＝同じパスに HTML が 200 で返る）は URL を変えても治らない。
+ *   よって正解はフルリロード一本であり、ChunkErrorCard の主導線もそうしてある。
+ *
+ * cache.delete は prefetchRoute（loadRoute を直に呼ぶ経路）が同じ reject を
+ * 握り続けないようにするためだけのもの。lazy 側には届かない。
  */
 export function loadRoute(path: string, loaders: Record<string, Loader> = ROUTE_LOADERS) {
   const loader = loaders[path];

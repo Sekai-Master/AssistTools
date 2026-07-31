@@ -1,4 +1,4 @@
-import { Suspense, useMemo, type ReactNode } from "react";
+import { Suspense, useMemo, useState, type ReactNode } from "react";
 import type { Location } from "react-router-dom";
 import { StageContext } from "../motion/stageContext";
 import { useRouteStage } from "../motion/useRouteStage";
@@ -21,11 +21,27 @@ export function RouteStage({ children }: { children: (loc: Location) => ReactNod
   const s = useRouteStage();
   const api = useMemo(() => ({ preview: s.preview }), [s.preview]);
 
+  // 境界が拾ったかどうか。拾っていれば失敗カードはステージの中に出ているので、
+  // ステージ外にもう1枚出さない（2枚重なって role="alert" が2回発火する）。
+  const [boundaryCaught, setBoundaryCaught] = useState(false);
+
   return (
     <StageContext.Provider value={api}>
-      <div ref={s.stageRef} tabIndex={-1} className="stage" aria-busy={s.attrs.busy || undefined}>
+      <div
+        ref={s.stageRef}
+        tabIndex={-1}
+        className="stage"
+        aria-busy={s.attrs.busy || undefined}
+        // 見えていない間はタブ順・支援技術から外す。付けないと「画面には何も
+        // 見えないのに Tab で前ページのボタンを押せる」状態になる。
+        inert={s.attrs.hidden}
+      >
         {/* 初回ディープリンクなど、先読みを経由しない経路の例外はここで拾う。 */}
-        <RouteErrorBoundary resetKey={s.shown.pathname} fallback={<ChunkErrorCard />}>
+        <RouteErrorBoundary
+          resetKey={s.shown.pathname}
+          onCaughtChange={setBoundaryCaught}
+          fallback={<ChunkErrorCard />}
+        >
           {/* 直リンク/リロードでだけ出る本物の fallback。
               通常のページ遷移では startTransition のおかげでここに落ちない。 */}
           <Suspense fallback={<div className="stage-fallback">読み込み中…</div>}>
@@ -37,8 +53,9 @@ export function RouteStage({ children }: { children: (loc: Location) => ReactNod
       {/* 我慢の限界を超えて待たされたときだけ出る。装飾ではなく機能フィードバック。 */}
       {s.state.slow && !s.state.failed && <div className="stage-wait" aria-hidden />}
 
-      {/* 先読みの reject / FAILSAFE で拾った失敗。無地のまま永久に待たせない。 */}
-      {s.state.failed && <ChunkErrorCard />}
+      {/* 先読みの reject / FAILSAFE で拾った失敗。無地のまま永久に待たせない。
+          境界が既に出しているときは重複させない。 */}
+      {s.state.failed && !boundaryCaught && <ChunkErrorCard />}
 
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {s.live}

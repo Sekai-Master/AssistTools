@@ -18,7 +18,7 @@ import { resolvePlan } from "./plan";
 import { announceText, prefetchRoute } from "./routes";
 import { createScrollMemory } from "./scrollMemory";
 import { useMotionSetting } from "./settingsStore";
-import { useReducedMotion } from "./useReducedMotion";
+import { useReducedMotion, useTouchOnly } from "./environment";
 
 const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
@@ -27,7 +27,11 @@ export function useRouteStage() {
   const navType = useNavigationType();
   const setting = useMotionSetting();
   const osReduce = useReducedMotion();
-  const plan = useMemo(() => resolvePlan(setting, osReduce), [setting, osReduce]);
+  const touchOnly = useTouchOnly();
+  const plan = useMemo(
+    () => resolvePlan(setting, { osReduce, touchOnly }),
+    [setting, osReduce, touchOnly]
+  );
 
   /** 実際に描画する location。URL より遅れて進む（沈んでいる間は前のページのまま）。 */
   const [shown, setShown] = useState<Location>(location);
@@ -128,10 +132,10 @@ export function useRouteStage() {
     send({ type: "READY", key: shown.key, at: now() });
   }, [shown, send]);
 
-  useEffect(() => {
-    const pending = timers.current;
-    return () => pending.forEach(clearTimeout);
-  }, []);
+  // ★ ref.current を effect の実行時ではなく後始末の時点で読むこと。
+  //   マウント時の配列を掎むと、cancelTimers 後に張り直されたタイマー
+  //   （timers.current が別の配列に差し替わる）が1本も片付かない。
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
   const attrs = stageAttrs(state, plan);
 

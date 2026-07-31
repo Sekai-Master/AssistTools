@@ -16,8 +16,11 @@ export function ChunkErrorCard() {
           サイトが更新された可能性があります。再読み込みしてください。
         </p>
         <div className="mt-4 flex justify-center gap-3">
+          {/* リッチではステージが inert なので、フォーカスを持たないと
+              キーボード利用者がこの逃げ道に到達できない。 */}
           <button
             type="button"
+            autoFocus
             onClick={() => window.location.reload()}
             className="neu-cta neu-tactile rounded-lg px-4 py-2 text-sm font-bold"
           >

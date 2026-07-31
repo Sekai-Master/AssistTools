@@ -16,6 +16,8 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 interface Props {
   resetKey: string;
   fallback: ReactNode;
+  /** 捕捉状態が変わったら知らせる。ステージ外の失敗カードと二重表示させないため。 */
+  onCaughtChange?: (caught: boolean) => void;
   children: ReactNode;
 }
 
@@ -41,6 +43,16 @@ export class RouteErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo): void {
     // 握り潰さない。失敗は検知可能にしておく。
     console.error("[RouteErrorBoundary]", error, info.componentStack);
+  }
+
+  componentDidUpdate(_prev: Props, prevState: State): void {
+    if (prevState.failed !== this.state.failed) {
+      this.props.onCaughtChange?.(this.state.failed);
+    }
+  }
+
+  componentWillUnmount(): void {
+    if (this.state.failed) this.props.onCaughtChange?.(false);
   }
 
   render() {

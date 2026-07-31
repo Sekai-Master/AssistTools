@@ -7,7 +7,7 @@
  */
 import { resolvePlan } from "./plan";
 import { readMotionSetting } from "./settingsStore";
-import { prefersReducedMotion } from "./useReducedMotion";
+import { readEnvironment } from "./environment";
 
 export function bootstrapMotion(): void {
   // ブラウザ既定のスクロール復元と、遷移ステージ側の自前復元が二重にかかると
@@ -20,7 +20,7 @@ export function bootstrapMotion(): void {
     // 非対応環境では諦める（ブラウザ既定のままでも致命的ではない）。
   }
 
-  const plan = resolvePlan(readMotionSetting(), prefersReducedMotion());
+  const plan = resolvePlan(readMotionSetting(), readEnvironment());
   const el = document.documentElement;
   el.dataset.motion = plan.level;
   el.dataset.stage = "idle";

@@ -188,10 +188,14 @@ export function reduce(state: StageState, event: StageEvent, plan: MotionPlan): 
     }
 
     case "READY": {
-      if (event.key !== state.targetKey || state.failed) return stay(state);
+      if (event.key !== state.targetKey) return stay(state);
+      // ★ failed で弾かない。FAILSAFE(10s) が発火したあとに実際はチャンクが届く
+      //   ことがある（遅いモバイル回線）。ここで捨てると画面が無地のまま
+      //   永久に固まり、届いているページを隠したまま偽の失敗カードを出し続ける。
+      //   届いたなら失敗表示を取り下げて復帰させる。
+      const ready = { ...state, ready: true, failed: false };
       // StrictMode の二重発火や、沈む前に解決したケースを吸収する。
-      if (state.phase !== "blank") return stay({ ...state, ready: true });
-      const ready = { ...state, ready: true };
+      if (state.phase !== "blank") return stay(ready);
       // 既に十分待たせた(slow)なら床は払わない。それ以外は minBlank の床を守る。
       const floorPaid = state.slow || event.at - state.since >= plan.minBlankMs;
       if (!floorPaid) return stay(ready);
@@ -202,7 +206,7 @@ export function reduce(state: StageState, event: StageEvent, plan: MotionPlan): 
     case "FAILED": {
       if (event.key !== state.targetKey || state.failed) return stay(state);
       // 沈んでいる途中で失敗が来たら blank へ落とす。phase を動かさないと
-      // 沈み込みアニメーションが fill:both で保持されたまま固まり、
+      // 沈み込みの演出が保持されたまま固まり、
       // 「たまたま無地に見えているだけ」の状態になる。
       // commit はしない（失敗したルートを描画させない）ので、表示中の木は
       // 前のページのまま無地の裏に留まる。
@@ -258,14 +262,25 @@ export interface StageAttrs {
   sink: string;
   rise: string;
   busy: boolean;
+  /**
+   * ステージが視覚的に消えているか。inert を付ける判断に使う。
+   *
+   * opacity:0 の間も DOM は残るので、これを付けないと「画面には何も見えないのに
+   * Tab で前ページの入力欄やボタンを巡れて Enter で発火できる」状態になる。
+   * 逆にオフ/控えめでは中身が見えているので絶対に付けない
+   *（＝「見えているのに操作できない」を作らない）。
+   */
+  hidden: boolean;
 }
 
 export function stageAttrs(state: StageState, plan: MotionPlan): StageAttrs {
+  const invisible = plan.level === "rich" && (state.phase === "sink" || state.phase === "blank");
   return {
     motion: plan.level,
     stage: state.phase,
     sink: `${plan.sinkMs}ms`,
     rise: `${plan.riseMs}ms`,
     busy: state.phase === "blank" && !state.ready && !state.failed,
+    hidden: invisible,
   };
 }
