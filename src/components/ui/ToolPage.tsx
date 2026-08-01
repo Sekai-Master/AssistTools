@@ -5,6 +5,12 @@ import { cn } from "../../lib/utils";
 interface ToolPageProps {
   /** テーマにするユニット。ページ全体の --unit-color を決める。 */
   unit: UnitKey;
+  /**
+   * 共有要素のキー（ツール id）。ハブのカードと同じ値を入れると、
+   * 「カード → この見出し」が1つの動きとして繋がる（motion/morph.ts）。
+   * 省略しても見た目は変わらない ── ふつうの遷移になるだけ。
+   */
+  morphKey?: string;
   /** 見出し（斜めカラーバナー付き）。 */
   title: string;
   /** 見出し脇の Material Icons 名（任意）。 */
@@ -22,14 +28,14 @@ interface ToolPageProps {
  *
  * 各ツールはこの中に <Panel> を積むだけで余白が揃う。
  */
-export function ToolPage({ unit, title, icon, wide = false, children }: ToolPageProps) {
+export function ToolPage({ unit, title, icon, wide = false, morphKey, children }: ToolPageProps) {
   const style = { "--unit-color": UNIT_COLOR_VAR[unit] } as CSSProperties;
   return (
     <div
       style={style}
       className={cn("mx-auto w-full px-4 py-6 sm:py-8", wide ? "max-w-6xl" : "max-w-3xl")}
     >
-      <h1 className="unit-title text-xl font-bold">
+      <h1 className="unit-title text-xl font-bold" data-morph={morphKey}>
         {icon && (
           <span className="material-icons" aria-hidden>
             {icon}

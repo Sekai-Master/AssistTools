@@ -101,7 +101,7 @@ export default function PlanPage() {
   };
 
   return (
-    <ToolPage unit="vs" title="周回プラン" icon="event_note">
+    <ToolPage morphKey="tool:plan" unit="vs" title="周回プラン" icon="event_note">
       {dataError && (
         <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
           {dataError}

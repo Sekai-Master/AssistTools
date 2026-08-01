@@ -88,6 +88,17 @@ html[data-motion="rich"][data-divs="on"][data-stage="rise"] .stage {
 /* --- ブロック（カスケードする層）--- */
 
 /*
+ * ★ すべて `.stage` の中に限定する。
+ *   ブロックの印（data-div）は遷移が終わっても要素に残る（idle では規則が
+ *   当たらないので消す必要が無い）。すると次の遷移で**印の付いた要素を複製した
+ *   共有要素（morph.ts）にまで規則が当たり、飛ぶはずの複製がページと一緒に
+ *   溶けて消える**。しかも初回だけは印がまだ無いので成功する ＝ 「2回目から
+ *   選んだパネルが消える」という分かりにくい壊れ方をする。
+ *   複製側でも印を剥がしているが、こちらは構造で保証する（新しい複製の作り方を
+ *   足したときに、また同じ穴に落ちないように）。
+ */
+
+/*
  * ★ filter を「遷移中だけ」宣言する。常設すると position:fixed の包含ブロックが
  *   このブロックへ切り替わり、ページ内モーダル（fixed inset-0・ポータル未使用）が
  *   ブロック基準の座標に飛ぶ。idle では宣言ごと消えるので静止時の影響はゼロ。
@@ -100,11 +111,11 @@ html[data-motion="rich"][data-divs="on"][data-stage="rise"] .stage {
  */
 /* ★ near だけ。画面外のブロックはぼかさない＝ぼかす面積を1画面ぶんに抑える。
    どうせ見えないので、消える・現れるだけで足りる。 */
-html[data-motion="rich"][data-divs="on"]:not([data-stage="idle"]) [data-div="near"] {
+html[data-motion="rich"][data-divs="on"]:not([data-stage="idle"]) .stage [data-div="near"] {
   filter: blur(var(--div-blur)) saturate(var(--div-sat));
 }
 /* カスケードの遅延。沈みは (1 - t) で下から上へ、浮上は t のまま上から下へ。 */
-html[data-motion="rich"][data-divs="on"]:not([data-stage="idle"]) [data-div] {
+html[data-motion="rich"][data-divs="on"]:not([data-stage="idle"]) .stage [data-div] {
   --div-out: calc((1 - var(--div-t, 0)) * var(--stage-sink-cascade));
   --div-in: calc(var(--div-t, 0) * var(--stage-rise-cascade));
 }
@@ -112,7 +123,7 @@ html[data-motion="rich"][data-divs="on"]:not([data-stage="idle"]) [data-div] {
 /* 沈み: 色が抜ける → 輪郭がぼやける → 存在が消える。
    色は真っ先に、しかも短く抜く（素材に還る）。opacity は尺の 40% 待ってから
    動き出すので、「色を失ってぼやけた灰色の塊」を必ず一度経由する。 */
-html[data-motion="rich"][data-divs="on"][data-stage="sink"] [data-div] {
+html[data-motion="rich"][data-divs="on"][data-stage="sink"] .stage [data-div] {
   opacity: 0;
   --div-blur: var(--stage-blur);
   --div-sat: 0.05;
@@ -124,7 +135,7 @@ html[data-motion="rich"][data-divs="on"][data-stage="sink"] [data-div] {
 }
 
 /* 無地: 沈みで到達済みの値をそのまま保持する（ここでの確定は瞬時）。 */
-html[data-motion="rich"][data-divs="on"][data-stage="blank"] [data-div] {
+html[data-motion="rich"][data-divs="on"][data-stage="blank"] .stage [data-div] {
   opacity: 0;
   --div-blur: var(--stage-blur);
   --div-sat: 0.05;
@@ -134,7 +145,7 @@ html[data-motion="rich"][data-divs="on"][data-stage="blank"] [data-div] {
 /* 浮上: 存在が戻る → 像を結ぶ → 最後に色が戻る。
    色だけ尺の後半に置いてあるので、灰色の浮き彫りとして現れたブロックに
    あとから色が染み込む。沈みと厳密に逆順。 */
-html[data-motion="rich"][data-divs="on"][data-stage="rise"] [data-div] {
+html[data-motion="rich"][data-divs="on"][data-stage="rise"] .stage [data-div] {
   opacity: 1;
   --div-blur: 0px;
   --div-sat: 1;
@@ -150,7 +161,7 @@ html[data-motion="rich"][data-divs="on"][data-stage="rise"] [data-div] {
  * fixed のモーダルが飛ぶので、ブロック演出を降ろしてステージごとのフェードに戻す。
  * （SongSearchModal / PlanListModal が data-overlay を付ける）
  */
-html[data-motion="rich"][data-divs="on"]:has([data-overlay]) [data-div] {
+html[data-motion="rich"][data-divs="on"]:has([data-overlay]) .stage [data-div] {
   filter: none;
   /* ブロック側の振り付けを完全に降ろす。降ろさないとステージのフェードと
      二重にかかって、モーダルだけ先に薄くなる不自然な絵になる。 */
@@ -293,4 +304,59 @@ html:not([data-stage="idle"]) .neu-cta {
     width: 100%;
     opacity: 0.55;
   }
+}
+
+/* =====================================================================
+ * 共有要素の変形（morph.ts）
+ *
+ * 複製を body 直下の fixed レイヤーで動かす。ステージの中で transform を使うと
+ * position:fixed の包含ブロックを奪ってしまうので、外へ出すのが要点。
+ * ここは「箱の軌道」だけを定義し、時間は TS 側が inline で入れる。
+ * ===================================================================== */
+
+#morph-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 45; /* ヘッダー(40)より上・モーダル(50)より下 */
+  pointer-events: none;
+}
+
+.morph-box {
+  position: fixed;
+  overflow: hidden;
+  /* 幅・高さ・位置をそのまま動かす。transform: scale で伸ばすと中の文字まで
+     引き伸ばされるし、毎フレーム折り返しが変わるとガタつく。中身は原寸のまま
+     .morph-inner に閉じ込めて、外の箱だけを動かして切り取る。 */
+  /* 持ち上げた瞬間の浮き。飛び始めると下の inline 指定に置き換わる。
+     ★ 飛行中の transition-property は TS 側（morph.ts の MOVED）が inline で入れる。
+     duration の個数と並びを1箇所で作らないと、値が循環して割り当てられて
+     「left だけ違う速さ」になり箱が歪む。緩急だけはここで決める。 */
+  transition-property: transform;
+  transition-duration: 260ms;
+  transition-timing-function: var(--ease-morph);
+  will-change: top, left, width, height;
+}
+
+.morph-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* レイアウトは本来の大きさのまま組み、拡縮は transform でやる。
+     幅を毎フレーム変えると折り返しが変わって文字が踊る。
+     ★ ここはステージの外なので transform を使ってよい（包含ブロックを奪う相手が居ない）。 */
+  transform-origin: top left;
+  transition-property: transform;
+  transition-timing-function: var(--ease-morph);
+}
+
+/*
+ * 飛んでいるものは沈まない。
+ *
+ * --neu-lift は html で動かしているのでレイヤーの複製にも継承されてしまい、
+ * 何もしないと「持ち上げたカードの影だけ道中で消える」ことになる。ここで 1 に
+ * 固定して、**周りが素材へ還るあいだ、選ばれたものだけが浮いたまま残る**
+ * という絵にする。演出の主語がどれなのかを影で示す。
+ */
+.morph-box {
+  --neu-lift: 1;
 }

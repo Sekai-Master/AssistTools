@@ -310,7 +310,7 @@ export default function EfficiencyRanking() {
   const best = ranked[0];
 
   return (
-    <ToolPage unit="ln" title="効率曲ランキング" icon="leaderboard" wide>
+    <ToolPage morphKey="tool:ranking" unit="ln" title="効率曲ランキング" icon="leaderboard" wide>
       <Panel>
         <SegmentedControl options={MODE_OPTIONS} value={mode} onChange={setMode} />
         <p className="mt-4 text-sm font-bold text-slate-600">{note.headline}</p>

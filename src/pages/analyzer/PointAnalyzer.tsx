@@ -256,7 +256,7 @@ export default function PointAnalyzer() {
   };
 
   return (
-    <ToolPage unit="mmj" title="ポイント調整アナライザー" icon="analytics">
+    <ToolPage morphKey="tool:analyzer" unit="mmj" title="ポイント調整アナライザー" icon="analytics">
       {dataError && (
         <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
           {dataError}

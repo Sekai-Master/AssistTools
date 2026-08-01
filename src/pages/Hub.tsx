@@ -24,6 +24,10 @@ export function Hub() {
             const accent = `var(--color-${tool.unit})`;
             const card = (
               <div
+                // 行き先ページの見出しと同じキー。押すとこのカードが持ち上がり、
+                // 他が溶けているあいだ浮いたまま、見出しの形へ飛んで着地する
+                //（motion/morph.ts）。
+                data-morph={isReady ? `tool:${tool.id}` : undefined}
                 className={`h-full neu-panel p-5 ${
                   isReady ? "neu-tactile neu-lit" : "opacity-60"
                 }`}

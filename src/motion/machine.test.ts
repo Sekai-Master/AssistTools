@@ -66,6 +66,7 @@ describe("チャンクが速いとき", () => {
       "cancelTimers",
       "restoreScroll",
       "markDivisions",
+      "morphFly",
       "focusStage",
       "announce",
       "timer",
@@ -470,6 +471,64 @@ describe("ブロック単位のカスケード（印付け）", () => {
     ]);
     expect(steps[0].effects).toContainEqual({ type: "markDivisions", flush: false });
     expect(steps[2].effects).toContainEqual({ type: "markDivisions", flush: true });
+  });
+});
+
+describe("共有要素の変形", () => {
+  // 出発点は「まだ元ページが見えている」時点でしか採寸できない。
+  it("沈む前に持ち上げ、行き先が確定してから飛ばす", () => {
+    const { steps } = run([
+      { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "READY", key: "k1", at: AFTER_FLOOR },
+    ]);
+    expect(kinds(steps[0])).toContain("morphCapture");
+    expect(kinds(steps[0])).not.toContain("morphFly");
+    expect(kinds(steps[2])).toContain("morphFly");
+  });
+
+  // 装飾ではなく「押したものが開いた」という説明なので、控えめでも動かす。
+  it("控えめでも動く（カスケードは無くても変形はする）", () => {
+    const { steps } = run(
+      [
+        { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
+        { type: "READY", key: "k1", at: 30 },
+      ],
+      SUBTLE
+    );
+    const all = steps.flatMap(kinds);
+    expect(all).toContain("morphCapture");
+    expect(all).toContain("morphFly");
+    expect(all).not.toContain("markDivisions");
+  });
+
+  it("オフでは持ち上げない", () => {
+    const { steps } = run(
+      [
+        { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
+        { type: "READY", key: "k1", at: 30 },
+      ],
+      OFF
+    );
+    expect(steps.flatMap(kinds)).not.toContain("morphCapture");
+  });
+
+  // 行き先が来ないなら着地点も無い。持ち上げた複製を宙に残さない。
+  it("失敗したら持ち上げたものを片付ける", () => {
+    const { steps } = run([
+      { type: "NAVIGATE", key: "k1", path: "/analyzer", pop: false, at: 0 },
+      { type: "FAILED", key: "k1", at: 50 },
+    ]);
+    expect(kinds(steps[1])).toContain("morphCancel");
+  });
+
+  // 沈み途中の連打で複製が増えないこと（採寸は最初の1回だけ）。
+  it("沈み途中の再ナビゲートでは持ち上げ直さない", () => {
+    const { steps } = run([
+      { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
+      { type: "NAVIGATE", key: "k2", path: "/bingo", pop: false, at: 60 },
+    ]);
+    expect(kinds(steps[1])).not.toContain("morphCapture");
   });
 });
 
