@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* 画面遷移の演出。★ @import は @import "tailwindcss" の直後に置くこと。
+   CSS 仕様上 @import は他のどの規則よりも前にしか書けないので、ファイル末尾に
+   足すとブラウザ/Lightning CSS が黙って落とす。 */
+@import "./motion/motion.css";
 
 /*
  * SekaiMaster デザイン言語（legacy/common.css から継承。不可侵ライン）。
@@ -7,37 +11,186 @@
  *  - ユニットカラー: プロセカ6ユニット＋メンバー色。ページ毎に --unit-color を差し替える
  *  - フォント: M PLUS Rounded 1c
  */
+
+/*
+ * --neu-lift: 素材からの「浮きの量」。1 = 通常 / 0 = 素材と面一（＝影が消える）。
+ * この 1 変数の補間だけで、影を持つ全要素が同時に沈み、同時に浮く。
+ *
+ * ★★ 必ず html(:root) 上で動かすこと。子孫に置いても効かない。 ★★
+ *   カスタムプロパティの var() は「宣言された要素」で computed-value 時に置換される。
+ *   --shadow-neu は @theme により :root, :host に宣言されるため、:root の時点で
+ *   --neu-lift = 1 が焼き付いた文字列が確定し、子孫はそれを継承するだけになる。
+ *   よって子要素に --neu-lift: 0 を置くと
+ *     .neu-panel { box-shadow: var(--shadow-neu) }          → 追随しない
+ *     .shadow-neu { --tw-shadow: calc(... var(--neu-lift)) } → 追随する（要素側で宣言のため）
+ *   となり、「パネルの影は据え置きで中のボタンだけ平ら」という真逆の絵になる。
+ *   html 上で動かせば :root の --shadow-neu 自体が再計算され、両系統が揃う。
+ *
+ * ★ @property 未対応環境（Safari 16.3 以前 / Firefox 127 以前）では影が補間されず
+ *   離散的に切り替わるだけ。全参照に var(--neu-lift, 1) のフォールバックを書いて
+ *   あるので、影が消えたまま戻らない事故は起きない。
+ */
+@property --neu-lift {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+/*
+ * ブロック単位の溶け方（motion/motion.css）。
+ *
+ * filter は1プロパティなので blur と saturate を直接書くと同じ時間でしか動かせない。
+ * 量をここへ逃がして filter: blur(var(--div-blur)) saturate(var(--div-sat)) と
+ * 組むことで、「色が先に抜けて、輪郭が後からぼやける」という別々の時間を作れる。
+ *
+ * ★ inherits: false。ブロックは入れ子にならない（収集器が親子を同時に選ばない）ので
+ *   継承させる必要が無く、継承させると配下の全ノードで再計算が走って重くなる。
+ */
+@property --div-blur {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --div-sat {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
+/*
+ * 素材の3値。ニューモーフィズムはこの3つの関係だけで出来ている。
+ *   base = 素材そのもの / lo = 光の当たらない側 / hi = 光の当たる側
+ *
+ * ★ light-dark() で1箇所に両方の値を書く。ダーク用の宣言ブロックを別に持つと、
+ *   片方だけ更新して食い違う（実際この手のトークンで一番起きる事故）。
+ *   どちらが採用されるかは color-scheme が決めるので、テーマの切り替えは
+ *   :root の color-scheme を差し替えるだけで済む（下の [data-theme]）。
+ *
+ * ★ 暗所では hi を白にしない。白いハイライトは素材ではなくプラスチックの
+ *   てかりに見える。base より少し明るいだけの灰にする。
+ *   影の落差も明所より浅い（暗い面ほど陰影の階調が出ないため）。
+ */
+:root {
+  --neu-base: light-dark(#f0f0f0, #2a2d33);
+  --neu-lo: light-dark(#bebebe, #16181d);
+  --neu-hi: light-dark(#ffffff, #3a3f4a);
+  --neu-ink: light-dark(#333333, #e4e6ea);
+  /* ヘッダーのガラス帯の縁。暗所で white/60 のままだと線だけ浮く。 */
+  --neu-edge: light-dark(rgb(255 255 255 / 0.6), rgb(255 255 255 / 0.07));
+}
+
 @theme {
   --font-sans: "M PLUS Rounded 1c", ui-sans-serif, system-ui, sans-serif;
 
-  /* ニューモーフィズムの土台と影 */
-  --color-neu: #f0f0f0;
-  --color-neu-ink: #333333;
-  --shadow-neu: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff;
-  --shadow-neu-sm: 3px 3px 6px #bebebe, -3px -3px 6px #ffffff;
-  --shadow-neu-lg: 7px 7px 14px #bebebe, -7px -7px 14px #ffffff;
-  --shadow-neu-inset: inset 3px 3px 6px #bebebe, inset -3px -3px 6px #ffffff;
+  /* ニューモーフィズムの土台と影。
+     値は --neu-lift = 1 のとき従来と完全に等価（calc 化しただけ）。 */
+  --color-neu: var(--neu-base);
+  --color-neu-ink: var(--neu-ink);
+  --shadow-neu:
+    calc(5px * var(--neu-lift, 1)) calc(5px * var(--neu-lift, 1))
+      calc(10px * var(--neu-lift, 1)) var(--neu-lo),
+    calc(-5px * var(--neu-lift, 1)) calc(-5px * var(--neu-lift, 1))
+      calc(10px * var(--neu-lift, 1)) var(--neu-hi);
+  --shadow-neu-sm:
+    calc(3px * var(--neu-lift, 1)) calc(3px * var(--neu-lift, 1))
+      calc(6px * var(--neu-lift, 1)) var(--neu-lo),
+    calc(-3px * var(--neu-lift, 1)) calc(-3px * var(--neu-lift, 1))
+      calc(6px * var(--neu-lift, 1)) var(--neu-hi);
+  --shadow-neu-lg:
+    calc(7px * var(--neu-lift, 1)) calc(7px * var(--neu-lift, 1))
+      calc(14px * var(--neu-lift, 1)) var(--neu-lo),
+    calc(-7px * var(--neu-lift, 1)) calc(-7px * var(--neu-lift, 1))
+      calc(14px * var(--neu-lift, 1)) var(--neu-hi);
+  --shadow-neu-inset:
+    inset calc(3px * var(--neu-lift, 1)) calc(3px * var(--neu-lift, 1))
+      calc(6px * var(--neu-lift, 1)) var(--neu-lo),
+    inset calc(-3px * var(--neu-lift, 1)) calc(-3px * var(--neu-lift, 1))
+      calc(6px * var(--neu-lift, 1)) var(--neu-hi);
 
   /* 強めの ease-out（標準カーブは弱い）。触覚モーションに使う。 */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  /* --ease-out の対。素材に吸い込まれる沈み込み用。 */
+  --ease-in-soft: cubic-bezier(0.4, 0, 1, 1);
 
-  /* ユニット代表色 */
-  --color-vs: #33ccbb;
-  --color-ln: #4455dd;
-  --color-mmj: #88dd44;
-  --color-vbs: #ee1166;
-  --color-wxs: #ff9900;
-  --color-n25: #884499;
+  /* 画面遷移専用の2本。触覚モーション(--ease-out)は「カチッ」を作るために
+     立ち上がりが鋭いが、遷移は逆に「時間をかけた」と感じさせたいので別物にする。 */
+  /* 溶けて消える: ゆっくり崩れ始め、最後に一気に持っていかれる。 */
+  --ease-melt: cubic-bezier(0.55, 0, 0.85, 0.35);
+  /* 素材から押し出されてくる: 動き出しに粘りがあり、長く減速して着地する。 */
+  --ease-emerge: cubic-bezier(0.5, 0, 0.15, 1);
+
+  /*
+   * ユニット代表色。暗所では明所の値をそのまま使えない —
+   * ln(#4455dd) と n25(#884499) は暗い面に載せると沈んで文字が読めなくなる。
+   * 明度だけ上げ、色相は動かさない（ユニットの同一性は色相が担っている）。
+   */
+  --color-vs: light-dark(#33ccbb, #45ddcc);
+  --color-ln: light-dark(#4455dd, #7b88f5);
+  --color-mmj: light-dark(#88dd44, #9ee85c);
+  --color-vbs: light-dark(#ee1166, #ff5b90);
+  --color-wxs: light-dark(#ff9900, #ffab33);
+  --color-n25: light-dark(#884499, #c07fd4);
 }
 
+
 :root {
-  color-scheme: light;
-  /* 既定テーマ色。各ページ/ツールが上書きする。 */
-  --unit-color: #667;
+  /*
+   * 既定は端末追随。テーマを明示的に選んだときだけ JS が data-theme を立て、
+   * color-scheme を固定する ＝ light-dark() の解決先が切り替わる。
+   * 変数の再定義は一切要らない（宣言が1箇所で済む理由）。
+   */
+  color-scheme: light dark;
+  /* 既定テーマ色。各ページ/ツールが上書きする（設定画面はこれを使い続ける
+     ＝どのユニットにも属さないシステムの画面であることを色で語る）。 */
+  --unit-color: light-dark(#667, #606a86);
   --member-color-01: #667;
   --member-color-02: #667;
   --member-color-03: #667;
   --member-color-04: #667;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/*
+ * Tailwind の slate は本文・補助テキストの階調としてアプリ全体で使っている。
+ * v4 のユーティリティは var(--color-slate-*) を参照するので、ここで暗所の値へ
+ * 差し替えるだけで全ページの文字が一斉に反転する（300箇所を書き換えない）。
+ * 暗い方が明るい、という向きに階段を組み替えているだけで、番号の意味
+ *（大きいほど強い/濃い）は保っている。
+ */
+:root {
+  --color-slate-950: light-dark(#020617, #f8fafc);
+  --color-slate-900: light-dark(#0f172a, #f1f5f9);
+  --color-slate-800: light-dark(#1e293b, #e2e8f0);
+  --color-slate-700: light-dark(#334155, #cbd5e1);
+  --color-slate-600: light-dark(#475569, #aab6c6);
+  --color-slate-500: light-dark(#64748b, #8e9bb0);
+  --color-slate-400: light-dark(#94a3b8, #6f7c90);
+  --color-slate-300: light-dark(#cbd5e1, #4a5364);
+  --color-slate-200: light-dark(#e2e8f0, #3a4250);
+  --color-slate-100: light-dark(#f1f5f9, #313845);
+}
+
+/*
+ * 状態色（警告・注意）。暗所では彩度の高い濃色が沈むので、文字色は明るく、
+ * 背景色は「淡い色面」ではなく「色を帯びた暗い面」に置き換える。
+ */
+:root {
+  --color-rose-600: light-dark(#e11d48, #ff6b8a);
+  --color-rose-500: light-dark(#f43f5e, #ff7d99);
+  --color-rose-50: light-dark(#fff1f2, #3a2129);
+  --color-amber-700: light-dark(#b45309, #f0b45f);
+  --color-amber-600: light-dark(#d97706, #f5c375);
+  --color-amber-400: light-dark(#fbbf24, #f8d38f);
+  --color-amber-100: light-dark(#fef3c7, #3d3320);
+  --color-amber-50: light-dark(#fffbeb, #332b1c);
+  --color-emerald-500: light-dark(#10b981, #34d399);
+  --color-teal-600: light-dark(#0d9488, #2dd4bf);
 }
 
 html,
@@ -62,7 +215,7 @@ body {
    * 触覚インタラクション。ニューモーフィズムの「押すとへこむ」物理感を出す。
    *  - ホバー: わずかに浮上（ポインタ環境のみ＝タッチ誤爆防止）
    *  - 押下: scale(0.97) で沈み込み、影を inset にして本当にへこませる
-   *  - transform 主体でGPU任せ。box-shadow の inset 切替は瞬時でも「カチッ」と気持ちよい
+   *  - transform 主体でGPU任せ。box-shadow の inset 切替は瞬時でも「カチッと」気持ちよい
    * scale は 0.95〜0.98 の範囲（Emil の指針）。100〜160ms。
    */
   .neu-tactile {
@@ -92,6 +245,41 @@ body {
     .neu-tactile:hover,
     .neu-tactile:active {
       transform: none;
+      transition: box-shadow 120ms ease;
+    }
+  }
+
+  /*
+   * ホバーで「そのカード自身の色に照らされる」。
+   *
+   * 光源は増やさない ── ニューモーフィズムは左上からの1つの光で出来ていて、
+   * 光が動いたり2つ目が生えたりした瞬間に素材が素材に見えなくなる。
+   * ここで色を付けるのは**影の側だけ**で、これは物理的には「カードの色が
+   * 落ちた影に回り込んでいる」に相当する。ハイライト側は白のまま
+   *（キーライトは白い光のまま、という宣言）。
+   *
+   * 色は --accent から取る。Hub のカードはツールのユニット色を入れている。
+   * 影の量は --neu-lift 込みなので、画面遷移で素材が沈むときは色付きの影も
+   * 一緒に潰れる（浮いたまま取り残されない）。
+   *
+   * ★ .neu-tactile:hover（灰色の -lg 影）と同specificity なので、必ずこの後に
+   *   置くこと。前に置くと灰色側が勝って何も起きない。
+   */
+  .neu-lit {
+    transition: box-shadow 220ms var(--ease-out);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .neu-lit:hover {
+      box-shadow:
+        calc(7px * var(--neu-lift, 1)) calc(7px * var(--neu-lift, 1))
+          calc(16px * var(--neu-lift, 1))
+          color-mix(in srgb, var(--accent, var(--unit-color)) 45%, var(--neu-lo)),
+        calc(-7px * var(--neu-lift, 1)) calc(-7px * var(--neu-lift, 1))
+          calc(14px * var(--neu-lift, 1)) var(--neu-hi);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .neu-lit {
       transition: box-shadow 120ms ease;
     }
   }
@@ -155,6 +343,22 @@ body {
       color-mix(in srgb, var(--unit-color) 90%, #000000)
     );
     box-shadow: var(--shadow-neu-sm), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  }
+
+  /*
+   * 選択中だけ太字にすると項目の幅が変わり、ページを移るたびにナビ全体が
+   * 左右にずれる。ずれをアニメーションで誤魔化すのではなく、常に太字ぶんの幅を
+   * 確保して**ずれ自体を無くす**。
+   * 高さ 0 のブロックを ::after に置くと、幅だけが太字の最大幅に張られる。
+   */
+  .nav-steady::after {
+    content: attr(data-label);
+    display: block;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+    font-weight: 700;
+    pointer-events: none;
   }
 
   /* ニューモーフィズムの浮き出しパネル */

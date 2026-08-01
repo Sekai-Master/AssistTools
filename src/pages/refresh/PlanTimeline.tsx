@@ -391,7 +391,7 @@ export function PlanTimeline({
                         </div>
                         <div
                           className="text-[10px]"
-                          style={{ color: pt.endPercent >= 100 ? "#e11d48" : "var(--unit-color)" }}
+                          style={{ color: pt.endPercent >= 100 ? "var(--color-rose-600)" : "var(--unit-color)" }}
                         >
                           ゲージ{pt.endPercent.toFixed(1)}%
                         </div>
@@ -400,7 +400,7 @@ export function PlanTimeline({
                       <>
                         <div
                           className="font-bold"
-                          style={{ color: pt.endPercent >= 100 ? "#e11d48" : "var(--unit-color)" }}
+                          style={{ color: pt.endPercent >= 100 ? "var(--color-rose-600)" : "var(--unit-color)" }}
                         >
                           {pt.endPercent.toFixed(1)}%
                         </div>

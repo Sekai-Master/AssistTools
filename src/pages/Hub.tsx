@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { TOOLS } from "../tools";
 
@@ -23,8 +24,11 @@ export function Hub() {
             const accent = `var(--color-${tool.unit})`;
             const card = (
               <div
-                className={`h-full neu-panel p-5 ${isReady ? "neu-tactile" : "opacity-60"}`}
-                style={{ borderTop: `4px solid ${accent}` }}
+                className={`h-full neu-panel p-5 ${
+                  isReady ? "neu-tactile neu-lit" : "opacity-60"
+                }`}
+                // --accent は .neu-lit がホバー時の影を染めるのに使う。
+                style={{ borderTop: `4px solid ${accent}`, "--accent": accent } as CSSProperties}
               >
                 <span
                   className="material-icons text-3xl"

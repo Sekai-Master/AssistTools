@@ -14,6 +14,15 @@ export interface ToolDef {
   /** ユニット色キー。Hubカードのアクセントと各ツールページの基調色を一致させる。 */
   unit: string;
   status: "ready" | "coming_soon";
+  /**
+   * ヘッダーの横並びに出すか。
+   *
+   * ★ 全ツールを等しく並べるのは「全部同じ重要度」と宣言することになるし、
+   *   実際 9 個は 1400px でも詰まる。ここに入れるのは 4 つまで。
+   *   それ以外はヘッダーの「すべて」→ ハブか、モバイルメニューから辿る。
+   *   増やしたくなったら、増やす前にどれを降ろすかを決めること。
+   */
+  primary?: boolean;
 }
 
 export const TOOLS: ToolDef[] = [
@@ -26,6 +35,7 @@ export const TOOLS: ToolDef[] = [
     icon: "campaign",
     unit: "vs",
     status: "ready",
+    primary: true,
   },
   {
     id: "evc",
@@ -46,6 +56,7 @@ export const TOOLS: ToolDef[] = [
     icon: "analytics",
     unit: "mmj",
     status: "ready",
+    primary: true,
   },
   {
     id: "bingo",
@@ -86,6 +97,7 @@ export const TOOLS: ToolDef[] = [
     icon: "event_note",
     unit: "vs",
     status: "ready",
+    primary: true,
   },
   {
     id: "ranking",
@@ -97,6 +109,7 @@ export const TOOLS: ToolDef[] = [
     icon: "leaderboard",
     unit: "ln",
     status: "ready",
+    primary: true,
   },
   {
     id: "efficiency",
@@ -111,3 +124,8 @@ export const TOOLS: ToolDef[] = [
 ];
 
 export const READY_TOOLS = TOOLS.filter((t) => t.status === "ready");
+/**
+ * ヘッダーの横並びに出すツール。4つまで（ToolDef.primary のコメント参照）。
+ * ヘッダーは実際にはこれ＋現在地を出すので、組み立ては Layout 側で行う。
+ */
+export const PRIMARY_TOOLS = READY_TOOLS.filter((t) => t.primary);

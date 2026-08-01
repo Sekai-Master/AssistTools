@@ -11,6 +11,20 @@
     <meta property="og:title" content="Sekai-Master" />
     <meta property="og:description" content="プロセカをより楽しむためのツール集" />
     <meta property="og:image" content="/images/icon.png" />
+    <!--
+      テーマだけは CSS より先に確定させる。main.tsx は module なので CSS の後に
+      走り、明示的にライト/ダークを選んでいる人は一瞬だけ端末側の配色が見える。
+      ここで html[data-theme] を立てておけば最初の描画から正しい配色になる。
+      ★ キー文字列は src/lib/theme.ts と同じもの。変えるなら両方。
+    -->
+    <script>
+      try {
+        var t = localStorage.getItem("sekaimaster:theme:v1");
+        if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      } catch (e) {
+        /* プライベートモード等。既定（端末追随）のままでよい */
+      }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

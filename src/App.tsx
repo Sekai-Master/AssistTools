@@ -1,43 +1,38 @@
-import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
+import { RouteStage } from "./components/RouteStage";
+import { RoutePages } from "./motion/routes";
 import { Hub } from "./pages/Hub";
 import { NotFound } from "./pages/NotFound";
+// 設定は数百バイトで、かつ「演出が重いから切りたい」人が最短で辿り着くべき画面。
+// 遅延ロードで待たせるのは本末転倒なので lazy にしない。
+import { SettingsPage } from "./pages/settings/SettingsPage";
 
 // 各ツールは重い（データや計算を抱える）ので遅延ロードし、ハブの初期表示を軽くする。
-const TweetGenerator = lazy(() => import("./pages/tweet/TweetGenerator"));
-const EffectiveValueCalculator = lazy(
-  () => import("./pages/evc/EffectiveValueCalculator")
-);
-const PointAnalyzer = lazy(() => import("./pages/analyzer/PointAnalyzer"));
-const BingoGenerator = lazy(() => import("./pages/bingo/BingoGenerator"));
-const RefreshGaugeCalculator = lazy(() => import("./pages/refresh/RefreshGaugeCalculator"));
-const PlanPage = lazy(() => import("./pages/refresh/PlanPage"));
-const WorkTimeCalculator = lazy(() => import("./pages/worktime/WorkTimeCalculator"));
-const EfficiencyRanking = lazy(() => import("./pages/ranking/EfficiencyRanking"));
-
-function PageFallback() {
-  return <div className="p-8 text-center text-slate-500">読み込み中…</div>;
-}
+// 定義は motion/routes.ts に集約している（先読みと同じ import 関数を共有するため）。
 
 export function App() {
   return (
     <BrowserRouter>
       <Layout>
-        <Suspense fallback={<PageFallback />}>
-          <Routes>
-            <Route path="/" element={<Hub />} />
-            <Route path="/tweet" element={<TweetGenerator />} />
-            <Route path="/evc" element={<EffectiveValueCalculator />} />
-            <Route path="/analyzer" element={<PointAnalyzer />} />
-            <Route path="/bingo" element={<BingoGenerator />} />
-            <Route path="/refresh" element={<RefreshGaugeCalculator />} />
-            <Route path="/plan" element={<PlanPage />} />
-            <Route path="/worktime" element={<WorkTimeCalculator />} />
-            <Route path="/ranking" element={<EfficiencyRanking />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Suspense>
+        {/* 描画する location は RouteStage が握り、Routes へ明示的に渡す。 */}
+        <RouteStage>
+          {(loc) => (
+            <Routes location={loc}>
+              <Route path="/" element={<Hub />} />
+              <Route path="/tweet" element={<RoutePages.tweet />} />
+              <Route path="/evc" element={<RoutePages.evc />} />
+              <Route path="/analyzer" element={<RoutePages.analyzer />} />
+              <Route path="/bingo" element={<RoutePages.bingo />} />
+              <Route path="/refresh" element={<RoutePages.refresh />} />
+              <Route path="/plan" element={<RoutePages.plan />} />
+              <Route path="/worktime" element={<RoutePages.worktime />} />
+              <Route path="/ranking" element={<RoutePages.ranking />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          )}
+        </RouteStage>
       </Layout>
     </BrowserRouter>
   );

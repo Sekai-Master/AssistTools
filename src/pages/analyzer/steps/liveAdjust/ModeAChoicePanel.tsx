@@ -238,11 +238,10 @@ export function ModeAChoicePanel({
   return (
     <div className="space-y-4">
       <p className="rounded-xl bg-neu p-3 text-xs text-slate-500 shadow-neu-inset">
-        サポート編成・メンバーの入れ替えで合計ボーナスを候補の値ちょうどに合わせます（0.5%刻み）。
+        端数1回分の編成（ボーナス）を選んでください（バルク回数は自動）。
         <span className="font-bold text-amber-600">
-          どのボーナスが実際に組めるかはこのツールでは判定できません。
+          組めるボーナスかはツールでは判定できません。
         </span>
-        組める端数編成（1回分）を選んでください。現在の編成でのバルク回数は自動で決まります。
       </p>
 
       <AdoptedChoiceCard choice={selected} />

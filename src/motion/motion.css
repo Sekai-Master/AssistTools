@@ -1,0 +1,296 @@
+/*
+ * 画面遷移の振り付け。
+ *
+ * duration の正本は TS(MotionPlan)。html の --stage-sink / --stage-rise に
+ * 流し込まれるので、ここには ms を1つも書かない（TS と CSS の二重管理をしない）。
+ *
+ * ★ keyframes ではなく transition を使う。
+ *   keyframes は 0% の値がリテラルなので、浮上(rise)の途中で次のページへ移ると
+ *   --neu-lift が補間途中の値（例 0.58）から 1.0 へ跳ね上がってから沈み直す
+ *   ＝画面全体が一瞬フル輝度・フル影になるストロボが出る（実測で確認）。
+ *   transition は「現在の計算値」から次の値へ向かうので、割り込まれても連続する。
+ *
+ * ★ transform は1箇所も使わない（.stage-wait のつまみだけは例外で、これは
+ *   ステージの外の小さな固定要素）。.stage に transform が乗ると position:fixed の
+ *   包含ブロックが .stage へ切り替わり、TweetGenerator のモバイル常設アクションバー
+ *   や、ポータルを使っていないページ内モーダルの位置が壊れる。
+ *   opacity は包含ブロックを変えないので安全。
+ *
+ * ★ isolation / stacking context も作らない。常設のスタッキングコンテキストを
+ *   作ると、上記モーダル(z-50)が Layout の sticky ヘッダー(z-40)の下に潜る。
+ */
+
+.stage {
+  outline: none;
+}
+
+/* =====================================================================
+ * リッチ: 沈む → 無地で待つ → 浮く
+ *
+ * 2つの層が別々の時間で動く。
+ *
+ *   素材そのもの（html の --neu-lift）  … 一枚の面として沈み、一枚の面として戻る。
+ *                                        影を持つ全要素が同時に潰れる。カスケードしない。
+ *   ブロック（[data-div]）              … 色 → 輪郭 → 存在 の順に溶け、逆順で戻る。
+ *                                        こちらだけが順番にずれて走る。
+ *
+ * 順番は divisions.ts が --div-t（0=ページ先頭 / 1=末尾）として書き込む。
+ * 沈みは (1 - t) を使って**下から上へ**、浮上は t のまま**上から下へ**。
+ * 波が上がってから下りてくる1つの息継ぎになり、視線のある上端では
+ * 「最後に消えた場所から最初に戻ってくる」ので連続して見える。
+ * ===================================================================== */
+
+/* --- 素材の呼吸（カスケードしない層）--- */
+
+html[data-motion="rich"][data-stage="sink"] {
+  --neu-lift: 0;
+  transition: --neu-lift var(--stage-sink-total) var(--ease-melt);
+}
+html[data-motion="rich"][data-stage="blank"] {
+  --neu-lift: 0;
+  transition: none;
+}
+html[data-motion="rich"][data-stage="rise"] {
+  --neu-lift: 1;
+  transition: --neu-lift var(--stage-rise-total) var(--ease-emerge);
+}
+
+/* 沈んでいる間はクリックを通さない（見えていても行き先はもう決まっている）。 */
+html[data-motion="rich"]:is([data-stage="sink"], [data-stage="blank"]) .stage {
+  pointer-events: none;
+}
+
+/* --- ブロックが取れなかったページ（空ページ等）の退避路 --- */
+/* ステージごとフェードする従来の振り付け。印が付いた中身だけ消えて残りが
+   居残る、という半端な絵を作らないための保険。 */
+html[data-motion="rich"][data-divs="off"][data-stage="sink"] .stage {
+  opacity: 0;
+  transition: opacity calc(var(--stage-sink) * 0.6) var(--ease-melt)
+    calc(var(--stage-sink) * 0.4);
+}
+html[data-motion="rich"][data-divs="off"][data-stage="rise"] .stage {
+  opacity: 1;
+  transition: opacity calc(var(--stage-rise) * 0.55) var(--ease-emerge);
+}
+
+/* 無地: 中身は必ず消えている。印の無い取りこぼしもここで確実に隠れる。 */
+html[data-motion="rich"][data-stage="blank"] .stage {
+  opacity: 0;
+  transition: none;
+}
+/* 浮上に入った瞬間、ステージの箱は即座に戻す。以降の見え方は
+   ブロック側の opacity が担当する（二重フェードにしない）。 */
+html[data-motion="rich"][data-divs="on"][data-stage="rise"] .stage {
+  opacity: 1;
+  transition: none;
+}
+
+/* --- ブロック（カスケードする層）--- */
+
+/*
+ * ★ filter を「遷移中だけ」宣言する。常設すると position:fixed の包含ブロックが
+ *   このブロックへ切り替わり、ページ内モーダル（fixed inset-0・ポータル未使用）が
+ *   ブロック基準の座標に飛ぶ。idle では宣言ごと消えるので静止時の影響はゼロ。
+ *   遷移中にモーダルが開いている場合だけは避けようがないので、そのときは
+ *   html[data-overlay] でカスケード自体を降ろす（下の退避規則）。
+ *
+ * ★ blur と saturate を1つの filter に同居させつつ別々の時間で動かすために、
+ *   量を @property 済みのカスタムプロパティに逃がしてある（index.css）。
+ *   filter そのものは1プロパティなので、直接書くと色と輪郭を別々に動かせない。
+ */
+/* ★ near だけ。画面外のブロックはぼかさない＝ぼかす面積を1画面ぶんに抑える。
+   どうせ見えないので、消える・現れるだけで足りる。 */
+html[data-motion="rich"][data-divs="on"]:not([data-stage="idle"]) [data-div="near"] {
+  filter: blur(var(--div-blur)) saturate(var(--div-sat));
+}
+/* カスケードの遅延。沈みは (1 - t) で下から上へ、浮上は t のまま上から下へ。 */
+html[data-motion="rich"][data-divs="on"]:not([data-stage="idle"]) [data-div] {
+  --div-out: calc((1 - var(--div-t, 0)) * var(--stage-sink-cascade));
+  --div-in: calc(var(--div-t, 0) * var(--stage-rise-cascade));
+}
+
+/* 沈み: 色が抜ける → 輪郭がぼやける → 存在が消える。
+   色は真っ先に、しかも短く抜く（素材に還る）。opacity は尺の 40% 待ってから
+   動き出すので、「色を失ってぼやけた灰色の塊」を必ず一度経由する。 */
+html[data-motion="rich"][data-divs="on"][data-stage="sink"] [data-div] {
+  opacity: 0;
+  --div-blur: var(--stage-blur);
+  --div-sat: 0.05;
+  transition:
+    --div-sat calc(var(--stage-sink) * 0.45) linear var(--div-out),
+    --div-blur var(--stage-sink) var(--ease-melt) var(--div-out),
+    opacity calc(var(--stage-sink) * 0.6) var(--ease-melt)
+      calc(var(--div-out) + var(--stage-sink) * 0.4);
+}
+
+/* 無地: 沈みで到達済みの値をそのまま保持する（ここでの確定は瞬時）。 */
+html[data-motion="rich"][data-divs="on"][data-stage="blank"] [data-div] {
+  opacity: 0;
+  --div-blur: var(--stage-blur);
+  --div-sat: 0.05;
+  transition: none;
+}
+
+/* 浮上: 存在が戻る → 像を結ぶ → 最後に色が戻る。
+   色だけ尺の後半に置いてあるので、灰色の浮き彫りとして現れたブロックに
+   あとから色が染み込む。沈みと厳密に逆順。 */
+html[data-motion="rich"][data-divs="on"][data-stage="rise"] [data-div] {
+  opacity: 1;
+  --div-blur: 0px;
+  --div-sat: 1;
+  transition:
+    opacity calc(var(--stage-rise) * 0.55) var(--ease-emerge) var(--div-in),
+    --div-blur var(--stage-rise) var(--ease-emerge) var(--div-in),
+    --div-sat calc(var(--stage-rise) * 0.5) linear
+      calc(var(--div-in) + var(--stage-rise) * 0.5);
+}
+
+/*
+ * モーダルが開いたまま遷移した場合の退避。filter の包含ブロック切り替えで
+ * fixed のモーダルが飛ぶので、ブロック演出を降ろしてステージごとのフェードに戻す。
+ * （SongSearchModal / PlanListModal が data-overlay を付ける）
+ */
+html[data-motion="rich"][data-divs="on"]:has([data-overlay]) [data-div] {
+  filter: none;
+  /* ブロック側の振り付けを完全に降ろす。降ろさないとステージのフェードと
+     二重にかかって、モーダルだけ先に薄くなる不自然な絵になる。 */
+  opacity: 1;
+  transition: none;
+}
+html[data-motion="rich"][data-divs="on"]:has([data-overlay])[data-stage="sink"] .stage {
+  opacity: 0;
+  transition: opacity calc(var(--stage-sink) * 0.6) var(--ease-melt);
+}
+html[data-motion="rich"][data-divs="on"]:has([data-overlay])[data-stage="rise"] .stage {
+  opacity: 1;
+  transition: opacity calc(var(--stage-rise) * 0.55) var(--ease-emerge);
+}
+
+/* ===== 控えめ: 沈まない。新しいページの影だけが育つ ===== */
+
+/* 中身は消さない（opacity を一切触らない）。だから「沈まない」と説明できる。
+   影だけ瞬時に 0 にしてから、浮上で育てる。 */
+html[data-motion="subtle"][data-stage="blank"] {
+  --neu-lift: 0;
+  transition: none;
+}
+html[data-motion="subtle"][data-stage="rise"] {
+  --neu-lift: 1;
+  transition: --neu-lift var(--stage-rise) var(--ease-out);
+}
+
+/* オフはどのフェーズにも規則を置かない。前ページを出したまま、操作可能な
+   まま新しい木を待つ。inert も pointer-events:none も付けない
+   ＝「見えているのにタップが効かない」状態を作らない。 */
+
+/*
+ * 遷移中は .neu-tactile / .neu-cta の box-shadow トランジション(140ms)を止める。
+ * 止めないと、ステージ外にあるヘッダーのロゴや設定ボタンだけが本体の沈み・浮きに
+ * 140ms 遅れて追随し、沈み込みの途中で逆方向へ動く瞬間まで出る（実測で確認）。
+ */
+html:not([data-stage="idle"]) .neu-tactile,
+html:not([data-stage="idle"]) .neu-lit,
+html:not([data-stage="idle"]) .neu-cta {
+  transition: none;
+}
+
+/*
+ * 待たされているときのインジケータ。溝の中をつまみが往復する＝この製品が既に
+ * 持っている語彙（.seg-thumb と同じ）。汎用スピナーは使わない。
+ * 装飾ではなく機能フィードバックなので「オフ」でも出る。
+ *
+ * ★ ここだけ影をリテラルで書く。無地の間は --shadow-neu* が意図的に 0 へ潰れて
+ *   いるので、トークンを使うと見えなくなる。
+ */
+.stage-wait {
+  position: fixed;
+  left: 50%;
+  top: 42%;
+  z-index: 30;
+  margin-left: -60px;
+  width: 120px;
+  height: 10px;
+  padding: 2px;
+  border-radius: 999px;
+  background-color: var(--neu-base);
+  box-shadow:
+    inset 2px 2px 4px var(--neu-lo),
+    inset -2px -2px 4px var(--neu-hi);
+  opacity: 0;
+  pointer-events: none;
+  animation: stage-hint 200ms var(--ease-out) 120ms forwards;
+}
+.stage-wait::after {
+  content: "";
+  display: block;
+  width: 36px;
+  height: 6px;
+  border-radius: 999px;
+  /* ステージ外なのでページのユニット色は届かない。ここは意図的に中立色。 */
+  background-color: light-dark(#9aa, #7c8496);
+  box-shadow:
+    1px 1px 2px var(--neu-lo),
+    -1px -1px 2px var(--neu-hi);
+  animation: stage-wait-slide 1400ms var(--ease-out) infinite;
+}
+@keyframes stage-hint {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes stage-wait-slide {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(76px);
+  }
+}
+
+/*
+ * 直リンク/リロードのときだけ出る本物の Suspense fallback。
+ * 最初は文字なしの無地面で、450ms 経ってから文言が出る（速い回線では文言を
+ * 見ずに終わる）。fallback が「無地に戻った状態」と同じ見た目なので、
+ * 無地→fallback→無地 の差が視覚的に存在しない。
+ */
+.stage-fallback {
+  min-height: 60svh;
+  display: grid;
+  place-items: center;
+  font-size: 0.875rem;
+  color: light-dark(#6b6b75, #9aa1ae);
+  opacity: 0;
+  animation: stage-hint 200ms var(--ease-out) 450ms forwards;
+}
+
+/* 無地の間もトークンが潰れない固定影。失敗カードなど「常に浮いていてほしい」もの用。 */
+.neu-static {
+  background-color: var(--neu-base);
+  border-radius: 1rem;
+  box-shadow:
+    5px 5px 10px var(--neu-lo),
+    -5px -5px 10px var(--neu-hi);
+}
+/* 失敗カードのボタンもトークン由来の影だと、まさに出したい無地の場面で
+   平らになってしまう。ここだけリテラルで浮かせる。 */
+.neu-static .neu-cta {
+  box-shadow:
+    5px 5px 10px var(--neu-lo),
+    -5px -5px 10px var(--neu-hi),
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.45);
+}
+
+/*
+ * ローディングインジケータは「装飾」ではなく「機能フィードバック」なので、
+ * 既存の .neu-tactile / .neu-cta と同じく OS の設定を絶対とする。
+ * 遷移演出（＝装飾）は設定画面での明示選択が OS より優先される、という
+ * 非対称は意図的。線引きは docs/porting/design.md に記載。
+ */
+@media (prefers-reduced-motion: reduce) {
+  .stage-wait::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.55;
+  }
+}
