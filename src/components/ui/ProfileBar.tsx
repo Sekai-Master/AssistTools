@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { NeuButton } from "./NeuButton";
-import { NeuInput } from "./NeuInput";
 import {
   formatProfileText,
   getActiveId,
-  parseProfileText,
   setActiveProfile,
   updateProfile,
   useActiveProfile,
@@ -20,37 +18,16 @@ import {
  * ★ ここが無いと、編成を変えるたびに設定へ往復することになる。それでは
  *   「同じ数字を打ち直す」を「ページを往復する」に置き換えただけになってしまう。
  *
+ * ★ 逆向き（いまの入力を編成へ保存する）はここに置かない。**その値を打っている場所の
+ *   すぐ隣**に無いと、何が保存されるのか分からないため（SaveToProfile を入力欄の近くに置く）。
+ *
  * @param apply 選ばれている編成をツールの入力へ流し込む。押されたときだけ呼ぶ
  *              （勝手に上書きしない ── 手で直した値を黙って消さないため）。
- * @param collect いまツールに入っている値。「編成に取り込む」で保存する。
  */
-export function ProfileBar({
-  apply,
-  collect,
-}: {
-  apply: (p: Profile) => void;
-  collect?: () => Partial<Profile>;
-}) {
+export function ProfileBar({ apply }: { apply: (p: Profile) => void }) {
   const profiles = useProfiles();
   const active = useActiveProfile();
-  const [pasting, setPasting] = useState(false);
-  const [text, setText] = useState("");
-  const [notice, setNotice] = useState<string | null>(null);
-
-  const say = (m: string) => {
-    setNotice(m);
-    setTimeout(() => setNotice(null), 2200);
-  };
-
-  const paste = () => {
-    const parsed = parseProfileText(text);
-    if (!parsed) return say("読み取れませんでした（例: 150/710/31.3）");
-    apply({ id: "", name: "", order: 0, ...parsed });
-    if (active) updateProfile(active.id, parsed);
-    setText("");
-    setPasting(false);
-    say("入力に反映しました");
-  };
+  const [notice] = useState<string | null>(null);
 
   if (profiles.length === 0) {
     return (
@@ -88,37 +65,6 @@ export function ProfileBar({
       <NeuButton className="!px-3 !py-1" onClick={() => active && apply(active)}>
         入力に反映
       </NeuButton>
-      {collect && active && (
-        <NeuButton
-          className="!px-3 !py-1"
-          onClick={() => {
-            updateProfile(active.id, collect());
-            say(`「${active.name}」に取り込みました`);
-          }}
-        >
-          編成に取り込む
-        </NeuButton>
-      )}
-      <NeuButton className="!px-3 !py-1" onClick={() => setPasting((v) => !v)}>
-        貼り付け
-      </NeuButton>
-
-      {pasting && (
-        <div className="flex w-full items-center gap-2">
-          <NeuInput
-            autoFocus
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && paste()}
-            placeholder="150/710/31.3/170%"
-            aria-label="内部値を貼り付け"
-          />
-          <NeuButton className="!px-3 !py-1" onClick={paste}>
-            反映
-          </NeuButton>
-        </div>
-      )}
-
       {/* 押した結果を必ず言葉で返す。黙って値が変わると何が起きたか分からない。 */}
       {notice && (
         <span role="status" className="text-xs text-slate-600">
@@ -126,5 +72,34 @@ export function ProfileBar({
         </span>
       )}
     </div>
+  );
+}
+
+/**
+ * いまの入力を編成へ保存するボタン。**値を打っている場所のすぐ隣に置く。**
+ *
+ * ページ上部の切り替えバーに混ぜていたが、「何が保存されるのか」が入力欄から
+ * 離れていて読めなかった（Nori 指摘 2026-08-01）。取り込む対象の近くに置く。
+ */
+export function SaveToProfile({ collect }: { collect: () => Partial<Profile> }) {
+  const active = useActiveProfile();
+  const [done, setDone] = useState(false);
+  if (!active) return null;
+  return (
+    <span className="inline-flex items-center gap-2">
+      <NeuButton
+        className="!px-3 !py-1"
+        onClick={() => {
+          updateProfile(active.id, collect());
+          setDone(true);
+          setTimeout(() => setDone(false), 2200);
+        }}
+      >
+        編成に取り込む
+      </NeuButton>
+      <span role="status" className="text-xs text-slate-500">
+        {done ? `「${active.name}」に保存しました` : `保存先: ${active.name}`}
+      </span>
+    </span>
   );
 }

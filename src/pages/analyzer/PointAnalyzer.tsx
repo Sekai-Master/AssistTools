@@ -26,7 +26,7 @@ import { LastPlaySettings } from "./steps/LastPlaySettings";
 import { PlanExportPanel } from "./steps/PlanExportPanel";
 import type { Adopted, Step2Mode } from "./steps/liveAdjust/types";
 import { JACKET_BASE } from "./assetPaths";
-import { ProfileBar } from "../../components/ui/ProfileBar";
+import { ProfileBar, SaveToProfile } from "../../components/ui/ProfileBar";
 import { numOrUndef } from "../../lib/num";
 
 /**
@@ -266,7 +266,6 @@ export default function PointAnalyzer() {
           if (p.power != null) setTalent(String(p.power));
           if (p.bonus != null) setBonus(String(p.bonus));
         }}
-        collect={() => ({ power: numOrUndef(talent), bonus: numOrUndef(bonus) })}
       />
       {dataError && (
         <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
@@ -321,6 +320,12 @@ export default function PointAnalyzer() {
               placeholder="例: 250.5"
             />
           </Field>
+
+          {/* 保存は「その値を打っている場所」の隣に置く。上部のバーに混ぜると
+              何が保存されるのか読めない。 */}
+          <SaveToProfile
+            collect={() => ({ power: numOrUndef(talent), bonus: numOrUndef(bonus) })}
+          />
           <Field
             label="スコア上限（詳細設定）"
             htmlFor="pa-max-score"

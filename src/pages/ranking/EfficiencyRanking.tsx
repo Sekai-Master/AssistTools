@@ -21,7 +21,7 @@ import {
   type RankingMode,
   type EfficiencyParams,
 } from "./lib/efficiency";
-import { ProfileBar } from "../../components/ui/ProfileBar";
+import { ProfileBar, SaveToProfile } from "../../components/ui/ProfileBar";
 import { numOrUndef } from "../../lib/num";
 import { Delta } from "../../components/ui/Delta";
 import { useFlip } from "../../lib/useFlip";
@@ -82,8 +82,24 @@ function hhmm(totalSec: number): string {
 }
 
 /** 譜面レベルの取りうる範囲。上限が伸びてもフィルタが取りこぼさないよう広めに取る。 */
-const LEVEL_MIN = 1;
-const LEVEL_MAX = 40;
+/**
+ * 譜面レベルの取りうる範囲。
+ *
+ * ★ 固定値ではなく実データから出す。1〜40 と決め打ちしていたが、実際に存在するのは
+ *   5〜38 で、両端に「選べるのに1曲も無い」レベルがぶら下がっていた。
+ *   新しい譜面で上限が伸びても自動で追随する。
+ */
+function levelBounds(entries: { playLevel?: number | null }[]): { min: number; max: number } {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const e of entries) {
+    if (typeof e.playLevel !== "number") continue;
+    if (e.playLevel < min) min = e.playLevel;
+    if (e.playLevel > max) max = e.playLevel;
+  }
+  // データが読めていないあいだの見た目が壊れないよう、素直な既定へ落とす。
+  return Number.isFinite(min) ? { min, max } : { min: 1, max: 40 };
+}
 
 interface Stored {
   v?: number;
@@ -119,7 +135,7 @@ function loadStored(): Stored {
         ? s.taki
         : undefined;
     const lv = (v: unknown) =>
-      typeof v === "number" && Number.isInteger(v) && v >= LEVEL_MIN && v <= LEVEL_MAX
+      typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 99
         ? v
         : undefined;
     return {
@@ -190,12 +206,16 @@ function LevelInput({
   value,
   onChange,
   label,
+  min,
+  max,
 }: {
   value: number;
   onChange: (v: number) => void;
   label: string;
+  min: number;
+  max: number;
 }) {
-  const clamp = (v: number) => Math.max(LEVEL_MIN, Math.min(LEVEL_MAX, v));
+  const clamp = (v: number) => Math.max(min, Math.min(max, v));
   const btn =
     "neu-raised neu-tactile flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 disabled:opacity-40";
   return (
@@ -203,7 +223,7 @@ function LevelInput({
       <button
         type="button"
         className={btn}
-        disabled={value <= LEVEL_MIN}
+        disabled={value <= min}
         onClick={() => onChange(clamp(value - 1))}
         aria-label={`${label}を下げる`}
       >
@@ -212,14 +232,14 @@ function LevelInput({
       <input
         inputMode="numeric"
         value={String(value)}
-        onChange={(e) => onChange(clamp(Math.floor(Number(e.target.value) || LEVEL_MIN)))}
+        onChange={(e) => onChange(clamp(Math.floor(Number(e.target.value) || min)))}
         className="w-10 rounded-lg bg-neu px-1 py-1 text-center tabular-nums text-slate-800 shadow-neu-inset outline-none"
         aria-label={`譜面レベルの${label}`}
       />
       <button
         type="button"
         className={btn}
-        disabled={value >= LEVEL_MAX}
+        disabled={value >= max}
         onClick={() => onChange(clamp(value + 1))}
         aria-label={`${label}を上げる`}
       >
@@ -278,8 +298,9 @@ export default function EfficiencyRanking() {
   );
   const [overhead, setOverhead] = useState(stored.overhead ?? String(DEFAULT_PARAMS.overheadSec));
   const [plays, setPlays] = useState(stored.plays ?? "100");
-  const [lvMin, setLvMin] = useState(stored.lvMin ?? LEVEL_MIN);
-  const [lvMax, setLvMax] = useState(stored.lvMax ?? LEVEL_MAX);
+  // 未保存なら「全部」= データの両端。読み込み前は 0/99 にして誰も弾かない。
+  const [lvMin, setLvMin] = useState(stored.lvMin ?? 0);
+  const [lvMax, setLvMax] = useState(stored.lvMax ?? 99);
 
   // 入力は毎回同じものを打ち直させない。次回開いたときの初期値にする。
   const persist = (patch: Stored) => {
@@ -307,9 +328,11 @@ export default function EfficiencyRanking() {
     };
   }, [custom, power, bonus, taki, skillLeader, skillTotal, overhead]);
 
+  // 選べるレベルは実データの範囲に合わせる（決め打ちの 1〜40 だと両端が空になる）。
+  const levels = useMemo(() => levelBounds(entries), [entries]);
   // 入力の前後がひっくり返っていても素直に受ける（下限>上限で空表にしない）。
   const [loLv, hiLv] = lvMin <= lvMax ? [lvMin, lvMax] : [lvMax, lvMin];
-  const levelFiltered = loLv > LEVEL_MIN || hiLv < LEVEL_MAX;
+  const levelFiltered = loLv > levels.min || hiLv < levels.max;
 
   const ranked = useMemo(() => {
     if (diffs.size === 0) return [];
@@ -358,13 +381,6 @@ export default function EfficiencyRanking() {
           if (p.taki != null) setTaki(p.taki);
           setCustom(true);
         }}
-        collect={() => ({
-          power: numOrUndef(power),
-          bonus: numOrUndef(bonus),
-          skillLeader: numOrUndef(skillLeader),
-          skillTotal: numOrUndef(skillTotal),
-          taki,
-        })}
       />
       <Panel>
         <SegmentedControl options={MODE_OPTIONS} value={mode} onChange={setMode} />
@@ -404,6 +420,8 @@ export default function EfficiencyRanking() {
               persist({ lvMin: v });
             }}
             label="下限"
+            min={levels.min}
+            max={levels.max}
           />
           <span className="text-slate-400">〜</span>
           <LevelInput
@@ -413,14 +431,16 @@ export default function EfficiencyRanking() {
               persist({ lvMax: v });
             }}
             label="上限"
+            min={levels.min}
+            max={levels.max}
           />
           {levelFiltered && (
             <NeuButton
               className="px-3 py-1.5 text-xs"
               onClick={() => {
-                setLvMin(LEVEL_MIN);
-                setLvMax(LEVEL_MAX);
-                persist({ lvMin: LEVEL_MIN, lvMax: LEVEL_MAX });
+                setLvMin(levels.min);
+                setLvMax(levels.max);
+                persist({ lvMin: levels.min, lvMax: levels.max });
               }}
             >
               解除
@@ -612,6 +632,19 @@ export default function EfficiencyRanking() {
           }}
           label="自分の条件で計算する"
         />
+        {custom && (
+          <div className="mt-4">
+            <SaveToProfile
+              collect={() => ({
+                power: numOrUndef(power),
+                bonus: numOrUndef(bonus),
+                skillLeader: numOrUndef(skillLeader),
+                skillTotal: numOrUndef(skillTotal),
+                taki,
+              })}
+            />
+          </div>
+        )}
 
         {custom && (
           <>
