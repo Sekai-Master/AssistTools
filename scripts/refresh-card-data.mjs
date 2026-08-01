@@ -33,6 +33,8 @@ const SOURCES = {
   characterRanks: "characterRanks.json",
   areaItemLevels: "areaItemLevels.json",
   gameCharacterUnits: "gameCharacterUnits.json",
+  mysekaiGates: "mysekaiGates.json",
+  mysekaiGateLevels: "mysekaiGateLevels.json",
 };
 
 async function fetchJson(file) {
@@ -93,6 +95,7 @@ async function main() {
       canvasBonuses: out.canvasBonuses,
       characterRanks: out.characterRanks,
       areaItems: out.areaItems,
+      gates: out.gates,
     },
   };
   for (const [name, data] of Object.entries(files)) {

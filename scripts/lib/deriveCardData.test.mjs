@@ -48,6 +48,18 @@ const src = () => ({
   characterRanks: [{ characterId: 1, characterRank: 100, power1BonusRate: 3 }],
   areaItemLevels: [
     { areaItemId: 5, level: 20, targetUnit: "light_sound", targetCardAttr: "cute", power1BonusRate: 10, power1AllMatchBonusRate: 20 },
+    // キャラ別の効果（26種）。targetGameCharacterId を落とすと丸ごと消える。
+    { areaItemId: 1, level: 3, targetUnit: "any", targetCardAttr: "any", targetGameCharacterId: 21, power1BonusRate: 6, power1AllMatchBonusRate: 6 },
+  ],
+  mysekaiGates: [
+    { id: 1, unit: "light_sound", name: "ゲート1" },
+    { id: 2, unit: "idol", name: "ゲート2" },
+  ],
+  mysekaiGateLevels: [
+    // わざと順番を崩す（level 順に並べ直せているかを見る）
+    { mysekaiGateId: 1, level: 2, powerBonusRate: 0.20000000298023224 },
+    { mysekaiGateId: 1, level: 1, powerBonusRate: 0.10000000149011612 },
+    { mysekaiGateId: 2, level: 1, powerBonusRate: 0.10000000149011612 },
   ],
 });
 
@@ -115,7 +127,28 @@ describe("未公開データの遮断", () => {
     expect(out.cardBonuses[0]).toMatchObject({ cardId: 1, eventId: 10, rate: 30 });
     expect(out.rarityBonuses).toHaveLength(1);
     expect(out.masterBonuses).toHaveLength(1);
-    expect(out.areaItems).toHaveLength(1);
+    expect(out.areaItems).toHaveLength(2);
+  });
+});
+
+describe("総合力に要る欄", () => {
+  const out = derive(src(), NOW);
+
+  // ★ 一度落として、キャラクター効果26種が丸ごと消えた欄。
+  it("エリアアイテムのキャラ指定（ch）が残っている", () => {
+    expect(out.areaItems.find((a) => a.itemId === 1)).toMatchObject({ ch: 21, level: 3 });
+  });
+
+  it("ゲートはユニットごとに、率をレベル順の配列で持つ（rates[0] が Lv1）", () => {
+    expect(out.gates).toEqual([
+      { id: 1, unit: "light_sound", rates: [0.10000000149011612, 0.20000000298023224] },
+      { id: 2, unit: "idol", rates: [0.10000000149011612] },
+    ]);
+  });
+
+  // ★ 0.1 と書き直すと float32 の丸めが変わって計算が1ずれる。生の値のまま持つこと。
+  it("ゲートの率をきれいな 0.1 に丸めていない", () => {
+    expect(out.gates[0].rates[0]).not.toBe(0.1);
   });
 });
 
