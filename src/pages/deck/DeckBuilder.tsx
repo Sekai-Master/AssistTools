@@ -13,7 +13,10 @@ import { SharePanel } from "./SharePanel";
 import { PlayerSettingsPanel } from "./PlayerSettingsPanel";
 import { ComparePanel } from "./ComparePanel";
 import { SaveToProfile } from "../../components/ui/ProfileBar";
-import { upsertProfileByName, useProfiles } from "../../lib/profiles";
+import { getActiveProfile, upsertProfileByName, useProfiles } from "../../lib/profiles";
+import { useRankingMusics } from "../ranking/useRankingMusics";
+import { DEFAULT_PARAMS } from "../ranking/lib/efficiency";
+import { ENVY_ID } from "../analyzer/lib/constants";
 import {
   readPlayerSettings,
   toPlayerState,
@@ -205,6 +208,24 @@ export default function DeckBuilder() {
   };
 
   /**
+   * 楽曲データ（難易度別で428KB）。
+   * ★ **カード選択を開いた時点**から読み始める。差し替え候補の判断で一番効くのは
+   *   Δ最終Pt で、それを出すには曲が要るため。開くまでは読まない（この画面の
+   *   初期表示を重くしない）。比較を開いたときも同じデータを使い回す。
+   */
+  const music = useRankingMusics(pickIndex != null || compareOpen);
+
+  /** 差し替え候補の基準にする曲（基礎点100の独りんぼエンヴィー・MASTER）。 */
+  const swapEntry = useMemo(
+    () =>
+      music.entries.find((e) => e.musicId === ENVY_ID && e.difficulty === "master") ??
+      music.entries.find((e) => e.musicId === ENVY_ID) ??
+      null,
+    [music.entries]
+  );
+  const swapTaki = getActiveProfile()?.taki ?? DEFAULT_PARAMS.taki;
+
+  /**
    * カード選択を開いている枠の「差し替え候補」。
    *
    * ★ 候補は**台帳にあるカード＝持っている証拠があるカード**だけ。総当たりをやるには
@@ -232,6 +253,9 @@ export default function DeckBuilder() {
     const { rows } = swapCandidates(cardIds, pickIndex, candidates, ctx, {
       leaderIndex,
       supportBonus: Number(supportBonus) || 0,
+      // 曲が読めていれば最終Ptの差まで出す（読めるまでは総合力とボーナスの差だけ）。
+      entry: swapEntry,
+      cond: { live: "multi", taki: swapTaki, overheadSec: DEFAULT_PARAMS.overheadSec },
     });
     // 候補が1枚も残らないなら絞り込み自体を出さない（空の一覧を見せない）。
     if (rows.length === 0) return undefined;
@@ -240,8 +264,9 @@ export default function DeckBuilder() {
         rows.map((r) => [r.cardId, { deltaPower: r.deltaPower, deltaBonus: r.deltaBonus, deltaPt: r.deltaPt }])
       ),
       order: rows.map((r) => r.cardId),
+      ...(swapEntry ? { basis: `協力・${swapEntry.title}・焚き${swapTaki}` } : {}),
     };
-  }, [pickIndex, ctx, slots, states, catalog, cardIds, leaderIndex, supportBonus, mode]);
+  }, [pickIndex, ctx, slots, states, catalog, cardIds, leaderIndex, supportBonus, mode, swapEntry, swapTaki]);
 
   /**
    * 計算した数字を、全ツール共通の「編成プロフィール」へ書き戻す。
@@ -493,6 +518,7 @@ export default function DeckBuilder() {
               current={{ cardIds, leaderIndex, supportBonus: Number(supportBonus) || 0 }}
               ctx={ctx}
               mode={mode}
+              music={music}
             />
           ) : (
             // 比較には楽曲データ（400KB超）が要るので、開いたときだけ読みに行く。

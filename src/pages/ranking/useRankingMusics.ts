@@ -119,16 +119,23 @@ function parse(rawMusics: unknown, rawScores: unknown): RankingMusic[] {
   return out;
 }
 
-export function useRankingMusics(): {
+/**
+ * @param enabled false のあいだは取りに行かない。
+ * ★ このデータは難易度別で 428KB あり、要らない画面で読ませたくない。
+ *   編成ビルダーのように「使うかもしれないが、開くまでは要らない」画面のために、
+ *   読み込みを遅らせられるようにしてある（既定は true ＝従来どおり）。
+ */
+export function useRankingMusics(enabled = true): {
   entries: RankingMusic[];
   loading: boolean;
   error: string | null;
 } {
   const [entries, setEntries] = useState<RankingMusic[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     const controller = new AbortController();
     const base = import.meta.env.BASE_URL;
     (async () => {
@@ -155,7 +162,7 @@ export function useRankingMusics(): {
       }
     })();
     return () => controller.abort();
-  }, []);
+  }, [enabled]);
 
   return { entries, loading, error };
 }

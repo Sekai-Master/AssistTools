@@ -54,6 +54,8 @@ export function CardSearchModal({
     rows: Map<number, { deltaPower: number; deltaBonus: number; deltaPt: number | null }>;
     /** 候補の並び（Pt差・無ければ総合力差の降順）。 */
     order: number[];
+    /** Pt を出せているときの前提（「協力・独りんぼエンヴィー・焚き5」）。 */
+    basis?: string;
   };
   /**
    * チャレンジライブの編成。
@@ -210,8 +212,14 @@ export function CardSearchModal({
             >
               持っているカードだけ
             </button>
+            {/* ★ Pt の差は前提（曲・ライブ種別・焚き数）で変わる。何を基準にした数字かを
+                書かないと、比較画面の Pt と食い違って見えたときに理由が分からない。 */}
             <span className="text-[11px] text-slate-400">
-              {ownedOnly ? "効く順（この枠を替えたときの差）に並べています" : "全カードから探します"}
+              {ownedOnly
+                ? swap.basis
+                  ? `効く順（${swap.basis} 基準の最終Pt差）`
+                  : "効く順（総合力の差）に並べています"
+                : "全カードから探します"}
             </span>
           </div>
         )}

@@ -5,7 +5,7 @@ import { NeuButton } from "../../components/ui/NeuButton";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { TakiInput } from "../../components/ui/TakiInput";
 import { SongSearchModal } from "../../components/SongSearchModal";
-import { useRankingMusics, DIFFICULTY_LABEL, type Difficulty } from "../ranking/useRankingMusics";
+import { DIFFICULTY_LABEL, type Difficulty, type RankingMusic } from "../ranking/useRankingMusics";
 import { ENVY_ID } from "../analyzer/lib/constants";
 import { DEFAULT_PARAMS, type LiveType } from "../ranking/lib/efficiency";
 import { ProfileBar } from "../../components/ui/ProfileBar";
@@ -33,15 +33,21 @@ export function ComparePanel({
   current,
   ctx,
   mode = "event",
+  music,
 }: {
   decks: SavedDeck[];
+  /**
+   * 楽曲データ。**ページ側で1回だけ読んで配る**（ここでも読むと同じ428KBを
+   * 二重に取りに行く。差し替え候補と同じデータを使う）。
+   */
+  music: { entries: RankingMusic[]; loading: boolean; error: string | null };
   /** チャレンジライブにはイベントポイントが無いので、スコアで比べる。 */
   mode?: DeckMode;
   /** いま画面で組んでいる編成（保存していなくても比較に混ぜられる）。 */
   current: { cardIds: (number | null)[]; leaderIndex: number; supportBonus: number };
   ctx: EvalContext;
 }) {
-  const { entries, loading, error } = useRankingMusics();
+  const { entries, loading, error } = music;
   const [songId, setSongId] = useState(ENVY_ID);
   const [difficulty, setDifficulty] = useState<Difficulty>("master");
   const [live, setLive] = useState<LiveType>("multi");
