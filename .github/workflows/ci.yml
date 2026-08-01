@@ -25,6 +25,8 @@ jobs:
       - name: Build
         run: npm run build
 
-      # eslint 設定を追加したら以下を有効化する:
-      # - name: Lint
-      #   run: npm run lint
+      # ★ 警告では落とさない。react-hooks v7 の新規則ぶんが warn で残っているので、
+      #   そこで赤くすると「赤いのが普通」になって門番の意味が消える。
+      #   エラーだけを止める。
+      - name: Lint
+        run: npm run lint
