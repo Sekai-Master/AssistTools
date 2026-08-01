@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 import { Panel } from "../../components/ui/Panel";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { cardThumbUrl } from "./CardThumb";
-import { drawDeckCanvas } from "./lib/deckCanvas";
+import { cardArtUrl, loadCardArt } from "./lib/cardArt";
+import { drawDeckCanvas, resolveColor } from "./lib/deckCanvas";
 import { buildShareCard, shareFileName } from "./lib/share";
 import type { CatalogCard } from "./lib/deckInputs";
 import type { CardStates } from "./lib/deckStore";
@@ -34,6 +35,8 @@ export function SharePanel({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /** 立ち絵を取れずに簡易版で描いたか。黙って別物を出さない。 */
+  const [simple, setSimple] = useState(false);
 
   const say = (msg: string) => {
     setNotice(msg);
@@ -43,11 +46,23 @@ export function SharePanel({
   const render = async (): Promise<HTMLCanvasElement | null> => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
-    const accent =
-      getComputedStyle(canvas).getPropertyValue("--unit-color").trim() || "#884499";
-    await drawDeckCanvas(
-      canvas,
-      buildShareCard({
+    // ★ ユニット色は light-dark() で定義されている。canvas は解釈できないので、
+    //   ブラウザに計算させた rgb() へ解決してから渡す（渡さないと描画が落ちる）。
+    const accent = resolveColor(canvas, "var(--unit-color)");
+
+    /**
+     * リーダーの立ち絵だけ、その場で配信元から取る。
+     * ★ 立ち絵はリポジトリに持っていない（全カードで50〜200MB になるため）。
+     * ★ **取れなくても止めない。** null ならサムネイルだけの簡易版で描く。
+     */
+    const leader = cards.find((c) => c.id === leaderCardId) ?? cards[0];
+    const s = leader ? states[leader.id] : undefined;
+    const url = leader ? cardArtUrl(leader, !!s?.trained && !s?.artUntrained) : null;
+    const heroArt = url ? await loadCardArt(url) : null;
+    setSimple(!heroArt);
+
+    await drawDeckCanvas(canvas, {
+      ...buildShareCard({
         deckName: deckName.trim() || "編成",
         eventName,
         cards,
@@ -56,8 +71,9 @@ export function SharePanel({
         leaderCardId,
         thumbUrl: cardThumbUrl,
         accent,
-      })
-    );
+      }),
+      heroArt,
+    });
     return canvas;
   };
 
@@ -91,6 +107,7 @@ export function SharePanel({
     <Panel title="紹介カード">
       <p className="text-sm text-slate-500">
         編成のカード5枚と、総合力・イベントボーナス・スキル値を1枚の画像にします。
+        リーダーの立ち絵だけ、書き出すときに配信元から読み込みます（サイトには持っていません）。
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <NeuButton onClick={copy}>画像をコピー</NeuButton>
@@ -101,6 +118,11 @@ export function SharePanel({
           </span>
         )}
       </div>
+      {simple && (
+        <p className="mt-2 text-xs text-amber-600">
+          立ち絵を読み込めなかったので、サムネイルだけの簡易版で書き出しました（数字は同じです）。
+        </p>
+      )}
       {/* 画面には出さない作業用（他ツールの画像出力と同じ作法）。 */}
       <canvas
         ref={canvasRef}

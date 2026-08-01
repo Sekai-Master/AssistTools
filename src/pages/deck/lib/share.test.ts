@@ -35,7 +35,15 @@ const evaluated = (over: Partial<DeckEval> = {}): DeckEval =>
     cards: [],
     power: { total: 236756 },
     bonus: { total: 156.5 },
-    skill: { leader: 150, total: 325, effective: 185 },
+    skill: {
+      leader: 150,
+      total: 325,
+      effective: 185,
+      perCard: [
+        { cardId: 1, base: 40, bonus: 0, value: 40 },
+        { cardId: 900, base: 100, bonus: 50, value: 150 },
+      ],
+    },
     ...over,
   }) as unknown as DeckEval;
 
@@ -86,6 +94,10 @@ describe("紹介カードの中身", () => {
   it("イベント未選択なら「—」（0% とは書かない）", () => {
     const d = build({ evaluated: evaluated({ bonus: null }) });
     expect(d.stats[1].value).toBe("—");
+  });
+
+  it("カードごとのスキル値も載せる（編成で変わるので1枚ずつ意味がある）", () => {
+    expect(build().cards.map((c) => c.skill)).toEqual(["40%", "150%"]);
   });
 
   it("リーダーは1枚だけ印がつく", () => {

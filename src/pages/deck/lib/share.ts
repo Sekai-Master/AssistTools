@@ -36,9 +36,14 @@ export function buildShareCard(opts: {
   const { evaluated } = opts;
   const round = (v: number) => Math.round(v * 10) / 10;
 
+  const skillOf = new Map(evaluated.skill.perCard.map((p) => [p.cardId, p.value]));
+
   const cards: DeckCanvasCard[] = opts.cards.map((c) => {
     const s = opts.states[c.id];
+    const skill = skillOf.get(c.id);
     return {
+      // カードごとのスキル値も出す（編成で変わるので、1枚ずつ見せる意味がある）。
+      skill: skill == null ? undefined : `${round(skill)}%`,
       // 絵は画面と同じものを出す（「絵は特訓前」を選んでいればその絵）。
       thumb: opts.thumbUrl(c, !!s?.trained && !s?.artUntrained),
       name: c.name,
