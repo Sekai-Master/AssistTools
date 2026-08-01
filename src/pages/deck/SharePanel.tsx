@@ -106,7 +106,11 @@ export function SharePanel({
     const canvas = await render();
     if (!canvas) return;
     canvas.toBlob(async (blob) => {
-      if (!blob) return;
+      // 黙って終わらない（押したのに何も起きないのが一番困る）。
+      if (!blob) {
+        say("画像を作れませんでした。");
+        return;
+      }
       try {
         await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
         say("画像をコピーしました。");

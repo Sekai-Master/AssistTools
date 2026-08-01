@@ -38,9 +38,10 @@ function MasterRankBadge({ rank, size }: { rank: number; size: number }) {
     >
       <span
         className="absolute inset-0 rotate-45 rounded-[2px]"
-        // 中身は暗い灰から緑へ（Nori 指定 2026-08-02）。縁は銀。
+        // 中身は上が緑・下が暗い灰（Nori 指定 2026-08-02）。縁は銀。
+        // ★ この span は45度回してあるので、回転前の 135deg が画面の上下方向になる。
         style={{
-          background: "linear-gradient(135deg,#515151 0%,#1D6633 100%)",
+          background: "linear-gradient(135deg,#1D6633 0%,#515151 100%)",
           border: "1.5px solid #d7dbe2",
         }}
       />

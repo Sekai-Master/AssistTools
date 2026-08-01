@@ -163,8 +163,28 @@ export default function DeckBuilder() {
     });
   };
 
+  /** 台帳に無いカードを既定の育成状態で登録する（無いと編集パネルが開かない）。 */
+  const ensureStates = (ids: (number | null)[]) => {
+    setStates((prev) => {
+      let next = prev;
+      for (const id of ids) {
+        if (id == null || next[id]) continue;
+        const card = catalog.get(id);
+        if (!card) continue;
+        next = { ...next, [id]: defaultCardState(maxLevelOf(card), isTrainable(card)) };
+      }
+      if (next === prev) return prev;
+      writeCardStates(next);
+      return next;
+    });
+  };
+
   const applyDeck = (d: SavedDeck) => {
     setCardIds(d.cardIds);
+    // ★ 編成だけ取り込んで育成状態が無い端末（バックアップの部分取り込み等）でも、
+    //   タップして直せる状態にしておく。無いとカードの編集パネルが開かず、
+    //   楽観的な既定値のまま計算だけ走る。
+    ensureStates(d.cardIds);
     setMode(d.mode === "challenge" ? "challenge" : "event");
     setLeaderIndex(d.leaderIndex);
     setSupportBonus(String(d.supportBonus));
@@ -354,7 +374,9 @@ export default function DeckBuilder() {
         <>
           {compareOpen ? (
             <ComparePanel
-              decks={decks}
+              // ★ 種類が違う編成は混ぜない。イベント編成の比較にチャレンジ用（同キャラ5枚）が
+              //   並ぶと、組めないはずの編成にボーナスが付いた行が出る。
+              decks={decks.filter((d) => (d.mode ?? "event") === mode)}
               current={{ cardIds, leaderIndex, supportBonus: Number(supportBonus) || 0 }}
               ctx={ctx}
               mode={mode}
