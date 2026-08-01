@@ -20,6 +20,7 @@ import {
   type PlayerSettings,
 } from "./lib/playerStore";
 import { evaluateDeck, type EvalContext } from "./lib/evaluate";
+import { swapCandidates } from "./lib/swap";
 import {
   CUSTOM_EVENT_ID,
   customBonusTables,
@@ -196,6 +197,45 @@ export default function DeckBuilder() {
     setOpenIndex(null);
   };
 
+  /**
+   * カード選択を開いている枠の「差し替え候補」。
+   *
+   * ★ 候補は**台帳にあるカード＝持っている証拠があるカード**だけ。総当たりをやるには
+   *   所持カード全部の育成状態が要り、入力コストが価値を上回る（lib/swap.ts 冒頭）。
+   * ★ 他の枠に入っているキャラは編成できないので、ここで外す。
+   * ★ 最終Pt の差は楽曲データが要るので、比較を開いていないうちは出さない
+   *  （総合力とボーナスの差だけになる）。
+   */
+  const swap = useMemo(() => {
+    if (pickIndex == null || !ctx) return undefined;
+    const usedChars = new Set(
+      slots.filter((c, i) => !!c && i !== pickIndex).map((c) => (c as CatalogCard).ch)
+    );
+    const candidates = Object.keys(states)
+      .map((id) => catalog.get(Number(id)))
+      .filter((c): c is CatalogCard => !!c)
+      .filter((c) =>
+        mode === "challenge"
+          ? // チャレンジライブは同キャラ限定。他の枠のキャラに揃える。
+            usedChars.size === 0 || usedChars.has(c.ch)
+          : !usedChars.has(c.ch)
+      );
+    if (candidates.length === 0) return undefined;
+
+    const { rows } = swapCandidates(cardIds, pickIndex, candidates, ctx, {
+      leaderIndex,
+      supportBonus: Number(supportBonus) || 0,
+    });
+    // 候補が1枚も残らないなら絞り込み自体を出さない（空の一覧を見せない）。
+    if (rows.length === 0) return undefined;
+    return {
+      rows: new Map(
+        rows.map((r) => [r.cardId, { deltaPower: r.deltaPower, deltaBonus: r.deltaBonus, deltaPt: r.deltaPt }])
+      ),
+      order: rows.map((r) => r.cardId),
+    };
+  }, [pickIndex, ctx, slots, states, catalog, cardIds, leaderIndex, supportBonus, mode]);
+
   const store = () => {
     const name = deckName.trim() || `編成${decks.length + 1}`;
     setDecks(
@@ -272,6 +312,35 @@ export default function DeckBuilder() {
           <NeuButton className="!px-3 !py-1.5" onClick={store}>
             保存
           </NeuButton>
+          {/* ★ 比較用の2案目をゼロから組み直さなくて済むようにする。
+              いまの編成を別名で保存して、そのまま1枚だけ差し替えられる。 */}
+          {cards.length > 0 && (
+            <NeuButton
+              className="!px-3 !py-1.5 !text-xs"
+              onClick={() => {
+                const base = deckName.trim() || `編成${decks.length + 1}`;
+                let name = `${base}の写し`;
+                for (let i = 2; decks.some((d) => d.name === name); i++) name = `${base}の写し${i}`;
+                setDecks(
+                  saveDeck({
+                    name,
+                    savedAt: Date.now(),
+                    cardIds,
+                    leaderIndex,
+                    mode,
+                    supportBonus: Number(supportBonus) || 0,
+                    ...(eventId != null ? { eventId } : {}),
+                    ...(eventId === CUSTOM_EVENT_ID ? { custom } : {}),
+                  })
+                );
+                setDeckName(name);
+                setNotice(`「${name}」として複製しました`);
+                setTimeout(() => setNotice(null), 2600);
+              }}
+            >
+              複製
+            </NeuButton>
+          )}
           {decks.some((d) => d.name === deckName.trim()) && (
             <NeuButton
               className="!px-3 !py-1.5 !text-xs"
@@ -404,6 +473,7 @@ export default function DeckBuilder() {
           // 選び直している枠自身は除く（自分のキャラで塞がって差し替えられなくなる）。
           others={slots.filter((c, i): c is CatalogCard => !!c && i !== pickIndex)}
           sameCharacterOnly={mode === "challenge"}
+          swap={swap}
           onSelect={(card) => selectCard(pickIndex, card)}
           onClose={() => setPickIndex(null)}
         />

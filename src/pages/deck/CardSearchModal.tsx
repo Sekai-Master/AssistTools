@@ -33,6 +33,7 @@ export function CardSearchModal({
   onClose,
   others = [],
   sameCharacterOnly = false,
+  swap,
 }: {
   cards: CatalogCard[];
   onSelect: (card: CatalogCard) => void;
@@ -45,6 +46,16 @@ export function CardSearchModal({
    */
   others?: CatalogCard[];
   /**
+   * 「この枠を替えたらどう動くか」。差し替えの候補と差分を出すために使う。
+   * ★ 渡されたときだけ「持っているカード」の絞り込みが出る。
+   */
+  swap?: {
+    /** 候補（台帳にあるカード）と、いまの編成に対する差。 */
+    rows: Map<number, { deltaPower: number; deltaBonus: number; deltaPt: number | null }>;
+    /** 候補の並び（Pt差・無ければ総合力差の降順）。 */
+    order: number[];
+  };
+  /**
    * チャレンジライブの編成。
    * ★ 条件が**逆**になる: 同じキャラのカードだけで5枚組む（他のキャラは選べない）。
    *   同じカードを2枚は、こちらでも不可。
@@ -55,6 +66,12 @@ export function CardSearchModal({
   const [ch, setCh] = useState<number | null>(null);
   const [rarity, setRarity] = useState<string | null>(null);
   const [attr, setAttr] = useState<string | null>(null);
+  /**
+   * ★ 「持っているカード」＝育成状態を登録したことがあるカード。
+   *   総当たりの代わりに、**入力ゼロで回せる範囲の差し替え候補**を出すための絞り込み
+   *  （lib/swap.ts の冒頭に理由）。候補があるときは最初から開いておく。
+   */
+  const [ownedOnly, setOwnedOnly] = useState(!!swap);
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useModalA11y(true, onClose, dialogRef);
@@ -66,18 +83,24 @@ export function CardSearchModal({
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return cards
-      .filter((c) => {
-        if (ch != null && c.ch !== ch) return false;
-        if (rarity && c.rarity !== rarity) return false;
-        if (attr && c.attr !== attr) return false;
-        if (!q) return true;
-        return c.name.toLowerCase().includes(q) || characterName(c.ch).includes(q);
-      })
-      // 新しいカードほど上（id は追加順）。目当てのカードはたいてい最近のもの。
-      .sort((a, b) => b.id - a.id)
-      .slice(0, 120);
-  }, [cards, query, ch, rarity, attr]);
+    const hit = cards.filter((c) => {
+      if (ownedOnly && swap && !swap.rows.has(c.id)) return false;
+      if (ch != null && c.ch !== ch) return false;
+      if (rarity && c.rarity !== rarity) return false;
+      if (attr && c.attr !== attr) return false;
+      if (!q) return true;
+      return c.name.toLowerCase().includes(q) || characterName(c.ch).includes(q);
+    });
+
+    // ★ 候補モードのときは**効く順**（最終Pt差・無ければ総合力差）に並べる。
+    //   ここが id 順のままだと、差し替えの判断に一番効く情報が埋もれる。
+    if (ownedOnly && swap) {
+      const rank = new Map(swap.order.map((id, i) => [id, i]));
+      return [...hit].sort((a, b) => (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9)).slice(0, 120);
+    }
+    // 新しいカードほど上（id は追加順）。目当てのカードはたいてい最近のもの。
+    return [...hit].sort((a, b) => b.id - a.id).slice(0, 120);
+  }, [cards, query, ch, rarity, attr, ownedOnly, swap]);
 
   const chip = (active: boolean) =>
     cn(
@@ -164,6 +187,22 @@ export function CardSearchModal({
           ))}
         </div>
 
+        {swap && (
+          <div className="mt-2 flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              aria-pressed={ownedOnly}
+              onClick={() => setOwnedOnly((v) => !v)}
+              className={chip(ownedOnly)}
+            >
+              持っているカードだけ
+            </button>
+            <span className="text-[11px] text-slate-400">
+              {ownedOnly ? "効く順（この枠を替えたときの差）に並べています" : "全カードから探します"}
+            </span>
+          </div>
+        )}
+
         <NeuInput
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -173,7 +212,13 @@ export function CardSearchModal({
 
         <div className="mt-2 min-h-0 flex-1 overflow-y-auto rounded-lg bg-neu p-1 shadow-neu-inset">
           {results.length === 0 ? (
-            <p className="p-4 text-center text-sm text-slate-500">見つかりませんでした</p>
+            <p className="p-4 text-center text-sm text-slate-500">
+              {ownedOnly && swap
+                ? // 台帳は「編成に入れたことがあるカード」なので、最初は候補が少ない。
+                  //  そのことを言わないと「壊れている」と読まれる。
+                  "この枠に入れられる手持ちのカードがありません。絞り込みを外すと全カードから選べます。"
+                : "見つかりませんでした"}
+            </p>
           ) : (
             results.map((c) => {
               // イベント編成は「同キャラ不可」、チャレンジライブは「同キャラ限定」。
@@ -207,6 +252,34 @@ export function CardSearchModal({
                       {c.supportUnit && ` ・ ${UNIT_SHORT[c.supportUnit] ?? c.supportUnit}`}
                     </span>
                   </span>
+                  {/* ★ この枠を替えたらどう動くか。**最終Ptの差が判断の本命**なので、
+                      出せるときはそれを主に出す（総合力だけだと、ボーナスを落として
+                      総合力を取る判断がそのまま消える）。 */}
+                  {!taken &&
+                    ownedOnly &&
+                    (() => {
+                      const d = swap?.rows.get(c.id);
+                      if (!d) return null;
+                      const sign = (v: number) => (v > 0 ? "+" : "");
+                      const good = (d.deltaPt ?? d.deltaPower) > 0;
+                      return (
+                        <span className="shrink-0 text-right text-[11px] leading-tight">
+                          <span className={cn("block font-bold", good ? "text-emerald-600" : "text-slate-400")}>
+                            {d.deltaPt != null
+                              ? `${sign(d.deltaPt)}${Math.round(d.deltaPt).toLocaleString()}pt`
+                              : `${sign(d.deltaPower)}${Math.round(d.deltaPower).toLocaleString()}`}
+                          </span>
+                          {/* 最終Pt を出せているときだけ、その内訳として総合力も添える
+                              （出せないときは上の行が総合力なので繰り返さない）。 */}
+                          <span className="block text-slate-400">
+                            {d.deltaPt != null &&
+                              `${sign(d.deltaPower)}${Math.round(d.deltaPower).toLocaleString()} / `}
+                            {sign(d.deltaBonus)}
+                            {Math.round(d.deltaBonus * 10) / 10}%
+                          </span>
+                        </span>
+                      );
+                    })()}
                   {/* 同じカードでなくても入れられないので、「編成中」だけだと誤解される。 */}
                   {taken && (
                     <span className="shrink-0 text-xs text-slate-500">

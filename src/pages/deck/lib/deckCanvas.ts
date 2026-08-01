@@ -53,13 +53,17 @@ const H = 675;
 const PAD = 32;
 
 /** 立ち絵を敷く幅。右のカード欄の手前まで伸ばして、境目はぼかす。 */
-const ART_W = 830;
-/** 右カラム（5枚）。 */
-const RIGHT_X = 856;
+const ART_W = 812;
+/**
+ * 右カラム（5枚）。
+ * ★ ロゴを右上からどけたぶん、**一回り大きく**取る（Nori 指示 2026-08-02）。
+ *   上に詰めて、行の高さとサムネイルも上げる。
+ */
+const RIGHT_X = 828;
 const RIGHT_W = W - PAD - RIGHT_X;
-const ROW_H = 84;
-const CARDS_TOP = 148;
-const THUMB = 56;
+const ROW_H = 96;
+const CARDS_TOP = 92;
+const THUMB = 66;
 /** 内訳の帯（載せるときだけ）。**16:9 の中に収める**ので高さは増やさない。 */
 const DETAIL_H = 76;
 
@@ -131,7 +135,6 @@ export async function drawDeckCanvas(canvas: HTMLCanvasElement, data: DeckCanvas
   drawStats(ctx, data, theme, !!data.details?.length);
   drawLeader(ctx, leader, theme, !!data.details?.length);
   drawCards(ctx, data, imgs, theme);
-  if (data.eventLogo) drawEventLogo(ctx, data.eventLogo);
   if (data.details?.length) drawDetails(ctx, data);
 
   // ★ 上端の線は**立ち絵の上まで通す**。地の上に描くと絵で切れて、
@@ -349,8 +352,22 @@ function drawStats(
     ctx.save();
     ctx.shadowColor = "rgba(0,0,0,0.55)";
     ctx.shadowBlur = 10;
-    ctx.fillText(truncate(ctx, s.value, 420), PAD, y + (big ? 42 : 28));
+    const shown = truncate(ctx, s.value, 420);
+    const valueY = y + (big ? 42 : 28);
+    ctx.fillText(shown, PAD, valueY);
     ctx.restore();
+
+    // ★ イベントのロゴは**イベントボーナスの値の右隣**（Nori 指示 2026-08-02）。
+    //   どのイベントのボーナスなのかが、数字とひと続きで読める。
+    if (data.eventLogo && s.label.includes("イベントボーナス")) {
+      const logo = data.eventLogo;
+      const maxH = 62;
+      const maxW = 250;
+      const scale = Math.min(maxW / logo.width, maxH / logo.height, 1);
+      const w = logo.width * scale;
+      const h = logo.height * scale;
+      ctx.drawImage(logo, PAD + ctx.measureText(shown).width + 22, valueY - h / 2, w, h);
+    }
 
     if (s.sub) {
       ctx.fillStyle = MUTED;
@@ -436,14 +453,6 @@ function drawCards(
       ctx.fillText("スキル", RIGHT_X + RIGHT_W - 12, y + 48);
     }
   });
-}
-
-/** イベントのロゴ。右上に置く（イベント名のテキストの代わり）。 */
-function drawEventLogo(ctx: CanvasRenderingContext2D, logo: HTMLImageElement): void {
-  const maxW = 210;
-  const maxH = 82;
-  const scale = Math.min(maxW / logo.width, maxH / logo.height, 1);
-  ctx.drawImage(logo, W - PAD - logo.width * scale, 24, logo.width * scale, logo.height * scale);
 }
 
 /**
