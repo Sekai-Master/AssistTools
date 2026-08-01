@@ -13,9 +13,10 @@ import { isModeAOk, isModeBOk } from "./liveAdjust/modeStatus";
 import type { Adopted, Step2Mode, SuggestMusic } from "./liveAdjust/types";
 import type { TimeForBase } from "../lib/planDuration";
 
+// モバイルで折り返さないよう対称・短文に（A=編成を組み替えて合わせる / B=現編成で曲を変えて合わせる）。
 const STEP2_MODE_LABEL: Record<Step2Mode, string> = {
-  songFixed: "任意の曲＋ボーナス選択",
-  bonusFixed: "入力編成＋曲選択",
+  songFixed: "編成で合わせる",
+  bonusFixed: "曲で合わせる",
 };
 
 /**
