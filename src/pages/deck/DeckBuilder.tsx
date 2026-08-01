@@ -9,7 +9,15 @@ import { DeckSlots } from "./DeckSlots";
 import { BonusPanel } from "./BonusPanel";
 import { PowerPanel } from "./PowerPanel";
 import { PlayerSettingsPanel } from "./PlayerSettingsPanel";
-import { readPlayerSettings, writePlayerSettings, type PlayerSettings } from "./lib/playerStore";
+import { ComparePanel } from "./ComparePanel";
+import { ProfileBar, SaveToProfile } from "../../components/ui/ProfileBar";
+import {
+  readPlayerSettings,
+  toPlayerState,
+  writePlayerSettings,
+  type PlayerSettings,
+} from "./lib/playerStore";
+import { evaluateDeck, type EvalContext } from "./lib/evaluate";
 import {
   defaultEventId,
   filledCards,
@@ -63,6 +71,7 @@ export default function DeckBuilder() {
   const [decks, setDecks] = useState<SavedDeck[]>(() => listDecks());
   const [deckName, setDeckName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
 
   // 既定のイベント（開催中）。データが来た1回だけ決める。
   useEffect(() => {
@@ -76,7 +85,30 @@ export default function DeckBuilder() {
     [cardIds, catalog]
   );
   const cards = useMemo(() => filledCards(slots), [slots]);
-  const leaderCardId = cardIds[leaderIndex] ?? undefined;
+
+  /**
+   * 計算はここで1回だけ行い、各パネルへ結果を配る。
+   * ★ パネルごとに計算し直すと、比較や編成プロフィールへの保存と**別の値**が出かねない。
+   *   同じ画面に違う総合力が並ぶのが一番たちが悪い。
+   */
+  const ctx = useMemo<EvalContext | null>(
+    () =>
+      data
+        ? {
+            catalog,
+            states,
+            player: toPlayerState(player),
+            bonusTables: data.bonusTables,
+            powerTables: data.powerTables,
+            eventId,
+          }
+        : null,
+    [data, catalog, states, player, eventId]
+  );
+  const evaluated = useMemo(
+    () => (ctx ? evaluateDeck(cardIds, leaderIndex, Number(supportBonus) || 0, ctx) : null),
+    [ctx, cardIds, leaderIndex, supportBonus]
+  );
 
   /** 育成状態の書き込みは write-through（保存ボタンを押させない）。 */
   const patchState = (cardId: number, patch: Partial<CardState>) => {
@@ -210,22 +242,54 @@ export default function DeckBuilder() {
         </p>
       </Panel>
 
-      {data && (
+      {data && evaluated && (
         <BonusPanel
           cards={cards}
-          states={states}
-          tables={data.bonusTables}
+          result={evaluated.bonus}
           events={data.events}
           eventId={eventId}
           onEventId={setEventId}
-          leaderCardId={leaderCardId}
           supportBonus={supportBonus}
           onSupportBonus={setSupportBonus}
         />
       )}
 
-      {data && (
-        <PowerPanel cards={cards} states={states} tables={data.powerTables} settings={player} />
+      {evaluated && (
+        <>
+          <PowerPanel cards={cards} result={evaluated.power} settings={player} />
+
+          {/* ★ 出した値を他のツール（ランキング・アナライザー・稼働時間）へ渡す導線。
+              値を出している場所のすぐ隣に置く（ProfileBar.tsx の規約）。 */}
+          {cards.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 px-1">
+              <SaveToProfile
+                collect={() => ({
+                  power: evaluated.power.total,
+                  // ★ ボーナスは切り捨てず小数のまま渡す（0.5% が最終Ptに効く）。
+                  bonus: evaluated.bonus?.total ?? 0,
+                })}
+              />
+              <ProfileBar apply={() => undefined} />
+            </div>
+          )}
+        </>
+      )}
+
+      {ctx && (
+        <>
+          {compareOpen ? (
+            <ComparePanel
+              decks={decks}
+              current={{ cardIds, leaderIndex, supportBonus: Number(supportBonus) || 0 }}
+              ctx={ctx}
+            />
+          ) : (
+            // 比較には楽曲データ（400KB超）が要るので、開いたときだけ読みに行く。
+            <div className="px-1">
+              <NeuButton onClick={() => setCompareOpen(true)}>編成を比べる</NeuButton>
+            </div>
+          )}
+        </>
       )}
 
       <PlayerSettingsPanel

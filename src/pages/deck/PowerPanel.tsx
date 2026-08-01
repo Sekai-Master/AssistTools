@@ -2,10 +2,9 @@ import { useMemo } from "react";
 import { Panel } from "../../components/ui/Panel";
 import { Stat } from "../refresh/Stat";
 import { characterName } from "./lib/characters";
-import { toPowerDeck, type CatalogCard } from "./lib/deckInputs";
-import { deckPower, type PowerTables } from "./lib/power";
-import { toPlayerState, type PlayerSettings } from "./lib/playerStore";
-import type { CardStates } from "./lib/deckStore";
+import type { CatalogCard } from "./lib/deckInputs";
+import type { DeckPowerResult } from "./lib/power";
+import type { PlayerSettings } from "./lib/playerStore";
 
 /**
  * 総合力のパネル。
@@ -19,21 +18,14 @@ import type { CardStates } from "./lib/deckStore";
  */
 export function PowerPanel({
   cards,
-  states,
-  tables,
+  result,
   settings,
 }: {
   cards: CatalogCard[];
-  states: CardStates;
-  tables: PowerTables;
+  /** 計算はページ側で1回だけ行う（比較や編成プロフィールへの保存と同じ値を使うため）。 */
+  result: DeckPowerResult;
   settings: PlayerSettings;
 }) {
-  const player = useMemo(() => toPlayerState(settings), [settings]);
-  const result = useMemo(
-    () => deckPower(toPowerDeck(cards, states), player, tables),
-    [cards, states, player, tables]
-  );
-
   const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
   const n = (v: number) => v.toLocaleString();
 
@@ -82,18 +74,21 @@ export function PowerPanel({
         {result.perCard.map((c) => {
           const card = byId.get(c.cardId);
           return (
-            <li key={c.cardId} className="flex items-center gap-2 rounded-lg px-2 py-1.5 shadow-neu-inset">
-              <span className="min-w-0 flex-1 truncate text-slate-600">
-                {card ? `${characterName(card.ch)}「${card.name}」` : `カード${c.cardId}`}
-              </span>
-              <span className="shrink-0 text-xs text-slate-400">
+            // 内訳は幅を食うので、狭い画面では名前の下へ回す（横スクロールを作らない）。
+            <li key={c.cardId} className="rounded-lg px-2 py-1.5 shadow-neu-inset">
+              <div className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-slate-600">
+                  {card ? `${characterName(card.ch)}「${card.name}」` : `カード${c.cardId}`}
+                </span>
+                <span className="w-20 shrink-0 text-right font-bold tabular-nums text-slate-700">
+                  {n(c.total)}
+                </span>
+              </div>
+              <div className="text-xs text-slate-400">
                 素 {n(c.performanceTotal)} ・ エリア {n(c.areaItem)} ・ CR {n(c.characterRank)}
                 {c.gate > 0 && ` ・ ゲート ${c.gate}`}
                 {c.fixture > 0 && ` ・ 家具 ${c.fixture}`}
-              </span>
-              <span className="w-20 shrink-0 text-right font-bold tabular-nums text-slate-700">
-                {n(c.total)}
-              </span>
+              </div>
             </li>
           );
         })}

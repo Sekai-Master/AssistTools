@@ -4,6 +4,7 @@ import { cn } from "../../lib/utils";
 import { ATTR_COLOR, ATTR_LABEL, RARITY_LABEL, UNIT_SHORT, characterName } from "./lib/characters";
 import { isTrainable, maxLevelOf, type CatalogCard } from "./lib/deckInputs";
 import type { CardState } from "./lib/deckStore";
+import { CardThumb } from "./CardThumb";
 
 /**
  * 編成の5枠。
@@ -165,6 +166,8 @@ export function DeckSlots({
             ) : (
               <>
                 <div className="flex items-start gap-2">
+                  {/* 特訓の有無で絵が変わる。編成の状態がそのまま見た目に出る。 */}
+                  <CardThumb card={card} trained={!!state?.trained} size={48} />
                   <span
                     className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
                     style={{ backgroundColor: ATTR_COLOR[card.attr] ?? "#888" }}

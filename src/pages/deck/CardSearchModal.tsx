@@ -13,6 +13,7 @@ import {
   characterName,
 } from "./lib/characters";
 import type { CatalogCard } from "./lib/deckInputs";
+import { CardThumb } from "./CardThumb";
 
 /**
  * カード選択モーダル。
@@ -174,6 +175,7 @@ export function CardSearchModal({
                       : "hover:bg-[color:color-mix(in_srgb,var(--neu-ink)_9%,transparent)]"
                   )}
                 >
+                  <CardThumb card={c} size={40} />
                   <span
                     className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
                     style={{ backgroundColor: ATTR_COLOR[c.attr] ?? "#888" }}

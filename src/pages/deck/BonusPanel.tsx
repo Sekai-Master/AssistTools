@@ -4,9 +4,8 @@ import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { Stat } from "../refresh/Stat";
 import { characterName } from "./lib/characters";
-import { displayBonus, toBonusDeck, type CatalogCard, type EventRow } from "./lib/deckInputs";
-import { eventBonus, type BonusTables } from "./lib/eventBonus";
-import type { CardStates } from "./lib/deckStore";
+import { displayBonus, type CatalogCard, type EventRow } from "./lib/deckInputs";
+import type { EventBonusResult } from "./lib/eventBonus";
 
 /**
  * イベントボーナスのパネル。
@@ -21,34 +20,22 @@ import type { CardStates } from "./lib/deckStore";
  */
 export function BonusPanel({
   cards,
-  states,
-  tables,
+  result,
   events,
   eventId,
   onEventId,
-  leaderCardId,
   supportBonus,
   onSupportBonus,
 }: {
   cards: CatalogCard[];
-  states: CardStates;
-  tables: BonusTables;
+  /** 計算はページ側で1回だけ行う（比較や編成プロフィールへの保存と同じ値を使うため）。 */
+  result: EventBonusResult | null;
   events: EventRow[];
   eventId: number | undefined;
   onEventId: (id: number) => void;
-  leaderCardId?: number;
   supportBonus: string;
   onSupportBonus: (v: string) => void;
 }) {
-  const support = Number(supportBonus) || 0;
-  const result = useMemo(() => {
-    if (eventId == null) return null;
-    return eventBonus(toBonusDeck(cards, states), eventId, tables, {
-      leaderCardId,
-      supportBonus: support,
-    });
-  }, [cards, states, tables, eventId, leaderCardId, support]);
-
   const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
 
   return (
@@ -106,19 +93,19 @@ export function BonusPanel({
             {result.perCard.map((c) => {
               const card = byId.get(c.cardId);
               return (
-                <li
-                  key={c.cardId}
-                  className="flex items-center gap-2 rounded-lg px-2 py-1.5 shadow-neu-inset"
-                >
-                  <span className="min-w-0 flex-1 truncate text-slate-600">
-                    {card ? `${characterName(card.ch)}「${card.name}」` : `カード${c.cardId}`}
-                  </span>
-                  <span className="shrink-0 text-xs text-slate-400">
+                // 内訳は幅を食うので、狭い画面では名前の下へ回す（横スクロールを作らない）。
+                <li key={c.cardId} className="rounded-lg px-2 py-1.5 shadow-neu-inset">
+                  <div className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate text-slate-600">
+                      {card ? `${characterName(card.ch)}「${card.name}」` : `カード${c.cardId}`}
+                    </span>
+                    <span className="w-14 shrink-0 text-right font-bold tabular-nums text-slate-700">
+                      {c.total}%
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-400">
                     キャラ/属性 {c.deck}％ ・ MR {c.master}％{c.card > 0 && ` ・ PU ${c.card}％`}
-                  </span>
-                  <span className="w-14 shrink-0 text-right font-bold tabular-nums text-slate-700">
-                    {c.total}%
-                  </span>
+                  </div>
                 </li>
               );
             })}
