@@ -52,7 +52,15 @@ export interface DeckCard {
   attr: string;
   /** ユニット限定カード（VS のキャラが他ユニット枠で出る場合など）。 */
   supportUnit?: string;
-  masterRank: number;
+  /**
+   * マスターランク。**未入力は undefined で渡すこと（0 と混同しない）。**
+   *
+   * ★ 検証中に実際にやらかした: マスターランクの記載が無い編成を 0 として計算し、
+   *   5% ズレた原因を「データと実機の食い違い」だと疑って3つの仮説を立てた。
+   *   実際はただの入力漏れだった。0 と未入力は別物として扱い、未入力があることを
+   *   呼び出し側へ返す（画面で「未設定」と分かるようにするため）。
+   */
+  masterRank?: number;
 }
 
 export interface CardBonus {
@@ -75,6 +83,11 @@ export interface EventBonusResult {
   cappedOut: number;
   /** WL のサポート編成など、手入力で足したぶん。 */
   support: number;
+  /**
+   * マスターランクが未入力のカード。空でなければ合計は**暫定値**。
+   * 0 として計算してしまうと、足りない数字に気付けない。
+   */
+  unsetMasterRank: number[];
 }
 
 /**
@@ -139,9 +152,13 @@ export function eventBonus(
 
   const perCard: CardBonus[] = deck.map((card) => {
     const deckRate = deckBonusOf(card, rows, tables.unitCharacters);
+    // 未入力は 0 として足すが、黙って足したことを結果に残す。
     const master =
-      tables.rarityBonuses.find((r) => r.rarity === card.rarity && r.masterRank === card.masterRank)
-        ?.rate ?? 0;
+      card.masterRank == null
+        ? 0
+        : (tables.rarityBonuses.find(
+            (r) => r.rarity === card.rarity && r.masterRank === card.masterRank
+          )?.rate ?? 0);
     const cr = cardRows.find((r) => r.cardId === card.cardId);
     const cardRate =
       (cr?.rate ?? 0) + (cr && opts.leaderCardId === card.cardId ? cr.leaderRate : 0);
@@ -175,5 +192,6 @@ export function eventBonus(
     perCard,
     cappedOut,
     support,
+    unsetMasterRank: deck.filter((c) => c.masterRank == null).map((c) => c.cardId),
   };
 }

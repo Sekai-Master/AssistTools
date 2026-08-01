@@ -150,6 +150,38 @@ describe("対象人数の上限", () => {
   });
 });
 
+describe("未入力の扱い", () => {
+  // ★ 実際にやらかした事故の再発防止。マスターランクの記載が無い編成を 0 として
+  //   計算し、5% ズレた原因を「データと実機の食い違い」だと疑って仮説を3つ立てた。
+  //   実際はただの入力漏れ。0 と未入力を混同しないこと。
+  it("マスターランク未入力のカードを報告する", () => {
+    const r = eventBonus([card({ cardId: 1 }), card({ cardId: 2, masterRank: undefined })], EV, tables);
+    expect(r.unsetMasterRank).toEqual([2]);
+  });
+
+  it("全部入力済みなら空", () => {
+    const r = eventBonus([card({ cardId: 1, masterRank: 0 })], EV, tables);
+    expect(r.unsetMasterRank).toEqual([]);
+  });
+
+  // 未入力は 0 として足すが、それを黙ってやらない（暫定値だと分かるようにする）。
+  it("未入力でも計算は止めない（暫定値として出す）", () => {
+    const r = eventBonus([card({ cardId: 1, masterRank: undefined })], EV, tables);
+    expect(r.perCard[0].master).toBe(0);
+    expect(r.total).toBe(50);
+    expect(r.unsetMasterRank).toHaveLength(1);
+  });
+
+  // MR0 は「入力済みで0」。未入力と区別がつくこと。
+  it("MR0 と未入力は別物", () => {
+    const zero = eventBonus([card({ cardId: 1, masterRank: 0 })], EV, tables);
+    const unset = eventBonus([card({ cardId: 1, masterRank: undefined })], EV, tables);
+    expect(zero.total).toBe(unset.total);
+    expect(zero.unsetMasterRank).toEqual([]);
+    expect(unset.unsetMasterRank).toEqual([1]);
+  });
+});
+
 describe("サポート編成（WL）", () => {
   // 20枚以上の編成を組ませるのは現実的でないので手入力で合算する。
   it("手入力ぶんが合計に足される", () => {
