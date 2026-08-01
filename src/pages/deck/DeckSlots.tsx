@@ -128,6 +128,23 @@ function CardStateEditor({
           </button>
         ))}
       </div>
+
+      {/* ★ スキルレベル。カードが決まっていればスキル値は計算できるので、
+          手で「150/710」を入れなくてよくなる（内部値・実効値の自動算出）。 */}
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="mr-1 text-xs text-slate-500">SL</span>
+        {[1, 2, 3, 4].map((sl) => (
+          <button
+            key={sl}
+            type="button"
+            aria-pressed={(state.skillLevel ?? 1) === sl}
+            onClick={() => onChange({ skillLevel: sl })}
+            className={chip((state.skillLevel ?? 1) === sl)}
+          >
+            {sl}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -195,7 +212,7 @@ export function DeckSlots({
                       {card.supportUnit && ` ・ ${UNIT_SHORT[card.supportUnit] ?? card.supportUnit}`}
                       {state && ` ・ Lv${state.level}`}
                       {state?.trained && " 特訓"}
-                      {state && ` ・ MR${state.masterRank ?? 0}`}
+                      {state && ` ・ MR${state.masterRank ?? 0} ・ SL${state.skillLevel ?? 1}`}
                     </span>
                   </button>
                   <button

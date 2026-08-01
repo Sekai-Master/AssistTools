@@ -8,6 +8,7 @@
 import { eventBonus, type BonusTables, type EventBonusResult } from "./eventBonus";
 import { deckPower, type DeckPowerResult, type PlayerState, type PowerTables } from "./power";
 import { filledCards, toBonusDeck, toPowerDeck, type CatalogCard } from "./deckInputs";
+import { deckSkill, type DeckSkillResult, type SkillRow } from "./skill";
 import type { CardStates } from "./deckStore";
 
 export interface EvalContext {
@@ -16,6 +17,9 @@ export interface EvalContext {
   player: PlayerState;
   bonusTables: BonusTables;
   powerTables: PowerTables;
+  skills: SkillRow[];
+  /** スキルの一部はキャラクターランクで伸びるので、プレイヤー設定から渡す。 */
+  characterRanks?: Record<number, number>;
   eventId: number | undefined;
 }
 
@@ -23,6 +27,7 @@ export interface DeckEval {
   cards: CatalogCard[];
   bonus: EventBonusResult | null;
   power: DeckPowerResult;
+  skill: DeckSkillResult;
 }
 
 export function evaluateDeck(
@@ -35,6 +40,8 @@ export function evaluateDeck(
   const cards = filledCards(slots);
   const leaderCardId = cardIds[leaderIndex] ?? undefined;
 
+  const power = deckPower(toPowerDeck(cards, ctx.states), ctx.player, ctx.powerTables);
+
   return {
     cards,
     // ★ イベントが選ばれていないときは 0 を出さず null。「ボーナス0の編成」と
@@ -46,6 +53,22 @@ export function evaluateDeck(
             leaderCardId,
             supportBonus,
           }),
-    power: deckPower(toPowerDeck(cards, ctx.states), ctx.player, ctx.powerTables),
+    power,
+    /**
+     * ★ スキルの上乗せ（同ユニット◯人ごと等）は**編成で変わる**ので、
+     *   カード単体では出せない。総合力の計算が出した「そのカードが名乗るユニット枠」
+     *   （perCard.unit）をそのまま使う＝エリアアイテムやゲートと同じ判定になる。
+     */
+    skill: deckSkill(
+      cards.map((c, i) => ({
+        cardId: c.id,
+        ch: c.ch,
+        skillId: c.skillId,
+        unit: power.perCard[i]?.unit ?? c.supportUnit ?? "piapro",
+        level: ctx.states[c.id]?.skillLevel ?? 1,
+      })),
+      ctx.skills,
+      { leaderCardId, characterRanks: ctx.characterRanks }
+    ),
   };
 }

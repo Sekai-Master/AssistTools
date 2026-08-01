@@ -26,6 +26,12 @@ export interface CardState {
    *   毎回5枚ぶん選ばせるほうが手間に見合わない、という判断。
    */
   masterRank?: number;
+  /**
+   * スキルレベル（1〜4）。
+   * ★ カードが1意に決まっているので、これさえ入れれば内部値も実効値も計算できる。
+   *   既定は 1（マスターランクと同じく「まだ上げていない」から始める）。
+   */
+  skillLevel?: number;
   /** 読了したサイドストーリー。入れ忘れると1編成で1万以上ずれる（docs/deck-builder.md）。 */
   episodes: { first: boolean; latter: boolean };
   canvas: boolean;
@@ -100,6 +106,9 @@ export function isCardState(v: unknown): v is CardState {
     return false;
   }
   if (c.artUntrained != null && typeof c.artUntrained !== "boolean") return false;
+  if (c.skillLevel != null && (!isFiniteNum(c.skillLevel) || c.skillLevel < 1 || c.skillLevel > 4)) {
+    return false;
+  }
   const e = c.episodes;
   if (!e || typeof e !== "object") return false;
   return typeof e.first === "boolean" && typeof e.latter === "boolean";
@@ -113,8 +122,13 @@ export function parseCardStates(raw: unknown): CardStates {
     // JSON のキーは文字列。数値でないキー（改竄・別バージョンの残骸）は捨てる。
     if (!Number.isInteger(id) || id <= 0) continue;
     if (!isCardState(value)) continue;
-    // 以前のバージョンは「未設定」を持っていた。読み込み時に 0 へ寄せる。
-    out[id] = { ...value, masterRank: value.masterRank ?? 0, episodes: { ...value.episodes } };
+    // 以前のバージョンは「未設定」を持っていた。読み込み時に既定へ寄せる。
+    out[id] = {
+      ...value,
+      masterRank: value.masterRank ?? 0,
+      skillLevel: value.skillLevel ?? 1,
+      episodes: { ...value.episodes },
+    };
   }
   return out;
 }
@@ -142,6 +156,7 @@ export function defaultCardState(maxLevel: number, trainable: boolean): CardStat
     level: maxLevel,
     trained: trainable,
     masterRank: 0,
+    skillLevel: 1,
     episodes: { first: true, latter: true },
     canvas: false,
   };

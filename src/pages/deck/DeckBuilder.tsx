@@ -8,6 +8,7 @@ import { CardSearchModal } from "./CardSearchModal";
 import { DeckSlots } from "./DeckSlots";
 import { BonusPanel } from "./BonusPanel";
 import { PowerPanel } from "./PowerPanel";
+import { SkillPanel } from "./SkillPanel";
 import { PlayerSettingsPanel } from "./PlayerSettingsPanel";
 import { ComparePanel } from "./ComparePanel";
 import { SaveToProfile } from "../../components/ui/ProfileBar";
@@ -100,6 +101,8 @@ export default function DeckBuilder() {
             player: toPlayerState(player),
             bonusTables: data.bonusTables,
             powerTables: data.powerTables,
+            skills: data.skills,
+            characterRanks: player.characterRanks,
             eventId,
           }
         : null,
@@ -258,6 +261,8 @@ export default function DeckBuilder() {
         <>
           <PowerPanel cards={cards} result={evaluated.power} settings={player} />
 
+          <SkillPanel cards={cards} result={evaluated.skill} />
+
           {/* ★ 出した値を他のツール（ランキング・アナライザー・稼働時間）へ渡す導線。
               値を出している場所のすぐ隣に置く（ProfileBar.tsx の規約）。 */}
           {cards.length > 0 && (
@@ -265,6 +270,9 @@ export default function DeckBuilder() {
               <SaveToProfile
                 collect={() => ({
                   power: evaluated.power.total,
+                  // スキルもカードから出るので一緒に渡す（他のツールの入力がこれで埋まる）。
+                  skillLeader: Math.round(evaluated.skill.leader * 10) / 10,
+                  skillTotal: Math.round(evaluated.skill.total * 10) / 10,
                   // ★ ボーナスは切り捨てず小数のまま渡す（0.5% が最終Ptに効く）。
                   //   イベント未選択のときは**書かない**（0% として保存すると、
                   //   他のツールが「ボーナス0の編成」として計算してしまう）。

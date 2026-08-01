@@ -106,7 +106,10 @@ export function BonusPanel({
                     </span>
                   </div>
                   <div className="text-xs text-slate-400">
-                    キャラ/属性 {c.deck}％ ・ MR {c.master}％{c.card > 0 && ` ・ PU ${c.card}％`}
+                    {/* ★ 「MR ◯%」だと誤解される。この行はレアリティとマスターランクの
+                        組み合わせで決まる値で、MR0 でも★4なら乗る。 */}
+                    キャラ/属性 {c.deck}％ ・ レアリティ×MR {c.master}％
+                    {c.card > 0 && ` ・ PU ${c.card}％`}
                   </div>
                 </li>
               );

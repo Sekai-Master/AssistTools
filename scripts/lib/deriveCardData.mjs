@@ -98,6 +98,84 @@ export function slimCard(c) {
  * @param src 各 json をそのまま渡す
  * @param nowMs ビルド時刻。これより後に解禁されるものは一切出さない
  */
+/**
+ * スキルを「スキルレベルごとのスコアアップ％」へ削る。
+ *
+ * マスタのスキルは21種の原型しかなく、全カードがこれを共有している。
+ * 効果は種類ごとに形が違うので、**画面が計算に使える形**へ揃える:
+ *
+ *   base[レベル-1] … 素のスコアアップ％
+ *   enhance        … 編成やプレイ状況で上乗せされるぶん（種類ごとに形が違う）
+ *
+ * ★ 条件付きのもの（ライフ依存・GOOD を出すまで）は**上限側**を採る。
+ *   ゲーム内のスキル表示も上限（「最大◯%」）で書かれていて、編成を比べる用途では
+ *   そちらが基準になる。実際の平均値は叩き方で変わるので、ここでは決められない。
+ *
+ * ★ ライフ回復・判定強化はスコアに効かないので落とす。
+ */
+export function slimSkill(s) {
+  const details = (type) =>
+    (s.skillEffects ?? []).filter((e) => e.skillEffectType === type);
+
+  // スコアに効く効果。条件違いで複数行あるものは、レベルごとに最大を採る。
+  const scoreRows = [
+    ...details("score_up"),
+    ...details("score_up_condition_life"),
+    ...details("score_up_keep"),
+  ];
+  const base = [];
+  for (const e of scoreRows) {
+    for (const d of e.skillEffectDetails ?? []) {
+      const i = (d.level ?? 1) - 1;
+      base[i] = Math.max(base[i] ?? 0, d.activateEffectValue ?? 0);
+    }
+  }
+  if (base.length === 0) return null;
+
+  const out = { id: s.id, base, desc: s.shortDescription ?? "" };
+
+  // 同ユニットのメンバー数で伸びるもの（1人ごと＋全員一致でもう1回）。
+  const sub = (s.skillEffects ?? []).find(
+    (e) => e.skillEnhance?.skillEnhanceType === "sub_unit_score_up"
+  );
+  if (sub) {
+    out.enhance = {
+      type: "sub_unit",
+      unit: sub.skillEnhance.skillEnhanceCondition?.unit,
+      per: sub.skillEnhance.activateEffectValue ?? 0,
+    };
+  }
+
+  // 自身と異なるユニットの種類数で伸びるもの。
+  const unitCount = details("score_up_unit_count");
+  if (unitCount.length > 0) {
+    const rows = unitCount.map((e) => ({
+      count: e.activateUnitCount ?? 0,
+      value: e.skillEffectDetails?.[0]?.activateEffectValue ?? 0,
+    }));
+    const top = rows.reduce((a, b) => (b.count > a.count ? b : a));
+    out.enhance = { type: "unit_count", maxKinds: top.count, max: top.value };
+  }
+
+  // 編成の他メンバーのスキル値を参照するもの（上限つき）。
+  const ref = details("other_member_score_up_reference_rate")[0];
+  if (ref) {
+    const d = ref.skillEffectDetails?.[0] ?? {};
+    out.enhance = { type: "reference", rate: d.activateEffectValue ?? 0, cap: d.activateEffectValue2 ?? 0 };
+  }
+
+  // キャラクターランクで伸びるもの（2ランクごとに+1%）。
+  const cr = details("score_up_character_rank");
+  if (cr.length > 0) {
+    const rows = cr
+      .map((e) => ({ rank: e.activateCharacterRank ?? 0, value: e.skillEffectDetails?.[0]?.activateEffectValue ?? 0 }))
+      .sort((a, b) => a.rank - b.rank);
+    out.enhance = { type: "character_rank", steps: rows };
+  }
+
+  return out;
+}
+
 export function derive(src, nowMs) {
   const cards = published(src.cards, nowMs);
   const cardIds = new Set(cards.map((c) => c.id));
@@ -116,6 +194,18 @@ export function derive(src, nowMs) {
   return {
     generatedAt: nowMs,
     cards: cards.map(slimCard),
+    /**
+     * スキル（21種の原型）。カードは skillId でここを引く。
+     *
+     * ★★ **公開済みカードが実際に使っているスキルだけ**を出す。★★
+     *   この表は日付欄を持たないので未公開判定が効かない。素通しすると、
+     *   未公開カード専用の新スキルの説明文（「◯◯を1人編成する毎に…」など）が
+     *   カード本体より先に世に出る。参照されていないものは落とす。
+     */
+    skills: (src.skills ?? [])
+      .filter((s) => new Set(cards.map((c) => c.skillId)).has(s.id))
+      .map(slimSkill)
+      .filter(Boolean),
     events: events.map((e) => ({
       id: e.id,
       name: e.name,
@@ -252,5 +342,14 @@ export function auditLeaks(out, allowed) {
   check(out.bonusLimits, "eventId", allowed.eventIds, "bonusLimits");
   check(out.cards, "id", allowed.cardIds, "cards");
   check(out.events, "id", allowed.eventIds, "events");
+  check(out.episodes, "cardId", allowed.cardIds, "episodes");
+  // ★ スキルは日付欄を持たないので、公開済みカードが使っているものだけであることを
+  //   ここで確かめる。未公開カード専用の新スキルは説明文だけで内容が漏れる。
+  const usedSkillIds = new Set((out.cards ?? []).map((c) => c.skillId));
+  for (const s of out.skills ?? []) {
+    if (!usedSkillIds.has(s.id)) {
+      problems.push(`skills: id=${s.id} は公開済みカードが使っていない`);
+    }
+  }
   return problems;
 }
