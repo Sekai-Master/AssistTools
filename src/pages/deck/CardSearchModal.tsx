@@ -140,46 +140,57 @@ export function CardSearchModal({
         </div>
 
         {/* キャラ選択。ゲーム内と同じ並び（レオニ→…→VS）で、1タップで絞れる。 */}
-        <div className="shrink-0 space-y-1.5">
+        {/* ★ VS は6人。1行に収めたいので、この段だけ文字と余白を詰める
+            （2行に折り返すと他のユニットと段組みが揃わず、読み取りにくい）。 */}
+        <div className="shrink-0 space-y-1">
           {UNIT_ORDER.map((unit) => (
-            <div key={unit} className="flex flex-wrap items-center gap-1">
-              <span className="w-16 shrink-0 text-[10px] font-bold text-slate-400">
+            <div key={unit} className="flex items-center gap-1">
+              <span className="w-14 shrink-0 whitespace-nowrap text-[9px] font-bold text-slate-400">
                 {UNIT_SHORT[unit]}
               </span>
-              {CHARACTERS.filter((c) => c.unit === unit).map((c) => (
-                <button
-                  key={c.ch}
-                  type="button"
-                  onClick={() => setCh(ch === c.ch ? null : c.ch)}
-                  aria-pressed={ch === c.ch}
-                  className={chip(ch === c.ch)}
-                >
-                  {c.name}
-                </button>
-              ))}
+              <span className="flex min-w-0 flex-1 gap-1">
+                {CHARACTERS.filter((c) => c.unit === unit).map((c) => (
+                  <button
+                    key={c.ch}
+                    type="button"
+                    onClick={() => setCh(ch === c.ch ? null : c.ch)}
+                    aria-pressed={ch === c.ch}
+                    className={cn(chip(ch === c.ch), "min-w-0 flex-1 truncate !px-1 !text-[10px]")}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </span>
             </div>
           ))}
         </div>
 
-        <div className="mt-2 flex shrink-0 flex-wrap gap-1">
-          {(["4", "3", "birthday", "2", "1"] as const).map((r) => (
+        {/* ★ レアリティと属性は別の軸なので行を分ける（混ざっていると、どちらの
+            絞り込みなのか一目で分からない）。Birthday は★の並びに挟まないで最後に置く。 */}
+        <div className="mt-2 flex shrink-0 items-center gap-1">
+          <span className="w-14 shrink-0 whitespace-nowrap text-[9px] font-bold text-slate-400">レア</span>
+          {(["4", "3", "2", "1", "birthday"] as const).map((r) => (
             <button
               key={r}
               type="button"
               onClick={() => setRarity(rarity === r ? null : r)}
               aria-pressed={rarity === r}
-              className={chip(rarity === r)}
+              className={cn(chip(rarity === r), "!px-2 !text-[11px]")}
             >
               {RARITY_LABEL[r]}
             </button>
           ))}
+        </div>
+
+        <div className="mt-1 flex shrink-0 items-center gap-1">
+          <span className="w-14 shrink-0 whitespace-nowrap text-[9px] font-bold text-slate-400">タイプ</span>
           {ATTR_ORDER.map((a) => (
             <button
               key={a}
               type="button"
               onClick={() => setAttr(attr === a ? null : a)}
               aria-pressed={attr === a}
-              className={chip(attr === a)}
+              className={cn(chip(attr === a), "min-w-0 flex-1 truncate !px-1 !text-[10px]")}
               style={attr === a ? undefined : { color: ATTR_COLOR[a] }}
             >
               {ATTR_LABEL[a]}
