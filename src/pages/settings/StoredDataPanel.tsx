@@ -65,6 +65,12 @@ function summarizeRanking(raw: string): string | null {
 
 const ITEMS: StoredItem[] = [
   {
+    key: "sekaimaster:profiles:v1",
+    label: "編成",
+    note: "このページで登録した総合力・ボーナスなど",
+    summarize: countEntries("件"),
+  },
+  {
     key: "sekaimaster:plans:v1",
     label: "周回プラン",
     note: "「周回プラン」で名前を付けて保存したもの",

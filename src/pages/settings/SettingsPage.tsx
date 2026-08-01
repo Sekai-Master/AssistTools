@@ -23,6 +23,7 @@ import {
   useTheme,
   type Theme,
 } from "../../lib/theme";
+import { ProfilePanel } from "./ProfilePanel";
 import { StoredDataPanel } from "./StoredDataPanel";
 
 const OPTIONS = MOTION_SETTINGS.map((v) => ({ value: v, label: MOTION_LABEL[v] }));
@@ -61,6 +62,9 @@ export function SettingsPage() {
       </h1>
 
       <div className="mt-6 space-y-6">
+        {/* 数値ツールの初期値になるので、見た目の設定より先に置く。 */}
+        <ProfilePanel />
+
         <Panel title="配色">
           <p className="text-sm text-slate-500">
             明るい配色と暗い配色を切り替えます。素材の色と影の落差が入れ替わるだけで、

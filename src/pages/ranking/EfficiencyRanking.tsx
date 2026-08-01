@@ -21,6 +21,8 @@ import {
   type RankingMode,
   type EfficiencyParams,
 } from "./lib/efficiency";
+import { ProfileBar } from "../../components/ui/ProfileBar";
+import { numOrUndef } from "../../lib/num";
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 const STORE_KEY = "sekai-master:ranking-inputs";
@@ -311,6 +313,24 @@ export default function EfficiencyRanking() {
 
   return (
     <ToolPage morphKey="tool:ranking" unit="ln" title="効率曲ランキング" icon="leaderboard" wide>
+      {/* このツールが使う値は編成そのもの（総合力・ボーナス・内部値・焚き数）。 */}
+      <ProfileBar
+        apply={(p) => {
+          if (p.power != null) setPower(String(p.power));
+          if (p.bonus != null) setBonus(String(p.bonus));
+          if (p.skillLeader != null) setSkillLeader(String(p.skillLeader));
+          if (p.skillTotal != null) setSkillTotal(String(p.skillTotal));
+          if (p.taki != null) setTaki(p.taki);
+          setCustom(true);
+        }}
+        collect={() => ({
+          power: numOrUndef(power),
+          bonus: numOrUndef(bonus),
+          skillLeader: numOrUndef(skillLeader),
+          skillTotal: numOrUndef(skillTotal),
+          taki,
+        })}
+      />
       <Panel>
         <SegmentedControl options={MODE_OPTIONS} value={mode} onChange={setMode} />
         <p className="mt-4 text-sm font-bold text-slate-600">{note.headline}</p>

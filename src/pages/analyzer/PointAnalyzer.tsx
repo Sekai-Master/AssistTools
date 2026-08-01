@@ -26,6 +26,8 @@ import { LastPlaySettings } from "./steps/LastPlaySettings";
 import { PlanExportPanel } from "./steps/PlanExportPanel";
 import type { Adopted, Step2Mode } from "./steps/liveAdjust/types";
 import { JACKET_BASE } from "./assetPaths";
+import { ProfileBar } from "../../components/ui/ProfileBar";
+import { numOrUndef } from "../../lib/num";
 
 /**
  * 計算実行時に固定した全入力のスナップショット（R6 §6-1）。
@@ -257,6 +259,15 @@ export default function PointAnalyzer() {
 
   return (
     <ToolPage morphKey="tool:analyzer" unit="mmj" title="ポイント調整アナライザー" icon="analytics">
+      {/* 総合力とボーナスは他のツールとも共通なので、編成から流し込めるようにする。
+          勝手に上書きはしない ── 押されたときだけ反映する。 */}
+      <ProfileBar
+        apply={(p) => {
+          if (p.power != null) setTalent(String(p.power));
+          if (p.bonus != null) setBonus(String(p.bonus));
+        }}
+        collect={() => ({ power: numOrUndef(talent), bonus: numOrUndef(bonus) })}
+      />
       {dataError && (
         <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
           {dataError}
