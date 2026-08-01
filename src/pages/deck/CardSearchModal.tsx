@@ -34,6 +34,8 @@ export function CardSearchModal({
   others = [],
   sameCharacterOnly = false,
   swap,
+  owned,
+  onToggleOwned,
 }: {
   cards: CatalogCard[];
   onSelect: (card: CatalogCard) => void;
@@ -57,6 +59,13 @@ export function CardSearchModal({
     /** Pt を出せているときの前提（「協力・独りんぼエンヴィー・焚き5」）。 */
     basis?: string;
   };
+  /**
+   * 持っていると登録済みのカード（育成状態の台帳にあるもの）。
+   * ★ 編成に入れなくても「持っている」だけ登録できるようにするため、
+   *   一覧の各行に印を出す（差し替え候補の母数がここで決まる）。
+   */
+  owned?: Set<number>;
+  onToggleOwned?: (card: CatalogCard) => void;
   /**
    * チャレンジライブの編成。
    * ★ 条件が**逆**になる: 同じキャラのカードだけで5枚組む（他のキャラは選べない）。
@@ -247,13 +256,15 @@ export function CardSearchModal({
                 ? usedIds.has(c.id) || (requiredCh != null && c.ch !== requiredCh)
                 : usedChars.has(c.ch);
               return (
+                // ★ 行は「選ぶ」ボタンと「持っている」トグルの2つを持つので、
+                //   行自体をボタンにはしない（ボタンの入れ子は成立しない）。
+                <div key={c.id} className="flex items-center gap-1">
                 <button
-                  key={c.id}
                   type="button"
                   disabled={taken}
                   onClick={() => onSelect(c)}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left",
+                    "flex min-w-0 flex-1 items-center gap-2 rounded px-2 py-1.5 text-left",
                     taken
                       ? "opacity-40"
                       : "hover:bg-[color:color-mix(in_srgb,var(--neu-ink)_9%,transparent)]"
@@ -312,6 +323,34 @@ export function CardSearchModal({
                     </span>
                   )}
                 </button>
+
+                {/* ★ 編成に入れなくても「持っている」だけ登録できる。ここが増えるほど
+                    差し替え候補の母数が増える（台帳＝持っている証拠があるカード）。 */}
+                {onToggleOwned && (
+                  <button
+                    type="button"
+                    aria-pressed={!!owned?.has(c.id)}
+                    aria-label={owned?.has(c.id) ? `${c.name} を持っていない扱いにする` : `${c.name} を持っている扱いにする`}
+                    title={
+                      usedIds.has(c.id)
+                        ? "編成に入っているカードは登録を外せません"
+                        : "持っているカードとして登録します（編成には入れません）"
+                    }
+                    disabled={usedIds.has(c.id)}
+                    onClick={() => onToggleOwned(c)}
+                    className={cn(
+                      "shrink-0 rounded-full px-2 py-1 text-[10px] font-bold",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
+                      owned?.has(c.id)
+                        ? "neu-selected"
+                        : "bg-neu text-slate-400 shadow-neu-sm",
+                      usedIds.has(c.id) && "opacity-40"
+                    )}
+                  >
+                    所持
+                  </button>
+                )}
+                </div>
               );
             })
           )}

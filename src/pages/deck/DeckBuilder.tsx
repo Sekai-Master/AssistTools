@@ -114,6 +114,8 @@ export default function DeckBuilder() {
     [cardIds, catalog]
   );
   const cards = useMemo(() => filledCards(slots), [slots]);
+  /** 台帳にあるカード＝「持っている」と登録済みのカード。 */
+  const ownedIds = useMemo(() => new Set(Object.keys(states).map(Number)), [states]);
 
   /**
    * 計算はここで1回だけ行い、各パネルへ結果を配る。
@@ -156,6 +158,21 @@ export default function DeckBuilder() {
       // スプレッドで消えないように patch のキー有無で判定する。
       const next: CardStates = { ...prev, [cardId]: { ...base, ...patch } };
       if ("masterRank" in patch && patch.masterRank == null) delete next[cardId].masterRank;
+      writeCardStates(next);
+      return next;
+    });
+  };
+
+  /**
+   * 「持っている」だけ登録する（編成には入れない）。
+   * ★ 台帳が育つほど差し替え候補の母数が増える。全部入力させる設計にはせず、
+   *   カードを探しているついでに1枚ずつ足せる形にしてある。
+   */
+  const toggleOwned = (card: CatalogCard) => {
+    setStates((prev) => {
+      const next = { ...prev };
+      if (next[card.id]) delete next[card.id];
+      else next[card.id] = defaultCardState(maxLevelOf(card), isTrainable(card));
       writeCardStates(next);
       return next;
     });
@@ -544,6 +561,8 @@ export default function DeckBuilder() {
           others={slots.filter((c, i): c is CatalogCard => !!c && i !== pickIndex)}
           sameCharacterOnly={mode === "challenge"}
           swap={swap}
+          owned={ownedIds}
+          onToggleOwned={toggleOwned}
           onSelect={(card) => selectCard(pickIndex, card)}
           onClose={() => setPickIndex(null)}
         />
