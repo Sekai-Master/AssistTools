@@ -2,7 +2,7 @@ import { NeuButton } from "../../components/ui/NeuButton";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { cn } from "../../lib/utils";
 import { ATTR_COLOR, ATTR_LABEL, RARITY_LABEL, UNIT_SHORT, characterName } from "./lib/characters";
-import { isTrainable, maxLevelOf, type CatalogCard } from "./lib/deckInputs";
+import { applyTrained, isTrainable, levelCapOf, type CatalogCard } from "./lib/deckInputs";
 import type { CardState } from "./lib/deckStore";
 import { CardThumb } from "./CardThumb";
 
@@ -34,7 +34,8 @@ function CardStateEditor({
   state: CardState;
   onChange: (patch: Partial<CardState>) => void;
 }) {
-  const maxLevel = maxLevelOf(card);
+  // ★ 特訓前は上限が10低い（★3=40 / ★4=50）。実機で作れない状態を入力させない。
+  const maxLevel = levelCapOf(card, state.trained);
   const trainable = isTrainable(card);
 
   return (
@@ -66,10 +67,24 @@ function CardStateEditor({
           <button
             type="button"
             aria-pressed={state.trained}
-            onClick={() => onChange({ trained: !state.trained })}
+            // 上限レベルと後編の連動は applyTrained が面倒を見る（画面では持たない）。
+            onClick={() => onChange(applyTrained(state, card, !state.trained))}
             className={chip(state.trained)}
           >
             特訓
+          </button>
+        )}
+        {/* ★ 絵だけ特訓前に戻す。**計算には効かない見た目だけの設定**なので特訓とは別のボタン。
+            特訓を外して絵を戻すと、上限レベルと後編まで巻き添えで動いてしまう。 */}
+        {trainable && state.trained && (
+          <button
+            type="button"
+            aria-pressed={!!state.artUntrained}
+            title="計算には影響しません（絵だけ特訓前に戻します）"
+            onClick={() => onChange({ artUntrained: !state.artUntrained })}
+            className={chip(!!state.artUntrained)}
+          >
+            絵は特訓前
           </button>
         )}
         <button
@@ -99,15 +114,8 @@ function CardStateEditor({
       </div>
 
       <div className="flex flex-wrap items-center gap-1">
+        {/* ★ 既定は 0。「未設定」という状態は持たない（Nori 指示 2026-08-02）。 */}
         <span className="mr-1 text-xs text-slate-500">MR</span>
-        <button
-          type="button"
-          aria-pressed={state.masterRank == null}
-          onClick={() => onChange({ masterRank: undefined })}
-          className={chip(state.masterRank == null)}
-        >
-          未設定
-        </button>
         {[0, 1, 2, 3, 4, 5].map((mr) => (
           <button
             key={mr}
@@ -167,7 +175,7 @@ export function DeckSlots({
               <>
                 <div className="flex items-start gap-2">
                   {/* 特訓の有無で絵が変わる。編成の状態がそのまま見た目に出る。 */}
-                  <CardThumb card={card} trained={!!state?.trained} size={48} />
+                  <CardThumb card={card} trained={!!state?.trained && !state?.artUntrained} size={48} />
                   <span
                     className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
                     style={{ backgroundColor: ATTR_COLOR[card.attr] ?? "#888" }}
@@ -187,8 +195,7 @@ export function DeckSlots({
                       {card.supportUnit && ` ・ ${UNIT_SHORT[card.supportUnit] ?? card.supportUnit}`}
                       {state && ` ・ Lv${state.level}`}
                       {state?.trained && " 特訓"}
-                      {/* ★ 未設定は隠さない。合計が暫定値であることが1目で分かるように。 */}
-                      {state && (state.masterRank == null ? " ・ MR未設定" : ` ・ MR${state.masterRank}`)}
+                      {state && ` ・ MR${state.masterRank ?? 0}`}
                     </span>
                   </button>
                   <button

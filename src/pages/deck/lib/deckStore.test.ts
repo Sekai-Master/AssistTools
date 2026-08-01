@@ -37,11 +37,13 @@ describe("育成状態", () => {
     expect(readCardStates()).toEqual(states);
   });
 
-  it("未設定のマスターランクは 0 に潰さない", () => {
-    const s = defaultCardState(60, true);
-    expect(s.masterRank).toBeUndefined();
-    writeCardStates({ 471: s });
-    expect(readCardStates()[471].masterRank).toBeUndefined();
+  it("マスターランクの既定は 0（未設定という状態を持たない）", () => {
+    expect(defaultCardState(60, true).masterRank).toBe(0);
+  });
+
+  it("以前のバージョンの「未設定」は読み込み時に 0 へ寄せる", () => {
+    const { masterRank: _drop, ...old } = defaultCardState(60, true);
+    expect(parseCardStates({ 471: old })[471].masterRank).toBe(0);
   });
 
   it("レアリティに応じた既定値になる（★1は特訓しても加算が無いので false）", () => {

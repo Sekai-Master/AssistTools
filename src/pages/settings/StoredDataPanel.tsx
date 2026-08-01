@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
 import { Panel } from "../../components/ui/Panel";
 import { NeuButton } from "../../components/ui/NeuButton";
-import { MOTION_LABEL, MOTION_SETTINGS, type MotionSetting } from "../../motion/plan";
-import { THEME_LABEL, THEMES, type Theme } from "../../lib/theme";
+import { STORED_ITEMS, type StoredItem } from "./lib/storedItems";
 
 /**
  * この端末に保存しているもの。
@@ -15,132 +14,16 @@ import { THEME_LABEL, THEMES, type Theme } from "../../lib/theme";
  *   利用者には何の意味も無いし、空配列 `[]` が保存済みに見えてしまう
  *   （実際そうなっていた）。中身が実質空なら行ごと出さない。
  *
- * ★ キーは各ツールが持っている実体をそのまま並べている。命名が揃っていないのは
- *   歴史的経緯で、揃えると保存済みデータが読めなくなるため触っていない。
+ * ★ 台帳（どのキーがあるか）は `lib/storedItems.ts` に置いてある。書き出し・取り込み
+ *   （BackupPanel）と共有していて、**新しい保存キーを作ったらそちらに足す**。
  */
-interface StoredItem {
-  key: string;
-  label: string;
-  note: string;
-  /** 中身の要約。実質空なら null を返す（＝一覧に出さない）。 */
-  summarize: (raw: string) => string | null;
-}
-
-/** 壊れた内容でも「消す」導線は出したいので、読めない場合は null にしない。 */
-const BROKEN = "内容を読み取れませんでした";
-
-/** 配列で持っているもの（プラン・履歴）。 */
-const countEntries =
-  (unit: string) =>
-  (raw: string): string | null => {
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return BROKEN;
-      return parsed.length === 0 ? null : `${parsed.length} ${unit}`;
-    } catch {
-      return BROKEN;
-    }
-  };
-
-/** オブジェクトで持っているもの（カードごと・キャラごとの設定）。 */
-const countKeys =
-  (unit: string) =>
-  (raw: string): string | null => {
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return BROKEN;
-      const n = Object.keys(parsed).length;
-      return n === 0 ? null : `${n} ${unit}`;
-    } catch {
-      return BROKEN;
-    }
-  };
-
-/** 選択肢のどれかを文字列で持っているもの（各種設定）。 */
-const pickLabel =
-  <T extends string>(values: readonly T[], labels: Record<T, string>) =>
-  (raw: string): string | null =>
-    (values as readonly string[]).includes(raw) ? labels[raw as T] : BROKEN;
-
-/**
- * ランキングの入力。保存時に必ずバージョン `v` が入るので、
- * それ以外のキーが1つも無ければ「まだ何も入力していない」とみなす。
- */
-function summarizeRanking(raw: string): string | null {
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return BROKEN;
-    const keys = Object.keys(parsed).filter((k) => k !== "v");
-    return keys.length === 0 ? null : `${keys.length} 項目`;
-  } catch {
-    return BROKEN;
-  }
-}
-
-const ITEMS: StoredItem[] = [
-  {
-    key: "sekaimaster:profiles:v1",
-    label: "編成",
-    note: "このページで登録した総合力・ボーナスなど",
-    summarize: countEntries("件"),
-  },
-  {
-    key: "sekaimaster:plans:v1",
-    label: "周回プラン",
-    note: "「周回プラン」で名前を付けて保存したもの",
-    summarize: countEntries("件"),
-  },
-  {
-    // 「編成ビルダー」の保存キー（src/pages/deck/lib/deckStore.ts の DECK_STORAGE_KEYS）。
-    key: "sekaimaster:deck:decks:v1",
-    label: "編成ビルダーの編成",
-    note: "「編成ビルダー」で名前を付けて保存したカード5枚の組み合わせ",
-    summarize: countEntries("件"),
-  },
-  {
-    key: "sekaimaster:deck:cards:v1",
-    label: "カードの育成状態",
-    note: "レベル・特訓・マスターランク・サイドストーリーなど（カードごと）",
-    summarize: countKeys("枚"),
-  },
-  {
-    key: "sekaimaster:deck:player:v1",
-    label: "プレイヤー設定（編成ビルダー）",
-    note: "エリアアイテム効果・キャラクターランク・ゲート・家具・称号",
-    summarize: countKeys("項目"),
-  },
-  {
-    key: "tweetGenerator.history",
-    label: "ついぼの入力履歴",
-    note: "「ついぼジェネレーター」で保存した募集内容",
-    summarize: countEntries("件"),
-  },
-  {
-    key: "sekai-master:ranking-inputs",
-    label: "ランキングの入力",
-    note: "「効率曲ランキング」の総合力・イベントボーナスなど",
-    summarize: summarizeRanking,
-  },
-  {
-    key: "sekaimaster:motion:v1",
-    label: "画面遷移の設定",
-    note: "このページで選んだ段階",
-    summarize: pickLabel<MotionSetting>(MOTION_SETTINGS, MOTION_LABEL),
-  },
-  {
-    key: "sekaimaster:theme:v1",
-    label: "配色の設定",
-    note: "このページで選んだ配色",
-    summarize: pickLabel<Theme>(THEMES, THEME_LABEL),
-  },
-];
 
 interface Row extends StoredItem {
   summary: string;
 }
 
 function readRows(): Row[] {
-  return ITEMS.flatMap((item) => {
+  return STORED_ITEMS.flatMap((item) => {
     let raw: string | null = null;
     try {
       raw = localStorage.getItem(item.key);

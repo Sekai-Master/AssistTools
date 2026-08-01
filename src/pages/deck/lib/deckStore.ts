@@ -19,14 +19,23 @@ export interface CardState {
   level: number;
   trained: boolean;
   /**
-   * ★ 未設定は undefined のまま持つ。**0（マスターランク0）と混同しない。**
-   *   eventBonus.ts / power.ts が未設定を結果に残す設計になっているので、
-   *   ここで 0 に潰すと画面から「未設定」の警告が消えてしまう。
+   * マスターランク（0〜5）。
+   * ★ 画面では**既定を 0 にして「未設定」を持たない**（Nori 指示 2026-08-02）。
+   *   計算モジュール側は未設定（undefined）を区別できるままにしてあるが、
+   *   この画面からは常に値を渡す。0 は「まだ上げていない」の意味で実在する状態で、
+   *   毎回5枚ぶん選ばせるほうが手間に見合わない、という判断。
    */
   masterRank?: number;
   /** 読了したサイドストーリー。入れ忘れると1編成で1万以上ずれる（docs/deck-builder.md）。 */
   episodes: { first: boolean; latter: boolean };
   canvas: boolean;
+  /**
+   * 絵だけ特訓前のものを出す。
+   * ★ **計算には一切効かない、見た目だけの設定。** 特訓後の絵より前の絵が好き、
+   *   というだけの理由で特訓フラグを外されると、上限レベルも後編も巻き添えで
+   *   狂って数字が合わなくなる。だから絵の切り替えは別の設定として持つ。
+   */
+  artUntrained?: boolean;
 }
 
 export type CardStates = Record<number, CardState>;
@@ -90,6 +99,7 @@ export function isCardState(v: unknown): v is CardState {
   if (c.masterRank != null && (!isFiniteNum(c.masterRank) || c.masterRank < 0 || c.masterRank > 5)) {
     return false;
   }
+  if (c.artUntrained != null && typeof c.artUntrained !== "boolean") return false;
   const e = c.episodes;
   if (!e || typeof e !== "object") return false;
   return typeof e.first === "boolean" && typeof e.latter === "boolean";
@@ -103,7 +113,8 @@ export function parseCardStates(raw: unknown): CardStates {
     // JSON のキーは文字列。数値でないキー（改竄・別バージョンの残骸）は捨てる。
     if (!Number.isInteger(id) || id <= 0) continue;
     if (!isCardState(value)) continue;
-    out[id] = { ...value, episodes: { ...value.episodes } };
+    // 以前のバージョンは「未設定」を持っていた。読み込み時に 0 へ寄せる。
+    out[id] = { ...value, masterRank: value.masterRank ?? 0, episodes: { ...value.episodes } };
   }
   return out;
 }
@@ -121,8 +132,7 @@ export function writeCardStates(states: CardStates): void {
  *
  * ★ レベルと前後編は**入っている側**に倒す。編成に入れるカードは育成済みが普通で、
  *   サイドストーリーの入れ忘れは1編成で1万以上ずれる（docs/deck-builder.md）。
- * ★ マスターランクだけは既定を置かない（人によるため）。undefined のまま持ち、
- *   画面に「未設定」として出す。
+ * ★ マスターランクは 0 から始める（未設定という状態を持たない）。
  *
  * @param maxLevel そのレアリティの上限（cards.json の power[0].length。★1=20 … ★4=60）
  * @param trainable 特訓の加算を持つか（★1・★2 は特訓しても加算が0）
@@ -131,7 +141,7 @@ export function defaultCardState(maxLevel: number, trainable: boolean): CardStat
   return {
     level: maxLevel,
     trained: trainable,
-    masterRank: undefined,
+    masterRank: 0,
     episodes: { first: true, latter: true },
     canvas: false,
   };

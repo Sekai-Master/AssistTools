@@ -17,9 +17,25 @@ export interface CatalogCard extends PowerCardData {
   asset?: string;
 }
 
-/** そのカードの上限レベル。★1=20 / ★2=30 / ★3=50 / ★4・birthday=60。 */
+/** 特訓まで済ませたときの上限レベル。★1=20 / ★2=30 / ★3=50 / ★4・birthday=60。 */
 export function maxLevelOf(card: PowerCardData): number {
   return card.power[0]?.length ?? 1;
+}
+
+/** 特訓前の上限は10下がる（★3=40 / ★4=50）。 */
+export const UNTRAINED_LEVEL_GAP = 10;
+
+/**
+ * いまの育成状態で到達できる上限レベル。
+ *
+ * ★ 特訓できるカード（★3・★4）は、**特訓前は上限が10低い**。
+ *   ここを見ずに「レアリティの上限」で入力させると、実機では作れない
+ *   ★4 Lv60・特訓なしのような編成の数字が出てしまう。
+ *   特訓の加算を持たないカード（★1・★2・birthday）は特訓の概念自体が無いので変わらない。
+ */
+export function levelCapOf(card: PowerCardData, trained: boolean): number {
+  const max = maxLevelOf(card);
+  return isTrainable(card) && !trained ? Math.max(1, max - UNTRAINED_LEVEL_GAP) : max;
 }
 
 /**
@@ -38,7 +54,8 @@ export function filledCards(slots: (CatalogCard | null)[]): CatalogCard[] {
 
 /**
  * イベントボーナス用の詰め替え。
- * ★ masterRank は**未設定なら undefined のまま**渡す（0 と混同しない）。
+ * ★ マスターランクは画面では常に値を持つ（既定 0・未設定という状態を置かない）。
+ *   台帳にまだ無いカードも 0 として渡す。
  */
 export function toBonusDeck(cards: CatalogCard[], states: CardStates): DeckCard[] {
   return cards.map((card) => ({
@@ -47,7 +64,7 @@ export function toBonusDeck(cards: CatalogCard[], states: CardStates): DeckCard[
     rarity: card.rarity,
     attr: card.attr,
     ...(card.supportUnit ? { supportUnit: card.supportUnit } : {}),
-    masterRank: states[card.id]?.masterRank,
+    masterRank: states[card.id]?.masterRank ?? 0,
   }));
 }
 
@@ -56,7 +73,7 @@ export function toBonusDeck(cards: CatalogCard[], states: CardStates): DeckCard[
  *
  * ★ 育成状態が未登録のカードは「上限レベル・前後編読了・特訓済み」で仮に置く
  *   （defaultCardState と同じ既定）。ここで level を 1 に倒すと総合力が数万ずれるが
- *   画面はそれらしく見えてしまう。マスターランクだけは undefined を維持する。
+ *   画面はそれらしく見えてしまう。
  */
 export function toPowerDeck(cards: CatalogCard[], states: CardStates): DeckPowerCard[] {
   return cards.map((card) => {
@@ -64,12 +81,32 @@ export function toPowerDeck(cards: CatalogCard[], states: CardStates): DeckPower
     return {
       cardId: card.id,
       level: s?.level ?? maxLevelOf(card),
-      masterRank: s?.masterRank,
+      masterRank: s?.masterRank ?? 0,
       trained: s?.trained ?? isTrainable(card),
       episodes: s?.episodes ?? { first: true, latter: true },
       canvas: s?.canvas ?? false,
     };
   });
+}
+
+/**
+ * 特訓の切り替えに伴って、他の項目も現実に合わせる。
+ *
+ * ★ 特訓を外すと**上限レベルが10下がる**ので、それを超えていたレベルは連れて下げる。
+ *   放っておくと「特訓なしで Lv60」という実機では存在しない状態のまま計算され、
+ *   総合力だけが数千多く出る（画面は何も警告しない）。
+ * ★ **後編は特訓後にしか読めない**ので、特訓を外したら未読に戻す。
+ *   サイドストーリーは1編成で1万以上動くので、ここのズレは大きい。
+ * ★ 絵だけ特訓前に戻す設定（artUntrained）は見た目の話なので、ここでは触らない。
+ */
+export function applyTrained(state: CardState, card: PowerCardData, trained: boolean): CardState {
+  const cap = levelCapOf(card, trained);
+  return {
+    ...state,
+    trained,
+    level: Math.min(state.level, cap),
+    episodes: trained ? state.episodes : { ...state.episodes, latter: false },
+  };
 }
 
 export interface EventRow {

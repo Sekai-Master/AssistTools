@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Panel } from "../../components/ui/Panel";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { cn } from "../../lib/utils";
-import { ATTR_LABEL, ATTR_ORDER, CHARACTERS, UNIT_NAME, UNIT_ORDER } from "./lib/characters";
+import { AREA_UNIT_ORDER, ATTR_LABEL, ATTR_ORDER, CHARACTERS, UNIT_NAME } from "./lib/characters";
 import { sanitizeDecimal } from "./lib/deckInputs";
 import type { FixtureCounts, PlayerSettings } from "./lib/playerStore";
 
@@ -101,7 +101,7 @@ export function PlayerSettingsPanel({
             <div>
               <p className="mb-1 text-xs font-bold text-slate-500">ユニット</p>
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                {UNIT_ORDER.map((u) => (
+                {AREA_UNIT_ORDER.map((u) => (
                   <label key={u} className="flex items-center gap-1.5 text-xs text-slate-600">
                     <NumCell
                       label={`${UNIT_NAME[u]} のエリア効果`}
@@ -177,7 +177,7 @@ export function PlayerSettingsPanel({
           hint="レベル1〜40。ゲートは5ユニットぶんだけで、VS のゲートはありません"
         >
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-            {UNIT_ORDER.filter((u) => u !== "piapro").map((u) => (
+            {AREA_UNIT_ORDER.filter((u) => u !== "piapro").map((u) => (
               <label key={u} className="flex items-center gap-1.5 text-xs text-slate-600">
                 <NumCell
                   label={`${UNIT_NAME[u]} のゲートのレベル`}

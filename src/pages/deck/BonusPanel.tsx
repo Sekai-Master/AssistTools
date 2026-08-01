@@ -113,13 +113,6 @@ export function BonusPanel({
             })}
           </ul>
 
-          {/* ★ 未設定を黙って0で計算したことを隠さない。合計は暫定値。 */}
-          {result.unsetMasterRank.length > 0 && (
-            <p className="mt-3 text-xs text-amber-600">
-              ⚠ マスターランク未設定のカードが {result.unsetMasterRank.length} 枚あります（0として計算した暫定値）。
-              カードをタップして入力してください。
-            </p>
-          )}
           {result.cappedOut > 0 && (
             <p className="mt-2 text-xs text-amber-600">
               ⚠ このイベントは対象人数に上限があり、{result.cappedOut} 枚ぶんのボーナスが効いていません

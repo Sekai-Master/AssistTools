@@ -10,10 +10,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  applyTrained,
   defaultEventId,
   displayBonus,
   filledCards,
   isTrainable,
+  levelCapOf,
   maxLevelOf,
   sanitizeDecimal,
   toBonusDeck,
@@ -45,20 +47,58 @@ describe("カードの素性", () => {
   });
 });
 
+describe("特訓と上限レベル", () => {
+  it("特訓前は上限が10低い（★3=40 / ★4=50）", () => {
+    expect(levelCapOf(card(471), true)).toBe(60); // ★4 特訓後
+    expect(levelCapOf(card(471), false)).toBe(50); // ★4 特訓前
+    const r3 = catalog.get(419)!; // ★3
+    expect(r3.rarity).toBe("3");
+    expect(levelCapOf(r3, true)).toBe(50);
+    expect(levelCapOf(r3, false)).toBe(40);
+  });
+
+  it("特訓の無いカード（★1・★2・birthday）は変わらない", () => {
+    expect(levelCapOf(card(1), false)).toBe(20);
+    const bd = cardsJson.cards.find((c) => c.rarity === "birthday")!;
+    expect(levelCapOf(bd, false)).toBe(maxLevelOf(bd));
+  });
+
+  it("特訓を外すと、上限を超えたレベルと後編の読了が連れて戻る", () => {
+    const state = { ...defaultCardState(60, true), level: 60 };
+    const off = applyTrained(state, card(471), false);
+    expect(off.level).toBe(50);
+    // ★ 後編は特訓後にしか読めない。読了のまま残すと1編成で1万以上ずれる。
+    expect(off.episodes.latter).toBe(false);
+    expect(off.episodes.first).toBe(true);
+  });
+
+  it("特訓を付け直しても、後編は勝手に読了にしない", () => {
+    const off = applyTrained({ ...defaultCardState(60, true), level: 60 }, card(471), false);
+    const on = applyTrained(off, card(471), true);
+    expect(on.trained).toBe(true);
+    expect(on.level).toBe(50); // 下げたレベルは戻さない（本人が上げる）
+    expect(on.episodes.latter).toBe(false);
+  });
+
+  it("上限より低いレベルは触らない", () => {
+    const s = { ...defaultCardState(60, true), level: 30 };
+    expect(applyTrained(s, card(471), false).level).toBe(30);
+  });
+});
+
 describe("イベントボーナスへの詰め替え", () => {
   const cards = [card(1), card(471)];
 
-  it("未設定のマスターランクを 0 で埋めない", () => {
+  it("台帳にまだ無いカードも 0 として渡す（未設定という状態を持たない）", () => {
     const deck = toBonusDeck(cards, {});
-    expect(deck.every((d) => d.masterRank === undefined)).toBe(true);
+    expect(deck.every((d) => d.masterRank === 0)).toBe(true);
   });
 
   it("入力済みの値はそのまま渡す", () => {
-    const states: CardStates = { 1: { ...defaultCardState(20, false), masterRank: 0 } };
+    const states: CardStates = { 1: { ...defaultCardState(20, false), masterRank: 3 } };
     const deck = toBonusDeck(cards, states);
-    // ★ 0 と undefined を取り違えないこと。0 は「入力された 0」。
-    expect(deck[0].masterRank).toBe(0);
-    expect(deck[1].masterRank).toBeUndefined();
+    expect(deck[0].masterRank).toBe(3);
+    expect(deck[1].masterRank).toBe(0);
   });
 
   it("ユニット限定カードの supportUnit を落とさない", () => {
@@ -79,7 +119,7 @@ describe("総合力への詰め替え", () => {
       episodes: { first: true, latter: true },
       canvas: false,
     });
-    expect(d.masterRank).toBeUndefined();
+    expect(d.masterRank).toBe(0);
   });
 
   it("登録済みの育成状態を優先する", () => {
