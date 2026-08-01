@@ -245,10 +245,14 @@ export function aimMorph(target: EventTarget | null): void {
  * 印付きの要素を採る ── 戻るときのツールページのように、印が1つしか無い場合は
  * これで足りる（＝戻る/進むでも同じ動きになる）。
  */
-export function captureMorph(stage: Element | null): void {
+export function captureMorph(stage: Element | null, destKey?: string | null): void {
   if (captured && now() - aimedAt < AIM_TTL_MS) return; // 押下で指名済み
   cancelMorph();
   if (!stage) return;
+  // ★ 行き先が印を持たないなら持ち上げない。持ち上げると本文だけ沈んで
+  //   **機能名だけが宙に残り**、行き先が見つからずに消える（issue #3）。
+  //   ツール→ツールがまさにこれで、印はどちらにもあるがキーが違う。
+  if (destKey === null) return;
 
   const visible = Array.from(stage.querySelectorAll<HTMLElement>(`[${MORPH_ATTR}]`)).filter(
     (el) => {
@@ -259,6 +263,9 @@ export function captureMorph(stage: Element | null): void {
   );
   // 候補が複数あるのに押下の指名が無い＝どれを飛ばすか決められない。何もしない。
   if (visible.length !== 1) return;
+  // 行き先の印が分かっているなら、一致するときだけ持ち上げる（"*" は不問＝ハブ）。
+  const key = visible[0].getAttribute(MORPH_ATTR);
+  if (destKey != null && destKey !== "*" && destKey !== key) return;
   captured = lift(visible[0]);
 }
 

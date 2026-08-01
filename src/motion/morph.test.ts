@@ -65,6 +65,40 @@ describe("出発点の指名", () => {
     expect(t.style.visibility).toBe("hidden");
   });
 
+  /**
+   * ★ ツールからツールへ移ると、印はどちらにもあるがキーが違う。持ち上げると
+   *   本文だけ沈んで**機能名だけが宙に残り**、行き先が見つからずに消える（issue #3）。
+   */
+  it("行き先が違う印しか持たないなら持ち上げない", () => {
+    const stage = mount(`<h1 ${MORPH_ATTR}="tool:x" id="t"></h1>`);
+    const t = sized(stage.querySelector("#t")!, 10, 10, 600, 48);
+
+    captureMorph(stage, "tool:y");
+    expect(boxes().length).toBe(0);
+    expect(t.style.visibility).toBe("");
+  });
+
+  it("行き先が印を持たない画面（設定・404）なら持ち上げない", () => {
+    const stage = mount(`<h1 ${MORPH_ATTR}="tool:x" id="t"></h1>`);
+    sized(stage.querySelector("#t")!, 10, 10, 600, 48);
+
+    captureMorph(stage, null);
+    expect(boxes().length).toBe(0);
+  });
+
+  it("行き先が同じ印を持つ / ハブ（不問）なら持ち上げる", () => {
+    const stage = mount(`<h1 ${MORPH_ATTR}="tool:x" id="t"></h1>`);
+    sized(stage.querySelector("#t")!, 10, 10, 600, 48);
+    captureMorph(stage, "tool:x");
+    expect(boxes().length).toBe(1);
+
+    cancelMorph();
+    const stage2 = mount(`<h1 ${MORPH_ATTR}="tool:x" id="t2"></h1>`);
+    sized(stage2.querySelector("#t2")!, 10, 10, 600, 48);
+    captureMorph(stage2, "*");
+    expect(boxes().length).toBe(1);
+  });
+
   it("押下で指名すればその1枚が持ち上がる", () => {
     const stage = mount(`
       <a id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>

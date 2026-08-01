@@ -87,6 +87,23 @@ export const RoutePages = {
   deck: lazyOf("/deck"),
 };
 
+/**
+ * その画面が持つ共有要素の印（morph のキー）。
+ *
+ * ★ 行き先が同じ印を持たないなら、出発点を持ち上げてはいけない。持ち上げると
+ *   **本文だけ沈んで機能名だけが宙に残り**、行き先が見つからずに消える
+ *  （ツールからツールへ移ったときに実際にそう見えていた・issue #3）。
+ *
+ * - ハブ: 全ツールのカードを持つので `"*"`（どの印にも一致しうる）
+ * - ツール: 見出しに1つだけ（`tool:<id>`）
+ * - それ以外（設定・404）: 印を持たない
+ */
+export function morphKeyOf(pathname: string): string | null {
+  if (pathname === "/") return "*";
+  const tool = TOOLS.find((t) => t.path === pathname);
+  return tool ? `tool:${tool.id}` : null;
+}
+
 /** aria-live に流す遷移先の名前。 */
 export function routeTitle(pathname: string): string {
   if (pathname === "/") return "ツール一覧";

@@ -17,7 +17,7 @@ import { flushStyles, markDivisions } from "./divisions";
 import { cancelMorph, captureMorph, flyMorph } from "./morph";
 import { initialState, reduce, stageAttrs, type StageEvent, type StageState } from "./machine";
 import { resolvePlan, stageVars } from "./plan";
-import { announceText, prefetchRoute } from "./routes";
+import { announceText, morphKeyOf, prefetchRoute } from "./routes";
 import { createScrollMemory } from "./scrollMemory";
 import { useMotionSetting } from "./settingsStore";
 import { useReducedMotion, useTouchOnly } from "./environment";
@@ -99,7 +99,8 @@ export function useRouteStage() {
           window.scrollTo(0, eff.pop ? scroll.current.restore(eff.key) : 0);
           break;
         case "morphCapture":
-          captureMorph(stageRef.current);
+          // 行き先が同じ印を持つときだけ持ち上げる（持たないなら何もしない）。
+          captureMorph(stageRef.current, morphKeyOf(targetRef.current.pathname));
           break;
         case "morphFly":
           flyMorph(stageRef.current, {
