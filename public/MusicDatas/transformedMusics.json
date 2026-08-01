@@ -8027,7 +8027,8 @@
     "default": 1640901,
     "Unit": "5_25",
     "categories": [
-      "mv_3d"
+      "mv_3d",
+      "mv_2d"
     ],
     "publishedAt": 1715925600000,
     "published": true,
@@ -13418,7 +13419,26 @@
     "isFullLength": false,
     "jacketLink": "jacket_s_765.webp",
     "music_time": 95,
-    "event_rate": 106
+    "event_rate": 105
+  },
+  {
+    "id": "789",
+    "title": "天秤、指先で触れて",
+    "pronunciation": "てんびん、ゆびさきでふれて",
+    "creatorArtistId": 231,
+    "artistName": "卯花ロク",
+    "default": 2267401,
+    "Unit": "1_L/n",
+    "categories": [
+      "mv_2d"
+    ],
+    "publishedAt": 1785477600000,
+    "published": true,
+    "isNewlyWrittenMusic": true,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_789.webp",
+    "music_time": 121.8,
+    "event_rate": 113
   },
   {
     "id": "790",
@@ -13476,5 +13496,43 @@
     "jacketLink": "jacket_s_792.webp",
     "music_time": 121.3,
     "event_rate": 113
+  },
+  {
+    "id": "794",
+    "title": "デロスサントス",
+    "pronunciation": "でろすさんとす",
+    "creatorArtistId": 337,
+    "artistName": "山本",
+    "default": 1167501,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1785736800000,
+    "published": false,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_794.webp",
+    "music_time": 125.2,
+    "event_rate": 114
+  },
+  {
+    "id": "795",
+    "title": "一億年恋してる",
+    "pronunciation": "いちおくねんこいしてる",
+    "creatorArtistId": 283,
+    "artistName": "いのうつはSA",
+    "default": 1167601,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1785823200000,
+    "published": false,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_795.webp",
+    "music_time": 123,
+    "event_rate": 114
   }
 ]
