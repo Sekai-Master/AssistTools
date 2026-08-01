@@ -1,4 +1,6 @@
-import { defineConfig } from 'vite'
+// ★ 'vite' ではなく 'vitest/config' から取る。test セクションの型が付くのは
+//    こちらだけで、'vite' の defineConfig に test を書くと tsc が通らない。
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
