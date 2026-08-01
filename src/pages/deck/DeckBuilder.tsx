@@ -9,6 +9,7 @@ import { DeckSlots } from "./DeckSlots";
 import { BonusPanel } from "./BonusPanel";
 import { PowerPanel } from "./PowerPanel";
 import { SkillPanel } from "./SkillPanel";
+import { SharePanel } from "./SharePanel";
 import { PlayerSettingsPanel } from "./PlayerSettingsPanel";
 import { ComparePanel } from "./ComparePanel";
 import { SaveToProfile } from "../../components/ui/ProfileBar";
@@ -262,6 +263,15 @@ export default function DeckBuilder() {
           <PowerPanel cards={cards} result={evaluated.power} settings={player} />
 
           <SkillPanel cards={cards} result={evaluated.skill} />
+
+          <SharePanel
+            deckName={deckName}
+            eventName={data?.events.find((e) => e.id === eventId)?.name}
+            cards={cards}
+            states={states}
+            evaluated={evaluated}
+            leaderCardId={cardIds[leaderIndex] ?? undefined}
+          />
 
           {/* ★ 出した値を他のツール（ランキング・アナライザー・稼働時間）へ渡す導線。
               値を出している場所のすぐ隣に置く（ProfileBar.tsx の規約）。 */}
