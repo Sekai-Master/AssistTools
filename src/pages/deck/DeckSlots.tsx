@@ -201,7 +201,13 @@ export function DeckSlots({
               <>
                 <div className="flex items-start gap-2">
                   {/* 特訓の有無で絵が変わる。編成の状態がそのまま見た目に出る。 */}
-                  <CardThumb card={card} trained={!!state?.trained && !state?.artUntrained} size={48} />
+                  {/* マスターランクはゲームと同じくカードの左下にひし形で出す。 */}
+                  <CardThumb
+                    card={card}
+                    trained={!!state?.trained && !state?.artUntrained}
+                    masterRank={state?.masterRank ?? 0}
+                    size={48}
+                  />
                   <span
                     className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
                     style={{ backgroundColor: ATTR_COLOR[card.attr] ?? "#888" }}
@@ -221,7 +227,8 @@ export function DeckSlots({
                       {card.supportUnit && ` ・ ${UNIT_SHORT[card.supportUnit] ?? card.supportUnit}`}
                       {state && ` ・ Lv${state.level}`}
                       {state?.trained && " 特訓"}
-                      {state && ` ・ MR${state.masterRank ?? 0} ・ SL${state.skillLevel ?? 1}`}
+                      {/* マスターランクはサムネのひし形で出しているので、文字では繰り返さない。 */}
+                      {state && ` ・ SL${state.skillLevel ?? 1}`}
                     </span>
                   </button>
                   <button

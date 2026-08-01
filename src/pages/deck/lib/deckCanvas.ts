@@ -54,13 +54,18 @@ export interface DeckCanvasData {
   heroArt?: HTMLImageElement | null;
 }
 
-const W = 1000;
+/**
+ * ★ 立ち絵は横長（2338×1440）なのに縦長のパネルに敷くので、横がごっそり切れる。
+ *   パネルが狭いと顔まで切れるので、**全体を広げて左を厚く取る**
+ *  （Nori 指摘 2026-08-02）。右の5枚も同時に広がって窮屈さが取れる。
+ */
+const W = 1180;
 /** 内訳を載せるモードでは下に1段増やす。 */
 const H_BASE = 520;
 const DETAIL_H = 92;
 const PAD = 28;
 /** 左（リーダー＋編成名）／中央（数字）／右（5枚）の3カラム。 */
-const LEFT_W = 300;
+const LEFT_W = 414;
 /** 立ち絵を敷く左パネルの幅。 */
 const HERO_PANEL_W = LEFT_W + PAD * 2;
 /**
@@ -68,7 +73,7 @@ const HERO_PANEL_W = LEFT_W + PAD * 2;
  *   文字が張り付いて窮屈に見える（Nori 指摘 2026-08-02）。
  */
 const MID_X = HERO_PANEL_W + 46;
-const MID_W = 280;
+const MID_W = 300;
 const RIGHT_X = MID_X + MID_W + PAD;
 const HERO = 200;
 const ROW_H = 78;
@@ -242,10 +247,10 @@ function drawMasterRank(
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(Math.PI / 4);
+  // 中身は暗い灰から緑へ（Nori 指定 2026-08-02）。
   const g = ctx.createLinearGradient(-r, -r, r, r);
-  g.addColorStop(0, "#8ff0b4");
-  g.addColorStop(0.5, "#22a06b");
-  g.addColorStop(1, "#0d5238");
+  g.addColorStop(0, "#515151");
+  g.addColorStop(1, "#1D6633");
   ctx.fillStyle = g;
   ctx.fillRect(-r, -r, size, size);
   const s = ctx.createLinearGradient(-r, -r, r, r);
@@ -257,11 +262,12 @@ function drawMasterRank(
   ctx.strokeRect(-r, -r, size, size);
   ctx.restore();
 
+  // ★ 数字はひし形いっぱいまで大きく（小さいと何の数字か分からない）。
   ctx.save();
   ctx.textAlign = "center";
   ctx.fillStyle = "#ffffff";
-  ctx.font = `bold ${Math.round(size * 0.6)}px sans-serif`;
-  ctx.fillText(String(mr), cx, cy);
+  ctx.font = `bold ${Math.round(size * 0.82)}px sans-serif`;
+  ctx.fillText(String(mr), cx, cy + size * 0.02);
   ctx.restore();
 }
 
@@ -269,10 +275,10 @@ function drawMasterRank(
 function drawDetails(ctx: CanvasRenderingContext2D, data: DeckCanvasData, H: number): void {
   const items = data.details ?? [];
   const y = H - DETAIL_H - 6;
-  // ★ 立ち絵のパネルには掛けない。掛けるとリーダーの名前と重なって両方読めなくなる
-  //   （Nori 指摘 2026-08-02）。帯は中央カラムの左端から右端まで。
-  const x0 = HERO_PANEL_W + 16;
-  const bandW = W - PAD - x0;
+  // ★ 帯は画像の幅いっぱい（Nori 指示 2026-08-02）。リーダーの名前は帯の上に
+  //   逃がしてあるので重ならない（drawDeckCanvas の contentBottom）。
+  const x0 = PAD;
+  const bandW = W - PAD * 2;
   ctx.fillStyle = "rgba(255,255,255,0.05)";
   roundRect(ctx, x0, y, bandW, DETAIL_H - 26, 12);
   ctx.fill();
