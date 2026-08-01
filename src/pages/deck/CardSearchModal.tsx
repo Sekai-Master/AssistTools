@@ -69,9 +69,11 @@ export function CardSearchModal({
   /**
    * ★ 「持っているカード」＝育成状態を登録したことがあるカード。
    *   総当たりの代わりに、**入力ゼロで回せる範囲の差し替え候補**を出すための絞り込み
-   *  （lib/swap.ts の冒頭に理由）。候補があるときは最初から開いておく。
+   *  （lib/swap.ts の冒頭に理由）。
+   * ★ 既定はオフ（Nori 指示 2026-08-02）。台帳は使ううちに育つもので、最初から
+   *   絞った状態だと「カードが少ししか出てこない」画面に見える。
    */
-  const [ownedOnly, setOwnedOnly] = useState(!!swap);
+  const [ownedOnly, setOwnedOnly] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useModalA11y(true, onClose, dialogRef);
