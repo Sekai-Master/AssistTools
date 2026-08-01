@@ -1,11 +1,15 @@
 name: Refresh music data
 
 # 楽曲マスタ（Sekai-World/sekai-master-db-diff・sekai.best）を取り込み、
-# 差分があれば PR を立てる。
+# 差分があれば main へ直接コミットする。
 #
-# 自動コミットにしない理由:
-#   - 取得元は第三者のリポジトリで、こちらの都合と無関係に構造が変わりうる
-#   - 新曲の混入や既存曲の消失を人が見てからマージしたい
+# ★★ 以前は PR を立てていた（人が見てからマージしたかった）。だが **org 側の設定で
+#    「GitHub Actions による PR 作成」が禁止**されていて、その一点だけで毎回失敗し、
+#    データが数日止まっていた（2026-08-02 に発覚）。リポジトリ設定では解除できない
+#    （org 管理権限が要る）。
+#    → 直接コミットに切り替え、**代わりにテストとビルドを門番にする**。
+#      壊れたデータ・型の合わないデータはここで止まる。要約は実行ログに残す。
+#      org 設定を変えられるようになったら PR 方式に戻してよい。
 #
 # 日次で回す理由:
 #   refresh-music-data.js は `published = publishedAt <= now` を実行時に焼き込む。
@@ -21,7 +25,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   refresh:
@@ -55,13 +58,16 @@ jobs:
             git diff --stat -- public/MusicDatas/
           fi
 
-      # 曲数の増減と、追加・公開状態が変わった曲を洗い出して PR 本文にする。
+      # 曲数の増減と、追加・公開状態が変わった曲を洗い出す。
+      # ★ PR 本文の代わりに**実行ログとコミット本文**に残す（後から追える）。
       - name: Summarize
         if: steps.diff.outputs.changed == 'true'
-        run: node scripts/summarize-music-diff.mjs /tmp/before.json public/MusicDatas/transformedMusics.json > /tmp/summary.md
+        run: |
+          node scripts/summarize-music-diff.mjs /tmp/before.json public/MusicDatas/transformedMusics.json > /tmp/summary.md
+          cat /tmp/summary.md
+          cat /tmp/summary.md >> "$GITHUB_STEP_SUMMARY"
 
-      # データが壊れていないかを PR を立てる前に確かめる。
-      # GITHUB_TOKEN で作った PR では CI が起動しないため、ここで実行しておく。
+      # ★ ここが門番。壊れたデータ・型の合わないデータは main に入れない。
       - name: Test
         if: steps.diff.outputs.changed == 'true'
         run: npm test
@@ -70,29 +76,19 @@ jobs:
         if: steps.diff.outputs.changed == 'true'
         run: npm run build
 
-      - name: Create pull request
+      - name: Commit
         if: steps.diff.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          BRANCH="data/refresh-music-$(date -u +%Y%m%d)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # 同日に再実行したときは既存ブランチへ上書きする（PR が乱立しないように）。
-          git checkout -B "$BRANCH"
+          # ★ 触るのは公開データだけ。他の差分は巻き込まない。
           git add public/MusicDatas/
-          git commit -m "chore(data): 楽曲マスタを更新"
-          git push --force-with-lease origin "$BRANCH"
+          git commit -F - <<EOF
+          chore(data): 楽曲マスタを更新
 
-          if gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
-            echo "既存の PR を更新した"
-            gh pr edit "$BRANCH" --body-file /tmp/summary.md
-          else
-            gh pr create \
-              --base main \
-              --head "$BRANCH" \
-              --title "chore(data): 楽曲マスタを更新 ($(date -u +%Y-%m-%d))" \
-              --body-file /tmp/summary.md
-          fi
+          $(cat /tmp/summary.md)
+          EOF
+          # 走っている間に main が進んでいることがあるので、取り込んでから押す。
+          git pull --rebase origin main
+          git push origin HEAD:main
