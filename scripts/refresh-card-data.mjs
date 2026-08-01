@@ -79,6 +79,7 @@ async function main() {
       generatedAt: out.generatedAt,
       events: out.events,
       deckBonuses: out.deckBonuses,
+      unitCharacters: out.unitCharacters,
       cardBonuses: out.cardBonuses,
       rarityBonuses: out.rarityBonuses,
       bonusLimits: out.bonusLimits,

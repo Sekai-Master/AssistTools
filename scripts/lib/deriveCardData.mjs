@@ -124,11 +124,23 @@ export function derive(src, nowMs) {
       startAt: e.startAt,
       aggregateAt: e.aggregateAt,
     })),
-    /** イベント×キャラ・ユニットのボーナス倍率。 */
+    /**
+     * イベント×（キャラ・ユニット）×属性 のボーナス倍率。
+     *
+     * ★ 行は「キャラ・ユニットだけ」「属性だけ」「両方」の3種が混在する。
+     *   attr を落とすと属性ボーナスが丸ごと消えるので必ず残すこと（一度落とした）。
+     */
     deckBonuses: withoutDangling(src.eventDeckBonuses, "eventId", eventIds).map((b) => ({
       eventId: b.eventId,
       unitCharacterId: b.gameCharacterUnitId,
+      attr: b.cardAttr,
       rate: b.bonusRate,
+    })),
+    /** キャラ×ユニット → id。カードとボーナス行を突き合わせるのに要る。 */
+    unitCharacters: (src.gameCharacterUnits ?? []).map((u) => ({
+      id: u.id,
+      ch: u.gameCharacterId,
+      unit: u.unit,
     })),
     /** ピックアップ等、カード個別のボーナス（リーダー時の別枠を含む）。 */
     cardBonuses: eventCards.map((b) => ({
