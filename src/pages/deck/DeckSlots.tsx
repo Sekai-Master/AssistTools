@@ -74,19 +74,6 @@ function CardStateEditor({
             特訓
           </button>
         )}
-        {/* ★ 絵だけ特訓前に戻す。**計算には効かない見た目だけの設定**なので特訓とは別のボタン。
-            特訓を外して絵を戻すと、上限レベルと後編まで巻き添えで動いてしまう。 */}
-        {trainable && state.trained && (
-          <button
-            type="button"
-            aria-pressed={!!state.artUntrained}
-            title="計算には影響しません（絵だけ特訓前に戻します）"
-            onClick={() => onChange({ artUntrained: !state.artUntrained })}
-            className={chip(!!state.artUntrained)}
-          >
-            絵は特訓前
-          </button>
-        )}
         <button
           type="button"
           aria-pressed={state.episodes.first}
@@ -111,6 +98,28 @@ function CardStateEditor({
         >
           キャンバス
         </button>
+
+        {/* ★ 絵だけ特訓前に戻す。**計算には効かない見た目だけの設定**なので、
+            計算に効くボタンと並べず、行の一番右にアイコンだけで置く。
+            特訓を外して絵を戻すと、上限レベルと後編まで巻き添えで動いてしまう。 */}
+        {trainable && state.trained && (
+          <button
+            type="button"
+            aria-pressed={!!state.artUntrained}
+            aria-label="絵を特訓前と切り替える"
+            title="絵だけ特訓前と切り替えます（計算には影響しません）"
+            onClick={() => onChange({ artUntrained: !state.artUntrained })}
+            className={cn(
+              "ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
+              state.artUntrained ? "neu-selected" : "bg-neu text-slate-500 shadow-neu-sm"
+            )}
+          >
+            <span className="material-icons !text-[16px]" aria-hidden>
+              autorenew
+            </span>
+          </button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-1">
