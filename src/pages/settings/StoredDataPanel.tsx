@@ -42,6 +42,20 @@ const countEntries =
     }
   };
 
+/** オブジェクトで持っているもの（カードごと・キャラごとの設定）。 */
+const countKeys =
+  (unit: string) =>
+  (raw: string): string | null => {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return BROKEN;
+      const n = Object.keys(parsed).length;
+      return n === 0 ? null : `${n} ${unit}`;
+    } catch {
+      return BROKEN;
+    }
+  };
+
 /** 選択肢のどれかを文字列で持っているもの（各種設定）。 */
 const pickLabel =
   <T extends string>(values: readonly T[], labels: Record<T, string>) =>
@@ -75,6 +89,25 @@ const ITEMS: StoredItem[] = [
     label: "周回プラン",
     note: "「周回プラン」で名前を付けて保存したもの",
     summarize: countEntries("件"),
+  },
+  {
+    // 「編成ビルダー」の保存キー（src/pages/deck/lib/deckStore.ts の DECK_STORAGE_KEYS）。
+    key: "sekaimaster:deck:decks:v1",
+    label: "編成ビルダーの編成",
+    note: "「編成ビルダー」で名前を付けて保存したカード5枚の組み合わせ",
+    summarize: countEntries("件"),
+  },
+  {
+    key: "sekaimaster:deck:cards:v1",
+    label: "カードの育成状態",
+    note: "レベル・特訓・マスターランク・サイドストーリーなど（カードごと）",
+    summarize: countKeys("枚"),
+  },
+  {
+    key: "sekaimaster:deck:player:v1",
+    label: "プレイヤー設定（編成ビルダー）",
+    note: "エリアアイテム効果・キャラクターランク・ゲート・家具・称号",
+    summarize: countKeys("項目"),
   },
   {
     key: "tweetGenerator.history",

@@ -28,6 +28,7 @@ export function App() {
               <Route path="/plan" element={<RoutePages.plan />} />
               <Route path="/worktime" element={<RoutePages.worktime />} />
               <Route path="/ranking" element={<RoutePages.ranking />} />
+              <Route path="/deck" element={<RoutePages.deck />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
