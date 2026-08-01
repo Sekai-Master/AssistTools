@@ -9,10 +9,12 @@ import { SongSearchModal } from "../../components/SongSearchModal";
 import { useRankingMusics, DIFFICULTY_LABEL, type Difficulty } from "../ranking/useRankingMusics";
 import { ENVY_ID } from "../analyzer/lib/constants";
 import { DEFAULT_PARAMS, type LiveType } from "../ranking/lib/efficiency";
+import { ProfileBar } from "../../components/ui/ProfileBar";
+import { getActiveProfile } from "../../lib/profiles";
 import { cn } from "../../lib/utils";
 import { bestIndex, compareDecks, findUpset, type CompareCondition } from "./lib/compare";
 import { evaluateDeck, type EvalContext } from "./lib/evaluate";
-import type { SavedDeck } from "./lib/deckStore";
+import { DECK_SIZE, type SavedDeck } from "./lib/deckStore";
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 
@@ -41,9 +43,15 @@ export function ComparePanel({
   const [songId, setSongId] = useState(ENVY_ID);
   const [difficulty, setDifficulty] = useState<Difficulty>("master");
   const [live, setLive] = useState<LiveType>("multi");
-  const [taki, setTaki] = useState(DEFAULT_PARAMS.taki);
-  const [skillLeader, setSkillLeader] = useState(String(DEFAULT_PARAMS.skillLeader));
-  const [skillTotal, setSkillTotal] = useState(String(DEFAULT_PARAMS.skillTotal));
+  // ★ スキルと焚き数は編成プロフィール（全ツール共通の入力）を初期値にする。
+  //   ここだけ既定値で走ると、他のツールと違う前提の Pt が出て比べられなくなる。
+  const [taki, setTaki] = useState(() => getActiveProfile()?.taki ?? DEFAULT_PARAMS.taki);
+  const [skillLeader, setSkillLeader] = useState(
+    () => String(getActiveProfile()?.skillLeader ?? DEFAULT_PARAMS.skillLeader)
+  );
+  const [skillTotal, setSkillTotal] = useState(
+    () => String(getActiveProfile()?.skillTotal ?? DEFAULT_PARAMS.skillTotal)
+  );
   const [picking, setPicking] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
 
@@ -159,6 +167,17 @@ export function ComparePanel({
         </Field>
       </div>
 
+      {/* 押したときだけ反映する（黙って値が変わらない）。ProfileBar.tsx の作法どおり。 */}
+      <div className="mt-3">
+        <ProfileBar
+          apply={(p) => {
+            if (p.skillLeader != null) setSkillLeader(String(p.skillLeader));
+            if (p.skillTotal != null) setSkillTotal(String(p.skillTotal));
+            if (p.taki != null) setTaki(p.taki);
+          }}
+        />
+      </div>
+
       {decks.length > 0 && (
         <div className="mt-4">
           <p className="mb-1.5 text-xs font-bold text-slate-500">比較に混ぜる保存済み編成</p>
@@ -185,7 +204,10 @@ export function ComparePanel({
         </div>
       )}
 
-      {rows.length === 0 ? (
+      {/* ★ イベント未選択のときは 0% として並べない（「ボーナス0の編成」に見えてしまう）。 */}
+      {ctx.eventId == null ? (
+        <p className="mt-4 text-sm text-slate-500">イベントを選ぶと比較できます。</p>
+      ) : rows.length === 0 ? (
         <p className="mt-4 text-sm text-slate-500">
           {loading ? "楽曲データを読み込んでいます…" : "曲を選ぶと比較できます。"}
         </p>
@@ -213,6 +235,13 @@ export function ComparePanel({
                     <td className="px-2 py-1.5">
                       {r.name}
                       {i === best && <span className="ml-1 text-xs">← 最良</span>}
+                      {/* ★ 5枚揃っていない編成は全一致（ユニット・属性の2倍）が付かないので、
+                          総合力が実際より大幅に低い。並べるときに見えないと誤読される。 */}
+                      {(candidates[i]?.cardCount ?? 0) < DECK_SIZE && (
+                        <span className="ml-1 text-xs text-amber-600">
+                          {candidates[i]?.cardCount ?? 0}枚
+                        </span>
+                      )}
                     </td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{r.bonus}%</td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{n(r.power)}</td>

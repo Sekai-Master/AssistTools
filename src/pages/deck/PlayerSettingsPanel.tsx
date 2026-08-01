@@ -3,6 +3,7 @@ import { Panel } from "../../components/ui/Panel";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { cn } from "../../lib/utils";
 import { ATTR_LABEL, ATTR_ORDER, CHARACTERS, UNIT_NAME, UNIT_ORDER } from "./lib/characters";
+import { sanitizeDecimal } from "./lib/deckInputs";
 import type { FixtureCounts, PlayerSettings } from "./lib/playerStore";
 
 /**
@@ -47,7 +48,7 @@ function NumCell({
       value={raw ?? (value ? String(value) : "")}
       placeholder="0"
       onChange={(e) => {
-        const t = e.target.value.replace(/[^0-9.]/g, "");
+        const t = sanitizeDecimal(e.target.value);
         setRaw(t);
         const n = Number(t);
         if (t === "") onChange(0);

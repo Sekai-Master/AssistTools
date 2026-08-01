@@ -15,6 +15,7 @@ import {
   filledCards,
   isTrainable,
   maxLevelOf,
+  sanitizeDecimal,
   toBonusDeck,
   toPowerDeck,
   type CatalogCard,
@@ -118,6 +119,17 @@ describe("既定のイベント", () => {
 
   it("1つも始まっていなければ undefined", () => {
     expect(defaultEventId(rows, 50)).toBeUndefined();
+  });
+});
+
+describe("数値入力のサニタイズ", () => {
+  it("数字と小数点1つだけ残す（NaN を作らない）", () => {
+    expect(sanitizeDecimal("8.5")).toBe("8.5");
+    expect(sanitizeDecimal("1.2.3")).toBe("1.23");
+    expect(sanitizeDecimal("１２abc3%")).toBe("3");
+    expect(sanitizeDecimal(".")).toBe(".");
+    // 打ち途中の "8." を弾かない（弾くと小数が打てない）。
+    expect(Number.isNaN(Number(sanitizeDecimal("1.2.3")))).toBe(false);
   });
 });
 

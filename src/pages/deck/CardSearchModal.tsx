@@ -31,13 +31,18 @@ export function CardSearchModal({
   cards,
   onSelect,
   onClose,
-  usedIds = [],
+  others = [],
 }: {
   cards: CatalogCard[];
   onSelect: (card: CatalogCard) => void;
   onClose: () => void;
-  /** すでに編成に入っている id（同じカードは2枚編成できないので選べなくする）。 */
-  usedIds?: number[];
+  /**
+   * **いま選び直している枠を除く**、他の枠に入っているカード。
+   * ★ ゲームの編成は**同じキャラを2枚入れられない**（同じカードはもちろん、
+   *   ミクのレオニ枠とVS枠のような別カードでも不可）。組めない編成の数字を
+   *   出しても意味が無いので、ここで選べなくする。
+   */
+  others?: CatalogCard[];
 }) {
   const [query, setQuery] = useState("");
   const [ch, setCh] = useState<number | null>(null);
@@ -47,7 +52,7 @@ export function CardSearchModal({
   const titleId = useId();
   useModalA11y(true, onClose, dialogRef);
 
-  const used = useMemo(() => new Set(usedIds), [usedIds]);
+  const usedChars = useMemo(() => new Set(others.map((c) => c.ch)), [others]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -161,7 +166,7 @@ export function CardSearchModal({
             <p className="p-4 text-center text-sm text-slate-500">見つかりませんでした</p>
           ) : (
             results.map((c) => {
-              const taken = used.has(c.id);
+              const taken = usedChars.has(c.ch);
               return (
                 <button
                   key={c.id}
@@ -189,7 +194,12 @@ export function CardSearchModal({
                       {c.supportUnit && ` ・ ${UNIT_SHORT[c.supportUnit] ?? c.supportUnit}`}
                     </span>
                   </span>
-                  {taken && <span className="shrink-0 text-xs text-slate-500">編成中</span>}
+                  {/* 同じカードでなくても入れられないので、「編成中」だけだと誤解される。 */}
+                  {taken && (
+                    <span className="shrink-0 text-xs text-slate-500">
+                      {others.some((o) => o.id === c.id) ? "編成中" : "同キャラ編成中"}
+                    </span>
+                  )}
                 </button>
               );
             })

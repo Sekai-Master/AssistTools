@@ -45,6 +45,19 @@ function isEvent(v: unknown): v is EventRow {
 
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
+/**
+ * 表の各行を検証して、条件を満たす行だけ残す。
+ *
+ * ★ 「配列であること」だけ見て中身をキャストすると、行に null が1つ混ざっただけで
+ *   計算中に TypeError になり、**画面全体が落ちる**（計算は render 中の useMemo）。
+ *   自前の CI が作っている配信物とはいえ、生成側の事故を黙って通さない。
+ */
+function rows<T>(v: unknown, ok: (row: Record<string, unknown>) => boolean): T[] {
+  return arr(v).filter((r): r is T => !!r && typeof r === "object" && ok(r as Record<string, unknown>));
+}
+
+const power3 = (v: unknown) => numArr3(v);
+
 export interface CardData {
   cards: CatalogCard[];
   events: EventRow[];
@@ -61,26 +74,43 @@ function build(rawCards: unknown, rawBonuses: unknown, rawPower: unknown): CardD
 
   const cards = arr(cardsRoot.cards).filter(isCard);
   const events = arr(bonuses.events).filter(isEvent);
+  // キャラ×ユニットの対応表はボーナスと総合力の両方が使う（同じものを2度作らない）。
+  const unitCharacters = rows(bonuses.unitCharacters, (r) => isNum(r.id) && isNum(r.ch) && isStr(r.unit));
 
   return {
     cards,
     // 新しいイベントほど上（既定の選択と、選び直すときの導線が一致する）。
     events: [...events].sort((a, b) => b.startAt - a.startAt),
     bonusTables: {
-      deckBonuses: arr(bonuses.deckBonuses) as BonusTables["deckBonuses"],
-      cardBonuses: arr(bonuses.cardBonuses) as BonusTables["cardBonuses"],
-      rarityBonuses: arr(bonuses.rarityBonuses) as BonusTables["rarityBonuses"],
-      bonusLimits: arr(bonuses.bonusLimits) as BonusTables["bonusLimits"],
-      unitCharacters: arr(bonuses.unitCharacters) as BonusTables["unitCharacters"],
+      deckBonuses: rows(bonuses.deckBonuses, (r) => isNum(r.eventId) && isNum(r.rate)),
+      cardBonuses: rows(
+        bonuses.cardBonuses,
+        (r) => isNum(r.eventId) && isNum(r.cardId) && isNum(r.rate) && isNum(r.leaderRate)
+      ),
+      rarityBonuses: rows(
+        bonuses.rarityBonuses,
+        (r) => isStr(r.rarity) && isNum(r.masterRank) && isNum(r.rate)
+      ),
+      bonusLimits: rows(bonuses.bonusLimits, (r) => isNum(r.eventId) && isNum(r.memberCountLimit)),
+      unitCharacters: unitCharacters as BonusTables["unitCharacters"],
     },
     powerTables: {
       cards,
-      masterBonuses: arr(power.masterBonuses) as PowerTables["masterBonuses"],
-      episodes: arr(power.episodes) as PowerTables["episodes"],
-      canvasBonuses: arr(power.canvasBonuses) as PowerTables["canvasBonuses"],
-      characterRanks: arr(power.characterRanks) as PowerTables["characterRanks"],
-      gates: arr(power.gates) as PowerTables["gates"],
-      unitCharacters: arr(bonuses.unitCharacters) as PowerTables["unitCharacters"],
+      masterBonuses: rows(
+        power.masterBonuses,
+        (r) => isStr(r.rarity) && isNum(r.masterRank) && power3(r.power)
+      ),
+      episodes: rows(power.episodes, (r) => isNum(r.cardId) && isStr(r.part) && power3(r.power)),
+      canvasBonuses: rows(power.canvasBonuses, (r) => isStr(r.rarity) && power3(r.power)),
+      characterRanks: rows(
+        power.characterRanks,
+        (r) => isNum(r.ch) && isNum(r.rank) && power3(r.rate)
+      ),
+      gates: rows(
+        power.gates,
+        (r) => isNum(r.id) && isStr(r.unit) && Array.isArray(r.rates) && r.rates.every(isNum)
+      ),
+      unitCharacters: unitCharacters as PowerTables["unitCharacters"],
     },
     generatedAt: isNum(cardsRoot.generatedAt) ? cardsRoot.generatedAt : null,
   };

@@ -100,6 +100,17 @@ export function defaultEventId(events: EventRow[], now: number): number | undefi
 }
 
 /**
+ * 数値入力から数字と小数点1つだけを残す。
+ * ★ "1.2.3" のような入力をそのまま通すと `Number()` が NaN になり、**黙って 0 として**
+ *   計算される。打ち間違いが数字に出ないのが一番たちが悪いので、入口で潰す。
+ */
+export function sanitizeDecimal(v: string): string {
+  const s = v.replace(/[^0-9.]/g, "");
+  const i = s.indexOf(".");
+  return i < 0 ? s : s.slice(0, i + 1) + s.slice(i + 1).replace(/\./g, "");
+}
+
+/**
  * イベントボーナスの表示値。
  * ★ ゲーム内は**合計だけ切り捨て**て出す（内部 156.5% → 表示 156%）。
  *   カードごとの値は小数のまま表示と一致する（docs/deck-builder.md 実測）。

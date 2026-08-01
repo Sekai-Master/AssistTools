@@ -31,7 +31,14 @@ export function PowerPanel({
 
   // 未入力の項目。0 として計算したものを列挙して、暫定値であることを見せる。
   const unset: string[] = [];
-  if (!Object.values(settings.areaEffects.units ?? {}).some((v) => v > 0)) unset.push("エリアアイテム効果");
+  // ユニット・属性・キャラのどれか1つでも入っていれば「入力した」とみなす
+  // （ユニットだけを見ると、属性やキャラだけ入れた人に誤った警告を出す）。
+  const anyArea = [
+    settings.areaEffects.units,
+    settings.areaEffects.attrs,
+    settings.areaEffects.chars,
+  ].some((t) => Object.values(t ?? {}).some((v) => v > 0));
+  if (!anyArea) unset.push("エリアアイテム効果");
   if (Object.keys(settings.characterRanks).length === 0) unset.push("キャラクターランク");
   if (Object.keys(settings.gateLevels).length === 0) unset.push("マイセカイのゲート");
   if (!settings.honorBonus) unset.push("称号ボーナス");

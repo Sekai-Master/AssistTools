@@ -10,7 +10,7 @@ import { BonusPanel } from "./BonusPanel";
 import { PowerPanel } from "./PowerPanel";
 import { PlayerSettingsPanel } from "./PlayerSettingsPanel";
 import { ComparePanel } from "./ComparePanel";
-import { ProfileBar, SaveToProfile } from "../../components/ui/ProfileBar";
+import { SaveToProfile } from "../../components/ui/ProfileBar";
 import {
   readPlayerSettings,
   toPlayerState,
@@ -266,10 +266,11 @@ export default function DeckBuilder() {
                 collect={() => ({
                   power: evaluated.power.total,
                   // ★ ボーナスは切り捨てず小数のまま渡す（0.5% が最終Ptに効く）。
-                  bonus: evaluated.bonus?.total ?? 0,
+                  //   イベント未選択のときは**書かない**（0% として保存すると、
+                  //   他のツールが「ボーナス0の編成」として計算してしまう）。
+                  ...(evaluated.bonus ? { bonus: evaluated.bonus.total } : {}),
                 })}
               />
-              <ProfileBar apply={() => undefined} />
             </div>
           )}
         </>
@@ -303,7 +304,8 @@ export default function DeckBuilder() {
       {pickIndex != null && data && (
         <CardSearchModal
           cards={data.cards}
-          usedIds={cardIds.filter((id): id is number => id != null)}
+          // 選び直している枠自身は除く（自分のキャラで塞がって差し替えられなくなる）。
+          others={slots.filter((c, i): c is CatalogCard => !!c && i !== pickIndex)}
           onSelect={(card) => selectCard(pickIndex, card)}
           onClose={() => setPickIndex(null)}
         />

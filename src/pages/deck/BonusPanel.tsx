@@ -4,7 +4,7 @@ import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { Stat } from "../refresh/Stat";
 import { characterName } from "./lib/characters";
-import { displayBonus, type CatalogCard, type EventRow } from "./lib/deckInputs";
+import { displayBonus, sanitizeDecimal, type CatalogCard, type EventRow } from "./lib/deckInputs";
 import type { EventBonusResult } from "./lib/eventBonus";
 
 /**
@@ -64,7 +64,9 @@ export function BonusPanel({
             id="deck-support"
             inputMode="decimal"
             value={supportBonus}
-            onChange={(e) => onSupportBonus(e.target.value.replace(/[^0-9.]/g, ""))}
+            // 小数点は1つまで。"1.2.3" のような入力を通すと Number() が NaN になり、
+            // 黙って 0% として計算される（打ち間違いが数字に出ない）。
+            onChange={(e) => onSupportBonus(sanitizeDecimal(e.target.value))}
             className="max-w-28 text-center"
           />
         </Field>
