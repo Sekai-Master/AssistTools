@@ -15,7 +15,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "data:refresh": "node scripts/refresh-music-data.js"
+    "data:refresh": "node scripts/refresh-music-data.js",
+    "data:refresh-cards": "node scripts/refresh-card-data.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",

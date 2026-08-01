@@ -1,0 +1,67 @@
+# カード・イベントの派生データを更新する。
+#
+# ★ 楽曲データ（refresh-music-data.yml）と分けてある。あちらはジャケット画像の
+#   取得と縮小が入って重いが、こちらは小さい JSON 3枚なので高頻度で回せる。
+#
+# ★ 頻度の理由: 解禁前のカードは「ビルド時刻」で切っている（先読みの猶予を入れない）。
+#   1日1回だと 15:00 解禁のカードが翌朝まで出ないので、6時間おきにして遅れを詰める。
+#   **早く出るくらいなら遅れる方を選ぶ**という原則は変えない。
+name: Refresh card data
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 未公開データの痕跡が残っていれば、このスクリプト自身が非ゼロで落ちる。
+      - name: Refresh
+        run: npm run data:refresh-cards
+
+      - name: Detect changes
+        id: diff
+        run: |
+          if git diff --quiet -- public/CardDatas/; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "カードデータに差分なし"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- public/CardDatas/
+          fi
+
+      # 遮断のテストを含む。ここが赤いまま PR を出さない。
+      # GITHUB_TOKEN で作った PR では CI が起動しないため、ここで実行しておく。
+      - name: Test
+        if: steps.diff.outputs.changed == 'true'
+        run: npm test
+
+      # ★ 直 push ではなく PR にする。遅れは安全側だが、レビュー無しで本番へ出すのは
+      #   そうではない。取り込みたければ即マージすればよい。
+      - name: Create pull request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(data): カード・イベントの派生データを更新"
+          branch: auto/refresh-card-data
+          delete-branch: true
+          title: "chore(data): カード・イベントの派生データを更新"
+          body: |
+            マスタDB から自動生成。解禁前のカード・イベントはビルド時刻で落としています
+            （`scripts/lib/deriveCardData.mjs`）。
