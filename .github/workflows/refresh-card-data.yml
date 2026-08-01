@@ -74,6 +74,15 @@ jobs:
           # ★ 触るのは公開データだけ。他の差分は巻き込まない。
           git add public/CardDatas/
           git commit -m "chore(data): カード・イベントの派生データを更新"
-          # 走っている間に main が進んでいることがあるので、取り込んでから押す。
-          git pull --rebase origin main
-          git push origin HEAD:main
+          # ★ 走っている間に main が進んでいることがある（楽曲側の更新と同時刻に
+          #   走ると実際にぶつかった）。取り込み直して数回やり直す。
+          for i in 1 2 3 4 5; do
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              echo "push した（試行 $i 回目）"
+              exit 0
+            fi
+            echo "競合したのでやり直す（試行 $i 回目）"
+            sleep $((5 + RANDOM % 10))
+          done
+          echo "::error::main への push に繰り返し失敗した"
+          exit 1
