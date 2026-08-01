@@ -294,3 +294,51 @@ html:not([data-stage="idle"]) .neu-cta {
     opacity: 0.55;
   }
 }
+
+/* =====================================================================
+ * 共有要素の変形（morph.ts）
+ *
+ * 複製を body 直下の fixed レイヤーで動かす。ステージの中で transform を使うと
+ * position:fixed の包含ブロックを奪ってしまうので、外へ出すのが要点。
+ * ここは「箱の軌道」だけを定義し、時間は TS 側が inline で入れる。
+ * ===================================================================== */
+
+#morph-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 45; /* ヘッダー(40)より上・モーダル(50)より下 */
+  pointer-events: none;
+}
+
+.morph-box {
+  position: fixed;
+  overflow: hidden;
+  /* 幅・高さ・位置をそのまま動かす。transform: scale で伸ばすと中の文字まで
+     引き伸ばされるし、毎フレーム折り返しが変わるとガタつく。中身は原寸のまま
+     .morph-inner に閉じ込めて、外の箱だけを動かして切り取る。 */
+  /* ★ transition-property は TS 側（morph.ts の MOVED）が inline で入れる。
+     duration の個数と並びを1箇所で作らないと、値が循環して割り当てられて
+     「left だけ違う速さ」になり箱が歪む。ここは緩急だけ決める。 */
+  transition-timing-function: var(--ease-emerge);
+  will-change: top, left, width, height;
+}
+
+.morph-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* 箱が縮んでも中身は原寸のまま。折り返しが変わらないので文字が踊らない。 */
+  transform-origin: top left;
+}
+
+/*
+ * 飛んでいるものは沈まない。
+ *
+ * --neu-lift は html で動かしているのでレイヤーの複製にも継承されてしまい、
+ * 何もしないと「持ち上げたカードの影だけ道中で消える」ことになる。ここで 1 に
+ * 固定して、**周りが素材へ還るあいだ、選ばれたものだけが浮いたまま残る**
+ * という絵にする。演出の主語がどれなのかを影で示す。
+ */
+.morph-box {
+  --neu-lift: 1;
+}

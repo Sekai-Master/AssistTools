@@ -31,7 +31,7 @@ export default function RefreshGaugeCalculator() {
   const songRate = hasLen ? playsPerHour(len, overhead) : 0;
 
   return (
-    <ToolPage unit="wxs" title="リフレッシュゲージ計算機" icon="battery_charging_full">
+    <ToolPage morphKey="tool:refresh" unit="wxs" title="リフレッシュゲージ計算機" icon="battery_charging_full">
       {dataError && (
         <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
           {dataError}

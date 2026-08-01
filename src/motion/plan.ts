@@ -34,6 +34,19 @@ export interface MotionPlan {
   riseStaggerMs: number;
   /** 溶けるときのぼかしの最大量(px)。0 ならぼかさない＝ブロック演出をしない。 */
   blurPx: number;
+
+  /* ---- 共有要素の変形（morph.ts）------------------------------------- */
+
+  /**
+   * 選んだものが行き先の形へ飛ぶ時間。0 なら変形しない。
+   *
+   * ★ これはページ全体の演出とは別建て。カスケードが「装飾」なのに対し、
+   *   変形は「押したものと開いた画面が同じものだ」という**説明**なので、
+   *   控えめでも動かす。オフだけが 0。
+   */
+  morphMs: number;
+  /** 出発点の中身から行き先の中身へ入れ替わる時間。 */
+  morphFadeMs: number;
 }
 
 interface Cascade {
@@ -44,6 +57,8 @@ interface Cascade {
   minBlankMs: number;
   patienceMs: number;
   blurPx: number;
+  morphMs: number;
+  morphFadeMs: number;
 }
 
 /** 総尺は「1ブロックの尺 + カスケードの幅」で決まる。ここでしか計算しない。 */
@@ -62,6 +77,8 @@ const OFF = plan("off", {
   minBlankMs: 0,
   patienceMs: 250,
   blurPx: 0,
+  morphMs: 0,
+  morphFadeMs: 0,
 });
 
 /**
@@ -78,6 +95,9 @@ const SUBTLE = plan("subtle", {
   minBlankMs: 0,
   patienceMs: 280,
   blurPx: 0,
+  // 控えめでもここは動かす。装飾ではなく「押したものが開いた」という説明だから。
+  morphMs: 320,
+  morphFadeMs: 200,
 });
 
 /**
@@ -99,6 +119,8 @@ const RICH = plan("rich", {
   minBlankMs: 90,
   patienceMs: 480,
   blurPx: 5,
+  morphMs: 520,
+  morphFadeMs: 300,
 });
 
 /**

@@ -129,7 +129,7 @@ export default function EffectiveValueCalculator() {
     });
 
   return (
-    <ToolPage unit="ln" title="スキル実効値計算機" icon="calculate">
+    <ToolPage morphKey="tool:evc" unit="ln" title="スキル実効値計算機" icon="calculate">
       <SegmentedControl
         options={[
           { value: "forward", label: "順方向（→実効値）" },

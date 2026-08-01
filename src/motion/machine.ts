@@ -52,6 +52,12 @@ export type StageEffect =
   | { type: "restoreScroll"; key: string; pop: boolean }
   /** ページをブロックに割ってカスケードの順番を書き込む。flush はスタイル計算の強制。 */
   | { type: "markDivisions"; flush: boolean }
+  /** 共有要素を持ち上げる（＝出発点を確定する）。まだ元ページが見えている時点で。 */
+  | { type: "morphCapture" }
+  /** 持ち上げたものを行き先の形へ飛ばす。新しい木が commit 済みの時点で。 */
+  | { type: "morphFly" }
+  /** 対応が付かなかった・割り込まれたときに複製を片付ける。 */
+  | { type: "morphCancel" }
   | { type: "focusStage" }
   | { type: "announce"; kind: "arrived" | "loading" | "failed"; path: string };
 
@@ -122,6 +128,9 @@ function enterRise(s: StageState, at: number, plan: MotionPlan): Step {
   if (hasCascade(plan) && plan.riseMs > 0) {
     effects.push({ type: "markDivisions", flush: true });
   }
+  // ★ 印付けの後・フォーカス移動の前。行き先の採寸はスクロール復元が済んで
+  //   いないと狂うし、飛ばし始めてからフォーカスで画面が動くと軌道がずれる。
+  if (plan.morphMs > 0) effects.push({ type: "morphFly" });
   if (!s.preview) {
     effects.push({ type: "focusStage" });
     effects.push({ type: "announce", kind: "arrived", path: s.targetPath });
@@ -167,6 +176,11 @@ export function reduce(state: StageState, event: StageEvent, plan: MotionPlan): 
           effects: [...pre, { type: "timer", kind: "SINK_END", after: rest }],
         };
       }
+      // ★ ここから先が「新しく遷移が始まる」経路。上の沈み途中の再ナビゲートでは
+      //   既に持ち上げ済みなので通らない（連打で複製が増えない）。
+      //   採寸は旧ページが見えているうちにしかできないので、沈む前に済ませる。
+      if (plan.morphMs > 0) pre.push({ type: "morphCapture" });
+
       if (plan.sinkMs > 0 && state.phase !== "blank") {
         // 印は今まさに見えている木（＝旧ページ）に対して付ける。
         // 沈み途中の再ナビゲート（上の分岐）では木が変わっていないので付け直さない。
@@ -191,6 +205,7 @@ export function reduce(state: StageState, event: StageEvent, plan: MotionPlan): 
         failed: false,
       };
       const pre: StageEffect[] = [{ type: "cancelTimers" }];
+      // プレビューはページが変わらない＝着地点が無いので、持ち上げはしない。
       if (plan.sinkMs > 0) {
         if (hasCascade(plan)) pre.push({ type: "markDivisions", flush: false });
         return {
@@ -229,6 +244,8 @@ export function reduce(state: StageState, event: StageEvent, plan: MotionPlan): 
         state: { ...state, failed: true, slow: false, phase: "blank", since: event.at },
         effects: [
           { type: "cancelTimers" },
+          // 行き先が来ない以上、持ち上げたものの着地点も無い。
+          { type: "morphCancel" },
           { type: "announce", kind: "failed", path: state.targetPath },
         ],
       };

@@ -159,7 +159,7 @@ export default function WorkTimeCalculator() {
   };
 
   return (
-    <ToolPage unit="n25" title="必要稼働時間計算" icon="schedule">
+    <ToolPage morphKey="tool:worktime" unit="n25" title="必要稼働時間計算" icon="schedule">
       {dataError && (
         <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
           {dataError}

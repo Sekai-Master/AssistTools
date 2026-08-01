@@ -14,6 +14,7 @@ import {
 } from "react";
 import { useLocation, useNavigationType, type Location } from "react-router-dom";
 import { flushStyles, markDivisions } from "./divisions";
+import { cancelMorph, captureMorph, flyMorph } from "./morph";
 import { initialState, reduce, stageAttrs, type StageEvent, type StageState } from "./machine";
 import { resolvePlan, stageVars } from "./plan";
 import { announceText, prefetchRoute } from "./routes";
@@ -97,6 +98,18 @@ export function useRouteStage() {
         case "restoreScroll":
           window.scrollTo(0, eff.pop ? scroll.current.restore(eff.key) : 0);
           break;
+        case "morphCapture":
+          captureMorph(stageRef.current);
+          break;
+        case "morphFly":
+          flyMorph(stageRef.current, {
+            flyMs: planRef.current.morphMs,
+            fadeMs: planRef.current.morphFadeMs,
+          });
+          break;
+        case "morphCancel":
+          cancelMorph();
+          break;
         case "markDivisions": {
           // ディビジョンが1つも取れないページ（＝中身が空）では、ステージごと
           // フェードする従来の振り付けに落ちる。CSS 側は html[data-divs] で分岐する。
@@ -148,6 +161,8 @@ export function useRouteStage() {
   //   マウント時の配列を掎むと、cancelTimers 後に張り直されたタイマー
   //   （timers.current が別の配列に差し替わる）が1本も片付かない。
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  // 画面から居なくなるときに飛んでいる複製を残さない。
+  useEffect(() => cancelMorph, []);
 
   const attrs = stageAttrs(state, plan);
 

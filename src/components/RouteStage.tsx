@@ -1,5 +1,6 @@
 import { Suspense, useMemo, useState, type ReactNode } from "react";
 import type { Location } from "react-router-dom";
+import { aimMorph } from "../motion/morph";
 import { StageContext } from "../motion/stageContext";
 import { useRouteStage } from "../motion/useRouteStage";
 import { ChunkErrorCard } from "./ChunkErrorCard";
@@ -31,6 +32,9 @@ export function RouteStage({ children }: { children: (loc: Location) => ReactNod
         ref={s.stageRef}
         tabIndex={-1}
         className="stage"
+        // 同じ印のカードが並ぶ一覧では、採寸だけでは「どれ」が押されたか決まらない。
+        // 遷移が始まる前（capture 段階）に出発点を指名しておく。
+        onClickCapture={(e) => aimMorph(e.target)}
         aria-busy={s.attrs.busy || undefined}
         // 見えていない間はタブ順・支援技術から外す。付けないと「画面には何も
         // 見えないのに Tab で前ページのボタンを押せる」状態になる。
