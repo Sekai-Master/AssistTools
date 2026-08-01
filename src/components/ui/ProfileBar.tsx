@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { NeuButton } from "./NeuButton";
 import {
+  createProfile,
   formatProfileText,
   getActiveId,
   setActiveProfile,
@@ -82,24 +83,54 @@ export function ProfileBar({ apply }: { apply: (p: Profile) => void }) {
  * 離れていて読めなかった（Nori 指摘 2026-08-01）。取り込む対象の近くに置く。
  */
 export function SaveToProfile({ collect }: { collect: () => Partial<Profile> }) {
+  const profiles = useProfiles();
   const active = useActiveProfile();
-  const [done, setDone] = useState(false);
+  // ★ 保存先を選ばせる。「使用中」へ黙って上書きすると、別の編成を見ながら
+  //   数値をいじっていたときに、意図しないものを壊す。
+  const [dest, setDest] = useState<string>("");
+  const [done, setDone] = useState<string | null>(null);
   if (!active) return null;
+
+  const target = dest || active.id;
+  const NEW = "__new__";
+
+  const save = () => {
+    const values = collect();
+    if (target === NEW) {
+      const created = createProfile("", values);
+      setDone(created.name);
+    } else {
+      updateProfile(target, values);
+      setDone(profiles.find((p) => p.id === target)?.name ?? "");
+    }
+    setTimeout(() => setDone(null), 2600);
+  };
+
   return (
-    <span className="inline-flex items-center gap-2">
-      <NeuButton
-        className="!px-3 !py-1"
-        onClick={() => {
-          updateProfile(active.id, collect());
-          setDone(true);
-          setTimeout(() => setDone(false), 2200);
-        }}
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <span className="text-xs text-slate-500">保存先</span>
+      <select
+        value={target}
+        onChange={(e) => setDest(e.target.value)}
+        aria-label="保存先の編成"
+        className="neu-inset rounded-lg px-2 py-1 text-sm text-slate-700"
       >
-        編成に取り込む
+        {profiles.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+        {/* 上書きが不安なときの逃げ道。既存を壊さずに残せる。 */}
+        <option value={NEW}>＋ 新しい編成として保存</option>
+      </select>
+      <NeuButton className="!px-3 !py-1" onClick={save}>
+        取り込む
       </NeuButton>
-      <span role="status" className="text-xs text-slate-500">
-        {done ? `「${active.name}」に保存しました` : `保存先: ${active.name}`}
-      </span>
+      {done && (
+        <span role="status" className="text-xs text-slate-600">
+          「{done}」に保存しました
+        </span>
+      )}
     </span>
   );
 }

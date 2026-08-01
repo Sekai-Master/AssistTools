@@ -633,7 +633,18 @@ export default function EfficiencyRanking() {
           label="自分の条件で計算する"
         />
         {custom && (
-          <div className="mt-4">
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+            {/* 呼び出しは上部にもあるが、値をいじっている場所からも届くようにする。
+                行き来せずに「別の編成で試す」ができる。 */}
+            <ProfileBar
+              apply={(p) => {
+                if (p.power != null) setPower(String(p.power));
+                if (p.bonus != null) setBonus(String(p.bonus));
+                if (p.skillLeader != null) setSkillLeader(String(p.skillLeader));
+                if (p.skillTotal != null) setSkillTotal(String(p.skillTotal));
+                if (p.taki != null) setTaki(p.taki);
+              }}
+            />
             <SaveToProfile
               collect={() => ({
                 power: numOrUndef(power),

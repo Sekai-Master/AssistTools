@@ -65,7 +65,16 @@ export function useFlip(keys: string[], opts: FlipOptions = {}) {
   }, [keys.join("|"), enabled, durationMs, thresholdPx]);
 
   return (key: string) => (el: HTMLElement | null) => {
-    if (el) nodes.current.set(key, el);
-    else nodes.current.delete(key);
+    if (el) {
+      // ★ スクロールアンカリングを切る。
+      //   ブラウザは中身の高さが変わったとき、画面内の要素を「錨」にして
+      //   scrollTop を勝手に補正する。並び替えで行が動くと、その錨ごと動くので
+      //   **入力欄をいじっているのに表の方へ画面が引っ張られる**。
+      //   行を錨の候補から外すだけで止まる（並び替えの見た目には影響しない）。
+      el.style.overflowAnchor = "none";
+      nodes.current.set(key, el);
+    } else {
+      nodes.current.delete(key);
+    }
   };
 }
