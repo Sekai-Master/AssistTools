@@ -116,6 +116,8 @@ export interface EventRow {
   unit: string;
   startAt: number;
   aggregateAt: number;
+  /** ロゴを引くためのアセット名（画像は public/CardDatas/logo に自前配信）。 */
+  asset?: string;
 }
 
 /**

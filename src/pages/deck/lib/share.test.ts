@@ -33,7 +33,17 @@ const state = (over: Partial<CardState> = {}): CardState => ({
 const evaluated = (over: Partial<DeckEval> = {}): DeckEval =>
   ({
     cards: [],
-    power: { total: 236756 },
+    power: {
+      total: 236756,
+      performance: 129838,
+      areaItem: 99968,
+      characterRank: 6483,
+      gate: 257,
+      fixture: 0,
+      honor: 210,
+      sameUnit: true,
+      sameAttr: true,
+    },
     bonus: { total: 156.5 },
     skill: {
       leader: 150,
@@ -61,18 +71,22 @@ const build = (over: Partial<Parameters<typeof buildShareCard>[0]> = {}) =>
   });
 
 describe("育成状態のラベル", () => {
-  it("数字の根拠になる項目を全部出す", () => {
-    expect(growthLabel(state(), card(1, "x", 1))).toBe("Lv60 特訓 MR5 SL4");
+  it("数字の根拠になる項目を出す", () => {
+    expect(growthLabel(state(), card(1, "x", 1))).toBe("Lv60 特訓 SL4");
+  });
+
+  it("★ マスターランクは文字に入れない（カードの左下にひし形で描くため）", () => {
+    expect(growthLabel(state({ masterRank: 5 }), card(1, "x", 1))).not.toContain("MR");
   });
 
   it("特訓していないカードは特訓を出さない", () => {
     expect(growthLabel(state({ trained: false, masterRank: 0, skillLevel: 1 }), card(1, "x", 1))).toBe(
-      "Lv60 MR0 SL1"
+      "Lv60 SL1"
     );
   });
 
   it("台帳に無いカードでも落ちない", () => {
-    expect(growthLabel(undefined, card(1, "x", 1))).toBe("Lv60 MR0 SL1");
+    expect(growthLabel(undefined, card(1, "x", 1))).toBe("Lv60 SL1");
   });
 });
 
@@ -109,7 +123,28 @@ describe("紹介カードの中身", () => {
     const [first] = build().cards;
     expect(first.character).toBe("星乃一歌");
     expect(first.name).toBe("クールだけど友達想い");
-    expect(first.sub).toBe("Lv60 特訓 MR5 SL4");
+    expect(first.sub).toBe("Lv60 特訓 SL4");
+    // マスターランクは数値で渡す（描画側がひし形にする）。
+    expect(first.masterRank).toBe(5);
+  });
+
+  it("内訳モードでは総合力の成分も載せる", () => {
+    expect(build().details).toBeUndefined();
+    const d = build({ withDetails: true });
+    expect(d.details?.map((x) => x.label)).toEqual([
+      "パフォーマンス",
+      "エリアアイテム",
+      "キャラランク",
+      "ゲート",
+      "家具",
+      "称号",
+      "全一致",
+    ]);
+  });
+
+  it("イベントボーナスを載せない指定なら欄ごと消す（「—」を出さない）", () => {
+    const d = build({ hideBonus: true });
+    expect(d.stats.map((s) => s.label)).toEqual(["総合力", "スキル（先頭/内部値）"]);
   });
 
   it("絵は画面と同じものを使う（「絵は特訓前」を選んでいればその絵）", () => {

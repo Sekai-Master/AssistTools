@@ -292,6 +292,21 @@ export default function DeckBuilder() {
         </p>
       </Panel>
 
+      {/* ★ 紹介カードはイベントボーナスより上（Nori 指示 2026-08-02）。
+          組んだ直後に出したくなるものなので、下まで送らない。 */}
+      {evaluated && cards.length > 0 && (
+        <SharePanel
+          deckName={deckName}
+          eventName={data?.events.find((e) => e.id === eventId)?.name}
+          eventAsset={data?.events.find((e) => e.id === eventId)?.asset}
+          cards={cards}
+          states={states}
+          evaluated={evaluated}
+          leaderCardId={cardIds[leaderIndex] ?? undefined}
+          hideBonus={mode === "challenge"}
+        />
+      )}
+
       {/* チャレンジライブにイベントポイントは無いので、ボーナスの画面ごと出さない。 */}
       {data && evaluated && mode === "event" && (
         <BonusPanel
@@ -313,15 +328,6 @@ export default function DeckBuilder() {
 
           <SkillPanel cards={cards} result={evaluated.skill} />
 
-          <SharePanel
-            deckName={deckName}
-            eventName={data?.events.find((e) => e.id === eventId)?.name}
-            cards={cards}
-            states={states}
-            evaluated={evaluated}
-            leaderCardId={cardIds[leaderIndex] ?? undefined}
-            hideBonus={mode === "challenge"}
-          />
 
           {/* ★ 出した値を他のツール（ランキング・アナライザー・稼働時間）へ渡す導線。
               値を出している場所のすぐ隣に置く（ProfileBar.tsx の規約）。 */}

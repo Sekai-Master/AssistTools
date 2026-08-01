@@ -213,6 +213,8 @@ export function derive(src, nowMs) {
       unit: e.unit,
       startAt: e.startAt,
       aggregateAt: e.aggregateAt,
+      // 紹介カードに載せるロゴを引くためのアセット名。画像自体は持たない（実行時に取る）。
+      asset: e.assetbundleName,
     })),
     /**
      * イベント×（キャラ・ユニット）×属性 のボーナス倍率。

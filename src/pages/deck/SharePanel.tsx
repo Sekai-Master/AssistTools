@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 import { Panel } from "../../components/ui/Panel";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { cardThumbUrl } from "./CardThumb";
-import { cardArtUrl, loadCardArt } from "./lib/cardArt";
+import { cardArtUrl, eventLogoUrl, loadCardArt } from "./lib/cardArt";
+import { cn } from "../../lib/utils";
 import { drawDeckCanvas, resolveColor } from "./lib/deckCanvas";
 import { buildShareCard, shareFileName } from "./lib/share";
 import type { CatalogCard } from "./lib/deckInputs";
@@ -18,6 +19,13 @@ import type { DeckEval } from "./lib/evaluate";
  * ★ 描いてから出す。押した瞬間に描画するので、編成を変えたあとの
  *   「古い画像が出てくる」が起きない（canvas を状態として持たない）。
  */
+const chip = (active: boolean) =>
+  cn(
+    "rounded-full px-3 py-1 text-xs font-bold",
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
+    active ? "neu-selected" : "bg-neu text-slate-500 shadow-neu-sm"
+  );
+
 export function SharePanel({
   deckName,
   eventName,
@@ -26,11 +34,14 @@ export function SharePanel({
   evaluated,
   leaderCardId,
   hideBonus,
+  eventAsset,
 }: {
   deckName: string;
-  /** チャレンジライブではイベントボーナスの欄を出さない。 */
+  /** チャレンジライブではイベントボーナスの欄を出さない（そもそも概念が無い）。 */
   hideBonus?: boolean;
   eventName?: string;
+  /** イベントのアセット名。ロゴを引くのに使う。 */
+  eventAsset?: string;
   cards: CatalogCard[];
   states: CardStates;
   evaluated: DeckEval;
@@ -40,6 +51,10 @@ export function SharePanel({
   const [notice, setNotice] = useState<string | null>(null);
   /** 立ち絵を取れずに簡易版で描いたか。黙って別物を出さない。 */
   const [simple, setSimple] = useState(false);
+  /** イベントボーナスを載せない（要らないときがある）。 */
+  const [noBonus, setNoBonus] = useState(false);
+  /** 総合力の内訳まで載せる。 */
+  const [withDetails, setWithDetails] = useState(false);
 
   const say = (msg: string) => {
     setNotice(msg);
@@ -54,14 +69,18 @@ export function SharePanel({
     const accent = resolveColor(canvas, "var(--unit-color)");
 
     /**
-     * リーダーの立ち絵だけ、その場で配信元から取る。
-     * ★ 立ち絵はリポジトリに持っていない（全カードで50〜200MB になるため）。
-     * ★ **取れなくても止めない。** null ならサムネイルだけの簡易版で描く。
+     * リーダーの立ち絵とイベントのロゴ。どちらも自前配信（`public/CardDatas/`）。
+     * ★ **取れなくても止めない。** 立ち絵が無ければサムネイルだけの簡易版で描く。
+     *   立ち絵を持っているのは★4と birthday だけなので、★3以下がリーダーなら簡易版になる。
      */
     const leader = cards.find((c) => c.id === leaderCardId) ?? cards[0];
     const s = leader ? states[leader.id] : undefined;
     const url = leader ? cardArtUrl(leader, !!s?.trained && !s?.artUntrained) : null;
-    const heroArt = url ? await loadCardArt(url) : null;
+    const logoUrl = hideBonus || noBonus ? null : eventLogoUrl(eventAsset);
+    const [heroArt, eventLogo] = await Promise.all([
+      url ? loadCardArt(url) : Promise.resolve(null),
+      logoUrl ? loadCardArt(logoUrl) : Promise.resolve(null),
+    ]);
     setSimple(!heroArt);
 
     await drawDeckCanvas(canvas, {
@@ -74,9 +93,11 @@ export function SharePanel({
         leaderCardId,
         thumbUrl: cardThumbUrl,
         accent,
-        hideBonus,
+        hideBonus: hideBonus || noBonus,
+        withDetails,
       }),
       heroArt,
+      eventLogo,
     });
     return canvas;
   };
@@ -111,8 +132,28 @@ export function SharePanel({
     <Panel title="紹介カード">
       <p className="text-sm text-slate-500">
         編成のカード5枚と、総合力・イベントボーナス・スキル値を1枚の画像にします。
-        リーダーの立ち絵だけ、書き出すときに配信元から読み込みます（サイトには持っていません）。
       </p>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {/* ★ いらないときがあるので、載せるかどうかを選べる（Nori 指示 2026-08-02）。 */}
+        <button
+          type="button"
+          aria-pressed={!noBonus}
+          onClick={() => setNoBonus((v) => !v)}
+          className={chip(!noBonus)}
+        >
+          イベントボーナスを載せる
+        </button>
+        <button
+          type="button"
+          aria-pressed={withDetails}
+          onClick={() => setWithDetails((v) => !v)}
+          className={chip(withDetails)}
+        >
+          内訳も載せる
+        </button>
+      </div>
+
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <NeuButton onClick={copy}>画像をコピー</NeuButton>
         <NeuButton onClick={save}>画像を保存</NeuButton>

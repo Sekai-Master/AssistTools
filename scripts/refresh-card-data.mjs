@@ -39,6 +39,32 @@ const THUMB_WIDTH = 128;
 const THUMB_QUALITY = 80;
 const THUMB_CONCURRENCY = 8;
 
+/**
+ * 紹介カードに使う立ち絵とイベントロゴ。
+ *
+ * ★★ **実行時に取りに行くことはできない。** ★★
+ *   配信元（Cloudflare）は Referer 付きの要求を 403 で弾く設定になっている
+ *   ＝他サイトからの直リンクを意図的に塞いでいる。ブラウザは画像取得で必ず
+ *   Referer を送るので、実行時取得は設計上通らない（回避はしない）。
+ *   ビルド時に落として自前配信する（サムネイル・ジャケットと同じ正規の経路）。
+ *
+ * ★ 立ち絵は★4と birthday だけ（Nori 判断 2026-08-02・約12MB）。
+ *   紹介カードで使うのはリーダーの1枚で、そこに置くのは実質★4系だけなので、
+ *   全レアリティを持つ（約28MB）に見合わない。★3以下がリーダーのときは
+ *   画面側がサムネイルの簡易版に落ちる。
+ */
+const ART_DIR = path.join(OUT_DIR, "art");
+const ART_BASE = "https://storage.sekai.best/sekai-jp-assets/character/member";
+const ART_WIDTH = 420;
+const ART_QUALITY = 72;
+/** 立ち絵を持つレアリティ。 */
+const ART_RARITIES = new Set(["4", "birthday"]);
+
+const LOGO_DIR = path.join(OUT_DIR, "logo");
+const LOGO_BASE = "https://storage.sekai.best/sekai-jp-assets/event";
+const LOGO_WIDTH = 280;
+const LOGO_QUALITY = 78;
+
 /** 取ってくるマスタ。ここに足すときは、その表が日付欄を持つかを必ず確かめること。 */
 const SOURCES = {
   cards: "cards.json",
@@ -65,6 +91,84 @@ async function fetchJson(file) {
 }
 
 const kb = (n) => `${(n / 1024).toFixed(0)} KB`;
+
+/**
+ * 画像を1枚落として webp に縮める。取得できなければ null（呼び出し側が数える）。
+ * ★ Referer を付けない（付けると 403。ビルド時なので既定で付かないが、明示しておく）。
+ */
+async function fetchImage(url, width, quality) {
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  return sharp(Buffer.from(await res.arrayBuffer()))
+    .resize({ width, withoutEnlargement: true })
+    .webp({ quality })
+    .toBuffer();
+}
+
+/** 落とす対象を並列で処理する共通ループ。既にあるファイルは触らない。 */
+async function syncImages(label, dir, items) {
+  fs.mkdirSync(dir, { recursive: true });
+  const todo = items.filter((i) => !fs.existsSync(path.join(dir, `${i.name}.webp`)));
+  if (todo.length === 0) {
+    console.log(`${label}: ${items.length}件すべて取得済み`);
+    return;
+  }
+  let next = 0;
+  const failures = [];
+  const worker = async () => {
+    for (;;) {
+      const item = todo[next++];
+      if (!item) return;
+      try {
+        const buf = await fetchImage(item.url, item.width, item.quality);
+        if (!buf) failures.push(item.name);
+        else fs.writeFileSync(path.join(dir, `${item.name}.webp`), buf);
+      } catch (err) {
+        failures.push(`${item.name} (${err.message})`);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: THUMB_CONCURRENCY }, worker));
+  console.log(
+    `${label}: 新規 ${todo.length - failures.length}件 / 既存 ${items.length - todo.length}件 / 失敗 ${failures.length}`
+  );
+  if (failures.length) console.warn(`  取得できなかったもの:`, failures.slice(0, 20).join(", "));
+}
+
+/** リーダーに置く立ち絵（★4・birthday のみ）。 */
+function artItems(cards) {
+  const items = [];
+  for (const c of cards) {
+    if (!ART_RARITIES.has(c.rarity)) continue;
+    items.push({
+      name: `${c.asset}_normal`,
+      url: `${ART_BASE}/${c.asset}/card_normal.webp`,
+      width: ART_WIDTH,
+      quality: ART_QUALITY,
+    });
+    if ((c.trained?.[0] ?? 0) > 0) {
+      items.push({
+        name: `${c.asset}_after_training`,
+        url: `${ART_BASE}/${c.asset}/card_after_training.webp`,
+        width: ART_WIDTH,
+        quality: ART_QUALITY,
+      });
+    }
+  }
+  return items;
+}
+
+/** イベントのロゴ。**公開済みイベントのぶんだけ**（未公開のロゴは名前だけで内容が漏れる）。 */
+function logoItems(events) {
+  return events
+    .filter((e) => e.asset)
+    .map((e) => ({
+      name: e.asset,
+      url: `${LOGO_BASE}/${e.asset}/logo/logo.webp`,
+      width: LOGO_WIDTH,
+      quality: LOGO_QUALITY,
+    }));
+}
 
 /**
  * カードのサムネイルを揃える。既にあるファイルは触らない（毎回2000枚落とさない）。
@@ -182,6 +286,8 @@ async function main() {
   // ★ 画像は JSON を書き出したあと（＝未公開データの検算を通したあと）に取りに行く。
   //   out.cards が起点なので、未公開カードのアセットは要求しない。
   await syncThumbnails(out.cards);
+  await syncImages("立ち絵", ART_DIR, artItems(out.cards));
+  await syncImages("イベントロゴ", LOGO_DIR, logoItems(out.events));
 
   console.log("完了");
 }

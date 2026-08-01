@@ -13,12 +13,15 @@ import type { CardState } from "./deckStore";
 import type { DeckCanvasCard, DeckCanvasData } from "./deckCanvas";
 import type { DeckEval } from "./evaluate";
 
-/** 「Lv60 特訓 MR5 SL4」。育成状態は数字の根拠なので必ず添える。 */
+/**
+ * 「Lv60 特訓 SL4」。育成状態は数字の根拠なので必ず添える。
+ * ★ マスターランクはここに入れない。ゲームと同じく**カードの左下にひし形**で描く
+ *   （deckCanvas.drawMasterRank）。文字とひし形の両方に出すと二重になる。
+ */
 export function growthLabel(state: CardState | undefined, card: CatalogCard): string {
   const s = state;
   const parts = [`Lv${s?.level ?? card.power[0]?.length ?? 1}`];
   if (s?.trained) parts.push("特訓");
-  parts.push(`MR${s?.masterRank ?? 0}`);
   parts.push(`SL${s?.skillLevel ?? 1}`);
   return parts.join(" ");
 }
@@ -32,8 +35,10 @@ export function buildShareCard(opts: {
   leaderCardId?: number;
   thumbUrl: (card: CatalogCard, trained: boolean) => string;
   accent: string;
-  /** チャレンジライブ（イベントボーナスの概念が無い編成）では欄ごと出さない。 */
+  /** イベントボーナスの欄を出さない（チャレンジライブ／載せたくないとき）。 */
   hideBonus?: boolean;
+  /** 総合力の内訳まで載せる。 */
+  withDetails?: boolean;
 }): DeckCanvasData {
   const { evaluated } = opts;
   const round = (v: number) => Math.round(v * 10) / 10;
@@ -51,10 +56,32 @@ export function buildShareCard(opts: {
       name: c.name,
       character: characterName(c.ch),
       sub: growthLabel(s, c),
+      masterRank: s?.masterRank ?? 0,
       leader: c.id === opts.leaderCardId,
       attrColor: ATTR_COLOR[c.attr] ?? "#888",
     };
   });
+
+  /**
+   * 総合力の内訳など。**載せるモードのときだけ**（Nori 指示 2026-08-02）。
+   * ふだんは数字3つで足りるが、確認や共有では「どこで稼いでいるか」まで見たいことがある。
+   */
+  const p = evaluated.power;
+  const details = opts.withDetails
+    ? [
+        { label: "パフォーマンス", value: p.performance.toLocaleString() },
+        { label: "エリアアイテム", value: p.areaItem.toLocaleString() },
+        { label: "キャラランク", value: p.characterRank.toLocaleString() },
+        { label: "ゲート", value: p.gate.toLocaleString() },
+        { label: "家具", value: p.fixture.toLocaleString() },
+        { label: "称号", value: p.honor.toLocaleString() },
+        {
+          label: "全一致",
+          // ★ 帯のセルは狭い。長い語は「ユニット…」と切れて意味が消えるので短く出す。
+          value: p.sameUnit && p.sameAttr ? "両方" : p.sameUnit ? "ユニット" : p.sameAttr ? "属性" : "なし",
+        },
+      ]
+    : undefined;
 
   const bonus = evaluated.bonus;
   return {
@@ -63,8 +90,8 @@ export function buildShareCard(opts: {
     cards,
     stats: [
       { label: "総合力", value: evaluated.power.total.toLocaleString() },
-      // ★ チャレンジライブにはイベントボーナスが無い。「—」を出すより行ごと消す。
-      ...(bonus === null && opts.hideBonus
+      // ★ 載せない指定のとき・チャレンジライブのときは、行ごと消す（「—」を出さない）。
+      ...(opts.hideBonus
         ? []
         : [
             {
@@ -83,6 +110,7 @@ export function buildShareCard(opts: {
         sub: `実効値 ${round(evaluated.skill.effective)}%`,
       },
     ],
+    details,
     accent: opts.accent,
   };
 }

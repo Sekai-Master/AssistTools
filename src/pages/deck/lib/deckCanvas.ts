@@ -21,10 +21,12 @@ export interface DeckCanvasCard {
   thumb?: string;
   name: string;
   character: string;
-  /** 「Lv60 特訓 MR5 SL4」のような育成状態。 */
+  /** 「Lv60 特訓 SL4」のような育成状態。**マスターランクは含めない**（ひし形で描く）。 */
   sub: string;
   /** そのカードのスキル値（「150%」）。 */
   skill?: string;
+  /** マスターランク（0〜5）。ゲームと同じくカードの左下にひし形で出す。 */
+  masterRank?: number;
   leader: boolean;
   attrColor: string;
 }
@@ -37,6 +39,13 @@ export interface DeckCanvasData {
   stats: { label: string; value: string; sub?: string }[];
   accent: string;
   footer?: string;
+  /** イベントのロゴ（自前配信の1枚）。無ければイベント名のテキストだけ。 */
+  eventLogo?: HTMLImageElement | null;
+  /**
+   * 総合力の内訳など、詳しい数値。**載せるモードのときだけ**渡す。
+   * 普段は数字3つで足りるが、確認や共有では内訳まで欲しいことがある。
+   */
+  details?: { label: string; value: string }[];
   /**
    * リーダーの立ち絵（cardArt.ts が読む1枚）。
    * ★ **無くても成立する**。取れなかったときはサムネイルを大きく置く簡易版になる。
@@ -46,12 +55,20 @@ export interface DeckCanvasData {
 }
 
 const W = 1000;
-const H = 520;
+/** 内訳を載せるモードでは下に1段増やす。 */
+const H_BASE = 520;
+const DETAIL_H = 92;
 const PAD = 28;
 /** 左（リーダー＋編成名）／中央（数字）／右（5枚）の3カラム。 */
 const LEFT_W = 300;
-const MID_X = LEFT_W + PAD * 2;
-const MID_W = 300;
+/** 立ち絵を敷く左パネルの幅。 */
+const HERO_PANEL_W = LEFT_W + PAD * 2;
+/**
+ * ★ 中央の数字は**パネルの縁から離す**。縁ぴったりから始めると、絵との境目に
+ *   文字が張り付いて窮屈に見える（Nori 指摘 2026-08-02）。
+ */
+const MID_X = HERO_PANEL_W + 46;
+const MID_W = 280;
 const RIGHT_X = MID_X + MID_W + PAD;
 const HERO = 200;
 const ROW_H = 78;
@@ -61,7 +78,13 @@ const INK = "#f1f5f9";
 const MUTED = "#94a3b8";
 const PANEL = "rgba(255,255,255,0.06)";
 
-export const deckCanvasSize = () => ({ width: W, height: H });
+/** プロセカらしいあしらいの色（ピンク・エメラルド・白）。 */
+const DECO_COLORS = ["#ff5fa2", "#3ddc97", "#ffffff"];
+
+export const deckCanvasSize = (hasDetails = false) => ({
+  width: W,
+  height: H_BASE + (hasDetails ? DETAIL_H : 0),
+});
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -83,6 +106,7 @@ export async function drawDeckCanvas(canvas: HTMLCanvasElement, data: DeckCanvas
     )
   );
 
+  const H = H_BASE + (data.details?.length ? DETAIL_H : 0);
   const dpr = 2;
   canvas.width = W * dpr;
   canvas.height = H * dpr;
@@ -110,12 +134,22 @@ export async function drawDeckCanvas(canvas: HTMLCanvasElement, data: DeckCanvas
       : "#884499";
   data = { ...data, accent: theme };
 
-  drawBackground(ctx, theme);
+  drawBackground(ctx, theme, H);
   // 立ち絵が取れていれば左半分を絵で埋める。取れていなければサムネの簡易版。
-  if (data.heroArt) drawHeroArt(ctx, data.heroArt);
-  drawLeft(ctx, data, leader, imgs, !!data.heroArt);
+  if (data.heroArt) drawHeroArt(ctx, data.heroArt, H);
+  drawDeco(ctx, H);
+  // ★ 内訳の帯は下に増える。リーダーの名前は**帯の上**に置く（重なると読めない）。
+  const contentBottom = H - (data.details?.length ? DETAIL_H : 0);
+  drawLeft(ctx, data, leader, imgs, !!data.heroArt, contentBottom);
   drawStats(ctx, data);
   drawCards(ctx, data, imgs);
+  if (data.eventLogo) drawEventLogo(ctx, data.eventLogo);
+  if (data.details?.length) drawDetails(ctx, data, H);
+
+  // ★ 上端の線は**立ち絵の上まで通す**。地の上に描くと絵で切れて、
+  //   線が途中から始まっているように見える（Nori 指摘 2026-08-02）。
+  ctx.fillStyle = theme;
+  ctx.fillRect(0, 0, W, 5);
 
   ctx.textAlign = "right";
   ctx.fillStyle = MUTED;
@@ -123,8 +157,143 @@ export async function drawDeckCanvas(canvas: HTMLCanvasElement, data: DeckCanvas
   ctx.fillText(data.footer ?? "Sekai-Master / 編成ビルダー", W - PAD, H - 16);
 }
 
+/**
+ * プロセカらしいあしらい（ピンク・エメラルド・白の三角と丸を散らす）。
+ *
+ * ★ 乱数は**固定の種**から作る。毎回違う配置になると「同じ編成なのに違う画像」に
+ *   見えて、貼り直したときに別物だと思われる。
+ * ★ 数字とカードの帯には置かない（読めなくなる）。
+ */
+function drawDeco(ctx: CanvasRenderingContext2D, H: number): void {
+  let seed = 20260802;
+  const rand = () => {
+    // 小さな線形合同法。ライブラリを足すほどのものではない。
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+
+  ctx.save();
+  for (let i = 0; i < 54; i++) {
+    const x = rand() * W;
+    const y = rand() * H;
+    const inText = x > MID_X - 24 && x < RIGHT_X - 12 && y > 96 && y < H - 80;
+    const inCards = x > RIGHT_X - 12 && y > 88 && y < 96 + ROW_H * 5;
+    const color = DECO_COLORS[Math.floor(rand() * DECO_COLORS.length)];
+    const size = 5 + rand() * 13;
+    const alpha = 0.1 + rand() * 0.22;
+    if (inText || inCards) continue;
+
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
+    const kind = rand();
+    if (kind < 0.36) {
+      ctx.beginPath();
+      ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (kind < 0.68) {
+      // 縁だけの輪（ドーナツ）。塗りつぶしばかりだと単調になる。
+      ctx.lineWidth = Math.max(1.5, size * 0.16);
+      ctx.beginPath();
+      ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rand() * Math.PI);
+      ctx.beginPath();
+      ctx.moveTo(0, -size / 2);
+      ctx.lineTo(size / 2, size / 2);
+      ctx.lineTo(-size / 2, size / 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+/** イベントのロゴ。右上に置く（イベント名のテキストの代わり）。 */
+function drawEventLogo(ctx: CanvasRenderingContext2D, logo: HTMLImageElement): void {
+  const maxW = 200;
+  const maxH = 76;
+  const scale = Math.min(maxW / logo.width, maxH / logo.height, 1);
+  ctx.drawImage(logo, W - PAD - logo.width * scale, 20, logo.width * scale, logo.height * scale);
+}
+
+/**
+ * マスターランクのひし形。
+ *
+ * ★ ゲームではカードの**左下**に、緑基調のグラデーション＋銀の縁取りのひし形で出る。
+ *   同じ見え方にしておくと、ゲーム画面と見比べたときに迷わない（Nori 指示 2026-08-02）。
+ *   0 のときは出さない（ゲームでも付かない）。
+ */
+function drawMasterRank(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  size: number,
+  mr: number | undefined
+): void {
+  if (!mr) return;
+  const r = size / 2;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(Math.PI / 4);
+  const g = ctx.createLinearGradient(-r, -r, r, r);
+  g.addColorStop(0, "#8ff0b4");
+  g.addColorStop(0.5, "#22a06b");
+  g.addColorStop(1, "#0d5238");
+  ctx.fillStyle = g;
+  ctx.fillRect(-r, -r, size, size);
+  const s = ctx.createLinearGradient(-r, -r, r, r);
+  s.addColorStop(0, "#ffffff");
+  s.addColorStop(0.5, "#c8ccd4");
+  s.addColorStop(1, "#8b93a1");
+  ctx.strokeStyle = s;
+  ctx.lineWidth = Math.max(1.5, size * 0.1);
+  ctx.strokeRect(-r, -r, size, size);
+  ctx.restore();
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `bold ${Math.round(size * 0.6)}px sans-serif`;
+  ctx.fillText(String(mr), cx, cy);
+  ctx.restore();
+}
+
+/** 総合力の内訳など。載せるモードのときだけ下に1段増やす。 */
+function drawDetails(ctx: CanvasRenderingContext2D, data: DeckCanvasData, H: number): void {
+  const items = data.details ?? [];
+  const y = H - DETAIL_H - 6;
+  // ★ 立ち絵のパネルには掛けない。掛けるとリーダーの名前と重なって両方読めなくなる
+  //   （Nori 指摘 2026-08-02）。帯は中央カラムの左端から右端まで。
+  const x0 = HERO_PANEL_W + 16;
+  const bandW = W - PAD - x0;
+  ctx.fillStyle = "rgba(255,255,255,0.05)";
+  roundRect(ctx, x0, y, bandW, DETAIL_H - 26, 12);
+  ctx.fill();
+
+  const cols = Math.min(items.length, 7);
+  const cellW = bandW / Math.max(cols, 1);
+  items.forEach((d, i) => {
+    const cx = x0 + cellW * (i % cols) + cellW / 2;
+    const cy = y + 20 + Math.floor(i / cols) * 32;
+    ctx.textAlign = "center";
+    ctx.fillStyle = MUTED;
+    ctx.font = "11px sans-serif";
+    ctx.fillText(truncate(ctx, d.label, cellW - 8), cx, cy);
+    ctx.fillStyle = INK;
+    ctx.font = "bold 15px sans-serif";
+    ctx.fillText(truncate(ctx, d.value, cellW - 8), cx, cy + 19);
+  });
+}
+
 /** 暗い地＋ユニット色の光。数字と絵を浮かせるための下地。 */
-function drawBackground(ctx: CanvasRenderingContext2D, accent: string): void {
+function drawBackground(ctx: CanvasRenderingContext2D, accent: string, H: number): void {
   ctx.fillStyle = "#12151c";
   ctx.fillRect(0, 0, W, H);
 
@@ -143,8 +312,6 @@ function drawBackground(ctx: CanvasRenderingContext2D, accent: string): void {
   ctx.fillStyle = sweep;
   ctx.fillRect(0, 0, W, H);
 
-  ctx.fillStyle = accent;
-  ctx.fillRect(0, 0, W, 5);
 }
 
 /**
@@ -154,8 +321,8 @@ function drawBackground(ctx: CanvasRenderingContext2D, accent: string): void {
  *   **高さを合わせて中央を切り出す**（cover）。顔が切れないよう、やや上寄りに置く。
  * ★ 右端は地の色へグラデーションで溶かす。切り口をそのまま出すと貼り絵に見える。
  */
-function drawHeroArt(ctx: CanvasRenderingContext2D, art: HTMLImageElement): void {
-  const panelW = LEFT_W + PAD * 2;
+function drawHeroArt(ctx: CanvasRenderingContext2D, art: HTMLImageElement, H: number): void {
+  const panelW = HERO_PANEL_W;
   ctx.save();
   ctx.beginPath();
   ctx.rect(0, 0, panelW, H);
@@ -176,11 +343,21 @@ function drawHeroArt(ctx: CanvasRenderingContext2D, art: HTMLImageElement): void
   ctx.fillStyle = shade;
   ctx.fillRect(0, 0, panelW, H);
 
-  const fade = ctx.createLinearGradient(panelW - 140, 0, panelW, 0);
+  /**
+   * ★ 右端は**広く・ゆっくり**溶かす。細い帯で一気に落とすと切り口が線に見える。
+   * ★★ **クリップの中だけで溶かすこと。** ★★ クリップの外（絵が無い側）まで
+   *   地の色を塗ると、背景の光（放射グラデーション）がその矩形だけ消えて、
+   *   縦に明るさの段差が出る＝「グラデーションが汚い」の正体（Nori 指摘 2026-08-02）。
+   */
+  const fadeW = 200;
+  const fade = ctx.createLinearGradient(panelW - fadeW, 0, panelW, 0);
   fade.addColorStop(0, "rgba(18,21,28,0)");
+  fade.addColorStop(0.4, "rgba(18,21,28,0.4)");
+  fade.addColorStop(0.75, "rgba(18,21,28,0.85)");
   fade.addColorStop(1, "rgba(18,21,28,1)");
   ctx.fillStyle = fade;
-  ctx.fillRect(panelW - 140, 0, 140, H);
+  ctx.fillRect(panelW - fadeW, 0, fadeW, H);
+
   ctx.restore();
 }
 
@@ -189,7 +366,8 @@ function drawLeft(
   data: DeckCanvasData,
   leader: DeckCanvasCard | undefined,
   imgs: Map<string, HTMLImageElement>,
-  hasHeroArt = false
+  hasHeroArt = false,
+  H = H_BASE
 ): void {
   const cx = PAD + LEFT_W / 2;
 
@@ -200,7 +378,8 @@ function drawLeft(
   ctx.fillStyle = INK;
   ctx.font = "bold 26px sans-serif";
   ctx.fillText(truncate(ctx, data.deckName, LEFT_W), PAD, 68);
-  if (data.eventName) {
+  // ロゴを右上に置いたときは、同じことを2回書かない。
+  if (data.eventName && !data.eventLogo) {
     ctx.fillStyle = MUTED;
     ctx.font = "13px sans-serif";
     ctx.fillText(truncate(ctx, data.eventName, LEFT_W), PAD, 92);
@@ -251,6 +430,7 @@ function drawLeft(
   ctx.lineWidth = 3;
   roundRect(ctx, x + 1.5, top + 1.5, HERO - 3, HERO - 3, 17);
   ctx.stroke();
+  drawMasterRank(ctx, x + 26, top + HERO - 24, 38, leader.masterRank);
 
   // リーダーであることは編成の意味が変わる（ボーナスの上乗せ）ので必ず出す。
   ctx.fillStyle = data.accent;
@@ -329,6 +509,8 @@ function drawCards(
     ctx.lineWidth = 2;
     roundRect(ctx, tx + 1, ty + 1, THUMB - 2, THUMB - 2, 7);
     ctx.stroke();
+    // マスターランクはゲームと同じくカードの左下にひし形で。
+    drawMasterRank(ctx, tx + 12, ty + THUMB - 11, 20, c.masterRank);
 
     const textX = tx + THUMB + 12;
     const skillW = 66;
