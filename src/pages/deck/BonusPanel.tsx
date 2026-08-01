@@ -1,0 +1,144 @@
+import { useMemo } from "react";
+import { Panel } from "../../components/ui/Panel";
+import { Field } from "../../components/ui/Field";
+import { NeuInput } from "../../components/ui/NeuInput";
+import { Stat } from "../refresh/Stat";
+import { characterName } from "./lib/characters";
+import { displayBonus, toBonusDeck, type CatalogCard, type EventRow } from "./lib/deckInputs";
+import { eventBonus, type BonusTables } from "./lib/eventBonus";
+import type { CardStates } from "./lib/deckStore";
+
+/**
+ * イベントボーナスのパネル。
+ *
+ * ★ この値は**カードだけで決まる**（エリアアイテムもキャラランクも効かない）。
+ *   つまり総合力と違って「まだ持っていない編成」でも正確に出せる。編成ビルダーで
+ *   最初に価値が立つのがここなので、プレイヤー設定より上に置いている。
+ *
+ * ★ ゲーム内は合計だけ切り捨てて表示する（内部 156.5% → 表示 156%）。
+ *   大きく出すのは実機と同じ切り捨て値、正確な値は脇に小さく添える。
+ *   カードごとの値は小数のままで実機表示と一致する（docs/deck-builder.md の実測）。
+ */
+export function BonusPanel({
+  cards,
+  states,
+  tables,
+  events,
+  eventId,
+  onEventId,
+  leaderCardId,
+  supportBonus,
+  onSupportBonus,
+}: {
+  cards: CatalogCard[];
+  states: CardStates;
+  tables: BonusTables;
+  events: EventRow[];
+  eventId: number | undefined;
+  onEventId: (id: number) => void;
+  leaderCardId?: number;
+  supportBonus: string;
+  onSupportBonus: (v: string) => void;
+}) {
+  const support = Number(supportBonus) || 0;
+  const result = useMemo(() => {
+    if (eventId == null) return null;
+    return eventBonus(toBonusDeck(cards, states), eventId, tables, {
+      leaderCardId,
+      supportBonus: support,
+    });
+  }, [cards, states, tables, eventId, leaderCardId, support]);
+
+  const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
+
+  return (
+    <Panel title="イベントボーナス">
+      <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+        <Field label="イベント" htmlFor="deck-event" hint="開催中のイベントを既定で選んでいます">
+          <select
+            id="deck-event"
+            value={eventId ?? ""}
+            onChange={(e) => onEventId(Number(e.target.value))}
+            className="neu-inset w-full rounded-lg px-3 py-2 text-slate-700"
+          >
+            {events.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field
+          label="サポート編成"
+          htmlFor="deck-support"
+          hint="ワールドリンクのサポート編成ぶん(%)。手入力です"
+        >
+          <NeuInput
+            id="deck-support"
+            inputMode="decimal"
+            value={supportBonus}
+            onChange={(e) => onSupportBonus(e.target.value.replace(/[^0-9.]/g, ""))}
+            className="max-w-28 text-center"
+          />
+        </Field>
+      </div>
+
+      {!result ? (
+        <p className="mt-4 text-sm text-slate-500">イベントを選ぶとボーナスを計算します。</p>
+      ) : cards.length === 0 ? (
+        <p className="mt-4 text-sm text-slate-500">カードを入れるとボーナスを計算します。</p>
+      ) : (
+        <>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Stat
+              label="編成ボーナス"
+              value={`${displayBonus(result.total)}%`}
+              sub={
+                // 切り捨てで消えた端数があるときだけ正確な値を添える（普段は静かに）。
+                result.total !== displayBonus(result.total) ? `正確には ${result.total}%` : "ゲーム内表示と同じ"
+              }
+            />
+            <Stat label="カード合計" value={`${result.total - result.support}%`} sub={`${cards.length}枚`} />
+            <Stat label="サポート" value={`${result.support}%`} sub="手入力ぶん" />
+          </div>
+
+          <ul className="mt-4 space-y-1 text-sm">
+            {result.perCard.map((c) => {
+              const card = byId.get(c.cardId);
+              return (
+                <li
+                  key={c.cardId}
+                  className="flex items-center gap-2 rounded-lg px-2 py-1.5 shadow-neu-inset"
+                >
+                  <span className="min-w-0 flex-1 truncate text-slate-600">
+                    {card ? `${characterName(card.ch)}「${card.name}」` : `カード${c.cardId}`}
+                  </span>
+                  <span className="shrink-0 text-xs text-slate-400">
+                    キャラ/属性 {c.deck}％ ・ MR {c.master}％{c.card > 0 && ` ・ PU ${c.card}％`}
+                  </span>
+                  <span className="w-14 shrink-0 text-right font-bold tabular-nums text-slate-700">
+                    {c.total}%
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* ★ 未設定を黙って0で計算したことを隠さない。合計は暫定値。 */}
+          {result.unsetMasterRank.length > 0 && (
+            <p className="mt-3 text-xs text-amber-600">
+              ⚠ マスターランク未設定のカードが {result.unsetMasterRank.length} 枚あります（0として計算した暫定値）。
+              カードをタップして入力してください。
+            </p>
+          )}
+          {result.cappedOut > 0 && (
+            <p className="mt-2 text-xs text-amber-600">
+              ⚠ このイベントは対象人数に上限があり、{result.cappedOut} 枚ぶんのボーナスが効いていません
+              （効く側を残しています）。
+            </p>
+          )}
+        </>
+      )}
+    </Panel>
+  );
+}

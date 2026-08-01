@@ -20,6 +20,7 @@ export const ROUTE_LOADERS: Record<string, Loader> = {
   "/plan": () => import("../pages/refresh/PlanPage"),
   "/worktime": () => import("../pages/worktime/WorkTimeCalculator"),
   "/ranking": () => import("../pages/ranking/EfficiencyRanking"),
+  "/deck": () => import("../pages/deck/DeckBuilder"),
 };
 
 const cache = new Map<string, Promise<Mod>>();
@@ -83,6 +84,7 @@ export const RoutePages = {
   plan: lazyOf("/plan"),
   worktime: lazyOf("/worktime"),
   ranking: lazyOf("/ranking"),
+  deck: lazyOf("/deck"),
 };
 
 /** aria-live に流す遷移先の名前。 */

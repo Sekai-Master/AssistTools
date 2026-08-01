@@ -112,6 +112,17 @@ export const TOOLS: ToolDef[] = [
     primary: true,
   },
   {
+    id: "deck",
+    path: "/deck",
+    name: "編成ビルダー",
+    shortName: "編成",
+    description:
+      "カード5枚のイベントボーナスと総合力を出します。ボーナスを落として総合力を盛った方が勝つ場合があるので、編成を並べて最終ポイントで比べられます。",
+    icon: "style",
+    unit: "wxs",
+    status: "ready",
+  },
+  {
     id: "efficiency",
     path: "/efficiency",
     name: "効率難易度検索",
