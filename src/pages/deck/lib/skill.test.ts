@@ -96,14 +96,33 @@ describe("編成で変わるスキル", () => {
     ).toBe(150); // 3種類あっても上限2種類ぶん
   });
 
-  it("他メンバー参照は上限側（一番高い人の50%・上限60）", () => {
-    const self = card(1, 23, "light_sound"); // 素80
-    // 他が★4の120%なら 60% ぶんだが上限60で頭打ち
+  it("他メンバー参照は上限側（一番高い人の50%）", () => {
+    const self = card(1, 23, "light_sound", 4); // 素80
+    // 他が★4の120%なら 60% ぶん（SL4 の上限は70なので頭打ちしない）
     expect(deckSkill([self, card(2, 4, "idol")], skills).perCard[0].value).toBe(140);
     // 他が★1の40%なら 20%
     expect(deckSkill([self, card(2, 1, "idol")], skills).perCard[0].value).toBe(100);
     // 1人だけなら参照先が無い
     expect(deckSkill([self], skills).perCard[0].value).toBe(80);
+  });
+
+  /**
+   * ★★ 上限は**スキルレベルで変わる**（SL1=60 / SL2=65 / SL3=70 / SL4=70）。
+   *   マスタの先頭行だけ見て1つの値にしていたせいで、SL3・SL4 で10低く出ていた。
+   */
+  it("参照の上限がスキルレベルごとに効く", () => {
+    const ref = skills.find((s) => s.enhance?.type === "reference")!;
+    expect(ref.enhance?.caps).toEqual([60, 65, 70, 70]);
+
+    // 参照先は skill 13（SL4 で 140）。50% なら 70 だが、SL ごとの上限で頭打ちする。
+    const partner = card(2, 13, "idol", 4);
+    const at = (lv: number) =>
+      deckSkill([card(1, ref.id, "light_sound", lv), partner], skills).perCard[0];
+
+    expect(at(1).bonus).toBe(60); // 上限60
+    expect(at(2).bonus).toBe(65); // 上限65
+    expect(at(3).bonus).toBe(70); // 上限70
+    expect(at(4).bonus).toBe(70); // 70（50%ぶんが 70 なので上限とちょうど同じ）
   });
 
   it("上乗せがあったカードは理由を返す（黙って増やさない）", () => {

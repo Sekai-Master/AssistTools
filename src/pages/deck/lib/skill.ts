@@ -28,9 +28,13 @@ export interface SkillEnhance {
   /** unit_count: 数える上限の種類数と、その上限に達したときの%。 */
   maxKinds?: number;
   max?: number;
-  /** reference: 参照する割合(%)と、上乗せの上限(%)。 */
-  rate?: number;
-  cap?: number;
+  /**
+   * reference: 参照する割合(%)と、上乗せの上限(%)。**どちらもスキルレベル別**。
+   * ★ 上限は SL1=60 / SL2=65 / SL3=70 / SL4=70 と変わる（実データ）。
+   *   1つの値で持つと SL3・SL4 で10低く出る。
+   */
+  rates?: number[];
+  caps?: number[];
   /** character_rank: ランクの段ごとの%。 */
   steps?: { rank: number; value: number }[];
 }
@@ -127,10 +131,14 @@ export function deckSkill(
       const n = Math.min(kinds.size, e.maxKinds);
       bonus = (e.max / e.maxKinds) * n;
       note = `異なるユニット${n}種類`;
-    } else if (e?.type === "reference" && e.rate) {
+    } else if (e?.type === "reference" && e.rates?.length) {
       // 他メンバーのスキル値を参照する。**ランダムなので上限側**（＝一番高い人）を採る。
+      // ★ 割合も上限も**スキルレベル別**。固定値で持つと SL3・SL4 で10低く出る。
+      const lv = clampLevel(card.level, e.rates.length) - 1;
+      const rate = e.rates[lv] ?? 0;
+      const cap = e.caps?.[lv] ?? Infinity;
       const othersMax = Math.max(0, ...bases.filter((v, j) => j !== i && v != null).map((v) => v!));
-      bonus = Math.min((othersMax * e.rate) / 100, e.cap ?? Infinity);
+      bonus = Math.min((othersMax * rate) / 100, cap);
       note = "他メンバー参照（上限）";
     } else if (e?.type === "character_rank" && e.steps?.length) {
       const rank = opts.characterRanks?.[card.ch] ?? 0;

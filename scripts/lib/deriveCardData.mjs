@@ -158,10 +158,17 @@ export function slimSkill(s) {
   }
 
   // 編成の他メンバーのスキル値を参照するもの（上限つき）。
+  // ★★ **上限はスキルレベルで変わる**（実データ: SL1=60 / SL2=65 / SL3=70 / SL4=70）。★★
+  //   先頭の行だけ見て1つの値にすると、SL3・SL4 で上限が10低く出る。
+  //   参照の割合（50%）は全レベル同じだが、それも将来変わりうるのでレベル別に持つ。
   const ref = details("other_member_score_up_reference_rate")[0];
   if (ref) {
-    const d = ref.skillEffectDetails?.[0] ?? {};
-    out.enhance = { type: "reference", rate: d.activateEffectValue ?? 0, cap: d.activateEffectValue2 ?? 0 };
+    const rows = [...(ref.skillEffectDetails ?? [])].sort((a, b) => (a.level ?? 0) - (b.level ?? 0));
+    out.enhance = {
+      type: "reference",
+      rates: rows.map((d) => d.activateEffectValue ?? 0),
+      caps: rows.map((d) => d.activateEffectValue2 ?? 0),
+    };
   }
 
   // キャラクターランクで伸びるもの（2ランクごとに+1%）。
