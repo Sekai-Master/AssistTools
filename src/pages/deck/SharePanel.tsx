@@ -25,8 +25,11 @@ export function SharePanel({
   states,
   evaluated,
   leaderCardId,
+  hideBonus,
 }: {
   deckName: string;
+  /** チャレンジライブではイベントボーナスの欄を出さない。 */
+  hideBonus?: boolean;
   eventName?: string;
   cards: CatalogCard[];
   states: CardStates;
@@ -71,6 +74,7 @@ export function SharePanel({
         leaderCardId,
         thumbUrl: cardThumbUrl,
         accent,
+        hideBonus,
       }),
       heroArt,
     });

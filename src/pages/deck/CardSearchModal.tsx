@@ -32,6 +32,7 @@ export function CardSearchModal({
   onSelect,
   onClose,
   others = [],
+  sameCharacterOnly = false,
 }: {
   cards: CatalogCard[];
   onSelect: (card: CatalogCard) => void;
@@ -43,6 +44,12 @@ export function CardSearchModal({
    *   出しても意味が無いので、ここで選べなくする。
    */
   others?: CatalogCard[];
+  /**
+   * チャレンジライブの編成。
+   * ★ 条件が**逆**になる: 同じキャラのカードだけで5枚組む（他のキャラは選べない）。
+   *   同じカードを2枚は、こちらでも不可。
+   */
+  sameCharacterOnly?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [ch, setCh] = useState<number | null>(null);
@@ -53,6 +60,9 @@ export function CardSearchModal({
   useModalA11y(true, onClose, dialogRef);
 
   const usedChars = useMemo(() => new Set(others.map((c) => c.ch)), [others]);
+  /** チャレンジライブでは、すでに枠に入っているキャラに揃える必要がある。 */
+  const requiredCh = sameCharacterOnly ? others[0]?.ch : undefined;
+  const usedIds = useMemo(() => new Set(others.map((c) => c.id)), [others]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -166,7 +176,10 @@ export function CardSearchModal({
             <p className="p-4 text-center text-sm text-slate-500">見つかりませんでした</p>
           ) : (
             results.map((c) => {
-              const taken = usedChars.has(c.ch);
+              // イベント編成は「同キャラ不可」、チャレンジライブは「同キャラ限定」。
+              const taken = sameCharacterOnly
+                ? usedIds.has(c.id) || (requiredCh != null && c.ch !== requiredCh)
+                : usedChars.has(c.ch);
               return (
                 <button
                   key={c.id}
@@ -197,7 +210,11 @@ export function CardSearchModal({
                   {/* 同じカードでなくても入れられないので、「編成中」だけだと誤解される。 */}
                   {taken && (
                     <span className="shrink-0 text-xs text-slate-500">
-                      {others.some((o) => o.id === c.id) ? "編成中" : "同キャラ編成中"}
+                      {usedIds.has(c.id)
+                        ? "編成中"
+                        : sameCharacterOnly
+                          ? "別のキャラ"
+                          : "同キャラ編成中"}
                     </span>
                   )}
                 </button>

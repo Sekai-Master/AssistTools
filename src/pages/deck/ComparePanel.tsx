@@ -13,7 +13,7 @@ import { getActiveProfile } from "../../lib/profiles";
 import { cn } from "../../lib/utils";
 import { bestIndex, compareDecks, findUpset, type CompareCondition } from "./lib/compare";
 import { evaluateDeck, type EvalContext } from "./lib/evaluate";
-import { DECK_SIZE, type SavedDeck } from "./lib/deckStore";
+import { DECK_SIZE, type DeckMode, type SavedDeck } from "./lib/deckStore";
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 
@@ -32,8 +32,11 @@ export function ComparePanel({
   decks,
   current,
   ctx,
+  mode = "event",
 }: {
   decks: SavedDeck[];
+  /** チャレンジライブにはイベントポイントが無いので、スコアで比べる。 */
+  mode?: DeckMode;
   /** いま画面で組んでいる編成（保存していなくても比較に混ぜられる）。 */
   current: { cardIds: (number | null)[]; leaderIndex: number; supportBonus: number };
   ctx: EvalContext;
@@ -86,8 +89,12 @@ export function ComparePanel({
     const cond: CompareCondition = { live, taki, overheadSec: DEFAULT_PARAMS.overheadSec };
     return entry ? compareDecks(candidates, entry, cond) : [];
   }, [candidates, entry, live, taki]);
-  const best = bestIndex(rows);
-  const upset = findUpset(rows);
+  // チャレンジライブは Pt が付かないので、スコアの一番高い編成を最良にする。
+  const challenge = mode === "challenge";
+  const best = challenge
+    ? rows.reduce((b, r, i) => (r.score != null && (rows[b]?.score ?? -1) < r.score ? i : b), -1)
+    : bestIndex(rows);
+  const upset = challenge ? null : findUpset(rows);
 
   const n = (v: number | null) => (v == null ? "—" : Math.round(v).toLocaleString());
 
@@ -184,12 +191,16 @@ export function ComparePanel({
               <thead>
                 <tr className="text-xs text-slate-500">
                   <th className="px-2 py-1 text-left font-bold">編成</th>
-                  <th className="px-2 py-1 text-right font-bold">ボーナス</th>
+                  {!challenge && <th className="px-2 py-1 text-right font-bold">ボーナス</th>}
                   <th className="px-2 py-1 text-right font-bold">総合力</th>
                   <th className="px-2 py-1 text-right font-bold">スキル</th>
                   <th className="px-2 py-1 text-right font-bold">スコア</th>
-                  <th className="px-2 py-1 text-right font-bold">1回のPt</th>
-                  <th className="px-2 py-1 text-right font-bold">Pt/時</th>
+                  {!challenge && (
+                    <>
+                      <th className="px-2 py-1 text-right font-bold">1回のPt</th>
+                      <th className="px-2 py-1 text-right font-bold">Pt/時</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -210,14 +221,20 @@ export function ComparePanel({
                         </span>
                       )}
                     </td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{r.bonus}%</td>
+                    {!challenge && (
+                      <td className="px-2 py-1.5 text-right tabular-nums">{r.bonus}%</td>
+                    )}
                     <td className="px-2 py-1.5 text-right tabular-nums">{n(r.power)}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums">
                       {Math.round(r.skillLeader)}/{Math.round(r.skillTotal)}
                     </td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{n(r.score)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{n(r.eventPt)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{n(r.ptPerHour)}</td>
+                    {!challenge && (
+                      <>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{n(r.eventPt)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{n(r.ptPerHour)}</td>
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>

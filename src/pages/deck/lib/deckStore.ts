@@ -46,6 +46,15 @@ export interface CardState {
 
 export type CardStates = Record<number, CardState>;
 
+/**
+ * 編成の種類。
+ *
+ * ★ チャレンジライブは**同じキャラのカードだけで5枚**組む。イベント編成とは
+ *   組める条件が正反対（イベントは同キャラ不可）なので、同じ画面で切り替える。
+ *   チャレライにイベントポイントは無いので、ボーナスは計算しない。
+ */
+export type DeckMode = "event" | "challenge";
+
 export interface SavedDeck {
   name: string;
   /** 保存時刻(ms)。一覧の新しい順に使う。 */
@@ -56,6 +65,8 @@ export interface SavedDeck {
   leaderIndex: number;
   /** WL のサポート編成ぶん(%)。自動計算しないので手入力（docs の方針）。 */
   supportBonus: number;
+  /** 省略時は "event"（この欄より前に保存した編成はすべてイベント編成）。 */
+  mode?: DeckMode;
   /** 最後に見ていたイベント。開き直したときに戻すためだけの補助情報。 */
   eventId?: number;
   /**
@@ -196,6 +207,7 @@ export function parseDecks(raw: unknown): SavedDeck[] {
       supportBonus: isFiniteNum(d.supportBonus) && d.supportBonus >= 0 ? d.supportBonus : 0,
       ...(isFiniteNum(d.eventId) ? { eventId: d.eventId } : {}),
       ...(d.custom != null ? { custom: d.custom } : {}),
+      mode: d.mode === "challenge" ? "challenge" : "event",
     });
   }
   return out;

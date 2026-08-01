@@ -32,6 +32,8 @@ export function buildShareCard(opts: {
   leaderCardId?: number;
   thumbUrl: (card: CatalogCard, trained: boolean) => string;
   accent: string;
+  /** チャレンジライブ（イベントボーナスの概念が無い編成）では欄ごと出さない。 */
+  hideBonus?: boolean;
 }): DeckCanvasData {
   const { evaluated } = opts;
   const round = (v: number) => Math.round(v * 10) / 10;
@@ -61,12 +63,20 @@ export function buildShareCard(opts: {
     cards,
     stats: [
       { label: "総合力", value: evaluated.power.total.toLocaleString() },
-      {
-        label: "イベントボーナス",
-        // ★ 画面と同じくゲーム内表示（切り捨て）を大きく、端数は下に添える。
-        value: bonus ? `${displayBonus(bonus.total)}%` : "—",
-        sub: bonus && bonus.total !== displayBonus(bonus.total) ? `正確には ${bonus.total}%` : undefined,
-      },
+      // ★ チャレンジライブにはイベントボーナスが無い。「—」を出すより行ごと消す。
+      ...(bonus === null && opts.hideBonus
+        ? []
+        : [
+            {
+              label: "イベントボーナス",
+              // ★ 画面と同じくゲーム内表示（切り捨て）を大きく、端数は下に添える。
+              value: bonus ? `${displayBonus(bonus.total)}%` : "—",
+              sub:
+                bonus && bonus.total !== displayBonus(bonus.total)
+                  ? `正確には ${bonus.total}%`
+                  : undefined,
+            },
+          ]),
       {
         label: "スキル（先頭/内部値）",
         value: `${round(evaluated.skill.leader)}/${round(evaluated.skill.total)}`,

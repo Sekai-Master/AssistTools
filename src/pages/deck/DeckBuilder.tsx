@@ -44,8 +44,10 @@ import {
   writeCardStates,
   type CardState,
   type CardStates,
+  type DeckMode,
   type SavedDeck,
 } from "./lib/deckStore";
+import { SegmentedControl } from "../../components/ui/SegmentedControl";
 
 /**
  * 編成ビルダー。
@@ -83,6 +85,11 @@ export default function DeckBuilder() {
   const [deckName, setDeckName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
+  /**
+   * ★ チャレンジライブは同じキャラのカードだけで5枚組む＝イベント編成と条件が正反対。
+   *   イベントポイントも無いので、ボーナスの計算ごと外す。
+   */
+  const [mode, setMode] = useState<DeckMode>("event");
 
   // 既定のイベント（開催中）。データが来た1回だけ決める。
   useEffect(() => {
@@ -118,10 +125,11 @@ export default function DeckBuilder() {
             powerTables: data.powerTables,
             skills: data.skills,
             characterRanks: player.characterRanks,
-            eventId,
+            // チャレンジライブにイベントボーナスは無い。ここで外すと下流が全部止まる。
+            eventId: mode === "challenge" ? undefined : eventId,
           }
         : null,
-    [data, catalog, states, player, eventId, custom]
+    [data, catalog, states, player, eventId, custom, mode]
   );
   const evaluated = useMemo(
     () => (ctx ? evaluateDeck(cardIds, leaderIndex, Number(supportBonus) || 0, ctx) : null),
@@ -157,6 +165,7 @@ export default function DeckBuilder() {
 
   const applyDeck = (d: SavedDeck) => {
     setCardIds(d.cardIds);
+    setMode(d.mode === "challenge" ? "challenge" : "event");
     setLeaderIndex(d.leaderIndex);
     setSupportBonus(String(d.supportBonus));
     if (d.eventId != null) setEventId(d.eventId);
@@ -175,6 +184,7 @@ export default function DeckBuilder() {
         savedAt: Date.now(),
         cardIds,
         leaderIndex,
+        mode,
         supportBonus: Number(supportBonus) || 0,
         ...(eventId != null ? { eventId } : {}),
         ...(eventId === CUSTOM_EVENT_ID ? { custom } : {}),
@@ -194,6 +204,24 @@ export default function DeckBuilder() {
       )}
 
       <Panel title="編成">
+        {/* ★ 組める条件が正反対（イベント=同キャラ不可 / チャレライ=同キャラ限定）なので、
+            先に選ばせる。ここを取り違えると、そもそも組めない編成の数字が出る。 */}
+        <SegmentedControl<DeckMode>
+          className="mb-4"
+          options={[
+            { value: "event", label: "イベント編成" },
+            { value: "challenge", label: "チャレンジライブ" },
+          ]}
+          value={mode}
+          onChange={(next) => {
+            setMode(next);
+            // 条件が変わるので枠を空ける（残すと組めない編成のまま数字が出る）。
+            setCardIds(Array(DECK_SIZE).fill(null));
+            setLeaderIndex(0);
+            setOpenIndex(null);
+          }}
+        />
+
         {/* 保存済み編成の呼び出しと保存。周回プラン（planStorage）と同じ作法で名前付き。 */}
         <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
           {decks.length > 0 && (
@@ -264,7 +292,8 @@ export default function DeckBuilder() {
         </p>
       </Panel>
 
-      {data && evaluated && (
+      {/* チャレンジライブにイベントポイントは無いので、ボーナスの画面ごと出さない。 */}
+      {data && evaluated && mode === "event" && (
         <BonusPanel
           cards={cards}
           result={evaluated.bonus}
@@ -291,6 +320,7 @@ export default function DeckBuilder() {
             states={states}
             evaluated={evaluated}
             leaderCardId={cardIds[leaderIndex] ?? undefined}
+            hideBonus={mode === "challenge"}
           />
 
           {/* ★ 出した値を他のツール（ランキング・アナライザー・稼働時間）へ渡す導線。
@@ -321,6 +351,7 @@ export default function DeckBuilder() {
               decks={decks}
               current={{ cardIds, leaderIndex, supportBonus: Number(supportBonus) || 0 }}
               ctx={ctx}
+              mode={mode}
             />
           ) : (
             // 比較には楽曲データ（400KB超）が要るので、開いたときだけ読みに行く。
@@ -344,6 +375,7 @@ export default function DeckBuilder() {
           cards={data.cards}
           // 選び直している枠自身は除く（自分のキャラで塞がって差し替えられなくなる）。
           others={slots.filter((c, i): c is CatalogCard => !!c && i !== pickIndex)}
+          sameCharacterOnly={mode === "challenge"}
           onSelect={(card) => selectCard(pickIndex, card)}
           onClose={() => setPickIndex(null)}
         />
