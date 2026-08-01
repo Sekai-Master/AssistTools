@@ -42,6 +42,7 @@ const THUMB_CONCURRENCY = 8;
 /** 取ってくるマスタ。ここに足すときは、その表が日付欄を持つかを必ず確かめること。 */
 const SOURCES = {
   cards: "cards.json",
+  skills: "skills.json",
   cardEpisodes: "cardEpisodes.json",
   cardMysekaiCanvasBonuses: "cardMysekaiCanvasBonuses.json",
   events: "events.json",
@@ -150,7 +151,8 @@ async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
   // カタログ（大きい）とボーナス表（小さく、更新が速い）を分ける。
   const files = {
-    "cards.json": { cards: out.cards, generatedAt: out.generatedAt },
+    // スキルはカードが skillId で引くので、カタログと同じファイルに置く（21行しかない）。
+    "cards.json": { cards: out.cards, skills: out.skills, generatedAt: out.generatedAt },
     "bonuses.json": {
       generatedAt: out.generatedAt,
       events: out.events,

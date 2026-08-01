@@ -10,10 +10,9 @@
  *   calcScore / eventPtFor（src/pages/ranking/lib/efficiency.ts）をそのまま使う。
  *   ここでやるのは「編成ごとの総合力・ボーナスを差し替えて並べる」配線だけ。
  *
- * ★ スキル値（先頭スキル・スキル合計）は**編成ごとに計算できない**。配信データに
- *   スキルの表が無く、カードは skillId しか持っていないため。よって全編成で共通の
- *   値を使う近似になる。スコア式ではスキル項は加算・総合力は乗算なので、
- *   「ボーナスと総合力のどちらを取るか」の比較には十分効く。**画面には明記すること。**
+ * ★ スキル値は**編成ごとに計算している**（skill.ts）。カードが1意に決まっていて
+ *   スキルレベルを入力してもらえるので、以前の「全編成共通の近似」は要らなくなった。
+ *   同ユニット加算のように編成で変わるスキルも、ここでは正しく差が出る。
  */
 import {
   calcScore,
@@ -30,14 +29,19 @@ export interface DeckCandidate {
   power: number;
   /** イベントボーナス(%)。**切り捨てず小数のまま渡す**（0.5刻みが結果に効く）。 */
   bonus: number;
+  /**
+   * 先頭スキル・内部値。
+   * ★ カードが決まればスキルレベルから計算できるので、**編成ごとに違う値**を渡す。
+   *   以前は全編成共通の近似だった（スキル表を配信していなかったため）。
+   */
+  skillLeader: number;
+  skillTotal: number;
 }
 
-/** 全編成に共通の条件。 */
+/** 全編成に共通の条件（叩き方の前提）。 */
 export interface CompareCondition {
   live: LiveType;
   taki: number;
-  skillLeader: number;
-  skillTotal: number;
   overheadSec: number;
 }
 
@@ -65,8 +69,8 @@ export function compareDecks(
       power: d.power,
       bonus: d.bonus,
       taki: cond.taki,
-      skillLeader: cond.skillLeader,
-      skillTotal: cond.skillTotal,
+      skillLeader: d.skillLeader,
+      skillTotal: d.skillTotal,
       overheadSec: cond.overheadSec,
     };
     const score = calcScore(entry, params, cond.live);

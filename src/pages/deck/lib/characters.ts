@@ -56,7 +56,7 @@ export const CHARACTERS: CharacterDef[] = [
   { ch: 26, name: "KAITO", unit: "piapro" },
 ];
 
-/** 画面に並べるときの順。ゲーム内のキャラ選択と同じ並び（レオニ→…→VS）。 */
+/** キャラを並べるときの順。ゲーム内のキャラ一覧と同じ並び（レオニ→…→VS）。 */
 export const UNIT_ORDER = [
   "light_sound",
   "idol",
@@ -64,6 +64,20 @@ export const UNIT_ORDER = [
   "theme_park",
   "school_refusal",
   "piapro",
+] as const;
+
+/**
+ * エリアアイテム効果・ゲートを並べるときの順。**VS が先頭**（Nori 指示 2026-08-02）。
+ * ★ キャラ一覧とは並びが違う。ゲーム内でもその2画面で並びが違うので、
+ *   写す相手の画面に合わせる（上から順に目で追って入れられるようにするため）。
+ */
+export const AREA_UNIT_ORDER = [
+  "piapro",
+  "light_sound",
+  "idol",
+  "street",
+  "theme_park",
+  "school_refusal",
 ] as const;
 
 export const UNIT_NAME: Record<string, string> = {
@@ -95,7 +109,8 @@ export const UNIT_KEY: Record<string, UnitKey> = {
   school_refusal: "n25",
 };
 
-export const ATTR_ORDER = ["cool", "cute", "pure", "happy", "mysterious"] as const;
+/** 属性の並び。ゲーム内の効果一覧と同じ（Nori 指示 2026-08-02）。 */
+export const ATTR_ORDER = ["cool", "pure", "mysterious", "happy", "cute"] as const;
 
 export const ATTR_LABEL: Record<string, string> = {
   cool: "クール",

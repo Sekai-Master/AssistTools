@@ -15,6 +15,7 @@ import { useEffect, useState } from "react";
 import type { BonusTables } from "./lib/eventBonus";
 import type { PowerTables } from "./lib/power";
 import type { CatalogCard, EventRow } from "./lib/deckInputs";
+import type { SkillRow } from "./lib/skill";
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const isStr = (v: unknown): v is string => typeof v === "string" && v.length > 0;
@@ -61,6 +62,8 @@ const power3 = (v: unknown) => numArr3(v);
 export interface CardData {
   cards: CatalogCard[];
   events: EventRow[];
+  /** スキルの原型（21種）。カードは skillId でここを引く。 */
+  skills: SkillRow[];
   bonusTables: BonusTables;
   powerTables: PowerTables;
   /** データの生成時刻(ms)。画面に「いつ時点のデータか」を出すため。 */
@@ -81,6 +84,11 @@ function build(rawCards: unknown, rawBonuses: unknown, rawPower: unknown): CardD
     cards,
     // 新しいイベントほど上（既定の選択と、選び直すときの導線が一致する）。
     events: [...events].sort((a, b) => b.startAt - a.startAt),
+    // レベルごとの値が無いスキルは使えない（黙って0%として計算しない）。
+    skills: rows<SkillRow>(
+      cardsRoot.skills,
+      (r) => isNum(r.id) && Array.isArray(r.base) && r.base.length > 0 && r.base.every(isNum)
+    ),
     bonusTables: {
       deckBonuses: rows(bonuses.deckBonuses, (r) => isNum(r.eventId) && isNum(r.rate)),
       cardBonuses: rows(

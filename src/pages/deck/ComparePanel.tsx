@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Panel } from "../../components/ui/Panel";
 import { Field } from "../../components/ui/Field";
-import { NeuInput } from "../../components/ui/NeuInput";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { TakiInput } from "../../components/ui/TakiInput";
@@ -43,15 +42,9 @@ export function ComparePanel({
   const [songId, setSongId] = useState(ENVY_ID);
   const [difficulty, setDifficulty] = useState<Difficulty>("master");
   const [live, setLive] = useState<LiveType>("multi");
-  // ★ スキルと焚き数は編成プロフィール（全ツール共通の入力）を初期値にする。
-  //   ここだけ既定値で走ると、他のツールと違う前提の Pt が出て比べられなくなる。
+  // ★ スキル値は**編成ごとに計算する**ので、ここでは持たない（カードのSLから出る）。
+  //   共通なのは叩き方の前提（曲・ライブ種別・焚き数）だけ。
   const [taki, setTaki] = useState(() => getActiveProfile()?.taki ?? DEFAULT_PARAMS.taki);
-  const [skillLeader, setSkillLeader] = useState(
-    () => String(getActiveProfile()?.skillLeader ?? DEFAULT_PARAMS.skillLeader)
-  );
-  const [skillTotal, setSkillTotal] = useState(
-    () => String(getActiveProfile()?.skillTotal ?? DEFAULT_PARAMS.skillTotal)
-  );
   const [picking, setPicking] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
 
@@ -82,25 +75,17 @@ export function ComparePanel({
         power: ev.power.total,
         // ★ 表示は切り捨てでも、比較は小数のまま（0.5% が最終Ptに効く）。
         bonus: ev.bonus?.total ?? 0,
+        skillLeader: ev.skill.leader,
+        skillTotal: ev.skill.total,
         cardCount: ev.cards.length,
       };
     });
   }, [decks, current, ctx, selected]);
 
-  const cond: CompareCondition = {
-    live,
-    taki,
-    skillLeader: Number(skillLeader) || 0,
-    skillTotal: Number(skillTotal) || 0,
-    overheadSec: DEFAULT_PARAMS.overheadSec,
-  };
-
-  const rows = useMemo(
-    () => (entry ? compareDecks(candidates, entry, cond) : []),
-    // cond はレンダーごとに作り直されるので、中身を依存に並べる。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [candidates, entry, live, taki, skillLeader, skillTotal]
-  );
+  const rows = useMemo(() => {
+    const cond: CompareCondition = { live, taki, overheadSec: DEFAULT_PARAMS.overheadSec };
+    return entry ? compareDecks(candidates, entry, cond) : [];
+  }, [candidates, entry, live, taki]);
   const best = bestIndex(rows);
   const upset = findUpset(rows);
 
@@ -147,32 +132,13 @@ export function ComparePanel({
           </div>
         </Field>
 
-        <Field label="先頭スキル" htmlFor="cmp-skill-leader" hint="「150/710/31.3」の 150">
-          <NeuInput
-            id="cmp-skill-leader"
-            inputMode="decimal"
-            value={skillLeader}
-            onChange={(e) => setSkillLeader(e.target.value.replace(/[^0-9.]/g, ""))}
-            className="max-w-28 text-center"
-          />
-        </Field>
-        <Field label="スキル合計" htmlFor="cmp-skill-total" hint="「150/710/31.3」の 710">
-          <NeuInput
-            id="cmp-skill-total"
-            inputMode="decimal"
-            value={skillTotal}
-            onChange={(e) => setSkillTotal(e.target.value.replace(/[^0-9.]/g, ""))}
-            className="max-w-28 text-center"
-          />
-        </Field>
       </div>
 
-      {/* 押したときだけ反映する（黙って値が変わらない）。ProfileBar.tsx の作法どおり。 */}
+      {/* 押したときだけ反映する（黙って値が変わらない）。ProfileBar.tsx の作法どおり。
+          スキル値は編成から計算するので、ここで拾うのは焚き数だけ。 */}
       <div className="mt-3">
         <ProfileBar
           apply={(p) => {
-            if (p.skillLeader != null) setSkillLeader(String(p.skillLeader));
-            if (p.skillTotal != null) setSkillTotal(String(p.skillTotal));
             if (p.taki != null) setTaki(p.taki);
           }}
         />
@@ -220,6 +186,7 @@ export function ComparePanel({
                   <th className="px-2 py-1 text-left font-bold">編成</th>
                   <th className="px-2 py-1 text-right font-bold">ボーナス</th>
                   <th className="px-2 py-1 text-right font-bold">総合力</th>
+                  <th className="px-2 py-1 text-right font-bold">スキル</th>
                   <th className="px-2 py-1 text-right font-bold">スコア</th>
                   <th className="px-2 py-1 text-right font-bold">1回のPt</th>
                   <th className="px-2 py-1 text-right font-bold">Pt/時</th>
@@ -245,6 +212,9 @@ export function ComparePanel({
                     </td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{r.bonus}%</td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{n(r.power)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">
+                      {Math.round(r.skillLeader)}/{Math.round(r.skillTotal)}
+                    </td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{n(r.score)}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{n(r.eventPt)}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{n(r.ptPerHour)}</td>
@@ -268,9 +238,8 @@ export function ComparePanel({
           )}
 
           <p className="mt-3 text-xs text-slate-400">
-            スキルは全編成で同じ値を使って計算しています（カードからスキル値を出すためのデータを
-            配信していないため）。総合力とボーナスの比較には影響しません。
-            オーバーヘッドは {DEFAULT_PARAMS.overheadSec} 秒で固定です。
+            スキルは編成ごとにカードのスキルレベルから計算しています（先頭/内部値）。
+            条件付きのスキルは上限の値です。オーバーヘッドは {DEFAULT_PARAMS.overheadSec} 秒で固定。
           </p>
         </>
       )}

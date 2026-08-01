@@ -26,17 +26,11 @@ const song: EfficiencyEntry = {
   eventRate: 100,
 };
 
-const cond: CompareCondition = {
-  live: "multi",
-  taki: 5,
-  skillLeader: 150,
-  skillTotal: 710,
-  overheadSec: 20,
-};
+const cond: CompareCondition = { live: "multi", taki: 5, overheadSec: 20 };
 
 describe("compareDecks", () => {
   it("既存の calcScore / eventPtFor と同じ値を返す（式を作り直していない）", () => {
-    const [row] = compareDecks([{ name: "A", power: 300_000, bonus: 400 }], song, cond);
+    const [row] = compareDecks([{ name: "A", power: 300_000, bonus: 400, skillLeader: 150, skillTotal: 710 }], song, cond);
     const params = { power: 300_000, bonus: 400, taki: 5, skillLeader: 150, skillTotal: 710, overheadSec: 20 };
     const score = calcScore(song, params, "multi");
     expect(row.score).toBe(score);
@@ -46,8 +40,8 @@ describe("compareDecks", () => {
   it("並び順を入れ替えない", () => {
     const rows = compareDecks(
       [
-        { name: "A", power: 100_000, bonus: 100 },
-        { name: "B", power: 300_000, bonus: 400 },
+        { name: "A", power: 100_000, bonus: 100, skillLeader: 150, skillTotal: 710 },
+        { name: "B", power: 300_000, bonus: 400, skillLeader: 150, skillTotal: 710 },
       ],
       song,
       cond
@@ -57,14 +51,14 @@ describe("compareDecks", () => {
   });
 
   it("時速は曲長＋オーバーヘッドで割る", () => {
-    const [row] = compareDecks([{ name: "A", power: 300_000, bonus: 400 }], song, cond);
+    const [row] = compareDecks([{ name: "A", power: 300_000, bonus: 400, skillLeader: 150, skillTotal: 710 }], song, cond);
     expect(row.cycleSec).toBe(120);
     expect(row.ptPerHour).toBeCloseTo((row.eventPt! / 120) * 3600, 6);
   });
 
   it("データが欠けている曲は null で返す（0にしない）", () => {
     const broken: EfficiencyEntry = { ...song, skillScoreMulti: null };
-    const [row] = compareDecks([{ name: "A", power: 300_000, bonus: 400 }], broken, cond);
+    const [row] = compareDecks([{ name: "A", power: 300_000, bonus: 400, skillLeader: 150, skillTotal: 710 }], broken, cond);
     expect(row.score).toBeNull();
     expect(row.eventPt).toBeNull();
     expect(row.ptPerHour).toBeNull();
@@ -76,8 +70,8 @@ describe("逆転の検出（このツールの存在意義）", () => {
   it("ボーナスが低くても総合力で勝てば逆転として拾う", () => {
     const rows = compareDecks(
       [
-        { name: "ボーナス盛り", power: 200_000, bonus: 400 },
-        { name: "総合力盛り", power: 320_000, bonus: 395 },
+        { name: "ボーナス盛り", power: 200_000, bonus: 400, skillLeader: 150, skillTotal: 710 },
+        { name: "総合力盛り", power: 320_000, bonus: 395, skillLeader: 150, skillTotal: 710 },
       ],
       song,
       cond
@@ -92,8 +86,8 @@ describe("逆転の検出（このツールの存在意義）", () => {
   it("ボーナス最大の編成がそのまま最終Ptでも勝つなら逆転ではない", () => {
     const rows = compareDecks(
       [
-        { name: "ボーナス盛り", power: 300_000, bonus: 400 },
-        { name: "総合力盛り", power: 305_000, bonus: 300 },
+        { name: "ボーナス盛り", power: 300_000, bonus: 400, skillLeader: 150, skillTotal: 710 },
+        { name: "総合力盛り", power: 305_000, bonus: 300, skillLeader: 150, skillTotal: 710 },
       ],
       song,
       cond
@@ -102,6 +96,6 @@ describe("逆転の検出（このツールの存在意義）", () => {
   });
 
   it("編成が1つだけなら逆転は無い", () => {
-    expect(findUpset(compareDecks([{ name: "A", power: 300_000, bonus: 400 }], song, cond))).toBeNull();
+    expect(findUpset(compareDecks([{ name: "A", power: 300_000, bonus: 400, skillLeader: 150, skillTotal: 710 }], song, cond))).toBeNull();
   });
 });

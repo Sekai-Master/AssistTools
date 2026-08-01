@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Panel } from "../../components/ui/Panel";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { cn } from "../../lib/utils";
-import { ATTR_LABEL, ATTR_ORDER, CHARACTERS, UNIT_NAME, UNIT_ORDER } from "./lib/characters";
+import { AREA_UNIT_ORDER, ATTR_LABEL, ATTR_ORDER, CHARACTERS, UNIT_NAME } from "./lib/characters";
 import { sanitizeDecimal } from "./lib/deckInputs";
 import type { FixtureCounts, PlayerSettings } from "./lib/playerStore";
 
@@ -60,10 +60,43 @@ function NumCell({
   );
 }
 
-function Section({ title, children, hint }: { title: string; children: React.ReactNode; hint?: string }) {
+/**
+ * ゲームのどこを見れば入力する値が分かるか。
+ * ★ 「効果一覧の数字を写す」と書いても、その画面へ行けなければ意味が無い。
+ *   一番よく聞かれるところなので、たどり方をそのまま出す。
+ */
+function Where({ path }: { path: string }) {
+  return (
+    <span
+      className="ml-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-normal text-slate-500 shadow-neu-sm"
+      title={`ゲーム内の ${path} で見られます`}
+    >
+      <span className="material-icons !text-[12px]" aria-hidden>
+        info
+      </span>
+      {path}
+    </span>
+  );
+}
+
+function Section({
+  title,
+  children,
+  hint,
+  where,
+}: {
+  title: string;
+  children: React.ReactNode;
+  hint?: string;
+  /** ゲーム内でその数字が見られる場所。 */
+  where?: string;
+}) {
   return (
     <details className="rounded-lg p-3 shadow-neu-inset">
-      <summary className="cursor-pointer text-sm font-bold text-slate-600">{title}</summary>
+      <summary className="cursor-pointer text-sm font-bold text-slate-600">
+        {title}
+        {where && <Where path={where} />}
+      </summary>
       {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
       <div className="mt-3">{children}</div>
     </details>
@@ -95,13 +128,14 @@ export function PlayerSettingsPanel({
       <div className="space-y-2">
         <Section
           title="エリアアイテム効果"
-          hint="効果一覧に出ている％。同ユニット・同属性だけで揃えたときの2倍は自動で計算します"
+          where="持ち物 → エリアアイテム → 効果確認"
+          hint="効果一覧に出ている％をそのまま。同ユニット・同属性だけで揃えたときの2倍は自動で計算します"
         >
           <div className="space-y-3">
             <div>
               <p className="mb-1 text-xs font-bold text-slate-500">ユニット</p>
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                {UNIT_ORDER.map((u) => (
+                {AREA_UNIT_ORDER.map((u) => (
                   <label key={u} className="flex items-center gap-1.5 text-xs text-slate-600">
                     <NumCell
                       label={`${UNIT_NAME[u]} のエリア効果`}
@@ -151,24 +185,45 @@ export function PlayerSettingsPanel({
           </div>
         </Section>
 
+        {/* ★ ユニットごとに1行。**VS が先頭で、その行だけ6人**（他は4人）。
+            ゲーム内のキャラクターランクの画面と同じ並びにして、上から目で追って
+            入れられるようにする（Nori 指示 2026-08-02）。 */}
         <Section title="キャラクターランク" hint="ランク50で上限（5%）。それ以上は伸びません">
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
-            {CHARACTERS.map((c) => (
-              <label key={c.ch} className="flex items-center gap-1.5 text-xs text-slate-600">
-                <NumCell
-                  label={`${c.name} のキャラクターランク`}
-                  value={settings.characterRanks[c.ch] ?? 0}
-                  max={200}
-                  onChange={(v) =>
-                    onChange({
-                      ...settings,
-                      characterRanks: { ...settings.characterRanks, [c.ch]: Math.trunc(v) },
-                    })
-                  }
-                />
-                <span className="truncate">{c.name}</span>
-              </label>
-            ))}
+          <div className="space-y-2">
+            {AREA_UNIT_ORDER.map((unit) => {
+              const members = CHARACTERS.filter((c) => c.unit === unit);
+              return (
+                <div key={unit}>
+                  <p className="mb-1 text-[10px] font-bold text-slate-400">{UNIT_NAME[unit]}</p>
+                  <div
+                    className={cn(
+                      "grid gap-1.5",
+                      members.length === 6
+                        ? "grid-cols-3 sm:grid-cols-6"
+                        : "grid-cols-2 sm:grid-cols-4"
+                    )}
+                  >
+                    {members.map((c) => (
+                      <label key={c.ch} className="flex items-center gap-1 text-xs text-slate-600">
+                        <NumCell
+                          label={`${c.name} のキャラクターランク`}
+                          value={settings.characterRanks[c.ch] ?? 0}
+                          max={200}
+                          width="w-12"
+                          onChange={(v) =>
+                            onChange({
+                              ...settings,
+                              characterRanks: { ...settings.characterRanks, [c.ch]: Math.trunc(v) },
+                            })
+                          }
+                        />
+                        <span className="truncate">{c.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </Section>
 
@@ -177,7 +232,7 @@ export function PlayerSettingsPanel({
           hint="レベル1〜40。ゲートは5ユニットぶんだけで、VS のゲートはありません"
         >
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-            {UNIT_ORDER.filter((u) => u !== "piapro").map((u) => (
+            {AREA_UNIT_ORDER.filter((u) => u !== "piapro").map((u) => (
               <label key={u} className="flex items-center gap-1.5 text-xs text-slate-600">
                 <NumCell
                   label={`${UNIT_NAME[u]} のゲートのレベル`}

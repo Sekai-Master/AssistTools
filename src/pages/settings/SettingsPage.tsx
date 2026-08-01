@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Panel } from "../../components/ui/Panel";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
@@ -25,6 +26,7 @@ import {
 } from "../../lib/theme";
 import { ProfilePanel } from "./ProfilePanel";
 import { StoredDataPanel } from "./StoredDataPanel";
+import { BackupPanel } from "./BackupPanel";
 
 const OPTIONS = MOTION_SETTINGS.map((v) => ({ value: v, label: MOTION_LABEL[v] }));
 const THEME_OPTIONS = THEMES.map((v) => ({ value: v, label: THEME_LABEL[v] }));
@@ -44,6 +46,7 @@ const LEVEL_LABEL: Record<string, string> = {
  * 意図的な区別。見出しは既存の .unit-title をそのまま使うので造形の連続性は保つ。
  */
 export function SettingsPage() {
+  const [storageRevision, setStorageRevision] = useState(0);
   const setting = useMotionSetting();
   const osReduce = useReducedMotion();
   const touchOnly = useTouchOnly();
@@ -150,7 +153,10 @@ export function SettingsPage() {
           )}
         </Panel>
 
-        <StoredDataPanel />
+        {/* 取り込むと保存内容が変わるので、一覧（StoredDataPanel）を引き直させる。
+            key を変えて作り直すのが一番確実で、内部状態（消す確認）も一緒に畳める。 */}
+        <StoredDataPanel key={storageRevision} />
+        <BackupPanel onImported={() => setStorageRevision((v) => v + 1)} />
       </div>
     </div>
   );

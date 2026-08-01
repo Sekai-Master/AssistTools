@@ -55,34 +55,46 @@ export function PowerPanel({
 
   return (
     <Panel title="総合力">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat
-          label="総合力"
-          value={n(result.total)}
-          sub={
-            diff == null
-              ? `${cards.length}枚`
-              : diff === 0
-                ? "実機と一致"
-                : `実機と ${diff > 0 ? "+" : ""}${n(diff)}`
-          }
-        />
-        <Stat label="パフォーマンス" value={n(result.performance)} sub="カードの素の値" />
-        <Stat label="エリアアイテム" value={n(result.areaItem)} sub={sameLabel(result.sameUnit, result.sameAttr)} />
-        <Stat label="キャラクターランク" value={n(result.characterRank)} />
-      </div>
-      <div className="mt-3 grid grid-cols-3 gap-3">
-        <Stat label="ゲート" value={n(result.gate)} />
-        <Stat label="家具" value={n(result.fixture)} />
-        <Stat label="称号" value={n(result.honor)} />
+      {/* ★ 見たいのは総合力そのもの。内訳は「合っているか確かめたいとき」にだけ要るので
+          既定では畳んでおく（Nori 指示 2026-08-02）。 */}
+      <div className="text-center">
+        <div
+          className="text-5xl font-extrabold leading-none tabular-nums sm:text-6xl"
+          style={{ color: "var(--unit-color)" }}
+        >
+          {n(result.total)}
+        </div>
+        <div className="mt-2 text-xs text-slate-500">
+          {cards.length}枚
+          {diff != null &&
+            (diff === 0 ? " ・ 実機と一致" : ` ・ 実機と ${diff > 0 ? "+" : ""}${n(diff)}`)}
+          {(result.sameUnit || result.sameAttr) &&
+            ` ・ ${sameLabel(result.sameUnit, result.sameAttr)}`}
+        </div>
       </div>
 
-      <ul className="mt-4 space-y-1 text-sm">
+      <details className="mt-4 rounded-lg p-3 shadow-neu-inset">
+        <summary className="cursor-pointer text-sm font-bold text-slate-600">内訳</summary>
+
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Stat label="パフォーマンス" value={n(result.performance)} sub="カードの素の値" />
+          <Stat
+            label="エリアアイテム"
+            value={n(result.areaItem)}
+            sub={sameLabel(result.sameUnit, result.sameAttr)}
+          />
+          <Stat label="キャラクターランク" value={n(result.characterRank)} />
+          <Stat label="ゲート" value={n(result.gate)} />
+          <Stat label="家具" value={n(result.fixture)} />
+          <Stat label="称号" value={n(result.honor)} />
+        </div>
+
+      <ul className="mt-3 space-y-1 text-sm">
         {result.perCard.map((c) => {
           const card = byId.get(c.cardId);
           return (
             // 内訳は幅を食うので、狭い画面では名前の下へ回す（横スクロールを作らない）。
-            <li key={c.cardId} className="rounded-lg px-2 py-1.5 shadow-neu-inset">
+            <li key={c.cardId} className="rounded-lg bg-neu px-2 py-1.5">
               <div className="flex items-center gap-2">
                 <span className="min-w-0 flex-1 truncate text-slate-600">
                   {card ? `${characterName(card.ch)}「${card.name}」` : `カード${c.cardId}`}
@@ -100,6 +112,7 @@ export function PowerPanel({
           );
         })}
       </ul>
+      </details>
 
       {/* ★ 計算できなかったものは黙って0にしない（power.ts が missing で返してくる）。 */}
       {result.missing.length > 0 && (
