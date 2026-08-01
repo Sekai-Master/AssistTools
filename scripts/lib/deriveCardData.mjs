@@ -160,6 +160,21 @@ export function derive(src, nowMs) {
       eventId: l.eventId,
       memberCountLimit: l.memberCountLimit,
     })),
+    /**
+     * サイドストーリーの読了による総合力の加算（前編・後編で別）。
+     * ★ 実測で無視できない大きさ（4★は前編250+後編600＝1パラメータあたり850、
+     *   総合力にして +2,550/枚）。入れ忘れると編成全体で1万以上ズレる。
+     */
+    episodes: withoutDangling(src.cardEpisodes, "cardId", cardIds).map((e) => ({
+      cardId: e.cardId,
+      part: e.cardEpisodePartType,
+      power: [e.power1BonusFixed ?? 0, e.power2BonusFixed ?? 0, e.power3BonusFixed ?? 0],
+    })),
+    /** マイセカイキャンバスによる加算（1枚ごと・レアリティで額が違う）。 */
+    canvasBonuses: (src.cardMysekaiCanvasBonuses ?? []).map((c) => ({
+      rarity: String(c.cardRarityType ?? "").replace("rarity_", ""),
+      power: [c.power1BonusFixed ?? 0, c.power2BonusFixed ?? 0, c.power3BonusFixed ?? 0],
+    })),
     /** マスターランクによる総合力の固定加算。 */
     masterBonuses: (src.masterLessons ?? []).map((m) => ({
       rarity: String(m.cardRarityType ?? "").replace("rarity_", ""),

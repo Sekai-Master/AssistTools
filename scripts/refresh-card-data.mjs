@@ -22,6 +22,8 @@ const BASE = "https://raw.githubusercontent.com/Sekai-World/sekai-master-db-diff
 /** 取ってくるマスタ。ここに足すときは、その表が日付欄を持つかを必ず確かめること。 */
 const SOURCES = {
   cards: "cards.json",
+  cardEpisodes: "cardEpisodes.json",
+  cardMysekaiCanvasBonuses: "cardMysekaiCanvasBonuses.json",
   events: "events.json",
   eventCards: "eventCards.json",
   eventDeckBonuses: "eventDeckBonuses.json",
@@ -87,6 +89,8 @@ async function main() {
     "power.json": {
       generatedAt: out.generatedAt,
       masterBonuses: out.masterBonuses,
+      episodes: out.episodes,
+      canvasBonuses: out.canvasBonuses,
       characterRanks: out.characterRanks,
       areaItems: out.areaItems,
     },
