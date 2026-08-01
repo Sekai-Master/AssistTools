@@ -182,6 +182,13 @@ function cleanup(): void {
 
 /** 出発点を浮かせる。元の要素は場所を残したまま隠す（下のレイアウトを動かさない）。 */
 function lift(el: HTMLElement): Captured | null {
+  // ★ 前の飛行をここで必ず終わらせる。
+  //   後片付けは「飛行が終わる頃」のタイマーでやっているので、着地しきる前に
+  //   次の遷移を始めると、**前の飛行のタイマーが新しく持ち上げた複製まで消す**。
+  //   複製が消えたのに元は隠れたままなので「選んだパネルごと消える」ことになる。
+  //   間隔を空けて操作している限り起きないので、テストでも実測でも取り逃しやすい。
+  cleanup();
+
   const key = el.getAttribute(MORPH_ATTR);
   if (!key) return null;
   const rect = readRect(el);
@@ -263,6 +270,11 @@ export function flyMorph(stage: Element | null, timing: FlightTiming): boolean {
   captured = null;
   aimedAt = -Infinity;
   if (!from) return false;
+  // 持ち上げた複製が既に外されている（＝別の遷移に片付けられた）なら飛ばせない。
+  if (!from.box.isConnected) {
+    cancelMorph();
+    return false;
+  }
 
   // キーはページ側が自由に付ける文字列なので、セレクタに埋めずに突き合わせる
   //（引用符やコロンのエスケープを考えなくて済むし、CSS.escape の有無にも依らない）。

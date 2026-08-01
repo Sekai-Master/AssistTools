@@ -181,6 +181,43 @@ describe("飛行", () => {
     expect(c1.style.visibility).toBe("");
   });
 
+  // ★ 後片付けは「飛行が終わる頃」のタイマーでやっている。着地しきる前に次の遷移を
+  //   始めると、前の飛行のタイマーが新しく持ち上げた複製まで消してしまい、
+  //   元は隠れたままなので「選んだパネルごと消える」ことになる。
+  //   間隔を空けて操作していると再現しないので、ここで固定しておく。
+  it("着地前に次の遷移を始めても、新しい複製が前の後片付けに巻き込まれない", () => {
+    const stage = setup();
+    stage.innerHTML = `<h1 ${MORPH_ATTR}="tool:x" id="t"></h1>`;
+    sized(stage.querySelector("#t")!, 24, 16, 700, 48);
+    flyMorph(stage, TIMING); // まだ飛んでいる（後片付けタイマーは未発火）
+    expect(boxes().length).toBe(2);
+
+    // 着地を待たずに次のページへ
+    stage.innerHTML = `<a id="a2"><div ${MORPH_ATTR}="tool:y" id="c2"></div></a>`;
+    const c2 = sized(stage.querySelector("#c2")!, 300, 40, 250, 150);
+    aimMorph(c2);
+
+    // 前の2枚は畳まれ、新しい1枚だけが生きている
+    expect(boxes().length).toBe(1);
+    expect((boxes()[0] as HTMLElement).isConnected).toBe(true);
+
+    stage.innerHTML = `<h1 ${MORPH_ATTR}="tool:y" id="t2"></h1>`;
+    sized(stage.querySelector("#t2")!, 24, 16, 700, 48);
+    expect(flyMorph(stage, TIMING)).toBe(true);
+    expect(boxes().length).toBe(2);
+  });
+
+  // 上の片付けと入れ違いになった場合でも、隠しっぱなしにしない。
+  it("持ち上げた複製が外されていたら飛ばさずに畳む", () => {
+    const stage = setup();
+    document.getElementById("morph-layer")!.innerHTML = ""; // 別経路で片付けられた状態
+    stage.innerHTML = `<h1 ${MORPH_ATTR}="tool:x" id="t"></h1>`;
+    sized(stage.querySelector("#t")!, 24, 16, 700, 48);
+
+    expect(flyMorph(stage, TIMING)).toBe(false);
+    expect(boxes().length).toBe(0);
+  });
+
   it("持ち上げていなければ何も起きない", () => {
     const stage = mount(`<h1 ${MORPH_ATTR}="tool:x" id="t"></h1>`);
     sized(stage.querySelector("#t")!, 24, 16, 700, 48);
