@@ -24,6 +24,8 @@
  * 同じ軌道で動かし、中身は原寸のまま overflow で切り、透明度だけを入れ替える。
  */
 
+import { DIV_ATTR, DIV_T } from "./divisions";
+
 /** ページ側が置く印。値が対応づけのキー。 */
 export const MORPH_ATTR = "data-morph";
 
@@ -152,10 +154,18 @@ function clone(el: HTMLElement, content: Rect, boxRect: Rect = content): HTMLEle
 
   const copy = el.cloneNode(true) as HTMLElement;
   copy.removeAttribute("id");
-  copy.removeAttribute(MORPH_ATTR);
-  // 複製の中に印が残っていると、次の採寸で複製自身を拾ってしまう。
-  copy.querySelectorAll(`[${MORPH_ATTR}]`).forEach((n) => n.removeAttribute(MORPH_ATTR));
   copy.querySelectorAll("[id]").forEach((n) => n.removeAttribute("id"));
+
+  // ページ側の印を全部剥がす。
+  //  - data-morph: 残っていると次の採寸で複製自身を拾ってしまう
+  //  - data-div  : 残っているとカスケードの規則が複製にも当たり、飛ぶはずのものが
+  //                ページと一緒に溶けて消える（印は遷移後も要素に残るので、
+  //                2回目以降の遷移でだけ起きる）
+  for (const el of [copy, ...copy.querySelectorAll<HTMLElement>("*")]) {
+    el.removeAttribute(MORPH_ATTR);
+    el.removeAttribute(DIV_ATTR);
+    el.style?.removeProperty(DIV_T);
+  }
   copy.style.width = `${content.width}px`;
   copy.style.height = `${content.height}px`;
   copy.style.margin = "0";

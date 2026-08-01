@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { DIV_ATTR, DIV_T } from "./divisions";
 import { aimMorph, cancelMorph, captureMorph, flyMorph, MORPH_ATTR } from "./morph";
 
 const TIMING = { flyMs: 400, fadeMs: 240 };
@@ -159,6 +160,24 @@ describe("飛行", () => {
 
     expect(flyMorph(stage, TIMING)).toBe(false);
     expect(boxes().length).toBe(0);
+  });
+
+  // ★ ブロックの印は遷移が終わっても要素に残る（idle では規則が当たらないので
+  //   消す必要が無い）。複製がそれを持ったままだとカスケードの規則が当たり、
+  //   飛ぶはずの複製がページと一緒に溶けて消える。初回は印がまだ無いので成功し、
+  //   2回目以降だけ壊れる ＝ 「一覧からの移動が2回目から消える」の正体。
+  it("複製にカスケードの印を持ち込まない", () => {
+    const stage = mount(`<a id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>`);
+    const c1 = sized(stage.querySelector("#c1")!, 400, 100, 200, 120);
+    // 前の遷移で付いた印が残っている状態
+    c1.setAttribute(DIV_ATTR, "near");
+    c1.style.setProperty(DIV_T, "0.500");
+
+    aimMorph(c1);
+    const layer = document.getElementById("morph-layer")!;
+    expect(layer.querySelectorAll(`[${DIV_ATTR}]`).length).toBe(0);
+    const copy = layer.querySelector(".morph-inner")?.firstElementChild as HTMLElement;
+    expect(copy.style.getPropertyValue(DIV_T)).toBe("");
   });
 
   it("複製の中に印を残さない（次の採寸で複製を拾わないため）", () => {
