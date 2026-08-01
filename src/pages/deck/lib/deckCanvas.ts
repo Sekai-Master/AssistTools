@@ -227,9 +227,12 @@ function drawTypeGlow(ctx: CanvasRenderingContext2D, theme: string): void {
 /**
  * プロセカらしいあしらい（ピンク・エメラルド・白の丸・輪・三角）。
  *
- * ★ **中央に寄せる**。左は立ち絵、右は編成情報で埋まるので、薄いのは中央だけ
- *  （Nori 指示 2026-08-02）。数は少なく、大きさはばらつかせる。
- * ★ 乱数は**固定の種**から作る。毎回違う配置だと「同じ編成なのに違う画像」に見える。
+ * ★ **右端から湧かせる**（Nori 指示 2026-08-02）。属性の光と発生源を揃えると、
+ *   右から光と粒が一緒に流れてくる形になって画面がまとまる。左へ行くほど疎になり、
+ *   立ち絵と数字の側は空けたままになる。
+ * ★ カードの一覧より**先に**描く。カードの板は半透明なので、粒が奥に透けて見える。
+ * ★ 数は少なく、大きさはばらつかせる。乱数は**固定の種**から作る
+ *  （毎回違う配置だと「同じ編成なのに違う画像」に見える）。
  */
 function drawDeco(ctx: CanvasRenderingContext2D): void {
   let seed = 20260802;
@@ -239,15 +242,18 @@ function drawDeco(ctx: CanvasRenderingContext2D): void {
   };
 
   ctx.save();
-  for (let i = 0; i < 20; i++) {
-    // 中央帯（立ち絵の右端あたり〜カード欄の手前）に寄せる。
-    const x = 520 + rand() * 330;
-    const y = 40 + rand() * (H - 120);
+  for (let i = 0; i < 24; i++) {
+    // 右端を基点に、左へ行くほど疎になるよう偏らせる（t を累乗して寄せる）。
+    const t = rand();
+    const x = W - t * t * 700 + (rand() - 0.5) * 40;
+    const y = 30 + rand() * (H - 90);
     const color = DECO_COLORS[Math.floor(rand() * DECO_COLORS.length)];
     // ★ 大小の差を大きく取る（小さい粒と大きい輪が混ざっている状態にする）。
-    const t = rand();
-    const size = 6 + t * t * 62;
-    ctx.globalAlpha = 0.08 + rand() * 0.2;
+    const s = rand();
+    const size = 6 + s * s * 62;
+    // カードの一覧に重なる粒は少し薄くする（スキル値の数字を潰さない）。
+    const overCards = x > RIGHT_X - 20 && y > CARDS_TOP - 20 && y < CARDS_TOP + ROW_H * 5;
+    ctx.globalAlpha = (0.08 + rand() * 0.2) * (overCards ? 0.6 : 1);
     ctx.fillStyle = color;
     ctx.strokeStyle = color;
 
