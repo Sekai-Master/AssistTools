@@ -280,7 +280,7 @@ function Stat({
 
 export default function EfficiencyRanking() {
   const { entries, loading, error } = useRankingMusics();
-  const stored = useMemo(loadStored, []);
+  const stored = useMemo(() => loadStored(), []);
 
   const [mode, setMode] = useState<RankingMode>("manual");
   const [diffs, setDiffs] = useState<Set<Difficulty>>(() => new Set(ALL_DIFFS));
