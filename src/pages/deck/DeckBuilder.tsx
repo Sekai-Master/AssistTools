@@ -7,6 +7,9 @@ import { useCardData } from "./useCardData";
 import { CardSearchModal } from "./CardSearchModal";
 import { DeckSlots } from "./DeckSlots";
 import { BonusPanel } from "./BonusPanel";
+import { PowerPanel } from "./PowerPanel";
+import { PlayerSettingsPanel } from "./PlayerSettingsPanel";
+import { readPlayerSettings, writePlayerSettings, type PlayerSettings } from "./lib/playerStore";
 import {
   defaultEventId,
   filledCards,
@@ -53,6 +56,9 @@ export default function DeckBuilder() {
   const [states, setStates] = useState<CardStates>(() => readCardStates());
   const [pickIndex, setPickIndex] = useState<number | null>(null);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  /** プレイヤー固有の育成状況。総合力にだけ効く（イベントボーナスには効かない）。 */
+  const [player, setPlayer] = useState<PlayerSettings>(() => readPlayerSettings());
 
   const [decks, setDecks] = useState<SavedDeck[]>(() => listDecks());
   const [deckName, setDeckName] = useState("");
@@ -217,6 +223,18 @@ export default function DeckBuilder() {
           onSupportBonus={setSupportBonus}
         />
       )}
+
+      {data && (
+        <PowerPanel cards={cards} states={states} tables={data.powerTables} settings={player} />
+      )}
+
+      <PlayerSettingsPanel
+        settings={player}
+        onChange={(next) => {
+          setPlayer(next);
+          writePlayerSettings(next);
+        }}
+      />
 
       {pickIndex != null && data && (
         <CardSearchModal

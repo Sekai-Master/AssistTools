@@ -104,6 +104,12 @@ const ITEMS: StoredItem[] = [
     summarize: countKeys("枚"),
   },
   {
+    key: "sekaimaster:deck:player:v1",
+    label: "プレイヤー設定（編成ビルダー）",
+    note: "エリアアイテム効果・キャラクターランク・ゲート・家具・称号",
+    summarize: countKeys("項目"),
+  },
+  {
     key: "tweetGenerator.history",
     label: "ついぼの入力履歴",
     note: "「ついぼジェネレーター」で保存した募集内容",
