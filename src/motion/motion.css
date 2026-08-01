@@ -24,41 +24,146 @@
   outline: none;
 }
 
-/* ===== リッチ: 沈む → 無地で待つ → 浮く ===== */
+/* =====================================================================
+ * リッチ: 沈む → 無地で待つ → 浮く
+ *
+ * 2つの層が別々の時間で動く。
+ *
+ *   素材そのもの（html の --neu-lift）  … 一枚の面として沈み、一枚の面として戻る。
+ *                                        影を持つ全要素が同時に潰れる。カスケードしない。
+ *   ブロック（[data-div]）              … 色 → 輪郭 → 存在 の順に溶け、逆順で戻る。
+ *                                        こちらだけが順番にずれて走る。
+ *
+ * 順番は divisions.ts が --div-t（0=ページ先頭 / 1=末尾）として書き込む。
+ * 沈みは (1 - t) を使って**下から上へ**、浮上は t のまま**上から下へ**。
+ * 波が上がってから下りてくる1つの息継ぎになり、視線のある上端では
+ * 「最後に消えた場所から最初に戻ってくる」ので連続して見える。
+ * ===================================================================== */
 
-/* 沈み: 影が先に潰れて素材と面一になり、そのあと平らな中身が溶ける。
-   opacity の遅延(55%)＋短い duration(45%) がその「先に影」を作っている。 */
+/* --- 素材の呼吸（カスケードしない層）--- */
+
 html[data-motion="rich"][data-stage="sink"] {
   --neu-lift: 0;
-  transition: --neu-lift var(--stage-sink) var(--ease-in-soft);
+  transition: --neu-lift var(--stage-sink-total) var(--ease-melt);
 }
-html[data-motion="rich"][data-stage="sink"] .stage {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity calc(var(--stage-sink) * 0.45) var(--ease-in-soft)
-    calc(var(--stage-sink) * 0.55);
-}
-
-/* 無地: 待っている間。ここでの値の確定は瞬時（沈みで既に 0 に達している）。 */
 html[data-motion="rich"][data-stage="blank"] {
   --neu-lift: 0;
   transition: none;
 }
+html[data-motion="rich"][data-stage="rise"] {
+  --neu-lift: 1;
+  transition: --neu-lift var(--stage-rise-total) var(--ease-emerge);
+}
+
+/* 沈んでいる間はクリックを通さない（見えていても行き先はもう決まっている）。 */
+html[data-motion="rich"]:is([data-stage="sink"], [data-stage="blank"]) .stage {
+  pointer-events: none;
+}
+
+/* --- ブロックが取れなかったページ（空ページ等）の退避路 --- */
+/* ステージごとフェードする従来の振り付け。印が付いた中身だけ消えて残りが
+   居残る、という半端な絵を作らないための保険。 */
+html[data-motion="rich"][data-divs="off"][data-stage="sink"] .stage {
+  opacity: 0;
+  transition: opacity calc(var(--stage-sink) * 0.6) var(--ease-melt)
+    calc(var(--stage-sink) * 0.4);
+}
+html[data-motion="rich"][data-divs="off"][data-stage="rise"] .stage {
+  opacity: 1;
+  transition: opacity calc(var(--stage-rise) * 0.55) var(--ease-emerge);
+}
+
+/* 無地: 中身は必ず消えている。印の無い取りこぼしもここで確実に隠れる。 */
 html[data-motion="rich"][data-stage="blank"] .stage {
   opacity: 0;
-  pointer-events: none;
+  transition: none;
+}
+/* 浮上に入った瞬間、ステージの箱は即座に戻す。以降の見え方は
+   ブロック側の opacity が担当する（二重フェードにしない）。 */
+html[data-motion="rich"][data-divs="on"][data-stage="rise"] .stage {
+  opacity: 1;
   transition: none;
 }
 
-/* 浮上: 中身が先に読めるようになり(45%で不透明度1)、影だけが遅れて育つ
-   ＝表面へ押し出されてくる。 */
-html[data-motion="rich"][data-stage="rise"] {
-  --neu-lift: 1;
-  transition: --neu-lift var(--stage-rise) var(--ease-out);
+/* --- ブロック（カスケードする層）--- */
+
+/*
+ * ★ filter を「遷移中だけ」宣言する。常設すると position:fixed の包含ブロックが
+ *   このブロックへ切り替わり、ページ内モーダル（fixed inset-0・ポータル未使用）が
+ *   ブロック基準の座標に飛ぶ。idle では宣言ごと消えるので静止時の影響はゼロ。
+ *   遷移中にモーダルが開いている場合だけは避けようがないので、そのときは
+ *   html[data-overlay] でカスケード自体を降ろす（下の退避規則）。
+ *
+ * ★ blur と saturate を1つの filter に同居させつつ別々の時間で動かすために、
+ *   量を @property 済みのカスタムプロパティに逃がしてある（index.css）。
+ *   filter そのものは1プロパティなので、直接書くと色と輪郭を別々に動かせない。
+ */
+/* ★ near だけ。画面外のブロックはぼかさない＝ぼかす面積を1画面ぶんに抑える。
+   どうせ見えないので、消える・現れるだけで足りる。 */
+html[data-motion="rich"][data-divs="on"]:not([data-stage="idle"]) [data-div="near"] {
+  filter: blur(var(--div-blur)) saturate(var(--div-sat));
 }
-html[data-motion="rich"][data-stage="rise"] .stage {
+/* カスケードの遅延。沈みは (1 - t) で下から上へ、浮上は t のまま上から下へ。 */
+html[data-motion="rich"][data-divs="on"]:not([data-stage="idle"]) [data-div] {
+  --div-out: calc((1 - var(--div-t, 0)) * var(--stage-sink-cascade));
+  --div-in: calc(var(--div-t, 0) * var(--stage-rise-cascade));
+}
+
+/* 沈み: 色が抜ける → 輪郭がぼやける → 存在が消える。
+   色は真っ先に、しかも短く抜く（素材に還る）。opacity は尺の 40% 待ってから
+   動き出すので、「色を失ってぼやけた灰色の塊」を必ず一度経由する。 */
+html[data-motion="rich"][data-divs="on"][data-stage="sink"] [data-div] {
+  opacity: 0;
+  --div-blur: var(--stage-blur);
+  --div-sat: 0.05;
+  transition:
+    --div-sat calc(var(--stage-sink) * 0.45) linear var(--div-out),
+    --div-blur var(--stage-sink) var(--ease-melt) var(--div-out),
+    opacity calc(var(--stage-sink) * 0.6) var(--ease-melt)
+      calc(var(--div-out) + var(--stage-sink) * 0.4);
+}
+
+/* 無地: 沈みで到達済みの値をそのまま保持する（ここでの確定は瞬時）。 */
+html[data-motion="rich"][data-divs="on"][data-stage="blank"] [data-div] {
+  opacity: 0;
+  --div-blur: var(--stage-blur);
+  --div-sat: 0.05;
+  transition: none;
+}
+
+/* 浮上: 存在が戻る → 像を結ぶ → 最後に色が戻る。
+   色だけ尺の後半に置いてあるので、灰色の浮き彫りとして現れたブロックに
+   あとから色が染み込む。沈みと厳密に逆順。 */
+html[data-motion="rich"][data-divs="on"][data-stage="rise"] [data-div] {
   opacity: 1;
-  transition: opacity calc(var(--stage-rise) * 0.45) var(--ease-out);
+  --div-blur: 0px;
+  --div-sat: 1;
+  transition:
+    opacity calc(var(--stage-rise) * 0.55) var(--ease-emerge) var(--div-in),
+    --div-blur var(--stage-rise) var(--ease-emerge) var(--div-in),
+    --div-sat calc(var(--stage-rise) * 0.5) linear
+      calc(var(--div-in) + var(--stage-rise) * 0.5);
+}
+
+/*
+ * モーダルが開いたまま遷移した場合の退避。filter の包含ブロック切り替えで
+ * fixed のモーダルが飛ぶので、ブロック演出を降ろしてステージごとのフェードに戻す。
+ * （SongSearchModal / PlanListModal が data-overlay を付ける）
+ */
+html[data-motion="rich"][data-divs="on"]:has([data-overlay]) [data-div] {
+  filter: none;
+  /* ブロック側の振り付けを完全に降ろす。降ろさないとステージのフェードと
+     二重にかかって、モーダルだけ先に薄くなる不自然な絵になる。 */
+  opacity: 1;
+  transition: none;
+}
+html[data-motion="rich"][data-divs="on"]:has([data-overlay])[data-stage="sink"] .stage {
+  opacity: 0;
+  transition: opacity calc(var(--stage-sink) * 0.6) var(--ease-melt);
+}
+html[data-motion="rich"][data-divs="on"]:has([data-overlay])[data-stage="rise"] .stage {
+  opacity: 1;
+  transition: opacity calc(var(--stage-rise) * 0.55) var(--ease-emerge);
 }
 
 /* ===== 控えめ: 沈まない。新しいページの影だけが育つ ===== */
@@ -84,6 +189,7 @@ html[data-motion="subtle"][data-stage="rise"] {
  * 140ms 遅れて追随し、沈み込みの途中で逆方向へ動く瞬間まで出る（実測で確認）。
  */
 html:not([data-stage="idle"]) .neu-tactile,
+html:not([data-stage="idle"]) .neu-lit,
 html:not([data-stage="idle"]) .neu-cta {
   transition: none;
 }
@@ -106,10 +212,10 @@ html:not([data-stage="idle"]) .neu-cta {
   height: 10px;
   padding: 2px;
   border-radius: 999px;
-  background-color: #f0f0f0;
+  background-color: var(--neu-base);
   box-shadow:
-    inset 2px 2px 4px #bebebe,
-    inset -2px -2px 4px #ffffff;
+    inset 2px 2px 4px var(--neu-lo),
+    inset -2px -2px 4px var(--neu-hi);
   opacity: 0;
   pointer-events: none;
   animation: stage-hint 200ms var(--ease-out) 120ms forwards;
@@ -121,10 +227,10 @@ html:not([data-stage="idle"]) .neu-cta {
   height: 6px;
   border-radius: 999px;
   /* ステージ外なのでページのユニット色は届かない。ここは意図的に中立色。 */
-  background-color: #9aa;
+  background-color: light-dark(#9aa, #7c8496);
   box-shadow:
-    1px 1px 2px #bebebe,
-    -1px -1px 2px #ffffff;
+    1px 1px 2px var(--neu-lo),
+    -1px -1px 2px var(--neu-hi);
   animation: stage-wait-slide 1400ms var(--ease-out) infinite;
 }
 @keyframes stage-hint {
@@ -153,25 +259,25 @@ html:not([data-stage="idle"]) .neu-cta {
   display: grid;
   place-items: center;
   font-size: 0.875rem;
-  color: #6b6b75;
+  color: light-dark(#6b6b75, #9aa1ae);
   opacity: 0;
   animation: stage-hint 200ms var(--ease-out) 450ms forwards;
 }
 
 /* 無地の間もトークンが潰れない固定影。失敗カードなど「常に浮いていてほしい」もの用。 */
 .neu-static {
-  background-color: #f0f0f0;
+  background-color: var(--neu-base);
   border-radius: 1rem;
   box-shadow:
-    5px 5px 10px #bebebe,
-    -5px -5px 10px #ffffff;
+    5px 5px 10px var(--neu-lo),
+    -5px -5px 10px var(--neu-hi);
 }
 /* 失敗カードのボタンもトークン由来の影だと、まさに出したい無地の場面で
    平らになってしまう。ここだけリテラルで浮かせる。 */
 .neu-static .neu-cta {
   box-shadow:
-    5px 5px 10px #bebebe,
-    -5px -5px 10px #ffffff,
+    5px 5px 10px var(--neu-lo),
+    -5px -5px 10px var(--neu-hi),
     inset 0 1.5px 1px rgba(255, 255, 255, 0.45);
 }
 

@@ -9,7 +9,7 @@
  *   idle ──NAVIGATE──> sink ──SINK_END──> blank ──READY/FLOOR──> rise ──> idle
  *                       （沈む）        （無地で待つ）      （浮き上がる）
  */
-import type { MotionLevel, MotionPlan } from "./plan";
+import { hasCascade, type MotionLevel, type MotionPlan } from "./plan";
 
 export type StagePhase = "idle" | "sink" | "blank" | "rise";
 export type TimerKind = "SINK_END" | "BLANK_FLOOR" | "PATIENCE" | "RISE_END" | "FAILSAFE";
@@ -50,6 +50,8 @@ export type StageEffect =
   | { type: "saveScroll"; key: string }
   | { type: "commit" }
   | { type: "restoreScroll"; key: string; pop: boolean }
+  /** ページをブロックに割ってカスケードの順番を書き込む。flush はスタイル計算の強制。 */
+  | { type: "markDivisions"; flush: boolean }
   | { type: "focusStage" }
   | { type: "announce"; kind: "arrived" | "loading" | "failed"; path: string };
 
@@ -112,6 +114,15 @@ function enterRise(s: StageState, at: number, plan: MotionPlan): Step {
   const effects: StageEffect[] = [];
   if (!s.preview) {
     effects.push({ type: "restoreScroll", key: s.targetKey, pop: s.pop });
+  }
+  // ★ 印付けはスクロール復元の後。どのブロックが画面内かを見て順番を決めるので、
+  //   復元前の位置で測るとカスケードの尺を画面外のブロックに食わせてしまう。
+  //   プレビュー（設定画面での試し再生）は commit も復元もしないが、カスケード
+  //   そのものを見せるための機能なので印は必要。だから preview の外に置く。
+  if (hasCascade(plan) && plan.riseMs > 0) {
+    effects.push({ type: "markDivisions", flush: true });
+  }
+  if (!s.preview) {
     effects.push({ type: "focusStage" });
     effects.push({ type: "announce", kind: "arrived", path: s.targetPath });
   }
@@ -157,6 +168,9 @@ export function reduce(state: StageState, event: StageEvent, plan: MotionPlan): 
         };
       }
       if (plan.sinkMs > 0 && state.phase !== "blank") {
+        // 印は今まさに見えている木（＝旧ページ）に対して付ける。
+        // 沈み途中の再ナビゲート（上の分岐）では木が変わっていないので付け直さない。
+        if (hasCascade(plan)) pre.push({ type: "markDivisions", flush: false });
         return {
           state: { ...base, phase: "sink", since: event.at },
           effects: [...pre, { type: "timer", kind: "SINK_END", after: plan.sinkMs }],
@@ -178,6 +192,7 @@ export function reduce(state: StageState, event: StageEvent, plan: MotionPlan): 
       };
       const pre: StageEffect[] = [{ type: "cancelTimers" }];
       if (plan.sinkMs > 0) {
+        if (hasCascade(plan)) pre.push({ type: "markDivisions", flush: false });
         return {
           state: { ...base, phase: "sink", since: event.at },
           effects: [...pre, { type: "timer", kind: "SINK_END", after: plan.sinkMs }],
@@ -258,9 +273,6 @@ export function reduce(state: StageState, event: StageEvent, plan: MotionPlan): 
 export interface StageAttrs {
   motion: MotionLevel;
   stage: StagePhase;
-  /** CSS へ渡す duration。ms の正本は TS 側だけ（CSS に数字を書かない）。 */
-  sink: string;
-  rise: string;
   busy: boolean;
   /**
    * ステージが視覚的に消えているか。inert を付ける判断に使う。
@@ -278,8 +290,6 @@ export function stageAttrs(state: StageState, plan: MotionPlan): StageAttrs {
   return {
     motion: plan.level,
     stage: state.phase,
-    sink: `${plan.sinkMs}ms`,
-    rise: `${plan.riseMs}ms`,
     busy: state.phase === "blank" && !state.ready && !state.failed,
     hidden: invisible,
   };

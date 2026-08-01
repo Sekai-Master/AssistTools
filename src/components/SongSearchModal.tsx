@@ -67,6 +67,10 @@ export function SongSearchModal<T extends SearchableSong>({
 
   return (
     <div
+      // ポータルを使わずステージの中に居る fixed 要素。開いたまま画面遷移すると
+      // ブロック演出の filter に包含ブロックを奪われて位置が飛ぶので、この印を
+      // 見つけたら遷移側がカスケードを降ろす（motion/motion.css の退避規則）。
+      data-overlay=""
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -110,7 +114,7 @@ export function SongSearchModal<T extends SearchableSong>({
                 key={m.id}
                 type="button"
                 onClick={() => onSelect(m)}
-                className="flex w-full items-center gap-3 px-2 py-1.5 rounded text-left hover:bg-black/5"
+                className="flex w-full items-center gap-3 px-2 py-1.5 rounded text-left hover:bg-[color:color-mix(in_srgb,var(--neu-ink)_9%,transparent)]"
               >
                 <img
                   src={`${jacketBase}${m.jacketLink}`}

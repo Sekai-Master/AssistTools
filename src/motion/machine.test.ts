@@ -12,9 +12,16 @@ import { resolvePlan } from "./plan";
 
 const DESKTOP = { osReduce: false, touchOnly: false };
 
-const RICH = resolvePlan("rich", DESKTOP); // sink130 / floor40 / patience320 / rise210
-const SUBTLE = resolvePlan("subtle", DESKTOP); // sink0 / floor0 / rise160
+const RICH = resolvePlan("rich", DESKTOP);
+const SUBTLE = resolvePlan("subtle", DESKTOP); // sink0 / floor0
 const OFF = resolvePlan("off", DESKTOP);
+
+// 振り付けの秒数を直に書かない。リッチの尺は作品側の判断で動くもので、
+// 状態機械の正しさはその値に依存しない（依存していたらそれ自体がバグ）。
+const SINK_END_AT = RICH.sinkMs;
+const FLOOR_AT = SINK_END_AT + RICH.minBlankMs;
+/** 無地の床を払い終えた頃 */
+const AFTER_FLOOR = FLOOR_AT + 10;
 
 function run(events: StageEvent[], plan = RICH, start: StageState = initialState("k0", "/")) {
   const steps: Step[] = [];
@@ -35,9 +42,9 @@ describe("チャンクが速いとき", () => {
   it("無地は minBlankMs ぴったりで抜ける（早く来ても床は払う）", () => {
     const { state, steps } = run([
       { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "READY", key: "k1", at: 140 }, // 床(40ms)未達
-      { type: "TIMER", kind: "BLANK_FLOOR", at: 170 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "READY", key: "k1", at: SINK_END_AT + 10 }, // 床未達
+      { type: "TIMER", kind: "BLANK_FLOOR", at: FLOOR_AT },
     ]);
     expect(steps[2].state.phase).toBe("blank");
     expect(steps[2].effects).toEqual([]);
@@ -48,13 +55,17 @@ describe("チャンクが速いとき", () => {
   it("浮上時の副作用は必ず スクロール→フォーカス→読み上げ の順", () => {
     const { steps } = run([
       { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "READY", key: "k1", at: 140 },
-      { type: "TIMER", kind: "BLANK_FLOOR", at: 170 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "READY", key: "k1", at: SINK_END_AT + 10 },
+      { type: "TIMER", kind: "BLANK_FLOOR", at: FLOOR_AT },
     ]);
+    // 印付けはスクロール復元の後・フォーカス移動の前。復元前に測るとカスケードの
+    // 尺を画面外のブロックに食わせ、フォーカス移動の後だとブラウザ由来のスクロールで
+    // 測った位置がずれる。
     expect(kinds(steps[3])).toEqual([
       "cancelTimers",
       "restoreScroll",
+      "markDivisions",
       "focusStage",
       "announce",
       "timer",
@@ -70,7 +81,7 @@ describe("チャンクが速いとき", () => {
   it("表示 location の差し替え(commit)は無地に入った瞬間だけ", () => {
     const { steps } = run([
       { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
     ]);
     expect(kinds(steps[0])).not.toContain("commit");
     expect(kinds(steps[1])).toContain("commit");
@@ -79,8 +90,8 @@ describe("チャンクが速いとき", () => {
   it("戻る(POP)は記憶した位置へ、通常遷移は先頭へ", () => {
     const pop = run([
       { type: "NAVIGATE", key: "k1", path: "/evc", pop: true, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "READY", key: "k1", at: 200 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "READY", key: "k1", at: AFTER_FLOOR },
     ]);
     expect(pop.steps[2].effects).toContainEqual({
       type: "restoreScroll",
@@ -90,8 +101,8 @@ describe("チャンクが速いとき", () => {
 
     const push = run([
       { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "READY", key: "k1", at: 200 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "READY", key: "k1", at: AFTER_FLOOR },
     ]);
     expect(push.steps[2].effects).toContainEqual({
       type: "restoreScroll",
@@ -105,9 +116,9 @@ describe("チャンクが遅いとき", () => {
   it("patience で待ちを見せ、到着したら床を払わず即浮上する", () => {
     const { steps } = run([
       { type: "NAVIGATE", key: "k1", path: "/analyzer", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "TIMER", kind: "BLANK_FLOOR", at: 170 }, // まだ来ていない
-      { type: "TIMER", kind: "PATIENCE", at: 450 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "TIMER", kind: "BLANK_FLOOR", at: FLOOR_AT }, // まだ来ていない
+      { type: "TIMER", kind: "PATIENCE", at: FLOOR_AT + 300 },
       { type: "READY", key: "k1", at: 900 },
     ]);
     expect(steps[2].state.phase).toBe("blank"); // 床は ready でないと効かない
@@ -121,8 +132,8 @@ describe("チャンクが遅いとき", () => {
   it("待ちを見せている間も FAILSAFE は生かす（cancelTimers しない）", () => {
     const { steps } = run([
       { type: "NAVIGATE", key: "k1", path: "/analyzer", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "TIMER", kind: "PATIENCE", at: 450 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "TIMER", kind: "PATIENCE", at: FLOOR_AT + 300 },
     ]);
     expect(kinds(steps[2])).not.toContain("cancelTimers");
   });
@@ -130,7 +141,7 @@ describe("チャンクが遅いとき", () => {
   it("無地に入るとき、まだ来ていなければ patience と failsafe を張る", () => {
     const { steps } = run([
       { type: "NAVIGATE", key: "k1", path: "/analyzer", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
     ]);
     expect(steps[1].effects).toContainEqual({
       type: "timer",
@@ -154,13 +165,17 @@ describe("割り込み", () => {
     expect(steps[1].state.phase).toBe("sink");
     expect(steps[1].state.targetKey).toBe("k2");
     expect(steps[1].effects[0]).toEqual({ type: "cancelTimers" });
-    expect(steps[1].effects.at(-1)).toEqual({ type: "timer", kind: "SINK_END", after: 70 });
+    expect(steps[1].effects.at(-1)).toEqual({
+      type: "timer",
+      kind: "SINK_END",
+      after: RICH.sinkMs - 60,
+    });
   });
 
   it("無地の最中の再ナビゲートは沈みを飛ばす（既に平らだから）", () => {
     const { steps } = run([
       { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
       { type: "NAVIGATE", key: "k2", path: "/bingo", pop: false, at: 160 },
     ]);
     expect(steps[2].state.phase).toBe("blank");
@@ -172,7 +187,7 @@ describe("割り込み", () => {
   it("無地の最中の再ナビゲートではスクロールを保存し直さない", () => {
     const { steps } = run([
       { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
       { type: "NAVIGATE", key: "k2", path: "/bingo", pop: false, at: 160 },
     ]);
     expect(kinds(steps[2])).not.toContain("saveScroll");
@@ -189,7 +204,7 @@ describe("割り込み", () => {
   it("古い READY は無視する", () => {
     const { steps } = run([
       { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
       { type: "NAVIGATE", key: "k2", path: "/bingo", pop: false, at: 160 },
       { type: "READY", key: "k1", at: 200 },
     ]);
@@ -200,9 +215,9 @@ describe("割り込み", () => {
   it("StrictMode の二重発火で浮上が2回始まらない", () => {
     const { steps } = run([
       { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "READY", key: "k1", at: 180 },
-      { type: "READY", key: "k1", at: 181 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "READY", key: "k1", at: AFTER_FLOOR },
+      { type: "READY", key: "k1", at: AFTER_FLOOR + 1 },
     ]);
     expect(steps[2].state.phase).toBe("rise");
     expect(steps[3].effects).toEqual([]);
@@ -211,9 +226,9 @@ describe("割り込み", () => {
   it("浮上が終わる前の再ナビゲートは沈みからやり直す", () => {
     const { steps } = run([
       { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "READY", key: "k1", at: 180 },
-      { type: "NAVIGATE", key: "k2", path: "/bingo", pop: false, at: 200 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "READY", key: "k1", at: AFTER_FLOOR },
+      { type: "NAVIGATE", key: "k2", path: "/bingo", pop: false, at: AFTER_FLOOR + 20 },
     ]);
     expect(steps[2].state.phase).toBe("rise");
     expect(steps[3].state.phase).toBe("sink");
@@ -258,7 +273,7 @@ describe("失敗", () => {
   it("古い FAILED は無視する", () => {
     const { state } = run([
       { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
       { type: "NAVIGATE", key: "k2", path: "/bingo", pop: false, at: 160 },
       { type: "FAILED", key: "k1", at: 200 },
     ]);
@@ -268,8 +283,8 @@ describe("失敗", () => {
   it("FAILSAFE で失敗表示に落ちる（永久ローディングにしない）", () => {
     const { state, steps } = run([
       { type: "NAVIGATE", key: "k1", path: "/analyzer", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "TIMER", kind: "FAILSAFE", at: 10_130 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "TIMER", kind: "FAILSAFE", at: 10_000 + SINK_END_AT },
     ]);
     expect(state.failed).toBe(true);
     expect(steps[2].effects).toContainEqual({
@@ -282,9 +297,9 @@ describe("失敗", () => {
   it("既に届いていれば FAILSAFE は効かない", () => {
     const { state } = run([
       { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "READY", key: "k1", at: 200 },
-      { type: "TIMER", kind: "FAILSAFE", at: 10_130 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "READY", key: "k1", at: AFTER_FLOOR },
+      { type: "TIMER", kind: "FAILSAFE", at: 10_000 + SINK_END_AT },
     ]);
     expect(state.failed).toBe(false);
   });
@@ -294,8 +309,8 @@ describe("失敗", () => {
   it("失敗表示のあとに遅れて届いたら復帰する（無地のまま固まらない）", () => {
     const { state } = run([
       { type: "NAVIGATE", key: "k1", path: "/analyzer", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "TIMER", kind: "FAILSAFE", at: 10_130 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "TIMER", kind: "FAILSAFE", at: 10_000 + SINK_END_AT },
       { type: "READY", key: "k1", at: 12_000 },
     ]);
     expect(state.failed).toBe(false);
@@ -305,9 +320,9 @@ describe("失敗", () => {
   it("失敗中でも別ページへ逃げられる（失敗が解除される）", () => {
     const { state } = run([
       { type: "NAVIGATE", key: "k1", path: "/analyzer", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "FAILED", key: "k1", at: 200 },
-      { type: "NAVIGATE", key: "k2", path: "/", pop: false, at: 300 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "FAILED", key: "k1", at: AFTER_FLOOR },
+      { type: "NAVIGATE", key: "k2", path: "/", pop: false, at: AFTER_FLOOR + 100 },
     ]);
     expect(state.failed).toBe(false);
     expect(state.targetPath).toBe("/");
@@ -365,8 +380,8 @@ describe("プレビュー", () => {
   it("commit もスクロールもフォーカスも読み上げも動かさない", () => {
     const { steps } = run([
       { type: "PREVIEW", at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "TIMER", kind: "BLANK_FLOOR", at: 170 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "TIMER", kind: "BLANK_FLOOR", at: FLOOR_AT },
     ]);
     const all = steps.flatMap(kinds);
     expect(all).not.toContain("commit");
@@ -388,8 +403,8 @@ describe("プレビュー", () => {
   it("プレビューが終わると preview フラグが下りる", () => {
     const { state } = run([
       { type: "PREVIEW", at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "TIMER", kind: "BLANK_FLOOR", at: 170 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "TIMER", kind: "BLANK_FLOOR", at: FLOOR_AT },
       { type: "TIMER", kind: "RISE_END", at: 380 },
     ]);
     expect(state.phase).toBe("idle");
@@ -397,17 +412,78 @@ describe("プレビュー", () => {
   });
 });
 
+describe("ブロック単位のカスケード（印付け）", () => {
+  // 印は「今まさに見えている木」に対して付ける。沈みでは旧ページ、浮上では新ページ。
+  it("沈むときと浮上するときの2回、印を付け直す", () => {
+    const { steps } = run([
+      { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "READY", key: "k1", at: AFTER_FLOOR },
+    ]);
+    expect(steps[0].effects).toContainEqual({ type: "markDivisions", flush: false });
+    expect(kinds(steps[1])).not.toContain("markDivisions"); // 無地では木が入れ替わる途中
+    expect(steps[2].effects).toContainEqual({ type: "markDivisions", flush: true });
+  });
+
+  // 印を付けた直後に data-stage が rise へ変わる。同じタスク内の2回の DOM 変更は
+  // まとめて1回しか計算されないので、開始値を確定させないとカスケードが丸ごと効かない。
+  it("浮上のときだけスタイル計算を強制する", () => {
+    const { steps } = run([
+      { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "READY", key: "k1", at: AFTER_FLOOR },
+    ]);
+    const marks = steps.flatMap((s) =>
+      s.effects.flatMap((e) => (e.type === "markDivisions" ? [e.flush] : []))
+    );
+    expect(marks).toEqual([false, true]);
+  });
+
+  // 木が変わっていないのに付け直すと、連打のたびに順番が引き直されて波が乱れる。
+  it("沈み途中の再ナビゲートでは付け直さない（木が変わっていない）", () => {
+    const { steps } = run([
+      { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
+      { type: "NAVIGATE", key: "k2", path: "/bingo", pop: false, at: 60 },
+    ]);
+    expect(kinds(steps[1])).not.toContain("markDivisions");
+  });
+
+  it("控えめ・オフでは印を付けない（カスケードを持たないので無駄な DOM 走査をしない）", () => {
+    for (const plan of [OFF, SUBTLE]) {
+      const { steps } = run(
+        [
+          { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
+          { type: "READY", key: "k1", at: 30 },
+        ],
+        plan
+      );
+      expect(steps.flatMap(kinds)).not.toContain("markDivisions");
+    }
+  });
+
+  // プレビューは commit も復元もしないが、カスケードそのものを見せるための機能。
+  it("設定画面のプレビューでも印は付く", () => {
+    const { steps } = run([
+      { type: "PREVIEW", at: 0 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "TIMER", kind: "BLANK_FLOOR", at: FLOOR_AT },
+    ]);
+    expect(steps[0].effects).toContainEqual({ type: "markDivisions", flush: false });
+    expect(steps[2].effects).toContainEqual({ type: "markDivisions", flush: true });
+  });
+});
+
 describe("stageAttrs", () => {
-  it("プランの ms を CSS 変数の文字列にする（CSS に数字を書かないため）", () => {
+  it("段階と phase をそのまま属性に出す", () => {
     const a = stageAttrs(initialState("k0", "/"), RICH);
-    expect(a).toMatchObject({ motion: "rich", stage: "idle", sink: "130ms", rise: "210ms" });
+    expect(a).toMatchObject({ motion: "rich", stage: "idle" });
   });
 
   it("aria-busy は無地で待っている間だけ立つ", () => {
     const { steps } = run([
       { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "READY", key: "k1", at: 140 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "READY", key: "k1", at: SINK_END_AT + 10 },
     ]);
     expect(stageAttrs(steps[0].state, RICH).busy).toBe(false); // 沈み中はまだ
     expect(stageAttrs(steps[1].state, RICH).busy).toBe(true);
@@ -419,8 +495,8 @@ describe("stageAttrs", () => {
   it("リッチで見えていない間だけ hidden（inert）が立つ", () => {
     const { steps } = run([
       { type: "NAVIGATE", key: "k1", path: "/evc", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "READY", key: "k1", at: 200 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "READY", key: "k1", at: AFTER_FLOOR },
     ]);
     expect(stageAttrs(steps[0].state, RICH).hidden).toBe(true); // sink
     expect(stageAttrs(steps[1].state, RICH).hidden).toBe(true); // blank
@@ -442,8 +518,8 @@ describe("stageAttrs", () => {
   it("失敗中は busy にしない（永久に読み込み中と読ませない）", () => {
     const { state } = run([
       { type: "NAVIGATE", key: "k1", path: "/analyzer", pop: false, at: 0 },
-      { type: "TIMER", kind: "SINK_END", at: 130 },
-      { type: "FAILED", key: "k1", at: 200 },
+      { type: "TIMER", kind: "SINK_END", at: SINK_END_AT },
+      { type: "FAILED", key: "k1", at: AFTER_FLOOR },
     ]);
     expect(stageAttrs(state, RICH).busy).toBe(false);
   });

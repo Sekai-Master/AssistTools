@@ -13,8 +13,9 @@ import {
   useState,
 } from "react";
 import { useLocation, useNavigationType, type Location } from "react-router-dom";
+import { flushStyles, markDivisions } from "./divisions";
 import { initialState, reduce, stageAttrs, type StageEvent, type StageState } from "./machine";
-import { resolvePlan } from "./plan";
+import { resolvePlan, stageVars } from "./plan";
 import { announceText, prefetchRoute } from "./routes";
 import { createScrollMemory } from "./scrollMemory";
 import { useMotionSetting } from "./settingsStore";
@@ -96,6 +97,17 @@ export function useRouteStage() {
         case "restoreScroll":
           window.scrollTo(0, eff.pop ? scroll.current.restore(eff.key) : 0);
           break;
+        case "markDivisions": {
+          // ディビジョンが1つも取れないページ（＝中身が空）では、ステージごと
+          // フェードする従来の振り付けに落ちる。CSS 側は html[data-divs] で分岐する。
+          const stage = stageRef.current;
+          const count = stage ? markDivisions(stage) : 0;
+          // ★ 属性 → スタイル確定 の順。逆にすると開始値が「印の無い状態」で
+          //   確定してしまい、浮上のカスケードが丸ごと効かない。
+          document.documentElement.dataset.divs = count > 0 ? "on" : "off";
+          if (eff.flush && stage) flushStyles(stage);
+          break;
+        }
         case "focusStage":
           // preventScroll で自前のスクロール制御と競合させない。
           stageRef.current?.focus({ preventScroll: true });
@@ -144,13 +156,15 @@ export function useRouteStage() {
   //   追随しない（＝パネルの影は据え置きで中のボタンだけ平ら、という真逆の絵になる）。
   //   html 上なら :root の --shadow-neu 自体が再計算され、コンポーネントクラスと
   //   ユーティリティの両系統が同時に沈む。
+  // plan は resolvePlan がモジュール定数を返すので参照が安定している。
+  // 毎レンダー新しい object を作らないよう、ここで1回だけ畳んでおく。
+  const vars = useMemo(() => stageVars(plan), [plan]);
   useLayoutEffect(() => {
     const el = document.documentElement;
     el.dataset.motion = attrs.motion;
     el.dataset.stage = attrs.stage;
-    el.style.setProperty("--stage-sink", attrs.sink);
-    el.style.setProperty("--stage-rise", attrs.rise);
-  }, [attrs.motion, attrs.stage, attrs.sink, attrs.rise]);
+    for (const [name, value] of Object.entries(vars)) el.style.setProperty(name, value);
+  }, [attrs.motion, attrs.stage, vars]);
 
   const preview = useCallback(() => send({ type: "PREVIEW", at: now() }), [send]);
 

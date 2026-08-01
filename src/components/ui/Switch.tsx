@@ -36,7 +36,7 @@ export function Switch({
         />
         <span
           className={cn(
-            "absolute top-1 left-1 h-5 w-5 rounded-full bg-white shadow transition-transform",
+            "absolute top-1 left-1 h-5 w-5 rounded-full bg-[color:var(--neu-hi)] shadow transition-transform",
             "peer-focus-visible:ring-2 peer-focus-visible:ring-[color:var(--unit-color)]",
             checked && "translate-x-5"
           )}

@@ -45,6 +45,9 @@ export function PlanListModal({
 
   return (
     <div
+      // 開いたまま遷移したときにブロック演出を降ろすための印。
+      // 理由は SongSearchModal と同じ（motion/motion.css の退避規則）。
+      data-overlay=""
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
