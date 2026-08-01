@@ -23,6 +23,11 @@ import {
 } from "./lib/efficiency";
 import { ProfileBar } from "../../components/ui/ProfileBar";
 import { numOrUndef } from "../../lib/num";
+import { Delta } from "../../components/ui/Delta";
+import { useFlip } from "../../lib/useFlip";
+import { resolvePlan } from "../../motion/plan";
+import { useMotionSetting } from "../../motion/settingsStore";
+import { useReducedMotion, useTouchOnly } from "../../motion/environment";
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 const STORE_KEY = "sekai-master:ranking-inputs";
@@ -224,11 +229,29 @@ function LevelInput({
   );
 }
 
-/** 数値ひとつぶんの見出し＋値。オート周回のまとめで並べる。 */
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+/**
+ * 数値ひとつぶんの見出し＋値。オート周回のまとめで並べる。
+ * delta に生の数値を渡すと、前回からの変化量を一瞬だけ脇に出す。
+ */
+function Stat({
+  label,
+  value,
+  sub,
+  delta,
+  formatDelta,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  delta?: number | null;
+  formatDelta?: (n: number) => string;
+}) {
   return (
     <div className="rounded-xl bg-neu p-3 shadow-neu-inset">
-      <div className="text-[11px] font-bold text-slate-500">{label}</div>
+      <div className="text-[11px] font-bold text-slate-500">
+        {label}
+        {delta !== undefined && <Delta value={delta} format={formatDelta} />}
+      </div>
       <div className="mt-1 text-lg font-bold tabular-nums text-slate-700">{value}</div>
       {sub && <div className="text-[11px] text-slate-400">{sub}</div>}
     </div>
@@ -309,7 +332,19 @@ export default function EfficiencyRanking() {
 
   const note = MODE_NOTE[mode];
   const playCount = Number(plays) || 0;
+  const osReduce = useReducedMotion();
+  const motionLevel = resolvePlan(useMotionSetting(), {
+    osReduce,
+    touchOnly: useTouchOnly(),
+  }).level;
   const best = ranked[0];
+
+  // 並び替えを目で追わせる。演出オフの人と OS の視差軽減には出さない
+  //（動き自体が情報なので控えめでは出す）。
+  const rowRef = useFlip(
+    ranked.map((r) => `${r.musicId}-${r.difficulty}`),
+    { enabled: motionLevel !== "off" && !osReduce }
+  );
 
   return (
     <ToolPage morphKey="tool:ranking" unit="ln" title="効率曲ランキング" icon="leaderboard" wide>
@@ -425,7 +460,12 @@ export default function EfficiencyRanking() {
               </thead>
               <tbody>
                 {ranked.map((r, i) => (
-                  <tr key={`${r.musicId}-${r.difficulty}`} className="border-t border-slate-200/60">
+                  <tr
+                    key={`${r.musicId}-${r.difficulty}`}
+                    // 条件を変えると順位が総入れ替えになる。行が実際に動いて見えないと
+                    // 「さっき見ていた曲がどこへ行ったか」が追えない。
+                    ref={rowRef(`${r.musicId}-${r.difficulty}`)}
+                    className="border-t border-slate-200/60">
                     <td className="px-2 py-2 tabular-nums text-slate-400">{i + 1}</td>
                     <td className="px-2 py-2">
                       <div className="flex items-center gap-2">
@@ -526,6 +566,8 @@ export default function EfficiencyRanking() {
                   label="獲得ポイント"
                   value={fmt(best.eventPt * playCount)}
                   sub={`1回 ${fmt(best.eventPt)} Pt`}
+                  // 焚き数・回数・編成を変えたときの効き目をその場で見せる。
+                  delta={best.eventPt * playCount}
                 />
                 <Stat
                   label="消費ライブボーナス"
@@ -536,6 +578,8 @@ export default function EfficiencyRanking() {
                   label="所要時間"
                   value={hhmm(best.cycleSec * playCount)}
                   sub={`1回 ${best.cycleSec.toFixed(0)}秒（ロス込み）`}
+                  delta={Math.round(best.cycleSec * playCount)}
+                  formatDelta={(n) => hhmm(n)}
                 />
                 <Stat
                   label="ライボ1あたり"

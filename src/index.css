@@ -196,6 +196,12 @@
   --color-teal-600: light-dark(#0d9488, #2dd4bf);
 }
 
+@keyframes delta-in {
+  from {
+    opacity: 0;
+  }
+}
+
 html,
 body,
 #root {
@@ -362,6 +368,17 @@ body {
     visibility: hidden;
     font-weight: 700;
     pointer-events: none;
+  }
+
+  /* 結果の変化量。出るときだけ短く、消えるときは自然に。
+     数字そのものは回さない（電卓では可読性が第一）。 */
+  .delta-badge {
+    animation: delta-in 180ms var(--ease-out);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .delta-badge {
+      animation: none;
+    }
   }
 
   /* ニューモーフィズムの浮き出しパネル */
