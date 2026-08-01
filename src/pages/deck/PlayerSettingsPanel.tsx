@@ -277,6 +277,20 @@ export function PlayerSettingsPanel({
         </Section>
 
         <Section
+          title="プレイヤー名（任意）"
+          hint="紹介カードに載せる名前。入れなければ何も出しません。この端末の中だけに保存されます"
+        >
+          <NeuInput
+            aria-label="プレイヤー名"
+            value={settings.playerName ?? ""}
+            maxLength={24}
+            placeholder="未設定"
+            onChange={(e) => onChange({ ...settings, playerName: e.target.value })}
+            className="max-w-60 !py-1.5 text-sm"
+          />
+        </Section>
+
+        <Section
           title="称号・実機の総合力"
           hint="称号ボーナスはマスタから計算できないので手入力です（総合力の内訳画面に出ています）"
         >

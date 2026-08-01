@@ -28,6 +28,8 @@ export function growthLabel(state: CardState | undefined, card: CatalogCard): st
 
 export function buildShareCard(opts: {
   deckName: string;
+  /** 任意のプレイヤー名（プレイヤー設定）。 */
+  playerName?: string;
   eventName?: string;
   cards: CatalogCard[];
   states: Record<number, CardState>;
@@ -86,6 +88,7 @@ export function buildShareCard(opts: {
   const bonus = evaluated.bonus;
   return {
     deckName: opts.deckName,
+    playerName: opts.playerName,
     // ★ ボーナスを載せないときはイベント名も出さない。関係ない編成の下に
     //   イベント名だけ素で残るのは意味が通らない（Nori 指摘 2026-08-02）。
     eventName: opts.hideBonus ? undefined : opts.eventName,

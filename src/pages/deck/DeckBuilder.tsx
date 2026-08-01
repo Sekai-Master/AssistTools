@@ -13,6 +13,7 @@ import { SharePanel } from "./SharePanel";
 import { PlayerSettingsPanel } from "./PlayerSettingsPanel";
 import { ComparePanel } from "./ComparePanel";
 import { SaveToProfile } from "../../components/ui/ProfileBar";
+import { upsertProfileByName, useProfiles } from "../../lib/profiles";
 import {
   readPlayerSettings,
   toPlayerState,
@@ -83,6 +84,12 @@ export default function DeckBuilder() {
   const [custom, setCustom] = useState<CustomEvent>(() => emptyCustomEvent());
 
   const [decks, setDecks] = useState<SavedDeck[]>(() => listDecks());
+  /** 既に編成プロフィールへ反映してある編成名（保存時に自動で追随させるため）。 */
+  const profiles = useProfiles();
+  const syncedProfileNames = useMemo(
+    () => new Set(profiles.filter((p) => p.source === "deck").map((p) => p.name)),
+    [profiles]
+  );
   const [deckName, setDeckName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -236,6 +243,26 @@ export default function DeckBuilder() {
     };
   }, [pickIndex, ctx, slots, states, catalog, cardIds, leaderIndex, supportBonus, mode]);
 
+  /**
+   * 計算した数字を、全ツール共通の「編成プロフィール」へ書き戻す。
+   *
+   * ★ **プロフィールは軽い受け口のまま**にする。各ツールが編成ビルダーのデータ
+   *  （カタログ1.2MB＋計算一式）を直接読むと、どのページも重くなる。
+   *   ビルダーが生産者として数字だけ置き、ツールは今までどおりそこを読む。
+   * ★ 手で作ったプロフィールは潰さない（upsertProfileByName が source で分けている）。
+   */
+  const pushToProfile = (name: string) => {
+    if (!evaluated || cards.length === 0) return;
+    upsertProfileByName(name, {
+      source: "deck",
+      power: evaluated.power.total,
+      skillLeader: Math.round(evaluated.skill.leader * 10) / 10,
+      skillTotal: Math.round(evaluated.skill.total * 10) / 10,
+      // ボーナスは切り捨てず小数のまま（0.5% が最終Ptに効く）。
+      ...(evaluated.bonus ? { bonus: evaluated.bonus.total } : {}),
+    });
+  };
+
   const store = () => {
     const name = deckName.trim() || `編成${decks.length + 1}`;
     setDecks(
@@ -251,6 +278,9 @@ export default function DeckBuilder() {
       })
     );
     setDeckName(name);
+    // ★ 既に同名のプロフィールがあるなら黙って古い数字を残さない（＝ずれる）。
+    //   無いときは勝手に増やさず、下のボタンで本人に選ばせる。
+    if (syncedProfileNames.has(name)) pushToProfile(name);
     setNotice(`「${name}」に保存しました`);
     setTimeout(() => setNotice(null), 2600);
   };
@@ -393,6 +423,7 @@ export default function DeckBuilder() {
           evaluated={evaluated}
           leaderCardId={cardIds[leaderIndex] ?? undefined}
           hideBonus={mode === "challenge"}
+          playerName={player.playerName}
         />
       )}
 
@@ -422,6 +453,19 @@ export default function DeckBuilder() {
               値を出している場所のすぐ隣に置く（ProfileBar.tsx の規約）。 */}
           {cards.length > 0 && (
             <div className="flex flex-wrap items-center gap-3 px-1">
+              {/* ★ 各ツール（ランキング・アナライザー・稼働時間）はこのプロフィールを
+                  読む。ここで書き戻せば、編成ビルダーで作った編成をそのまま呼び出せる。 */}
+              <NeuButton
+                className="!px-3 !py-1"
+                onClick={() => {
+                  const name = deckName.trim() || `編成${decks.length + 1}`;
+                  pushToProfile(name);
+                  setNotice(`編成プロフィール「${name}」に反映しました`);
+                  setTimeout(() => setNotice(null), 3000);
+                }}
+              >
+                編成プロフィールへ反映
+              </NeuButton>
               <SaveToProfile
                 collect={() => ({
                   power: evaluated.power.total,

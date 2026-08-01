@@ -35,8 +35,11 @@ export function SharePanel({
   leaderCardId,
   hideBonus,
   eventAsset,
+  playerName,
 }: {
   deckName: string;
+  /** 任意のプレイヤー名（プレイヤー設定）。 */
+  playerName?: string;
   /** チャレンジライブではイベントボーナスの欄を出さない（そもそも概念が無い）。 */
   hideBonus?: boolean;
   eventName?: string;
@@ -86,6 +89,7 @@ export function SharePanel({
     await drawDeckCanvas(canvas, {
       ...buildShareCard({
         deckName: deckName.trim() || "編成",
+        playerName,
         eventName,
         cards,
         states,

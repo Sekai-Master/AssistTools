@@ -33,6 +33,8 @@ export interface DeckCanvasCard {
 
 export interface DeckCanvasData {
   deckName: string;
+  /** 任意のプレイヤー名。入っていれば右上に小さく出す。 */
+  playerName?: string;
   eventName?: string;
   cards: DeckCanvasCard[];
   /** 左に積む数字。文字列に整形済みで渡す（描画は数字の意味を知らない）。 */
@@ -322,11 +324,20 @@ function drawHeader(ctx: CanvasRenderingContext2D, data: DeckCanvasData): void {
   ctx.fillStyle = INK;
   ctx.font = "bold 28px sans-serif";
   ctx.fillText(truncate(ctx, data.deckName, 460), PAD, 72);
-  // ロゴを右上に置いたときは、同じことを2回書かない。
+  // ロゴを出しているときは、同じことを2回書かない。
   if (data.eventName && !data.eventLogo) {
     ctx.fillStyle = MUTED;
     ctx.font = "13px sans-serif";
     ctx.fillText(truncate(ctx, data.eventName, 460), PAD, 98);
+  }
+
+  // ★ プレイヤー名は任意。入っているときだけ、右上の空いた場所に小さく置く
+  //   （ロゴをボーナスの隣へ移したので、ここが空いている）。
+  if (data.playerName) {
+    ctx.textAlign = "right";
+    ctx.fillStyle = MUTED;
+    ctx.font = "bold 15px sans-serif";
+    ctx.fillText(truncate(ctx, data.playerName, 280), W - PAD, 44);
   }
 }
 

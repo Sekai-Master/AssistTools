@@ -32,6 +32,14 @@ export interface Profile {
   skillTotal?: number;
   /** よく使う焚き数。 */
   taki?: number;
+  /**
+   * 出所。編成ビルダーが計算して入れたものは "deck"。
+   * ★ **プロフィールは全ツール共通の軽い受け口**という位置づけを変えない。
+   *   各ツールが編成ビルダーのデータ（カタログ1.2MB＋計算一式）を直接読むと、
+   *   どのページを開いても重くなる。ビルダー側が「生産者」として数字を書き込み、
+   *   ツールは今までどおりここだけを読む（Nori と決めた 2026-08-02）。
+   */
+  source?: "deck";
   /** 並び順（小さいほど上）。 */
   order: number;
 }
@@ -193,8 +201,28 @@ export function createProfile(name: string, values: Partial<Profile> = {}): Prof
   return next;
 }
 
+/**
+ * 名前で作成または更新する（編成ビルダーからの書き戻し用）。
+ *
+ * ★ 同じ名前のものがあれば**上書き**。編成ビルダー側で編成を保存し直すたびに
+ *   プロフィールが増殖するのを防ぐ。名前が編成の identity になっている。
+ * ★ 手で作ったプロフィールを黙って書き換えないよう、**source が違うものは
+ *   別枠として新しく作る**（手入力の値を計算値で潰さない）。
+ */
+export function upsertProfileByName(name: string, values: Partial<Profile>): Profile {
+  const trimmed = name.trim() || "編成";
+  const found = cache.find((p) => p.name === trimmed && p.source === values.source);
+  if (found) {
+    updateProfile(found.id, values);
+    setActiveProfile(found.id);
+    return cache.find((p) => p.id === found.id) ?? found;
+  }
+  return createProfile(trimmed, values);
+}
+
 export function updateProfile(id: string, patch: Partial<Profile>): void {
   const { id: _ignored, order: _order, ...rest } = patch;
+  // clampProfile は数値欄しか見ないので、name/source はそのまま通す。
   cache = cache.map((p) => (p.id === id ? { ...p, ...clampProfile(rest) } : p));
   persist();
   emit();

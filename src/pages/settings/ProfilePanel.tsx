@@ -62,6 +62,11 @@ export function ProfilePanel() {
                   }`}
                 >
                   {p.name}
+                  {/* ★ 出所を出す。編成ビルダーが計算して入れたものを手で書き換えると、
+                      次に反映したときに黙って上書きされる（そこを分かるようにする）。 */}
+                  {p.source === "deck" && (
+                    <span className="ml-2 text-xs font-normal text-slate-500">編成ビルダー</span>
+                  )}
                   {p.id === activeId && (
                     <span className="ml-2 text-xs font-normal text-slate-500">使用中</span>
                   )}

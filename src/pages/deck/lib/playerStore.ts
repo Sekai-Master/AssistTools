@@ -36,6 +36,11 @@ export interface PlayerSettings {
   /** 称号ボーナス。マスタから導出できないので手入力（Nori の環境では 210）。 */
   honorBonus: number;
   /**
+   * 紹介カードに載せる名前（任意）。
+   * ★ 入れなければ何も出さない。**この端末の中だけ**に保存され、どこにも送らない。
+   */
+  playerName?: string;
+  /**
    * ゲーム内に表示されている実際の総合力。
    * ★ 計算値との差を常に画面に出すための参照値。家具などを進めて誤差が開いたら
    *   「入力が古い」ことに気付ける（docs/deck-builder.md「次の一手」2）。
@@ -98,6 +103,10 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     gateLevels: numRecord(p.gateLevels, { numericKey: false, max: 40 }),
     fixtures,
     honorBonus: isNum(p.honorBonus) && p.honorBonus >= 0 ? p.honorBonus : 0,
+    // 外部由来なので長さを切り、制御文字は落とす（画像に描く値なので暴れさせない）。
+    ...(typeof p.playerName === "string" && p.playerName.trim()
+      ? { playerName: p.playerName.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 24) }
+      : {}),
     ...(isNum(p.actualPower) && p.actualPower > 0 ? { actualPower: p.actualPower } : {}),
   };
 }
