@@ -1,0 +1,167 @@
+{
+  "_": [
+    "Nori の実機で読んだ総合力。**正解はここ。** モデルの推論より実測が強い。",
+    "power.real.test.ts がこの表を使って、配信データと計算モジュールを突き合わせる。",
+    "",
+    "増やし方: ゲーム内の総合力の内訳画面の数字をそのまま writes に書き足す。",
+    "変数は1つずつ動かすこと（単体 → 2枚 → 5枚、ゲートのレベルを1上げる）。",
+    "同じ形の編成をいくら集めても式は割れない。",
+    "",
+    "areaEffects を入れていないケースは、エリアアイテムを除いた成分だけ照合する",
+    "（expected.areaItem は参考値として残す）。"
+  ],
+  "player": {
+    "_": "プレイヤー固有の育成状況（2026-08-01 時点）。",
+    "areaEffects": {
+      "_": [
+        "ゲーム内「エリアアイテム効果一覧」の数字をそのまま写したもの。",
+        "★ cool と mysterious はどちらも 8.5% で、アイコンの色から当てている。",
+        "  値が同じなので取り違えても結果は変わらないが、片方が変わったら要確認。",
+        "  緑=ピュアは同じ画面の「ピュアアップル」から確定、cute=8.5% は",
+        "  レン単体のエリア 13664 との一致から確定している。"
+      ],
+      "units": {
+        "piapro": 11,
+        "light_sound": 15,
+        "idol": 9,
+        "street": 8,
+        "theme_park": 8,
+        "school_refusal": 8.5
+      },
+      "attrs": { "cool": 8.5, "pure": 8, "mysterious": 8.5, "happy": 9, "cute": 8.5 },
+      "chars": {
+        "1": 30, "2": 30, "3": 30, "4": 30,
+        "5": 20, "6": 18, "7": 20, "8": 18,
+        "9": 16, "10": 16, "11": 16, "12": 16,
+        "13": 16, "14": 20, "15": 16, "16": 16,
+        "17": 20, "18": 20, "19": 20, "20": 20,
+        "21": 30, "22": 18, "23": 16, "24": 30,
+        "25": 16, "26": 30
+      }
+    },
+    "_characterRanks": [
+      "★ ランク50以上はどれも 5% で頭打ちなので、50 を超えたぶんは結果に効かない。",
+      "  ch23（レン）だけは実測から「50以上」としか分かっていない。"
+    ],
+    "characterRanks": { "1": 58, "2": 78, "3": 56, "4": 56, "21": 71, "23": 50, "25": 47, "26": 51 },
+    "gateLevels": {
+      "light_sound": 2,
+      "idol": 1,
+      "street": 1,
+      "theme_park": 1,
+      "school_refusal": 1
+    },
+    "fixtureRates": {},
+    "honorBonus": 210
+  },
+  "cases": [
+    {
+      "label": "レン「放課後のひととき」単体（2026-08-01・レオニのゲートを Lv2 にした後）",
+      "deck": [
+        {
+          "cardId": 471,
+          "level": 60,
+          "masterRank": 0,
+          "trained": true,
+          "episodes": { "first": true, "latter": true },
+          "canvas": false
+        }
+      ],
+      "expected": {
+        "total": 50267,
+        "performance": 34596,
+        "areaItem": 13664,
+        "characterRank": 1728,
+        "honor": 210,
+        "fixture": 0,
+        "gate": 69
+      }
+    },
+    {
+      "label": "レオニ5枚・クール染め（2026-08-01）",
+      "_": [
+        "★ 5枚とも light_sound 枠・5枚とも cool なので、ユニットとタイプの全一致が",
+        "  どちらも成立する。全一致を使わないとエリアが 69456 にしかならないので、",
+        "  99968 と合った時点で「5枚揃うと2倍」が両方まとめて確認できている。",
+        "★ 特訓は3★・4★のみ（1★・2★は特訓しても加算が0）。キャンバスは全部未制作。",
+        "  KAITO は VS のキャラだが supportUnit=light_sound なので、",
+        "  エリアもゲートもレオニ枠として効く（ミクも同じ）。"
+      ],
+      "deck": [
+        { "cardId": 900, "level": 60, "masterRank": 5, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
+        { "cardId": 419, "level": 50, "masterRank": 5, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
+        { "cardId": 579, "level": 50, "masterRank": 0, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
+        { "cardId": 846, "level": 30, "masterRank": 5, "trained": false, "episodes": { "first": true, "latter": true }, "canvas": false },
+        { "cardId": 1, "level": 20, "masterRank": 5, "trained": false, "episodes": { "first": true, "latter": true }, "canvas": false }
+      ],
+      "expected": {
+        "total": 236756,
+        "performance": 129838,
+        "areaItem": 99968,
+        "characterRank": 6483,
+        "honor": 210,
+        "fixture": 0,
+        "gate": 257
+      }
+    },
+    {
+      "label": "上の編成の一歌を MEIKO（サブユニットなしの VS）に差し替え（2026-08-01）",
+      "_": [
+        "★ 一歌(id 1)と MEIKO(id 101)はどちらも1★Lv20/MR5/前後編読了で、",
+        "  パフォーマンスが 9225 で完全に同じ。**動く変数がユニット枠だけ**になる。",
+        "",
+        "  これで一度に4つ確かめられる:",
+        "  1. 純ピアプロのカードには VIRTUAL SINGER の +11% が乗る",
+        "     （supportUnit 付きのレンには乗らなかったのと対）",
+        "  2. ピアプロが1枚混ざるとユニットの全一致は消えるが、**タイプの全一致は残る**",
+        "     ＝全一致はユニットとタイプで独立に判定される",
+        "  3. 純ピアプロのカードのゲートは**全ゲートのうち一番高いもの**（レオニLv2=0.2%）。",
+        "     ゲートが 257 のまま変わらないのがその証拠（0 なら 239 に落ちる）",
+        "  4. キャラクターランク47（＝上限50に達していない）の 4.7% が効く"
+      ],
+      "deck": [
+        { "cardId": 900, "level": 60, "masterRank": 5, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
+        { "cardId": 419, "level": 50, "masterRank": 5, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
+        { "cardId": 579, "level": 50, "masterRank": 0, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
+        { "cardId": 846, "level": 30, "masterRank": 5, "trained": false, "episodes": { "first": true, "latter": true }, "canvas": false },
+        { "cardId": 101, "level": 20, "masterRank": 5, "trained": false, "episodes": { "first": true, "latter": true }, "canvas": false }
+      ],
+      "expected": {
+        "total": 215593,
+        "performance": 129838,
+        "areaItem": 78832,
+        "characterRank": 6456,
+        "honor": 210,
+        "fixture": 0,
+        "gate": 257
+      }
+    },
+    {
+      "label": "同上＋咲希のぬいぐるみ/S を1個（2026-08-01）",
+      "_": [
+        "★★ マスタの bonusRate は 1 だが、単位は % ではなく 0.1%。★★",
+        "  咲希のカード合計 19994 に対して +19。1% なら 199 になる。",
+        "  ここを % として扱うと家具ボーナスが10倍に膨らむ。",
+        "★ 家具はそのキャラのカードにしか乗らない（編成全体ではない）。",
+        "  他の4枚は咲希ではないので 0 のまま、合計が 19 しか増えていないのがその証拠。"
+      ],
+      "player": { "fixtureRates": { "2": 0.1 } },
+      "deck": [
+        { "cardId": 900, "level": 60, "masterRank": 5, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
+        { "cardId": 419, "level": 50, "masterRank": 5, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
+        { "cardId": 579, "level": 50, "masterRank": 0, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
+        { "cardId": 846, "level": 30, "masterRank": 5, "trained": false, "episodes": { "first": true, "latter": true }, "canvas": false },
+        { "cardId": 101, "level": 20, "masterRank": 5, "trained": false, "episodes": { "first": true, "latter": true }, "canvas": false }
+      ],
+      "expected": {
+        "total": 215612,
+        "performance": 129838,
+        "areaItem": 78832,
+        "characterRank": 6456,
+        "honor": 210,
+        "fixture": 19,
+        "gate": 257
+      }
+    }
+  ]
+}

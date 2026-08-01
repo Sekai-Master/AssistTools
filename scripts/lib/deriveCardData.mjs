@@ -187,18 +187,44 @@ export function derive(src, nowMs) {
       rank: r.characterRank,
       rate: [r.power1BonusRate ?? 0, r.power2BonusRate ?? 0, r.power3BonusRate ?? 0],
     })),
-    /** エリアアイテムの倍率（同上）。 */
+    /**
+     * エリアアイテムの倍率（同上）。
+     *
+     * ★ 対象は「ユニット6・タイプ5・キャラ26」の37種だが、アイテムは55個ある
+     *   （1対象に複数アイテム。例: ミクは5個）。`ch` を落とすとキャラ効果26種が
+     *   丸ごと消えるので必ず残すこと（一度落とした）。
+     */
     areaItems: (src.areaItemLevels ?? []).map((a) => ({
       itemId: a.areaItemId,
       level: a.level,
       unit: a.targetUnit,
       attr: a.targetCardAttr,
+      ch: a.targetGameCharacterId,
       rate: [a.power1BonusRate ?? 0, a.power2BonusRate ?? 0, a.power3BonusRate ?? 0],
       allMatch: [
         a.power1AllMatchBonusRate ?? 0,
         a.power2AllMatchBonusRate ?? 0,
         a.power3AllMatchBonusRate ?? 0,
       ],
+    })),
+    /**
+     * マイセカイのゲート。**5基のみで VS（ピアプロ）のゲートは無い。**
+     *
+     * `rates[0]` が Lv1。率は 0.1%〜4.0% だが、マスタの値は float32 を float64 で
+     * 表したもの（0.1 が 0.10000000149011612）。**丸め方に効くのでそのまま持つ**
+     *（自分で 0.1 と書き直すと計算結果が1ずれる）。
+     *
+     * ★ この2表は日付欄を持たないので未公開判定が効かない。名前とアセット名は
+     *   出さない（未発表ユニットが増えたときに、そこから内容が割れるのを避ける）。
+     *   ユニット名だけは計算に要るので残している。
+     */
+    gates: (src.mysekaiGates ?? []).map((g) => ({
+      id: g.id,
+      unit: g.unit,
+      rates: (src.mysekaiGateLevels ?? [])
+        .filter((l) => l.mysekaiGateId === g.id)
+        .sort((a, b) => a.level - b.level)
+        .map((l) => l.powerBonusRate ?? 0),
     })),
   };
 }
