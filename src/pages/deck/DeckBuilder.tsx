@@ -21,6 +21,13 @@ import {
 } from "./lib/playerStore";
 import { evaluateDeck, type EvalContext } from "./lib/evaluate";
 import {
+  CUSTOM_EVENT_ID,
+  customBonusTables,
+  emptyCustomEvent,
+  parseCustomEvent,
+  type CustomEvent,
+} from "./lib/customEvent";
+import {
   defaultEventId,
   filledCards,
   isTrainable,
@@ -69,6 +76,8 @@ export default function DeckBuilder() {
 
   /** プレイヤー固有の育成状況。総合力にだけ効く（イベントボーナスには効かない）。 */
   const [player, setPlayer] = useState<PlayerSettings>(() => readPlayerSettings());
+  /** 「カスタム」を選んだときの条件（対象メンバー・タイプ・配分）。 */
+  const [custom, setCustom] = useState<CustomEvent>(() => emptyCustomEvent());
 
   const [decks, setDecks] = useState<SavedDeck[]>(() => listDecks());
   const [deckName, setDeckName] = useState("");
@@ -100,14 +109,19 @@ export default function DeckBuilder() {
             catalog,
             states,
             player: toPlayerState(player),
-            bonusTables: data.bonusTables,
+            // カスタムのときは、自分で置いた条件から作った表に差し替える。
+            // 計算式（eventBonus）はそのまま＝実在イベントと同じ経路を通る。
+            bonusTables:
+              eventId === CUSTOM_EVENT_ID
+                ? customBonusTables(custom, data.bonusTables)
+                : data.bonusTables,
             powerTables: data.powerTables,
             skills: data.skills,
             characterRanks: player.characterRanks,
             eventId,
           }
         : null,
-    [data, catalog, states, player, eventId]
+    [data, catalog, states, player, eventId, custom]
   );
   const evaluated = useMemo(
     () => (ctx ? evaluateDeck(cardIds, leaderIndex, Number(supportBonus) || 0, ctx) : null),
@@ -146,6 +160,9 @@ export default function DeckBuilder() {
     setLeaderIndex(d.leaderIndex);
     setSupportBonus(String(d.supportBonus));
     if (d.eventId != null) setEventId(d.eventId);
+    // カスタムの条件も一緒に戻す（外部由来なので必ず検証を通す）。
+    const saved = parseCustomEvent(d.custom);
+    if (saved) setCustom(saved);
     setDeckName(d.name);
     setOpenIndex(null);
   };
@@ -160,6 +177,7 @@ export default function DeckBuilder() {
         leaderIndex,
         supportBonus: Number(supportBonus) || 0,
         ...(eventId != null ? { eventId } : {}),
+        ...(eventId === CUSTOM_EVENT_ID ? { custom } : {}),
       })
     );
     setDeckName(name);
@@ -255,6 +273,8 @@ export default function DeckBuilder() {
           onEventId={setEventId}
           supportBonus={supportBonus}
           onSupportBonus={setSupportBonus}
+          custom={custom}
+          onCustom={setCustom}
         />
       )}
 

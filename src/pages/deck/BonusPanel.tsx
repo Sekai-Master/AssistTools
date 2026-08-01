@@ -3,7 +3,17 @@ import { Panel } from "../../components/ui/Panel";
 import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { Stat } from "../refresh/Stat";
-import { characterName } from "./lib/characters";
+import {
+  ATTR_COLOR,
+  ATTR_LABEL,
+  ATTR_ORDER,
+  CHARACTERS,
+  UNIT_ORDER,
+  UNIT_SHORT,
+  characterName,
+} from "./lib/characters";
+import { CUSTOM_EVENT_ID, type CustomEvent } from "./lib/customEvent";
+import { cn } from "../../lib/utils";
 import { displayBonus, sanitizeDecimal, type CatalogCard, type EventRow } from "./lib/deckInputs";
 import type { EventBonusResult } from "./lib/eventBonus";
 
@@ -18,6 +28,13 @@ import type { EventBonusResult } from "./lib/eventBonus";
  *   大きく出すのは実機と同じ切り捨て値、正確な値は脇に小さく添える。
  *   カードごとの値は小数のままで実機表示と一致する（docs/deck-builder.md の実測）。
  */
+const chip = (active: boolean) =>
+  cn(
+    "rounded-full px-2.5 py-1 text-xs font-bold transition-colors",
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
+    active ? "neu-selected" : "bg-neu text-slate-500 shadow-neu-sm"
+  );
+
 export function BonusPanel({
   cards,
   result,
@@ -26,6 +43,8 @@ export function BonusPanel({
   onEventId,
   supportBonus,
   onSupportBonus,
+  custom,
+  onCustom,
 }: {
   cards: CatalogCard[];
   /** 計算はページ側で1回だけ行う（比較や編成プロフィールへの保存と同じ値を使うため）。 */
@@ -35,6 +54,9 @@ export function BonusPanel({
   onEventId: (id: number) => void;
   supportBonus: string;
   onSupportBonus: (v: string) => void;
+  /** 「カスタム」を選んでいるときの条件。 */
+  custom?: CustomEvent;
+  onCustom?: (next: CustomEvent) => void;
 }) {
   const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
 
@@ -48,6 +70,9 @@ export function BonusPanel({
             onChange={(e) => onEventId(Number(e.target.value))}
             className="neu-inset w-full rounded-lg px-3 py-2 text-slate-700"
           >
+            {/* ★ 「次がこのメンバー・このタイプだったら」を試せるように、
+                自分で条件を置ける選択肢を先頭に出す。 */}
+            <option value={CUSTOM_EVENT_ID}>カスタム（自分で決める）</option>
             {events.map((e) => (
               <option key={e.id} value={e.id}>
                 {e.name}
@@ -71,6 +96,101 @@ export function BonusPanel({
           />
         </Field>
       </div>
+
+      {/* カスタムのときだけ、対象メンバーとタイプを置かせる。 */}
+      {eventId === CUSTOM_EVENT_ID && custom && onCustom && (
+        <div className="mt-4 rounded-lg p-3 shadow-neu-inset">
+          <p className="mb-2 text-xs text-slate-500">
+            ボーナス対象のメンバーとタイプを選んでください。
+            カード個別のピックアップぶんは載りません（誰が対象かは分からないため）。
+          </p>
+
+          <div className="space-y-1.5">
+            {UNIT_ORDER.map((unit) => (
+              <div key={unit} className="flex flex-wrap items-center gap-1">
+                <span className="w-16 shrink-0 text-[10px] font-bold text-slate-400">
+                  {UNIT_SHORT[unit]}
+                </span>
+                {CHARACTERS.filter((c) => c.unit === unit).map((c) => {
+                  const on = custom.chars.includes(c.ch);
+                  return (
+                    <button
+                      key={c.ch}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() =>
+                        onCustom({
+                          ...custom,
+                          chars: on
+                            ? custom.chars.filter((x) => x !== c.ch)
+                            : [...custom.chars, c.ch],
+                        })
+                      }
+                      className={chip(on)}
+                    >
+                      {c.name}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-1">
+            <span className="w-16 shrink-0 text-[10px] font-bold text-slate-400">タイプ</span>
+            {ATTR_ORDER.map((a) => {
+              const on = custom.attr === a;
+              return (
+                <button
+                  key={a}
+                  type="button"
+                  aria-pressed={on}
+                  // もう一度押すと「タイプ指定なし」に戻る（属性行を持たないイベントもある）。
+                  onClick={() => onCustom({ ...custom, attr: on ? undefined : a })}
+                  className={chip(on)}
+                  style={on ? undefined : { color: ATTR_COLOR[a] }}
+                >
+                  {ATTR_LABEL[a]}
+                </button>
+              );
+            })}
+          </div>
+
+          <details className="mt-2">
+            <summary className="cursor-pointer text-xs text-slate-500">配分を変える</summary>
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+              {(
+                [
+                  ["char", "メンバーのみ"],
+                  ["attr", "タイプのみ"],
+                  ["both", "両方"],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key} className="flex items-center gap-1">
+                  <span>{label}</span>
+                  <NeuInput
+                    inputMode="decimal"
+                    aria-label={`${label}のボーナス`}
+                    value={String(custom.rates[key])}
+                    onChange={(e) =>
+                      onCustom({
+                        ...custom,
+                        rates: { ...custom.rates, [key]: Number(sanitizeDecimal(e.target.value)) || 0 },
+                      })
+                    }
+                    className="max-w-16 !py-1 text-center"
+                  />
+                  <span className="text-slate-400">%</span>
+                </label>
+              ))}
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400">
+              既定は近年のイベントの標準（25 / 25 / 50）。「両方」は合算済みの値で、
+              メンバーとタイプの両方が当たったカードにはこれだけが乗ります。
+            </p>
+          </details>
+        </div>
+      )}
 
       {!result ? (
         <p className="mt-4 text-sm text-slate-500">イベントを選ぶとボーナスを計算します。</p>

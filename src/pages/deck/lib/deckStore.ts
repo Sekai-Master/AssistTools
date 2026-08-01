@@ -58,6 +58,12 @@ export interface SavedDeck {
   supportBonus: number;
   /** 最後に見ていたイベント。開き直したときに戻すためだけの補助情報。 */
   eventId?: number;
+  /**
+   * 「カスタム」を選んでいたときの条件（対象メンバー・タイプ・配分）。
+   * ★ 実在イベントを選んでいるときは持たない。形の検証は customEvent.ts が持つ
+   *   （ここで二重に書かない）ので、読み込み側で通す。
+   */
+  custom?: unknown;
 }
 
 const CARDS_KEY = "sekaimaster:deck:cards:v1";
@@ -189,6 +195,7 @@ export function parseDecks(raw: unknown): SavedDeck[] {
       leaderIndex: leader >= 0 && leader < DECK_SIZE ? leader : 0,
       supportBonus: isFiniteNum(d.supportBonus) && d.supportBonus >= 0 ? d.supportBonus : 0,
       ...(isFiniteNum(d.eventId) ? { eventId: d.eventId } : {}),
+      ...(d.custom != null ? { custom: d.custom } : {}),
     });
   }
   return out;
