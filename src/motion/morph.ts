@@ -58,13 +58,44 @@ const now = () => (typeof performance !== "undefined" ? performance.now() : Date
  *   「left だけ違う速さで動いて箱が歪む」という壊れ方をする（実際にそうなっていた）。
  *   並びと長さを1箇所で作れば、ずれようがない。
  */
-const MOVED = ["top", "left", "width", "height", "border-radius"] as const;
+const MOVED = ["top", "left", "width", "height", "border-radius", "transform"] as const;
 
-function transition(timing: FlightTiming): { property: string; duration: string } {
+/** 持ち上げたときの浮き。少しだけ大きくして「摘まみ上げた」を出す。 */
+const LIFT_SCALE = 1.02;
+
+interface Transition {
+  property: string;
+  duration: string;
+  delay: string;
+}
+
+/**
+ * 入れ替え（opacity）だけ遅らせて短く走らせる。
+ *
+ * 中身は箱に合わせて引き伸ばされるので、出発点の複製は**終盤ほど歪み**、
+ * 到着点の複製は**序盤ほど歪む**。だから「最初は出発点だけ・最後は到着点だけ」を
+ * 見せ、いちばん歪んでいる真ん中でだけ2枚を混ぜる。ここを端に寄せると、
+ * ひしゃげた文字がはっきり見えてしまう。
+ */
+function transition(timing: FlightTiming): Transition {
+  const delay = Math.round(timing.flyMs * 0.28);
   return {
     property: [...MOVED, "opacity"].join(", "),
     duration: [...MOVED.map(() => `${timing.flyMs}ms`), `${timing.fadeMs}ms`].join(", "),
+    delay: [...MOVED.map(() => "0ms"), `${delay}ms`].join(", "),
   };
+}
+
+/**
+ * 中身を箱の大きさに合わせて引き伸ばす倍率。
+ *
+ * ★ ここが無いと「箱だけ大きくなって中身は原寸のまま左上に residual」になり、
+ *   伸びているように見えない。移動が終わってから中身が入れ替わって初めて
+ *   大きさの変化に気づく＝「移動してから一瞬で伸びた」という読み方になる。
+ *   中身も一緒に伸ばすことで、移動と変形が1つの動きとして読める。
+ */
+function scaleTo(content: Rect, box: Rect): string {
+  return `scale(${box.width / content.width}, ${box.height / content.height})`;
 }
 
 function layer(): HTMLElement {
@@ -104,15 +135,20 @@ function place(box: HTMLElement, rect: Rect): void {
  * --unit-color はページのルートで宣言されているのでレイヤーへ出すと継承が切れる。
  * 解決済みの値を焼き付けて持っていく。
  */
-function clone(el: HTMLElement, rect: Rect): HTMLElement {
+function clone(el: HTMLElement, content: Rect, boxRect: Rect = content): HTMLElement {
   const cs = getComputedStyle(el);
   const box = document.createElement("div");
   box.className = "morph-box";
   box.style.setProperty("--unit-color", cs.getPropertyValue("--unit-color").trim());
-  place(box, rect);
+  place(box, boxRect);
 
+  // 中身は「その要素の本来の大きさ」で組み、外の箱に合わせて拡縮する。
+  // 幅を毎フレーム変えると折り返しが変わって文字が踊るので、レイアウトは動かさない。
   const inner = document.createElement("div");
   inner.className = "morph-inner";
+  inner.style.width = `${content.width}px`;
+  inner.style.height = `${content.height}px`;
+  inner.style.transform = scaleTo(content, boxRect);
 
   const copy = el.cloneNode(true) as HTMLElement;
   copy.removeAttribute("id");
@@ -120,8 +156,8 @@ function clone(el: HTMLElement, rect: Rect): HTMLElement {
   // 複製の中に印が残っていると、次の採寸で複製自身を拾ってしまう。
   copy.querySelectorAll(`[${MORPH_ATTR}]`).forEach((n) => n.removeAttribute(MORPH_ATTR));
   copy.querySelectorAll("[id]").forEach((n) => n.removeAttribute("id"));
-  copy.style.width = `${rect.width}px`;
-  copy.style.height = `${rect.height}px`;
+  copy.style.width = `${content.width}px`;
+  copy.style.height = `${content.height}px`;
   copy.style.margin = "0";
 
   inner.appendChild(copy);
@@ -153,6 +189,11 @@ function lift(el: HTMLElement): Captured | null {
 
   const box = clone(el, rect);
   layer().appendChild(box);
+  // 開始値を確定させてから浮かせる（同じタスク内の2回の変更は1回しか計算されない）。
+  void box.offsetHeight;
+  // 行き先が分かるまで、素材が溶けるあいだ宙で待つ。完全に静止させると
+  // 「固まった」ように見えるので、摘まみ上げたぶんだけ浮かせておく。
+  box.style.transform = `scale(${LIFT_SCALE})`;
   el.style.visibility = "hidden";
   document.documentElement.dataset.morph = "on";
   boxes.push(box);
@@ -236,8 +277,9 @@ export function flyMorph(stage: Element | null, timing: FlightTiming): boolean {
     return false;
   }
 
-  // 到着点の複製は出発点の箱で始まる。中身だけ先に置いてあり、これから染み出す。
-  const toBox = clone(target, from.rect);
+  // 到着点の複製は「行き先の大きさで組んだ中身」を「出発点の箱」に押し込んで始める。
+  // つまり最初はぺしゃんこで、箱が育つにつれて本来の形へ戻っていく。
+  const toBox = clone(target, to, from.rect);
   toBox.style.opacity = "0";
   layer().appendChild(toBox);
   boxes.push(toBox);
@@ -251,11 +293,23 @@ export function flyMorph(stage: Element | null, timing: FlightTiming): boolean {
   // 1回しか計算されないので、これが無いと一瞬で終点に飛ぶ。
   void layer().offsetHeight;
 
-  const { property, duration } = transition(timing);
-  for (const box of [from.box, toBox]) {
+  const { property, duration, delay } = transition(timing);
+  const contents: [HTMLElement, Rect][] = [
+    [from.box, from.rect],
+    [toBox, to],
+  ];
+  for (const [box, content] of contents) {
     box.style.transitionProperty = property;
     box.style.transitionDuration = duration;
+    box.style.transitionDelay = delay;
     place(box, to);
+
+    // 浮かせていたぶんを降ろしながら飛ぶ＝行き先へ「置きにいく」。
+    box.style.transform = "scale(1)";
+
+    const inner = box.firstElementChild as HTMLElement;
+    inner.style.transitionDuration = `${timing.flyMs}ms`;
+    inner.style.transform = scaleTo(content, to);
   }
   from.box.style.opacity = "0";
   toBox.style.opacity = "1";

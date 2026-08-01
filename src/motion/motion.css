@@ -316,10 +316,13 @@ html:not([data-stage="idle"]) .neu-cta {
   /* 幅・高さ・位置をそのまま動かす。transform: scale で伸ばすと中の文字まで
      引き伸ばされるし、毎フレーム折り返しが変わるとガタつく。中身は原寸のまま
      .morph-inner に閉じ込めて、外の箱だけを動かして切り取る。 */
-  /* ★ transition-property は TS 側（morph.ts の MOVED）が inline で入れる。
+  /* 持ち上げた瞬間の浮き。飛び始めると下の inline 指定に置き換わる。
+     ★ 飛行中の transition-property は TS 側（morph.ts の MOVED）が inline で入れる。
      duration の個数と並びを1箇所で作らないと、値が循環して割り当てられて
-     「left だけ違う速さ」になり箱が歪む。ここは緩急だけ決める。 */
-  transition-timing-function: var(--ease-emerge);
+     「left だけ違う速さ」になり箱が歪む。緩急だけはここで決める。 */
+  transition-property: transform;
+  transition-duration: 260ms;
+  transition-timing-function: var(--ease-morph);
   will-change: top, left, width, height;
 }
 
@@ -327,8 +330,12 @@ html:not([data-stage="idle"]) .neu-cta {
   position: absolute;
   top: 0;
   left: 0;
-  /* 箱が縮んでも中身は原寸のまま。折り返しが変わらないので文字が踊らない。 */
+  /* レイアウトは本来の大きさのまま組み、拡縮は transform でやる。
+     幅を毎フレーム変えると折り返しが変わって文字が踊る。
+     ★ ここはステージの外なので transform を使ってよい（包含ブロックを奪う相手が居ない）。 */
   transform-origin: top left;
+  transition-property: transform;
+  transition-timing-function: var(--ease-morph);
 }
 
 /*

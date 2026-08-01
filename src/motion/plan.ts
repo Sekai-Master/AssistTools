@@ -96,8 +96,8 @@ const SUBTLE = plan("subtle", {
   patienceMs: 280,
   blurPx: 0,
   // 控えめでもここは動かす。装飾ではなく「押したものが開いた」という説明だから。
-  morphMs: 320,
-  morphFadeMs: 200,
+  morphMs: 420,
+  morphFadeMs: 190,
 });
 
 /**
@@ -119,8 +119,8 @@ const RICH = plan("rich", {
   minBlankMs: 90,
   patienceMs: 480,
   blurPx: 5,
-  morphMs: 520,
-  morphFadeMs: 300,
+  morphMs: 640,
+  morphFadeMs: 290,
 });
 
 /**
