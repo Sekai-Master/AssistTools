@@ -1,0 +1,23 @@
+# ── このブランチは「旧URLの転送だけ」を担当する ──────────────────
+# 本体は Cloudflare Pages（https://sekaimaster.pages.dev）へ移行済み。
+# ただし sekaimaster.netlify.app のリンクを持っている人がいるので、
+# Netlify のサイト自体は消さずに 301 リダイレクタとして残す。
+#
+# netlify.app のサブドメインは Netlify 所有で DNS を他所へ向けられない。
+# 「サイトを生かしたまま中身をリダイレクトにする」のが唯一の手段。
+#
+# ★ 本体のコードはこのブランチに置かない。置くと push のたびにビルドが走り、
+#   Netlify の無料枠（本番デプロイ1回=15クレジット / 月300）を無駄に食う。
+
+[build]
+  # ビルドするものが無い。publish 先だけ用意する。
+  command = "echo 'redirect only'"
+  publish = "."
+
+# :splat でパスをそのまま引き継ぐ（/deck → /deck）。
+# force = true で、publish 配下にファイルがあっても必ず転送する。
+[[redirects]]
+  from = "/*"
+  to = "https://sekaimaster.pages.dev/:splat"
+  status = 301
+  force = true
