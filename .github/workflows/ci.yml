@@ -30,3 +30,16 @@ jobs:
       #   エラーだけを止める。
       - name: Lint
         run: npm run lint
+
+      # ── 本番デプロイ（Cloudflare Pages）────────────────────────────
+      # ここまでの test / build / lint が全部通ったときだけ走る。Netlify は
+      # push したら無条件でビルドしていたので、壊れたものがそのまま出ていた。
+      # 同じジョブに置いているのは、上の Build が作った dist をそのまま出すため
+      #（artifact 経由にすると 4,900 ファイルの往復で遅くなるだけ）。
+      - name: Deploy to Cloudflare Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=sekaimaster --branch=main
