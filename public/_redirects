@@ -1,0 +1,8 @@
+# SPA（React Router）のフォールバック。
+# 未知のパスは index.html を「そのURLのまま」返す（200 = リライト。301 ではない）。
+# これが無いと /deck を直リンクで開いたときやリロードで 404 になる。
+#
+# netlify.toml にも同じ意味のルールがあるが、Netlify は netlify.toml を優先し、
+# Cloudflare Pages は netlify.toml を読まない。乗り換え・併存のどちらでも効くように
+# 両方に置いている。消すなら移行が終わってから片方だけ。
+/*    /index.html    200
