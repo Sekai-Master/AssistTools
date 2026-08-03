@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Menu, Settings2, X } from "lucide-react";
 import { READY_TOOLS } from "../tools";
 import { resolveTheme, usePrefersDark, useTheme } from "../lib/theme";
+import { SiteFooter } from "./SiteFooter";
 
 /**
  * 全ページ共通レイアウト。ニューモーフィズム基調＋グラス質感のヘッダー。
@@ -141,11 +142,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <main className="flex-1">{children}</main>
 
-      <footer className="mt-8">
-        <div className="mx-auto max-w-5xl px-4 py-6 text-center text-xs text-slate-500">
-          © 2024 @Noritake All Rights Reserved.
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

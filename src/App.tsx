@@ -30,6 +30,11 @@ export function App() {
               <Route path="/ranking" element={<RoutePages.ranking />} />
               <Route path="/deck" element={<RoutePages.deck />} />
               <Route path="/settings" element={<SettingsPage />} />
+              {/* 規約・ポリシー・更新履歴。ツールではないのでハブのカードには出さず、
+                  フッターからいつでも辿れるようにしている。 */}
+              <Route path="/terms" element={<RoutePages.terms />} />
+              <Route path="/privacy" element={<RoutePages.privacy />} />
+              <Route path="/changelog" element={<RoutePages.changelog />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           )}

@@ -23,6 +23,22 @@ export const ROUTE_LOADERS: Record<string, Loader> = {
   "/deck": () => import("../pages/deck/DeckBuilder"),
 };
 
+/**
+ * ツールではない読み物のページ（規約・ポリシー・更新履歴）。
+ *
+ * ROUTE_LOADERS と分けているのは、あちらが「TOOLS に載っているもの」だけを
+ * 持つ約束になっていて、routes.test.ts がそれを固定しているため。
+ * 遅延ロードと先読みの扱いは同じでよいので、loadRoute には合流させる。
+ * 更新履歴は CHANGELOG.md を丸ごと抱えるので、ハブの初期表示には載せたくない。
+ */
+export const PAGE_LOADERS: Record<string, Loader> = {
+  "/terms": () => import("../pages/legal/TermsPage"),
+  "/privacy": () => import("../pages/legal/PrivacyPage"),
+  "/changelog": () => import("../pages/legal/ChangelogPage"),
+};
+
+const ALL_LOADERS: Record<string, Loader> = { ...ROUTE_LOADERS, ...PAGE_LOADERS };
+
 const cache = new Map<string, Promise<Mod>>();
 
 /**
@@ -42,7 +58,7 @@ const cache = new Map<string, Promise<Mod>>();
  * cache.delete は prefetchRoute（loadRoute を直に呼ぶ経路）が同じ reject を
  * 握り続けないようにするためだけのもの。lazy 側には届かない。
  */
-export function loadRoute(path: string, loaders: Record<string, Loader> = ROUTE_LOADERS) {
+export function loadRoute(path: string, loaders: Record<string, Loader> = ALL_LOADERS) {
   const loader = loaders[path];
   if (!loader) return undefined;
   let p = cache.get(path);
@@ -85,6 +101,18 @@ export const RoutePages = {
   worktime: lazyOf("/worktime"),
   ranking: lazyOf("/ranking"),
   deck: lazyOf("/deck"),
+  terms: lazyOf("/terms"),
+  privacy: lazyOf("/privacy"),
+  changelog: lazyOf("/changelog"),
+};
+
+/** ツール以外のページの名前。ヘッダーには出さないが、遷移の読み上げには要る。 */
+export const PAGE_TITLES: Record<string, string> = {
+  "/": "ツール一覧",
+  "/settings": "設定",
+  "/terms": "利用規約",
+  "/privacy": "プライバシーポリシー",
+  "/changelog": "更新履歴",
 };
 
 /**
@@ -106,8 +134,8 @@ export function morphKeyOf(pathname: string): string | null {
 
 /** aria-live に流す遷移先の名前。 */
 export function routeTitle(pathname: string): string {
-  if (pathname === "/") return "ツール一覧";
-  if (pathname === "/settings") return "設定";
+  const page = PAGE_TITLES[pathname];
+  if (page) return page;
   return TOOLS.find((t) => t.path === pathname)?.name ?? "ページ";
 }
 
