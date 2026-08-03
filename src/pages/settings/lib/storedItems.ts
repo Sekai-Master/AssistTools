@@ -7,6 +7,11 @@
  *
  * ★ キーは各ツールが持っている実体をそのまま並べている。命名が揃っていないのは
  *   歴史的経緯で、揃えると保存済みデータが読めなくなるため触っていない。
+ *
+ * ★ label / note は **プライバシーポリシーの「ブラウザに保存される情報」の表**にも
+ *   そのまま出る（src/pages/legal/PrivacyPage.tsx）。設定画面だけを見て
+ *  「このページで〜」と書くと、ポリシー側で別のページを指してしまう。
+ *   note は置かれる場所に依存しない書き方にすること。
  */
 import { MOTION_LABEL, MOTION_SETTINGS, type MotionSetting } from "../../../motion/plan";
 import { THEME_LABEL, THEMES, type Theme } from "../../../lib/theme";
@@ -74,7 +79,7 @@ export const STORED_ITEMS: StoredItem[] = [
   {
     key: "sekaimaster:profiles:v1",
     label: "編成",
-    note: "このページで登録した総合力・ボーナスなど",
+    note: "設定画面で登録した総合力・ボーナスなど",
     summarize: countEntries("件"),
   },
   {
@@ -117,13 +122,13 @@ export const STORED_ITEMS: StoredItem[] = [
   {
     key: "sekaimaster:motion:v1",
     label: "画面遷移の設定",
-    note: "このページで選んだ段階",
+    note: "設定画面で選んだ段階",
     summarize: pickLabel<MotionSetting>(MOTION_SETTINGS, MOTION_LABEL),
   },
   {
     key: "sekaimaster:theme:v1",
     label: "配色の設定",
-    note: "このページで選んだ配色",
+    note: "設定画面で選んだ配色",
     summarize: pickLabel<Theme>(THEMES, THEME_LABEL),
   },
 ];

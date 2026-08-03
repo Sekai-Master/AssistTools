@@ -25,16 +25,12 @@
         /* プライベートモード等。既定（端末追随）のままでよい */
       }
     </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      href="https://fonts.googleapis.com/icon?family=Material+Icons"
-      rel="stylesheet"
-    />
+    <!--
+      フォント（M PLUS Rounded 1c）とアイコン（Material Icons）は自前配信に移した。
+      読み込みは src/main.tsx から。ここに Google Fonts の <link> を戻すと、
+      ページを開いただけで閲覧者の IP が Google に渡る状態に逆戻りする
+      （プライバシーポリシー 第5項が嘘になる）。
+    -->
   </head>
   <body>
     <div id="root"></div>
