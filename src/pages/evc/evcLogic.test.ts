@@ -9,6 +9,7 @@ import {
   trainedSkillValue,
   vsSkillValue,
 } from "./evcLogic";
+import { multiEffectiveSkill } from "../ranking/lib/efficiency";
 
 describe("toHalfWidthNumber", () => {
   it("全角数字を半角化して数値にする", () => {
@@ -80,5 +81,33 @@ describe("reverseVerdict", () => {
     const v = reverseVerdict(244, 150);
     expect(v.kind).toBe("value");
     if (v.kind === "value") expect(v.inner).toBeCloseTo(620, 6);
+  });
+});
+
+/**
+ * ★ 編成プロフィール経由の往復。編成ビルダーは `multiEffectiveSkill`（効率曲ランキング側）で
+ *   実効値を出し、その 先頭 / 合計 をプロフィールに書く。この画面はそれを読んで
+ *   `effectiveValue` で出し直す。**式が別々に置かれている**ので、片方だけ直されると
+ *   同じ編成なのに画面ごとに違う実効値が出る。ここで縛っておく。
+ */
+describe("編成プロフィール経由でも同じ実効値になる", () => {
+  it("ランキング側の式と一致する（丸めのぶんだけ違う）", () => {
+    const cases: [number, number][] = [
+      [150, 620],
+      [150, 710],
+      [120, 500],
+      [100, 100], // 先頭だけ＝上乗せ無し
+      [140, 623], // 端数が出る組み合わせ
+    ];
+    for (const [leader, total] of cases) {
+      expect(effectiveValue(leader, total)).toBe(Math.round(multiEffectiveSkill(leader, total)));
+    }
+  });
+
+  it("合計が先頭を下回っても実効値は先頭を割らない（入力ミス時に負の上乗せをしない）", () => {
+    // ランキング側は max(0, ...) で守っている。こちらは素の引き算なので、
+    // 守り方が違うことを明示しておく（この画面は reverseVerdict 側で recheck を出す）。
+    expect(multiEffectiveSkill(150, 100)).toBe(150);
+    expect(effectiveValue(150, 100)).toBe(140);
   });
 });

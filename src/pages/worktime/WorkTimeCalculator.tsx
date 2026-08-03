@@ -7,6 +7,7 @@ import { NeuButton } from "../../components/ui/NeuButton";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { DurationInput } from "../../components/ui/DurationInput";
 import { TakiInput } from "../../components/ui/TakiInput";
+import { ProfileBar, SaveToProfile } from "../../components/ui/ProfileBar";
 import { useAnalyzerMusics } from "../analyzer/useAnalyzerMusics";
 import { useGaugeInputs } from "../refresh/useGaugeInputs";
 import { GaugeInputsPanel } from "../refresh/GaugeInputsPanel";
@@ -175,6 +176,24 @@ export default function WorkTimeCalculator() {
       />
 
       <Panel title="時速・焚き数">
+        {/*
+          ★ このツールが編成から受け取れるのは**焚き数だけ**。入口が「点数時速（pt/時）」で、
+            総合力・ボーナス・スキル値はここでは使わない（それらからスコアを起こすのは
+            アナライザーの仕事で、叩き方の精度に依存するのでここでは決められない）。
+            編成ごとに変わるのは本来は時速のほうだが、プロフィールがその値を持っていない。
+            → 「プロフィールに時速を持たせるか」は要判断。issue #18 に残す。
+        */}
+        <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <ProfileBar
+            apply={(p) => {
+              if (p.taki != null) {
+                setRefTaki(p.taki);
+                setRevTaki(p.taki);
+              }
+            }}
+          />
+          <SaveToProfile collect={() => ({ taki: refTaki })} />
+        </div>
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="点数時速" htmlFor="wt-rate" hint="この焚き数での実測 pt/時（例: 500000）">
             <div className="flex items-center gap-1">

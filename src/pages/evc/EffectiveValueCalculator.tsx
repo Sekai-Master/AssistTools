@@ -7,6 +7,7 @@ import { NeuButton } from "../../components/ui/NeuButton";
 import { Switch } from "../../components/ui/Switch";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { UNIT_COLOR_VAR, UNIT_LABEL, type UnitKey } from "../../lib/units";
+import { ProfileBar, SaveToProfile } from "../../components/ui/ProfileBar";
 import {
   type SkillCandidate,
   type SkillLevel,
@@ -91,7 +92,7 @@ export default function EffectiveValueCalculator() {
         detailMode || isOc
           ? leader + slotVals.reduce((a, b) => a + b, 0)
           : (toHalfWidthNumber(inner) ?? 0);
-      return { leader, count: cand.count, effective: effectiveValue(leader, innerTotal) };
+      return { leader, count: cand.count, innerTotal, effective: effectiveValue(leader, innerTotal) };
     });
   }, [leaderCandidates, detailMode, isOc, slotVals, inner]);
 
@@ -130,6 +131,29 @@ export default function EffectiveValueCalculator() {
 
   return (
     <ToolPage morphKey="tool:evc" unit="ln" title="スキル実効値計算機" icon="calculate">
+      {/*
+        このツールが使うのは 先頭スキル値 と 内部値（5枠合計）の2つ。プロフィールは
+        両方を持っているので、**読み込みも書き出しも成立する**。
+
+        ★ 起票時は「プロフィールは合計しか持たないので4枠に割り戻せない＝読み込み不可」と
+          見ていたが、この画面には内部値を**合計のまま受ける入力**（下の「内部値」欄）がある。
+          割り戻す必要が最初から無かった。片方向にする理由が消えたので両方向で繋ぐ。
+      */}
+      <ProfileBar
+        apply={(p) => {
+          // 先頭スキル値はプリセット欄へ。ブルフェスの組み立て中でもそこを降りる
+          //（プロフィールが持っているのは出来上がった値で、作り方の情報は無いため）。
+          if (p.skillLeader != null) {
+            setLeaderKind("preset");
+            setPresetLeader(String(p.skillLeader));
+            setRevLeader(String(p.skillLeader));
+          }
+          if (p.skillTotal != null) {
+            setDetailMode(false);
+            setInner(String(p.skillTotal));
+          }
+        }}
+      />
       <SegmentedControl
         options={[
           { value: "forward", label: "順方向（→実効値）" },
@@ -287,6 +311,26 @@ export default function EffectiveValueCalculator() {
               <p className="text-sm text-slate-500">（平均 {forwardAvg}）</p>
             )}
             <p className="text-sm text-slate-500">です。</p>
+
+            {/* ★ 候補が1つに定まるときだけ保存できる。OC（特訓前ユニットキャラ）は
+                発動スキル値が複数あり得るので、どれを保存したのか分からなくなる。
+                黙って先頭の候補を採るくらいならボタンを出さない。 */}
+            {forwardResults.length === 1 ? (
+              <div className="mt-5">
+                <SaveToProfile
+                  collect={() => ({
+                    skillLeader: forwardResults[0].leader,
+                    skillTotal: forwardResults[0].innerTotal,
+                  })}
+                />
+              </div>
+            ) : (
+              forwardResults.length > 1 && (
+                <p className="mt-5 text-xs text-slate-500">
+                  発動スキル値が複数あるので編成には保存できません（1つに定まる条件で計算してください）。
+                </p>
+              )
+            )}
           </Panel>
         </>
       ) : (
