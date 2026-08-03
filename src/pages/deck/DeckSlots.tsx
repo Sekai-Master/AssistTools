@@ -1,7 +1,8 @@
 import { NeuButton } from "../../components/ui/NeuButton";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { cn } from "../../lib/utils";
-import { ATTR_COLOR, ATTR_LABEL, RARITY_LABEL, UNIT_SHORT, characterName } from "./lib/characters";
+import { UNIT_SHORT, characterName } from "./lib/characters";
+import { RarityBadge } from "./RarityBadge";
 import { applyTrained, isTrainable, levelCapOf, type CatalogCard } from "./lib/deckInputs";
 import type { CardState } from "./lib/deckStore";
 import { CardThumb } from "./CardThumb";
@@ -208,13 +209,9 @@ export function DeckSlots({
                     masterRank={state?.masterRank ?? 0}
                     size={48}
                   />
-                  <span
-                    className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
-                    style={{ backgroundColor: ATTR_COLOR[card.attr] ?? "#888" }}
-                    title={ATTR_LABEL[card.attr] ?? card.attr}
-                  >
-                    {RARITY_LABEL[card.rarity] ?? card.rarity}
-                  </span>
+                  {/* 幅は固定。★4 と Birthday でバッジの幅が違うと、
+                      5枠を縦に並べたときカード名の頭がガタつく（RarityBadge 参照）。 */}
+                  <RarityBadge attr={card.attr} rarity={card.rarity} className="mt-0.5" />
                   <button
                     type="button"
                     onClick={() => onToggleOpen(i)}

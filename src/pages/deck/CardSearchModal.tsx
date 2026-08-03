@@ -14,6 +14,7 @@ import {
 } from "./lib/characters";
 import type { CatalogCard } from "./lib/deckInputs";
 import { CardThumb } from "./CardThumb";
+import { RarityBadge } from "./RarityBadge";
 
 /**
  * カード選択モーダル。
@@ -271,12 +272,7 @@ export function CardSearchModal({
                     )}
                   >
                     <CardThumb card={c} size={40} />
-                    <span
-                      className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
-                      style={{ backgroundColor: ATTR_COLOR[c.attr] ?? "#888" }}
-                    >
-                      {RARITY_LABEL[c.rarity] ?? c.rarity}
-                    </span>
+                    <RarityBadge attr={c.attr} rarity={c.rarity} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm text-slate-700">{c.name}</span>
                       <span className="block truncate text-xs text-slate-500">
