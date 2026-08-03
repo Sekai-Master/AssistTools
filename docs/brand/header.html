@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<!--
+  X のヘッダー（1500x500）。サイトと同じトークンで組む。
+
+  ★ 安全域: スマホではプロフィール画像が左下に重なり、上下も切れる。
+    主要素は中央帯（縦 100〜400px、横 300〜1300px）に収める。
+  ★ URL は焼き込まない。4世代引っ越しているので、次で作り直しになる。
+-->
+<style>
+  @font-face {
+    font-family: "M PLUS Rounded 1c";
+    src: url("mplus-700.woff2") format("woff2");
+    font-weight: 700;
+  }
+  @font-face {
+    font-family: "M PLUS Rounded 1c";
+    src: url("mplus-400.woff2") format("woff2");
+    font-weight: 400;
+  }
+
+  :root {
+    /* src/index.css のライト側の値をそのまま持ってきている */
+    --neu-base: #f0f0f0;
+    --neu-lo: #bebebe;
+    --neu-hi: #ffffff;
+    --neu-ink: #333333;
+    --vs: #33ccbb;
+    --ln: #4455dd;
+    --mmj: #88dd44;
+    --vbs: #ee1166;
+    --wxs: #ff9900;
+    --n25: #884499;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1500px;
+    height: 500px;
+    background: var(--neu-base);
+    font-family: "M PLUS Rounded 1c", sans-serif;
+    color: var(--neu-ink);
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* 素材の陰影。サイトの「左上光源」を面全体で再現する。
+     単色べた塗りだとニューモーフィズムに見えないので、ごく薄い斜めの光を敷く。 */
+  .field {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(120% 90% at 18% 8%, rgba(255,255,255,0.85), rgba(255,255,255,0) 60%),
+      radial-gradient(110% 80% at 88% 96%, rgba(190,190,190,0.5), rgba(190,190,190,0) 62%);
+  }
+
+  /* 素材に沈んだ溝。ユニットカラーの帯を「彫った溝に流し込む」形にして、
+     ただ線を置いただけの平板さを避ける。 */
+  .groove {
+    position: absolute;
+    left: -80px;
+    right: -80px;
+    height: 26px;
+    border-radius: 999px;
+    background: var(--neu-base);
+    box-shadow:
+      inset 4px 4px 8px var(--neu-lo),
+      inset -4px -4px 8px var(--neu-hi);
+    transform: rotate(-8deg);
+  }
+  .groove::after {
+    content: "";
+    position: absolute;
+    inset: 6px 0;
+    border-radius: 999px;
+    background: linear-gradient(90deg,
+      var(--vs) 0%, var(--vs) 14%,
+      var(--ln) 14%, var(--ln) 30%,
+      var(--mmj) 30%, var(--mmj) 46%,
+      var(--vbs) 46%, var(--vbs) 62%,
+      var(--wxs) 62%, var(--wxs) 80%,
+      var(--n25) 80%, var(--n25) 100%);
+    opacity: 0.92;
+  }
+
+  /* 帯は3本。中央の1本を主役にし、上下は薄く流して奥行きを作る。 */
+  .g1 { top: 78px;  opacity: 0.28; height: 18px; }
+  .g2 { top: 392px; opacity: 0.34; height: 20px; }
+  .gmain { top: 300px; }
+
+  /* 浮き出した板。ロゴと名前を載せる。 */
+  .plate {
+    position: absolute;
+    left: 300px;
+    top: 138px;
+    display: flex;
+    align-items: center;
+    gap: 34px;
+    padding: 34px 64px 34px 44px;
+    border-radius: 40px;
+    background: var(--neu-base);
+    box-shadow:
+      12px 12px 26px var(--neu-lo),
+      -12px -12px 26px var(--neu-hi);
+  }
+
+  .plate img { width: 108px; height: 108px; display: block; }
+
+  .name {
+    font-weight: 700;
+    font-size: 76px;
+    letter-spacing: 0.02em;
+    line-height: 1;
+  }
+
+  .tag {
+    margin-top: 14px;
+    font-weight: 400;
+    font-size: 25px;
+    color: #6b7280;
+    letter-spacing: 0.06em;
+  }
+</style>
+</head>
+<body>
+  <div class="field"></div>
+
+  <div class="groove g1"></div>
+  <div class="groove gmain"></div>
+  <div class="groove g2"></div>
+
+  <div class="plate">
+    <img src="icon-light.webp" alt="" />
+    <div>
+      <div class="name">Sekai-Master</div>
+      <div class="tag">プロセカのイベランを、計算で助ける</div>
+    </div>
+  </div>
+</body>
+</html>
