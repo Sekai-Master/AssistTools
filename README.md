@@ -43,8 +43,8 @@ npm run data:refresh
 test / build / lint を回し、**全部通ったときだけ** `wrangler pages deploy` する。
 旧 URL `sekaimaster.netlify.app` は 301 リダイレクタとして生かしてある（`netlify.toml` はその名残）。
 
-アクセス解析（Cloudflare Web Analytics）のビーコンは、GitHub の repository variables に
-`CF_BEACON_TOKEN` があるビルドにだけ差し込まれる。手元のビルドには入らない。
+アクセス解析（Cloudflare Web Analytics）は Cloudflare Pages 側の設定で有効にしてあり、
+**配信時にビーコンが自動挿入される**。リポジトリのコードには入っていないので、手元のビルドには付かない。
 
 ## バージョン管理
 

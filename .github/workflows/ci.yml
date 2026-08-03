@@ -35,10 +35,6 @@ jobs:
 
       - name: Build
         run: npm run build
-        env:
-          # Cloudflare Web Analytics のビーコン。公開前提の値なので secrets ではなく
-          # variables に置く。未設定ならビーコンごと差し込まれない（vite.config.ts）。
-          VITE_CF_BEACON_TOKEN: ${{ vars.CF_BEACON_TOKEN }}
 
       # ★ 警告では落とさない。react-hooks v7 の新規則ぶんが warn で残っているので、
       #   そこで赤くすると「赤いのが普通」になって門番の意味が消える。

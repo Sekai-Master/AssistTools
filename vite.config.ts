@@ -1,6 +1,6 @@
 // ★ 'vite' ではなく 'vitest/config' から取る。test セクションの型が付くのは
 //    こちらだけで、'vite' の defineConfig に test を書くと tsc が通らない。
-import { defineConfig, type Plugin } from 'vitest/config'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import fs from 'node:fs'
@@ -33,38 +33,17 @@ function cardDataGeneratedAt(): string {
   }
 }
 
-/**
- * Cloudflare Web Analytics のビーコン。
- *
- * トークン（VITE_CF_BEACON_TOKEN）が渡された時だけ差し込む。無ければ何もしない
- * ので、手元の開発や fork したビルドが他人の集計に混ざることはない。
- * トークンは公開前提の値（HTML に載る）なので secrets ではなく variables でよい。
- *
- * ★ これがサイト唯一の外部通信。増やすときはプライバシーポリシー第5項も直すこと。
+/*
+ * ★ アクセス解析（Cloudflare Web Analytics）のビーコンは、ここでは入れていない。
+ *   Cloudflare Pages 側の設定で有効にしてあり、**配信時に自動で挿入される**
+ *  （2026-08-04 の本番デプロイで挿入を実測確認）。
+ *   ビルドでも挿し込むと二重に計上されるので、こちらでは触らないこと。
+ *   これがサイト唯一の外部通信。増やすときはプライバシーポリシー第5項も直す。
  */
-function cloudflareBeacon(token: string | undefined): Plugin {
-  return {
-    name: 'cloudflare-web-analytics',
-    transformIndexHtml() {
-      if (!token) return []
-      return [
-        {
-          tag: 'script',
-          attrs: {
-            defer: true,
-            src: 'https://static.cloudflareinsights.com/beacon.min.js',
-            'data-cf-beacon': JSON.stringify({ token }),
-          },
-          injectTo: 'body',
-        },
-      ]
-    },
-  }
-}
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), cloudflareBeacon(process.env.VITE_CF_BEACON_TOKEN)],
+  plugins: [react(), tailwindcss()],
   define: {
     __APP_VERSION__: JSON.stringify(appVersion()),
     __CARD_DATA_GENERATED_AT__: JSON.stringify(cardDataGeneratedAt()),

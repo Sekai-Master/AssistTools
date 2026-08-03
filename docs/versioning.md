@@ -113,9 +113,14 @@ gh release create v1.9.0 --title "v1.9.0" --notes "..."
 
 ここに何かを足す（CDN・埋め込み・外部 API）ときは、**プライバシーポリシー第5項を同時に直す**。直さないとポリシーが嘘になる。
 
-- ビーコンは `VITE_CF_BEACON_TOKEN` が渡されたビルドにだけ入る（`vite.config.ts`）。
-- 本番のトークンは GitHub の repository **variables**（secrets ではない。HTML に載る公開値）の `CF_BEACON_TOKEN` に置く。
-- 手元のビルドや fork にはトークンが無いので、他人のビルドが集計に混ざることはない。
+- ビーコンは **Cloudflare Pages 側の設定で自動挿入している**。リポジトリのコードには入っていないので、ビルドでも挿し込まないこと（二重に計上される）。
+- 有効・無効は Cloudflare ダッシュボードの Pages プロジェクト `sekaimaster` 側で切り替える。**切ったらプライバシーポリシー第3項も直す。**
+- 自動挿入は**新しくデプロイしたものから効く**。有効化した直後に本番を見ても、まだ入っていない（2026-08-04 に実際そうだった）。確認は次のデプロイの後で:
+
+```bash
+# 1 なら入っている。キャッシュを踏まないようクエリを付けて叩く
+curl -s "https://sekaimaster.pages.dev/?v=$RANDOM" | grep -c cloudflareinsights
+```
 
 ## やらないと決めたこと
 
