@@ -30,8 +30,19 @@ export interface Profile {
   skillLeader?: number;
   /** リーダー込み5枚のスコアアップ合計。 */
   skillTotal?: number;
-  /** よく使う焚き数。 */
+  /**
+   * よく使う焚き数。**`hourlyRate` の基準焚き数も兼ねる。**
+   * 時速は焚き数に比例するので、どの焚き数で測ったかとセットでないと意味がない。
+   */
   taki?: number;
+  /**
+   * 実測の点数時速（pt/時、上の `taki` で測った値）。稼働時間計算・周回プランが使う。
+   *
+   * ★ 他のフィールドは編成から**計算できる**値だが、これだけは**実測値**。
+   *   総合力からスコアを起こすのは叩き方の精度に依存するので、計算では出せない
+   *   （アナライザーの領分で、しかも精度の仮定が要る）。編成を変えたら測り直す値。
+   */
+  hourlyRate?: number;
   /**
    * 出所。編成ビルダーが計算して入れたものは "deck"。
    * ★ **プロフィールは全ツール共通の軽い受け口**という位置づけを変えない。
@@ -51,6 +62,8 @@ export const PROFILE_FIELDS = [
   { key: "skillLeader", label: "先頭スキル", unit: "%", max: 1000 },
   { key: "skillTotal", label: "スキル合計", unit: "", max: 5000 },
   { key: "taki", label: "焚き数", unit: "", max: 10 },
+  // 時速は実測値で桁が大きい。上限は「1時間で500万pt」＝実運用ではあり得ない値に置く。
+  { key: "hourlyRate", label: "点数時速", unit: "pt/時", max: 5_000_000 },
 ] as const;
 
 export type ProfileField = (typeof PROFILE_FIELDS)[number]["key"];

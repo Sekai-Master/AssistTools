@@ -6,6 +6,8 @@ import { NeuInput } from "../../components/ui/NeuInput";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { Switch } from "../../components/ui/Switch";
+// ライボの自然回復の規則は稼働時間計算が正本。定数を2箇所に持たない。
+import { LB_REGEN_MIN } from "../worktime/lib/worktime";
 import { TakiInput } from "../../components/ui/TakiInput";
 import {
   useRankingMusics,
@@ -113,6 +115,10 @@ interface Stored {
   plays?: string;
   lvMin?: number;
   lvMax?: number;
+  /** 換算に使う曲（`musicId-difficulty`）。未指定なら1位。 */
+  pick?: string;
+  /** ライボの自然回復を差し引くか。 */
+  regen?: boolean;
 }
 
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
@@ -150,6 +156,8 @@ function loadStored(): Stored {
       plays: str(s.plays),
       lvMin: lv(s.lvMin),
       lvMax: lv(s.lvMax),
+      pick: str(s.pick),
+      regen: typeof s.regen === "boolean" ? s.regen : undefined,
     };
   } catch {
     return {};
@@ -360,7 +368,24 @@ export default function EfficiencyRanking() {
     osReduce,
     touchOnly: useTouchOnly(),
   }).level;
-  const best = ranked[0];
+  /**
+   * 換算に使う曲。**1位に固定していた**が、譜面の得手不得手があるので選べるようにした
+   * （1位が苦手曲なら、その回数は現実の予定にならない）。
+   * 選んだ曲が絞り込みから外れたら黙って1位へ戻す ── 消えた曲の数字を出し続けるより良い。
+   */
+  const [pickKey, setPickKey] = useState(stored.pick ?? "");
+  const keyOf = (r: { musicId: string; difficulty: string }) => `${r.musicId}-${r.difficulty}`;
+  const best = ranked.find((r) => keyOf(r) === pickKey) ?? ranked[0];
+
+  /**
+   * ライボの自然回復（30分に1）を消費から差し引くか。
+   * ★ 定数は稼働時間計算から借りる。同じ規則を2箇所に書くと必ず片方だけ古くなる。
+   */
+  const [regen, setRegen] = useState(stored.regen ?? false);
+  const totalSec = best ? best.cycleSec * playCount : 0;
+  const regenLB = totalSec / 60 / LB_REGEN_MIN;
+  const grossLB = taki * playCount;
+  const netLB = Math.max(0, grossLB - regenLB);
 
   // 並び替えを目で追わせる。演出オフの人と OS の視差軽減には出さない
   //（動き自体が情報なので控えめでは出す）。
@@ -549,6 +574,24 @@ export default function EfficiencyRanking() {
       {mode === "auto" && (
         <Panel title="まとめて回すと">
           <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="曲" hint="上の表から選ぶ（既定は1位）">
+              <select
+                value={best ? keyOf(best) : ""}
+                onChange={(e) => {
+                  setPickKey(e.target.value);
+                  persist({ pick: e.target.value });
+                }}
+                aria-label="換算に使う曲"
+                className="neu-inset w-full rounded-lg px-3 py-2 text-sm text-slate-700"
+              >
+                {ranked.map((r, i) => (
+                  <option key={keyOf(r)} value={keyOf(r)}>
+                    {i + 1}位 {r.title}（{r.difficulty}
+                    {r.playLevel != null ? ` ${r.playLevel}` : ""}）
+                  </option>
+                ))}
+              </select>
+            </Field>
             <Field label="焚き数" hint="1プレイで消費するライブボーナス">
               <TakiInput
                 value={taki}
@@ -573,8 +616,17 @@ export default function EfficiencyRanking() {
 
           {best && playCount > 0 ? (
             <>
-              <p className="mt-5 text-sm text-slate-600">
-                1位の
+              <div className="mt-5">
+                <Switch
+                  checked={regen}
+                  onChange={(v) => {
+                    setRegen(v);
+                    persist({ regen: v });
+                  }}
+                  label={`ライボの自然回復（${LB_REGEN_MIN}分に1）を差し引く`}
+                />
+              </div>
+              <p className="mt-4 text-sm text-slate-600">
                 <span className="font-bold text-slate-700">「{best.title}」</span>
                 <span className="ml-1">
                   <DifficultyBadge difficulty={best.difficulty} level={best.playLevel} />
@@ -590,9 +642,15 @@ export default function EfficiencyRanking() {
                   delta={best.eventPt * playCount}
                 />
                 <Stat
-                  label="消費ライブボーナス"
-                  value={fmt(taki * playCount)}
-                  sub={taki === 0 ? "0焚きなので消費なし" : `1回 ${taki}`}
+                  label={regen ? "実質の消費ライボ" : "消費ライブボーナス"}
+                  value={fmt(regen ? Math.round(netLB) : grossLB)}
+                  sub={
+                    taki === 0
+                      ? "0焚きなので消費なし"
+                      : regen
+                        ? `消費 ${fmt(grossLB)} − 回復 ${Math.floor(regenLB)}`
+                        : `1回 ${taki}`
+                  }
                 />
                 <Stat
                   label="所要時間"

@@ -8,6 +8,7 @@ import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { DurationInput } from "../../components/ui/DurationInput";
 import { TakiInput } from "../../components/ui/TakiInput";
 import { ProfileBar, SaveToProfile } from "../../components/ui/ProfileBar";
+import { RateCalibrator } from "../refresh/RateCalibrator";
 import { useAnalyzerMusics } from "../analyzer/useAnalyzerMusics";
 import { useGaugeInputs } from "../refresh/useGaugeInputs";
 import { GaugeInputsPanel } from "../refresh/GaugeInputsPanel";
@@ -42,15 +43,6 @@ export default function WorkTimeCalculator() {
   const [segments, setSegments] = useState<WorkSegment[]>([{ id: newId(), taki: 5, minutes: 60 }]);
   const [targetPt, setTargetPt] = useState("");
   const [revTaki, setRevTaki] = useState(5);
-
-  // 時速較正: ここまでの稼働と獲得ポイントから時速を算出
-  const [analMin, setAnalMin] = useState(60);
-  const [analPts, setAnalPts] = useState("");
-  const [analTaki, setAnalTaki] = useState(5);
-  const analRate = useMemo(() => {
-    const pts = Number(analPts);
-    return pts > 0 && analMin > 0 ? Math.round((pts / analMin) * 60) : null;
-  }, [analPts, analMin]);
 
   const params: WorkParams = useMemo(
     () => ({
@@ -177,22 +169,24 @@ export default function WorkTimeCalculator() {
 
       <Panel title="時速・焚き数">
         {/*
-          ★ このツールが編成から受け取れるのは**焚き数だけ**。入口が「点数時速（pt/時）」で、
-            総合力・ボーナス・スキル値はここでは使わない（それらからスコアを起こすのは
-            アナライザーの仕事で、叩き方の精度に依存するのでここでは決められない）。
-            編成ごとに変わるのは本来は時速のほうだが、プロフィールがその値を持っていない。
-            → 「プロフィールに時速を持たせるか」は要判断。issue #18 に残す。
+          ★ このツールの入口は「点数時速（pt/時）」で、総合力・ボーナス・スキル値は使わない
+            （総合力からスコアを起こすのはアナライザーの領分で、叩き方の精度に依存する）。
+            編成ごとに変わるのは**時速のほう**なので、プロフィールに時速を持たせて
+            ここで受け取る。時速は焚き数に比例するため、**必ず基準焚き数とセット**で扱う。
         */}
         <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
           <ProfileBar
             apply={(p) => {
+              if (p.hourlyRate != null) setHourlyRate(String(p.hourlyRate));
               if (p.taki != null) {
                 setRefTaki(p.taki);
                 setRevTaki(p.taki);
               }
             }}
           />
-          <SaveToProfile collect={() => ({ taki: refTaki })} />
+          <SaveToProfile
+            collect={() => ({ hourlyRate: Number(hourlyRate) || undefined, taki: refTaki })}
+          />
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="点数時速" htmlFor="wt-rate" hint="この焚き数での実測 pt/時（例: 500000）">
@@ -221,36 +215,14 @@ export default function WorkTimeCalculator() {
           </Field>
         </div>
 
-        <details className="mt-3">
-          <summary className="cursor-pointer text-xs text-slate-500">
-            ここまでの実績から時速を較正する
-          </summary>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-            <DurationInput value={analMin} onChange={setAnalMin} />
-            <span className="text-slate-500">で</span>
-            <NeuInput
-              inputMode="numeric"
-              value={analPts}
-              onChange={(e) => setAnalPts(onlyDigits(e.target.value))}
-              placeholder="獲得pt"
-              className="max-w-44 text-center"
-            />
-            <span className="text-slate-500">pt（焚き</span>
-            <TakiInput value={analTaki} onChange={setAnalTaki} />
-            <span className="text-slate-500">）</span>
-            <NeuButton
-              className="!py-1 !text-xs"
-              disabled={!analRate}
-              onClick={() => {
-                if (!analRate) return;
-                setHourlyRate(String(analRate));
-                setRefTaki(analTaki);
-              }}
-            >
-              → 時速{analRate ? analRate.toLocaleString() : "?"}にする
-            </NeuButton>
-          </div>
-        </details>
+        <RateCalibrator
+          hourlyRate={hourlyRate}
+          setHourlyRate={setHourlyRate}
+          refTaki={refTaki}
+          setRefTaki={setRefTaki}
+          pace={inputs.rate}
+          setPace={inputs.setRate}
+        />
       </Panel>
 
       <SegmentedControl

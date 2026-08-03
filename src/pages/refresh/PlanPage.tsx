@@ -4,8 +4,9 @@ import { Panel } from "../../components/ui/Panel";
 import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { NeuButton } from "../../components/ui/NeuButton";
-import { DurationInput } from "../../components/ui/DurationInput";
 import { TakiInput } from "../../components/ui/TakiInput";
+import { ProfileBar, SaveToProfile } from "../../components/ui/ProfileBar";
+import { RateCalibrator } from "./RateCalibrator";
 import { useAnalyzerMusics } from "../analyzer/useAnalyzerMusics";
 import { useGaugeInputs } from "./useGaugeInputs";
 import { GaugeInputsPanel } from "./GaugeInputsPanel";
@@ -39,15 +40,6 @@ export default function PlanPage() {
   const [saved, setSaved] = useState<SavedPlan[]>(() => listPlans());
   const [planName, setPlanName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
-
-  // 時速較正: ここまでの稼働と獲得ポイントから時速を算出
-  const [analMin, setAnalMin] = useState(60);
-  const [analPts, setAnalPts] = useState("");
-  const [analTaki, setAnalTaki] = useState(5);
-  const analRate = useMemo(() => {
-    const pts = Number(analPts);
-    return pts > 0 && analMin > 0 ? Math.round((pts / analMin) * 60) : null;
-  }, [analPts, analMin]);
 
   const points = useMemo(
     () => ({
@@ -111,6 +103,19 @@ export default function PlanPage() {
       <GaugeInputsPanel inputs={inputs} musics={musics} aliases={aliases} loading={loading} />
 
       <Panel title="ポイント設定">
+        {/* 時速・基準焚き数は稼働時間計算と同じ値。片方だけ編成から呼べると、
+            もう片方で打ち直すことになるので両方に置く。 */}
+        <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <ProfileBar
+            apply={(p) => {
+              if (p.hourlyRate != null) setHourlyRate(String(p.hourlyRate));
+              if (p.taki != null) setRefTaki(p.taki);
+            }}
+          />
+          <SaveToProfile
+            collect={() => ({ hourlyRate: Number(hourlyRate) || undefined, taki: refTaki })}
+          />
+        </div>
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="現在ポイント" htmlFor="pl-cur" hint="ここを起点に加算します">
             <NeuInput
@@ -139,36 +144,14 @@ export default function PlanPage() {
           </Field>
         </div>
 
-        <details className="mt-3">
-          <summary className="cursor-pointer text-xs text-slate-500">
-            ここまでの実績から時速を較正する
-          </summary>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-            <DurationInput value={analMin} onChange={setAnalMin} />
-            <span className="text-slate-500">で</span>
-            <NeuInput
-              inputMode="numeric"
-              value={analPts}
-              onChange={(e) => setAnalPts(onlyDigits(e.target.value))}
-              placeholder="獲得pt"
-              className="max-w-44 text-center"
-            />
-            <span className="text-slate-500">pt（焚き</span>
-            <TakiInput value={analTaki} onChange={setAnalTaki} />
-            <span className="text-slate-500">）</span>
-            <NeuButton
-              className="!py-1 !text-xs"
-              disabled={!analRate}
-              onClick={() => {
-                if (!analRate) return;
-                setHourlyRate(String(analRate));
-                setRefTaki(analTaki);
-              }}
-            >
-              → 時速{analRate ? analRate.toLocaleString() : "?"}にする
-            </NeuButton>
-          </div>
-        </details>
+        <RateCalibrator
+          hourlyRate={hourlyRate}
+          setHourlyRate={setHourlyRate}
+          refTaki={refTaki}
+          setRefTaki={setRefTaki}
+          pace={inputs.rate}
+          setPace={inputs.setRate}
+        />
 
         <p className="mt-3 text-xs text-slate-500">
           「上の曲」を選んで下の「＋稼働」で枠を積むと、各枠の焚き数・獲得ptと累積到達ptが出ます。
