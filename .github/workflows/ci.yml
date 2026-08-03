@@ -5,9 +5,20 @@ on:
     branches: [main]
   pull_request:
 
+  # ★ データ更新ワークフローの commit は GITHUB_TOKEN で push される。
+  #   GitHub は再帰防止のため、その push では **他のワークフローを起動しない**。
+  #   Netlify 時代はサイト側の Git 連携が直接デプロイしていたので影響が無かったが、
+  #   デプロイを CI 経由にした以上、ここを繋がないと日次のカード更新が本番に届かない
+  #   （実際に届いていなかった。2026-08-03 に発覚）。
+  workflow_run:
+    workflows: ["Refresh card data", "Refresh music data"]
+    types: [completed]
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    # データ更新が失敗した回にまでデプロイを走らせない。
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v4
 
@@ -37,7 +48,9 @@ jobs:
       # 同じジョブに置いているのは、上の Build が作った dist をそのまま出すため
       #（artifact 経由にすると 4,900 ファイルの往復で遅くなるだけ）。
       - name: Deploy to Cloudflare Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: >-
+          github.event_name == 'workflow_run' ||
+          (github.event_name == 'push' && github.ref == 'refs/heads/main')
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
