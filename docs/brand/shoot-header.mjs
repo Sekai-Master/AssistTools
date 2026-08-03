@@ -1,3 +1,10 @@
+/*
+ * ★ このファイルは Node とブラウザの2つの世界を跨ぐ。
+ *   page.evaluate() / addStyleTag() に渡すコードは**ブラウザの中**で走るので
+ *   document が出てくるのは正当だが、eslint から見ると Node のスクリプトなので
+ *   no-undef になる。設定を緩めるのではなく、ここで使うものだけを宣言する。
+ */
+/* global console, document */
 import { chromium } from "playwright-core";
 import path from "node:path";
 
