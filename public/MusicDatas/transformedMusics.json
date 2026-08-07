@@ -11416,7 +11416,8 @@
     "default": 2261501,
     "Unit": "1_L/n",
     "categories": [
-      "mv_3d"
+      "mv_3d",
+      "mv_2d"
     ],
     "publishedAt": 1771333500000,
     "published": true,
@@ -13270,6 +13271,44 @@
     "event_rate": 116
   },
   {
+    "id": "750",
+    "title": "ロスタイムメモリー",
+    "pronunciation": "ろすたいむめもりー",
+    "creatorArtistId": 29,
+    "artistName": "じん",
+    "default": 1467901,
+    "Unit": "3_VBS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1786514400000,
+    "published": false,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_750.webp",
+    "music_time": 133.7,
+    "event_rate": 117
+  },
+  {
+    "id": "751",
+    "title": "アディショナルメモリー",
+    "pronunciation": "あでぃしょなるめもりー",
+    "creatorArtistId": 29,
+    "artistName": "じん",
+    "default": 1267701,
+    "Unit": "1_L/n",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1786341600000,
+    "published": false,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_751.webp",
+    "music_time": 122,
+    "event_rate": 113
+  },
+  {
     "id": "754",
     "title": "光",
     "pronunciation": "ひかり",
@@ -13400,6 +13439,25 @@
     "isFullLength": false,
     "jacketLink": "jacket_s_760.webp",
     "music_time": 129.6,
+    "event_rate": 115
+  },
+  {
+    "id": "764",
+    "title": "オツキミリサイタル",
+    "pronunciation": "おつきみりさいたる",
+    "creatorArtistId": 29,
+    "artistName": "じん",
+    "default": 1367801,
+    "Unit": "2_MMJ",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1786428000000,
+    "published": false,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_764.webp",
+    "music_time": 127,
     "event_rate": 115
   },
   {
