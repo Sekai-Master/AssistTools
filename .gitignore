@@ -10,6 +10,12 @@ coverage
 *.local
 .vite
 
+# 秘密。★ アクセス解析の読み取りトークンなどをここに置く。絶対にコミットしない。
+#   例は .env.example にある（そちらは値を持たないので追跡する）。
+.env
+.env.*
+!.env.example
+
 # Editor / OS
 .vscode/*
 !.vscode/extensions.json

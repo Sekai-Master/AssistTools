@@ -477,7 +477,18 @@ export default function EfficiencyRanking() {
         </div>
       </Panel>
 
+      {/*
+       * ★ 読み込み中は高さを予約する（min-height）。
+       *   ここはページ最後のパネルで、読み込み中は中身が1行しか無いため
+       *   **フッターが画面内に見えている**。そこへ50行の表が生えると
+       *   フッターが画面の高さぶん一気に下がり、**CLS 0.37（判定「悪い」）**
+       *   になっていた（2026-08-10 実測）。画面1つぶん確保しておけば、
+       *   表が現れても動くのは画面外の要素だけになり、CLS に計上されない。
+       *   ★ 表の高さは選択条件で変わるので、正確に一致させることはできない。
+       *     狙いは「一致させる」ことではなく「動きを画面の外に追い出す」こと。
+       */}
       <Panel title={`ランキング（上位${ranked.length}件）`}>
+        <div className={loading ? "min-h-[80vh]" : undefined}>
         {loading && <p className="text-sm text-slate-500">楽曲データを読み込んでいます…</p>}
         {error && <p className="text-sm font-bold text-rose-600">{error}</p>}
         {!loading && !error && ranked.length === 0 && (
@@ -569,6 +580,7 @@ export default function EfficiencyRanking() {
             )}
           </p>
         )}
+        </div>
       </Panel>
 
       {mode === "auto" && (

@@ -266,7 +266,16 @@ html:not([data-stage="idle"]) .neu-cta {
  * 無地→fallback→無地 の差が視覚的に存在しない。
  */
 .stage-fallback {
-  min-height: 60svh;
+  /*
+   * ★ 画面より**高く**する。60svh だとフッターが画面内に見えたままで、
+   *   チャンクが届いて本文が生えた瞬間にフッターが画面外まで一気に動き、
+   *   それが CLS として計上されていた（全ページで約0.08、/ranking では
+   *   0.155。2026-08-10 実測）。100svh にしておけば読み込み中から
+   *   フッターは折り返しの下におり、動いても画面外の出来事になる。
+   * ★ 中身の短いツール（BINGO 等）では読み込み後に縮むが、外枠が
+   *   min-h-screen + flex-1 なのでフッターは画面下端に留まり、動きは小さい。
+   */
+  min-height: 100svh;
   display: grid;
   place-items: center;
   font-size: 0.875rem;

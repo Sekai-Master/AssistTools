@@ -430,23 +430,41 @@ export default function DeckBuilder() {
               {notice}
             </span>
           )}
+          {/*
+           * ★ 読み込み中の知らせは **sr-only**（画面に場所を取らない）。
+           *   見える文字として置くと、スマホ幅ではこの行が折り返して1行増え、
+           *   読み込み完了で消えるときに下の内容が全部ずれる
+           *  （モバイルで CLS 0.31。2026-08-10 実測。デスクトップでは
+           *   行に余白があったので気付けなかった）。
+           *   枠は最初から描かれていて中身が入るだけなので、目で見て
+           *   分からなくなることはない。読み上げには status として届く。
+           */}
+          {loading && (
+            <span role="status" className="sr-only">
+              カードデータを読み込んでいます…
+            </span>
+          )}
         </div>
 
-        {loading ? (
-          <p className="text-sm text-slate-500">カードデータを読み込んでいます…</p>
-        ) : (
-          <DeckSlots
-            slots={slots}
-            states={states}
-            leaderIndex={leaderIndex}
-            openIndex={openIndex}
-            onPick={setPickIndex}
-            onClear={(i) => setCardIds((prev) => prev.map((id, j) => (j === i ? null : id)))}
-            onLeader={setLeaderIndex}
-            onToggleOpen={(i) => setOpenIndex((cur) => (cur === i ? null : i))}
-            onStateChange={patchState}
-          />
-        )}
+        {/*
+         * ★ 読み込み中も枠を描く。1行のテキストに差し替えていたときは、
+         *   データが届いた瞬間に枠5つぶん（約400px）が生えて画面全体が飛び、
+         *   **CLS 0.30（判定「悪い」）** になっていた（2026-08-10 実測。
+         *   Cloudflare Web Analytics が実ユーザーの値 0.244 で検知）。
+         *   枠は cardIds だけで描けてカードデータを必要としないので、
+         *   最初から同じ高さで出しておけば動かない。
+         */}
+        <DeckSlots
+          slots={slots}
+          states={states}
+          leaderIndex={leaderIndex}
+          openIndex={openIndex}
+          onPick={setPickIndex}
+          onClear={(i) => setCardIds((prev) => prev.map((id, j) => (j === i ? null : id)))}
+          onLeader={setLeaderIndex}
+          onToggleOpen={(i) => setOpenIndex((cur) => (cur === i ? null : i))}
+          onStateChange={patchState}
+        />
 
         <p className="mt-3 text-xs text-slate-400">
           育成状態はカードごとに保存され、どの編成に入れても同じ値が使われます。
