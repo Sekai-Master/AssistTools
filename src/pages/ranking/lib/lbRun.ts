@@ -32,9 +32,14 @@ export interface PassLimits {
 }
 
 /**
- * ★ ここが上限の正本。DELUXE はライボだけ、オート99は PRECIOUS だけ。
- *   「パスを買えば全部増える」と思い込むと、DELUXE の人に 99回前提の
- *   計画を出してしまう。
+ * ★ ここが上限の正本。**増えるものがコースごとに違う。**
+ *
+ *   BASIC    … 上限も回数も解放されない（＝未加入と同じ。だから none にまとめてある）
+ *   DELUXE   … ライボ上限だけ 50。オートは10回のまま
+ *   PRECIOUS … ライボ上限 50 ＋ オート99回
+ *
+ *   「パスを買えば全部増える」と思い込むと、BASIC や DELUXE の人に
+ *   99回前提の計画を出してしまう。
  */
 export const PASS_LIMITS: Record<PassCourse, PassLimits> = {
   none: { lbCap: 25, autoPlays: 10 },
@@ -43,7 +48,8 @@ export const PASS_LIMITS: Record<PassCourse, PassLimits> = {
 };
 
 export const PASS_LABEL: Record<PassCourse, string> = {
-  none: "なし",
+  // BASIC は解放が何も無いので、未加入と同じ枠に入れて選ばせる。
+  none: "なし／BASIC",
   deluxe: "DELUXE",
   precious: "PRECIOUS",
 };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LB_REGEN_MIN, PASS_LIMITS, playsUntilEmpty } from "./lbRun";
+import { LB_REGEN_MIN, PASS_LABEL, PASS_LIMITS, playsUntilEmpty } from "./lbRun";
 
 /** エビ（74.8秒）＋オートのロス33秒。 */
 const CYCLE = 74.8 + 33;
@@ -66,6 +66,11 @@ describe("playsUntilEmpty", () => {
     expect(PASS_LIMITS.none).toEqual({ lbCap: 25, autoPlays: 10 });
     expect(PASS_LIMITS.deluxe).toEqual({ lbCap: 50, autoPlays: 10 });
     expect(PASS_LIMITS.precious).toEqual({ lbCap: 50, autoPlays: 99 });
+  });
+
+  /** ★ BASIC は上限も回数も解放されない。未加入と同じ枠に入れてある。 */
+  it("BASIC は未加入と同じ扱いだと分かる表示になっている", () => {
+    expect(PASS_LABEL.none).toContain("BASIC");
   });
 
   it("回復の間隔は30分に1", () => {
