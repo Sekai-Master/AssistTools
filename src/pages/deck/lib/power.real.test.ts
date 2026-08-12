@@ -84,47 +84,81 @@ describe("配信データの前提", () => {
   });
 });
 
+/** 日付ごとのプレイヤー像。育成は進むので、実測の時点ごとに切り替える。 */
+type Snapshot = {
+  areaEffects?: AreaEffects;
+  characterRanks?: Record<string, number>;
+  gateLevels?: Record<string, number>;
+  fixtureRates?: Record<string, number>;
+  honorBonus?: number;
+};
+const players = (measurements as unknown as { players?: Record<string, Snapshot> }).players ?? {};
+
+function build(s: Snapshot): PlayerState {
+  return {
+    areaRates: s.areaEffects ? areaRatesFromEffects(s.areaEffects) : undefined,
+    characterRanks: numKeys(s.characterRanks),
+    gateLevels: s.gateLevels,
+    fixtureRates: numKeys(s.fixtureRates),
+    honorBonus: s.honorBonus,
+  };
+}
+
 describe.each(measurements.cases)("実測 $label", (c) => {
   const deck = c.deck as DeckPowerCard[];
+  const ref = (c as { playerRef?: string }).playerRef;
   // 育成状況が変わった時点の実測は、その差分だけをケース側に書く（家具を作った等）。
   const 差分 = (c as { player?: { fixtureRates?: Record<string, number> } }).player;
-  const r = deckPower(
-    deck,
-    差分 ? { ...player, fixtureRates: numKeys(差分.fixtureRates) } : player,
-    tables
-  );
-  const 実測 = c.expected;
+  const 使うプレイヤー = ref
+    ? build(players[ref])
+    : 差分
+      ? { ...player, fixtureRates: numKeys(差分.fixtureRates) }
+      : player;
+  const r = deckPower(deck, 使うプレイヤー, tables);
+  // ★ 実機で読んだ欄だけを照合する。書いていない欄は「測っていない」であって
+  //   「0 だった」ではない。推測値を実測のふりで置くと、次に見た人が信じてしまう。
+  const 実測 = c.expected as Partial<Record<
+    "total" | "performance" | "areaItem" | "characterRank" | "gate" | "fixture" | "honor",
+    number
+  >>;
+  const 測った = (k: keyof typeof 実測) => 実測[k] != null;
 
   it("計算できなかったものが無い", () => {
     expect(r.missing).toEqual([]);
   });
 
-  it(`パフォーマンスが ${実測.performance}`, () => {
+  it.runIf(測った("performance"))(`パフォーマンスが ${実測.performance}`, () => {
     expect(r.performance).toBe(実測.performance);
   });
 
-  it(`キャラクターランクが ${実測.characterRank}`, () => {
+  it.runIf(測った("characterRank"))(`キャラクターランクが ${実測.characterRank}`, () => {
     expect(r.characterRank).toBe(実測.characterRank);
   });
 
-  it(`ゲートが ${実測.gate}`, () => {
+  it.runIf(測った("gate"))(`ゲートが ${実測.gate}`, () => {
     expect(r.gate).toBe(実測.gate);
   });
 
-  it(`家具が ${実測.fixture}・称号が ${実測.honor}`, () => {
-    expect(r.fixture).toBe(実測.fixture);
-    expect(r.honor).toBe(実測.honor);
-  });
+  it.runIf(測った("fixture") && 測った("honor"))(
+    `家具が ${実測.fixture}・称号が ${実測.honor}`,
+    () => {
+      expect(r.fixture).toBe(実測.fixture);
+      expect(r.honor).toBe(実測.honor);
+    }
+  );
 
   // エリアを入れていないうちは、エリアを除いた合計で突き合わせる。
-  const エリア入力済み = !!player.areaRates?.length;
-  it(エリア入力済み ? `合計が ${実測.total}` : `エリアを除いた合計が ${実測.total - 実測.areaItem}`, () => {
-    if (エリア入力済み) {
-      expect(r.areaItem).toBe(実測.areaItem);
-      expect(r.total).toBe(実測.total);
-    } else {
-      expect(r.areaItem).toBe(0);
-      expect(r.total).toBe(実測.total - 実測.areaItem);
+  const エリア入力済み = !!使うプレイヤー.areaRates?.length;
+  it(
+    エリア入力済み ? `合計が ${実測.total}` : `エリアを除いた合計が ${(実測.total ?? 0) - (実測.areaItem ?? 0)}`,
+    () => {
+      if (エリア入力済み) {
+        if (測った("areaItem")) expect(r.areaItem).toBe(実測.areaItem);
+        expect(r.total).toBe(実測.total);
+      } else {
+        expect(r.areaItem).toBe(0);
+        expect(r.total).toBe((実測.total ?? 0) - (実測.areaItem ?? 0));
+      }
     }
-  });
+  );
 });

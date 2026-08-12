@@ -218,6 +218,41 @@ function resolveUnit(card: PowerCardData, table: PowerTables["unitCharacters"]):
 }
 
 /**
+ * **エリアアイテムだけ**が見るユニット枠。ゲートとは別物。
+ *
+ * ★ ユニット限定カード（＝VS のキャラが他ユニットの衣装を着たカード。247枚あり、
+ *   VS 以外のキャラには存在しない）は、**そのユニットと piapro の両方に属する**。
+ *   マスタの unitCharacters でも VS のキャラは6ユニット全部に行がある。
+ *   実測すると、**ユニット効果が高いほうだけが乗る**（足し算ではない）。
+ *
+ *   確定に使った実機4編成（2026-08-12）:
+ *   - ミク・リン（supportUnit=モモジャン 9%）+ ピアプロ 11% → **11% が乗る**。
+ *     これを 9% で計算していたためエリアが 1,335 不足していた
+ *   - 622/900/471（supportUnit=レオニ 15%）+ ピアプロ 11% → **15% が乗る**。
+ *     「常に piapro」にするとこちらの編成が 3万近くずれて壊れる
+ *
+ *   片側だけなら「常に supportUnit」でも「常に piapro」でも説明できるが、
+ *   両側の実測があるので**高いほう**以外に説明がつかない。
+ *
+ * ★ ゲートはこの規則に従わない。同じ編成でゲートは supportUnit 側（モモジャン）の
+ *   値が実機と一致していた。エリアとゲートで枠の決め方が違う。
+ */
+function areaUnitOf(
+  card: PowerCardData,
+  table: PowerTables["unitCharacters"],
+  rates: AreaRate[]
+): string {
+  const nominal = resolveUnit(card, table);
+  if (!card.supportUnit) return nominal;
+  // ユニット行の効き目。入力は3パラ同値だが、念のため合計で比べる。
+  const strength = (unit: string) =>
+    rates
+      .filter((r) => r.unit === unit)
+      .reduce((s, r) => s + (r.rate?.reduce((a, b) => a + b, 0) ?? 0), 0);
+  return strength("piapro") > strength(nominal) ? "piapro" : nominal;
+}
+
+/**
  * ゲートの率(%)。
  *
  * ★ VS（piapro）のゲートは存在しない。実測では**全ゲートのうち一番高いもの**が効く
@@ -321,9 +356,11 @@ export function deckPower(
     const perfTotal = perf[0] + perf[1] + perf[2];
 
     // エリアアイテム: パラメータごとに積んでから floor。
+    // ★ 枠は areaUnitOf（ゲートで使う unit とは別）。理由は関数のコメント。
+    const areaUnit = areaUnitOf(card, tables.unitCharacters, player.areaRates ?? []);
     const acc = [0, 0, 0];
     for (const row of player.areaRates ?? []) {
-      if (!hits(row, card, unit)) continue;
+      if (!hits(row, card, areaUnit)) continue;
       const all =
         (!!row.unit && row.unit !== "any" && sameUnit) ||
         (!!row.attr && row.attr !== "any" && sameAttr);

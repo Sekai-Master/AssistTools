@@ -19,6 +19,7 @@ import {
 import {
   rankSongs,
   multiEffectiveSkill,
+  DEFAULT_OVERHEAD_SEC,
   DEFAULT_PARAMS,
   type RankingMode,
   type EfficiencyParams,
@@ -304,7 +305,8 @@ export default function EfficiencyRanking() {
   const [skillTotal, setSkillTotal] = useState(
     stored.skillTotal ?? String(DEFAULT_PARAMS.skillTotal),
   );
-  const [overhead, setOverhead] = useState(stored.overhead ?? String(DEFAULT_PARAMS.overheadSec));
+  // 既定はモードで違う（オートはリザルト送りを詰められないぶん長い）。
+  const [overhead, setOverhead] = useState(stored.overhead ?? String(DEFAULT_OVERHEAD_SEC.manual));
   const [plays, setPlays] = useState(stored.plays ?? "100");
   // 未保存なら「全部」= データの両端。読み込み前は 0/99 にして誰も弾かない。
   const [lvMin, setLvMin] = useState(stored.lvMin ?? 0);
@@ -325,7 +327,9 @@ export default function EfficiencyRanking() {
   const params: EfficiencyParams = useMemo(() => {
     // 焚き数だけは custom を切っていても効かせる。オートのまとめで直接いじる値なので、
     // 「表の焚き数」と「まとめの焚き数」が食い違うと必ず誤読される。
-    if (!custom) return { ...DEFAULT_PARAMS, taki };
+    // ★ ロスの既定はモード別。オートを手動と同じ 20 秒で計算すると、
+    //   1曲あたり13秒ぶん速く見積もってしまう（99回で20分以上ずれる）。
+    if (!custom) return { ...DEFAULT_PARAMS, taki, overheadSec: DEFAULT_OVERHEAD_SEC[mode] };
     return {
       power: Number(power) || 0,
       bonus: Number(bonus) || 0,
@@ -334,7 +338,22 @@ export default function EfficiencyRanking() {
       skillTotal: Number(skillTotal) || 0,
       overheadSec: Number(overhead) || 0,
     };
-  }, [custom, power, bonus, taki, skillLeader, skillTotal, overhead]);
+  }, [custom, mode, power, bonus, taki, skillLeader, skillTotal, overhead]);
+
+  /**
+   * モードを切り替える。
+   *
+   * ★ ロスは**まだ触っていないときだけ**新しいモードの既定へ差し替える。
+   *   手で入れた値を黙って書き換えると、戻したつもりの数字が変わっていて気付けない。
+   *   「触っていない」の判定は「いまのモードの既定値と同じか」で十分（実測値が
+   *   たまたま既定と一致していた場合は差し替わるが、そのときも表示は正しい）。
+   */
+  const changeMode = (next: RankingMode) => {
+    setOverhead((cur) =>
+      Number(cur) === DEFAULT_OVERHEAD_SEC[mode] ? String(DEFAULT_OVERHEAD_SEC[next]) : cur
+    );
+    setMode(next);
+  };
 
   // 選べるレベルは実データの範囲に合わせる（決め打ちの 1〜40 だと両端が空になる）。
   const levels = useMemo(() => levelBounds(entries), [entries]);
@@ -408,7 +427,7 @@ export default function EfficiencyRanking() {
         }}
       />
       <Panel>
-        <SegmentedControl options={MODE_OPTIONS} value={mode} onChange={setMode} />
+        <SegmentedControl options={MODE_OPTIONS} value={mode} onChange={changeMode} />
         <p className="mt-4 text-sm font-bold text-slate-600">{note.headline}</p>
         <p className="mt-1 text-xs leading-relaxed text-slate-500">{note.body}</p>
 
@@ -573,7 +592,7 @@ export default function EfficiencyRanking() {
                 {DEFAULT_PARAMS.skillLeader}/{DEFAULT_PARAMS.skillTotal}/
                 {(DEFAULT_PARAMS.power / 10000).toFixed(1)}
                 {mode !== "challenge" && `／ボーナス ${DEFAULT_PARAMS.bonus}%／${taki}焚き`}
-                {mode === "manual" && `／ロス ${DEFAULT_PARAMS.overheadSec}秒`}
+                {mode !== "challenge" && `／ロス ${DEFAULT_OVERHEAD_SEC[mode]}秒`}
                 {" を前提にした一般的な順位です。"}
                 自分の条件に差し替えるには下の「自分の条件で計算する」を入れてください。
               </>
@@ -678,7 +697,7 @@ export default function EfficiencyRanking() {
                 />
               </div>
               <p className="mt-4 text-xs leading-relaxed text-slate-500">
-                所要時間は曲長＋ロス{custom ? `（${overhead || 0}秒）` : `（${DEFAULT_PARAMS.overheadSec}秒）`}
+                所要時間は曲長＋ロス{custom ? `（${overhead || 0}秒）` : `（${DEFAULT_OVERHEAD_SEC[mode]}秒）`}
                 の単純な積み上げです。オートは放置できるので、この時間は拘束時間ではありません。
                 「ライボ1あたり」は焚き数の選び方を比べるための値で、
                 <span className="font-bold text-slate-600">焚き数を上げるほど下がります</span>

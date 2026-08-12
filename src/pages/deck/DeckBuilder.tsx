@@ -13,9 +13,9 @@ import { SharePanel } from "./SharePanel";
 import { PlayerSettingsPanel } from "./PlayerSettingsPanel";
 import { ComparePanel } from "./ComparePanel";
 import { SaveToProfile } from "../../components/ui/ProfileBar";
-import { getActiveProfile, upsertProfileByName, useProfiles } from "../../lib/profiles";
+import { getActiveProfile, upsertProfileByName } from "../../lib/profiles";
 import { useRankingMusics } from "../ranking/useRankingMusics";
-import { DEFAULT_PARAMS } from "../ranking/lib/efficiency";
+import { DEFAULT_PARAMS, OVERHEAD_BY_LIVE } from "../ranking/lib/efficiency";
 import { ENVY_ID } from "../analyzer/lib/constants";
 import {
   readPlayerSettings,
@@ -87,12 +87,6 @@ export default function DeckBuilder() {
   const [custom, setCustom] = useState<CustomEvent>(() => emptyCustomEvent());
 
   const [decks, setDecks] = useState<SavedDeck[]>(() => listDecks());
-  /** 既に編成プロフィールへ反映してある編成名（保存時に自動で追随させるため）。 */
-  const profiles = useProfiles();
-  const syncedProfileNames = useMemo(
-    () => new Set(profiles.filter((p) => p.source === "deck").map((p) => p.name)),
-    [profiles]
-  );
   const [deckName, setDeckName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -272,7 +266,7 @@ export default function DeckBuilder() {
       supportBonus: Number(supportBonus) || 0,
       // 曲が読めていれば最終Ptの差まで出す（読めるまでは総合力とボーナスの差だけ）。
       entry: swapEntry,
-      cond: { live: "multi", taki: swapTaki, overheadSec: DEFAULT_PARAMS.overheadSec },
+      cond: { live: "multi", taki: swapTaki, overheadSec: OVERHEAD_BY_LIVE.multi },
     });
     // 候補が1枚も残らないなら絞り込み自体を出さない（空の一覧を見せない）。
     if (rows.length === 0) return undefined;
@@ -320,9 +314,20 @@ export default function DeckBuilder() {
       })
     );
     setDeckName(name);
-    // ★ 既に同名のプロフィールがあるなら黙って古い数字を残さない（＝ずれる）。
-    //   無いときは勝手に増やさず、下のボタンで本人に選ばせる。
-    if (syncedProfileNames.has(name)) pushToProfile(name);
+    /*
+     * ★ 保存したら編成プロフィールにも必ず書く。
+     *
+     *   以前は「同名のプロフィールが既にあるときだけ更新し、無ければ増やさない」
+     *   にしていた（勝手にプロフィールが増えるのを避けるため）。だが実際に使うと、
+     *   **編成ビルダーで組んだ編成が他のツールに出てこない**という詰まり方をする。
+     *   ランキングや稼働時間の側からは「保存したのに呼べない」としか見えず、
+     *   もう一度ここへ戻って別のボタンを押す必要があった（Nori 指摘 2026-08-11）。
+     *
+     *   編成ビルダーの値を他のツールで使うのが主たる用途なので、保存＝共有でよい。
+     *   増えたプロフィールは設定画面の台帳から消せるし、source が "deck" なので
+     *   手で作ったプロフィールを潰すこともない（upsertProfileByName）。
+     */
+    pushToProfile(name);
     setNotice(`「${name}」に保存しました`);
     setTimeout(() => setNotice(null), 2600);
   };

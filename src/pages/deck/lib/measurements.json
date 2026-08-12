@@ -8,7 +8,11 @@
     "同じ形の編成をいくら集めても式は割れない。",
     "",
     "areaEffects を入れていないケースは、エリアアイテムを除いた成分だけ照合する",
-    "（expected.areaItem は参考値として残す）。"
+    "（expected.areaItem は参考値として残す）。",
+    "",
+    "★ プレイヤーの育成状況は時間とともに変わる。players に日付ごとのスナップショットを置き、",
+    "  ケース側は playerRef でどれを使うか指す。省略したケースは player（2026-08-01）を使う。",
+    "★ expected は**実機で読んだ欄だけ**書く。書いていない欄は照合しない（推測値を実測のふりで置かない）。"
   ],
   "player": {
     "_": "プレイヤー固有の育成状況（2026-08-01 時点）。",
@@ -28,22 +32,56 @@
         "theme_park": 8,
         "school_refusal": 8.5
       },
-      "attrs": { "cool": 8.5, "pure": 8, "mysterious": 8.5, "happy": 9, "cute": 8.5 },
+      "attrs": {
+        "cool": 8.5,
+        "pure": 8,
+        "mysterious": 8.5,
+        "happy": 9,
+        "cute": 8.5
+      },
       "chars": {
-        "1": 30, "2": 30, "3": 30, "4": 30,
-        "5": 20, "6": 18, "7": 20, "8": 18,
-        "9": 16, "10": 16, "11": 16, "12": 16,
-        "13": 16, "14": 20, "15": 16, "16": 16,
-        "17": 20, "18": 20, "19": 20, "20": 20,
-        "21": 30, "22": 18, "23": 16, "24": 30,
-        "25": 16, "26": 30
+        "1": 30,
+        "2": 30,
+        "3": 30,
+        "4": 30,
+        "5": 20,
+        "6": 18,
+        "7": 20,
+        "8": 18,
+        "9": 16,
+        "10": 16,
+        "11": 16,
+        "12": 16,
+        "13": 16,
+        "14": 20,
+        "15": 16,
+        "16": 16,
+        "17": 20,
+        "18": 20,
+        "19": 20,
+        "20": 20,
+        "21": 30,
+        "22": 18,
+        "23": 16,
+        "24": 30,
+        "25": 16,
+        "26": 30
       }
     },
     "_characterRanks": [
       "★ ランク50以上はどれも 5% で頭打ちなので、50 を超えたぶんは結果に効かない。",
       "  ch23（レン）だけは実測から「50以上」としか分かっていない。"
     ],
-    "characterRanks": { "1": 58, "2": 78, "3": 56, "4": 56, "21": 71, "23": 50, "25": 47, "26": 51 },
+    "characterRanks": {
+      "1": 58,
+      "2": 78,
+      "3": 56,
+      "4": 56,
+      "21": 71,
+      "23": 50,
+      "25": 47,
+      "26": 51
+    },
     "gateLevels": {
       "light_sound": 2,
       "idol": 1,
@@ -63,7 +101,10 @@
           "level": 60,
           "masterRank": 0,
           "trained": true,
-          "episodes": { "first": true, "latter": true },
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
           "canvas": false
         }
       ],
@@ -88,11 +129,61 @@
         "  エリアもゲートもレオニ枠として効く（ミクも同じ）。"
       ],
       "deck": [
-        { "cardId": 900, "level": 60, "masterRank": 5, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
-        { "cardId": 419, "level": 50, "masterRank": 5, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
-        { "cardId": 579, "level": 50, "masterRank": 0, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
-        { "cardId": 846, "level": 30, "masterRank": 5, "trained": false, "episodes": { "first": true, "latter": true }, "canvas": false },
-        { "cardId": 1, "level": 20, "masterRank": 5, "trained": false, "episodes": { "first": true, "latter": true }, "canvas": false }
+        {
+          "cardId": 900,
+          "level": 60,
+          "masterRank": 5,
+          "trained": true,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 419,
+          "level": 50,
+          "masterRank": 5,
+          "trained": true,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 579,
+          "level": 50,
+          "masterRank": 0,
+          "trained": true,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 846,
+          "level": 30,
+          "masterRank": 5,
+          "trained": false,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 1,
+          "level": 20,
+          "masterRank": 5,
+          "trained": false,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        }
       ],
       "expected": {
         "total": 236756,
@@ -120,11 +211,61 @@
         "  4. キャラクターランク47（＝上限50に達していない）の 4.7% が効く"
       ],
       "deck": [
-        { "cardId": 900, "level": 60, "masterRank": 5, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
-        { "cardId": 419, "level": 50, "masterRank": 5, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
-        { "cardId": 579, "level": 50, "masterRank": 0, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
-        { "cardId": 846, "level": 30, "masterRank": 5, "trained": false, "episodes": { "first": true, "latter": true }, "canvas": false },
-        { "cardId": 101, "level": 20, "masterRank": 5, "trained": false, "episodes": { "first": true, "latter": true }, "canvas": false }
+        {
+          "cardId": 900,
+          "level": 60,
+          "masterRank": 5,
+          "trained": true,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 419,
+          "level": 50,
+          "masterRank": 5,
+          "trained": true,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 579,
+          "level": 50,
+          "masterRank": 0,
+          "trained": true,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 846,
+          "level": 30,
+          "masterRank": 5,
+          "trained": false,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 101,
+          "level": 20,
+          "masterRank": 5,
+          "trained": false,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        }
       ],
       "expected": {
         "total": 215593,
@@ -145,13 +286,67 @@
         "★ 家具はそのキャラのカードにしか乗らない（編成全体ではない）。",
         "  他の4枚は咲希ではないので 0 のまま、合計が 19 しか増えていないのがその証拠。"
       ],
-      "player": { "fixtureRates": { "2": 0.1 } },
+      "player": {
+        "fixtureRates": {
+          "2": 0.1
+        }
+      },
       "deck": [
-        { "cardId": 900, "level": 60, "masterRank": 5, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
-        { "cardId": 419, "level": 50, "masterRank": 5, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
-        { "cardId": 579, "level": 50, "masterRank": 0, "trained": true, "episodes": { "first": true, "latter": true }, "canvas": false },
-        { "cardId": 846, "level": 30, "masterRank": 5, "trained": false, "episodes": { "first": true, "latter": true }, "canvas": false },
-        { "cardId": 101, "level": 20, "masterRank": 5, "trained": false, "episodes": { "first": true, "latter": true }, "canvas": false }
+        {
+          "cardId": 900,
+          "level": 60,
+          "masterRank": 5,
+          "trained": true,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 419,
+          "level": 50,
+          "masterRank": 5,
+          "trained": true,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 579,
+          "level": 50,
+          "masterRank": 0,
+          "trained": true,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 846,
+          "level": 30,
+          "masterRank": 5,
+          "trained": false,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 101,
+          "level": 20,
+          "masterRank": 5,
+          "trained": false,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        }
       ],
       "expected": {
         "total": 215612,
@@ -162,6 +357,244 @@
         "fixture": 19,
         "gate": 257
       }
+    },
+    {
+      "label": "ミク・リンのモモジャン衣装を含む5枚（2026-08-12）★ユニット限定カードのエリア枠",
+      "_": [
+        "ユニット限定カードは supportUnit と piapro の両方に属し、**効果が高いほうだけ**が乗る。",
+        "ミク(21)・リン(22) は モモジャン 9% より ピアプロ 11% が高いので 11% が乗る。",
+        "supportUnit だけを見ていた頃はエリアが 1,335 不足していた。",
+        "★ ゲート(401)は supportUnit 側の値。エリアとゲートで枠の決め方が違う。"
+      ],
+      "playerRef": "2026-08-12",
+      "deck": [
+        {
+          "cardId": 895,
+          "level": 60,
+          "trained": true,
+          "masterRank": 5,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": true
+        },
+        {
+          "cardId": 129,
+          "level": 60,
+          "trained": true,
+          "masterRank": 0,
+          "episodes": {
+            "first": true,
+            "latter": false
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 130,
+          "level": 60,
+          "trained": true,
+          "masterRank": 0,
+          "episodes": {
+            "first": true,
+            "latter": false
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 131,
+          "level": 60,
+          "trained": true,
+          "masterRank": 0,
+          "episodes": {
+            "first": true,
+            "latter": false
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 88,
+          "level": 60,
+          "trained": true,
+          "masterRank": 0,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        }
+      ],
+      "expected": {
+        "total": 269321,
+        "performance": 171162,
+        "areaItem": 89049,
+        "characterRank": 8451,
+        "gate": 401,
+        "fixture": 38,
+        "honor": 220
+      }
+    },
+    {
+      "label": "同編成の咲希を未特訓Lv30のカードに差し替え（2026-08-12）",
+      "_": [
+        "上と同じ規則を、レオニ枠が消えた（＝ピアプロ枠のミクが先頭）編成でも確認する。",
+        "★ 実機で読んだのは総合力とエリアだけ。他の欄は書かない（照合もしない）。"
+      ],
+      "playerRef": "2026-08-12",
+      "deck": [
+        {
+          "cardId": 88,
+          "level": 60,
+          "trained": true,
+          "masterRank": 0,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 129,
+          "level": 60,
+          "trained": true,
+          "masterRank": 0,
+          "episodes": {
+            "first": true,
+            "latter": false
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 130,
+          "level": 60,
+          "trained": true,
+          "masterRank": 0,
+          "episodes": {
+            "first": true,
+            "latter": false
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 131,
+          "level": 60,
+          "trained": true,
+          "masterRank": 0,
+          "episodes": {
+            "first": true,
+            "latter": false
+          },
+          "canvas": false
+        },
+        {
+          "cardId": 747,
+          "level": 30,
+          "trained": false,
+          "masterRank": 5,
+          "episodes": {
+            "first": true,
+            "latter": true
+          },
+          "canvas": false
+        }
+      ],
+      "expected": {
+        "total": 236950,
+        "areaItem": 76591
+      }
     }
-  ]
+  ],
+  "players": {
+    "2026-08-12": {
+      "_": [
+        "ユニット限定カード（VSのキャラが他ユニットの衣装を着たカード）のエリア枠を確定させた回。",
+        "2026-08-01 からの差分: キャラ効果の9・10が16→18、CRが全26キャラぶん、",
+        "レオニのゲートが Lv2→7、称号 210→220、咲希のぬいぐるみ/S を1個。"
+      ],
+      "areaEffects": {
+        "units": {
+          "piapro": 11,
+          "light_sound": 15,
+          "idol": 9,
+          "street": 8,
+          "theme_park": 8,
+          "school_refusal": 8.5
+        },
+        "attrs": {
+          "cool": 8.5,
+          "cute": 8.5,
+          "pure": 8,
+          "happy": 9,
+          "mysterious": 8.5
+        },
+        "chars": {
+          "1": 30,
+          "2": 30,
+          "3": 30,
+          "4": 30,
+          "5": 20,
+          "6": 18,
+          "7": 20,
+          "8": 18,
+          "9": 18,
+          "10": 18,
+          "11": 16,
+          "12": 16,
+          "13": 16,
+          "14": 20,
+          "15": 16,
+          "16": 16,
+          "17": 20,
+          "18": 20,
+          "19": 20,
+          "20": 20,
+          "21": 30,
+          "22": 18,
+          "23": 16,
+          "24": 30,
+          "25": 16,
+          "26": 30
+        }
+      },
+      "characterRanks": {
+        "1": 58,
+        "2": 80,
+        "3": 57,
+        "4": 56,
+        "5": 47,
+        "6": 49,
+        "7": 51,
+        "8": 46,
+        "9": 51,
+        "10": 46,
+        "11": 48,
+        "12": 47,
+        "13": 52,
+        "14": 48,
+        "15": 47,
+        "16": 46,
+        "17": 46,
+        "18": 48,
+        "19": 49,
+        "20": 47,
+        "21": 72,
+        "22": 52,
+        "23": 52,
+        "24": 53,
+        "25": 48,
+        "26": 52
+      },
+      "gateLevels": {
+        "light_sound": 7,
+        "idol": 1,
+        "street": 1,
+        "theme_park": 1,
+        "school_refusal": 1
+      },
+      "fixtureRates": {
+        "2": 0.1
+      },
+      "honorBonus": 220
+    }
+  }
 }

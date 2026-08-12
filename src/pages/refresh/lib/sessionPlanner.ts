@@ -9,6 +9,7 @@
  * オーバーヘッドはパラメータ（要実測チューニング）。根拠は docs/refresh-gauge/design.md。
  */
 import { GAUGE_SPEC, type GaugeSpec, liveGaugeInternal } from "./gaugeModel";
+import { MULTI_OVERHEAD_THEORETICAL, OVERHEAD_SEC } from "../../../lib/overhead";
 
 /**
  * 1周回の所要時間 = 曲の長さ + オーバーヘッド。
@@ -17,11 +18,15 @@ import { GAUGE_SPEC, type GaugeSpec, liveGaugeInternal } from "./gaugeModel";
  * 環境で大きく変わるので、UIで実測レートから overheadFromRate() で較正する前提。
  */
 export const OVERHEAD_PRESETS = {
-  theoretical: 38, // エビ 約32回/h 相当
-  realistic: 54, // エビ 約28回/h 相当（支援者交代・ロード込み）
+  theoretical: MULTI_OVERHEAD_THEORETICAL, // エビ 約32回/h 相当
+  realistic: OVERHEAD_SEC.multi, // エビ 約28回/h 相当（支援者交代・ロード込み）
 } as const;
 
-/** 既定は実測平均側（支援者交代・ロード込み）。 */
+/**
+ * 既定は実測平均側（支援者交代・ロード込み）。
+ * ★ 値の正本は src/lib/overhead.ts。効率曲ランキングと同じ数字を使う
+ *   （以前はこちらが54秒、ランキングが20秒で食い違っていた）。
+ */
 export const DEFAULT_OVERHEAD_SEC: number = OVERHEAD_PRESETS.realistic;
 
 /** 1周回の実所要秒。 */

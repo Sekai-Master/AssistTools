@@ -7,7 +7,7 @@ import { TakiInput } from "../../components/ui/TakiInput";
 import { SongSearchModal } from "../../components/SongSearchModal";
 import { DIFFICULTY_LABEL, type Difficulty, type RankingMusic } from "../ranking/useRankingMusics";
 import { ENVY_ID } from "../analyzer/lib/constants";
-import { DEFAULT_PARAMS, type LiveType } from "../ranking/lib/efficiency";
+import { DEFAULT_PARAMS, OVERHEAD_BY_LIVE, type LiveType } from "../ranking/lib/efficiency";
 import { ProfileBar } from "../../components/ui/ProfileBar";
 import { getActiveProfile } from "../../lib/profiles";
 import { cn } from "../../lib/utils";
@@ -92,7 +92,9 @@ export function ComparePanel({
   }, [decks, current, ctx, selected]);
 
   const rows = useMemo(() => {
-    const cond: CompareCondition = { live, taki, overheadSec: DEFAULT_PARAMS.overheadSec };
+    // ★ ロスは選ばれたライブ種別に追随させる。固定にするとオートで比べたときに
+    //   協力ライブのロスで Pt/時 を出してしまい、ランキングと数字が合わない。
+    const cond: CompareCondition = { live, taki, overheadSec: OVERHEAD_BY_LIVE[live] };
     return entry ? compareDecks(candidates, entry, cond) : [];
   }, [candidates, entry, live, taki]);
   // チャレンジライブは Pt が付かないので、スコアの一番高い編成を最良にする。
@@ -264,7 +266,7 @@ export function ComparePanel({
 
           <p className="mt-3 text-xs text-slate-400">
             スキルは編成ごとにカードのスキルレベルから計算しています（先頭/内部値）。
-            条件付きのスキルは上限の値です。オーバーヘッドは {DEFAULT_PARAMS.overheadSec} 秒で固定。
+            条件付きのスキルは上限の値です。オーバーヘッドは {OVERHEAD_BY_LIVE[live]} 秒（ライブ種別ごとの実測値）。
           </p>
         </>
       )}

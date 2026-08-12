@@ -54,6 +54,9 @@
  */
 
 import { calcLivePt, calcMultiLivePt } from "../../analyzer/lib/calcLivePt";
+// 1プレイの「曲以外」の秒数はサイト全体で1か所に置く（ランキングと周回プランで
+// 同じ値が別々に置かれ、2.7倍食い違っていた。2026-08-11 に統合）。
+import { OVERHEAD_SEC } from "../../../lib/overhead";
 
 /** ランキングの種類。 */
 export type RankingMode = "manual" | "auto" | "challenge";
@@ -141,7 +144,34 @@ export const DEFAULT_PARAMS: EfficiencyParams = {
   taki: 5,
   skillLeader: 150,
   skillTotal: 650,
-  overheadSec: 20,
+  // ★ 協力ライブ（手動）の実測値。src/lib/overhead.ts が正本。
+  overheadSec: OVERHEAD_SEC.multi,
+};
+
+/**
+ * ロスの既定値はモードで違う。**値の正本は src/lib/overhead.ts**。
+ *
+ * ★ 手動（協力ライブ）はマッチング・部屋待ち・支援者交代を含むので長い。
+ *   オートはロードとリザルト送りだけなので短い。ここを共通の1つにすると、
+ *   どちらかのモードで必ず外れる。
+ */
+export const DEFAULT_OVERHEAD_SEC: Record<RankingMode, number> = {
+  manual: OVERHEAD_SEC.multi,
+  auto: OVERHEAD_SEC.auto,
+  challenge: OVERHEAD_SEC.challenge,
+};
+
+/**
+ * ライブ種別ごとのロス。**種別を選ばせる画面はこれを使う。**
+ *
+ * ★ 編成ビルダーの比較は種別（協力／ソロ／オート）を選べるのに、ロスは
+ *   協力ライブ用の値で固定されていた。オートで比べても協力のロスで Pt/時 を
+ *   出していて、ランキングのオートと数字が合わなくなる（2026-08-11 修正）。
+ */
+export const OVERHEAD_BY_LIVE: Record<LiveType, number> = {
+  multi: OVERHEAD_SEC.multi,
+  auto: OVERHEAD_SEC.auto,
+  solo: OVERHEAD_SEC.challenge,
 };
 
 /** 計算で足すフィールド。入力側の型は呼び出し元のものを保つ（ジャケット等を落とさない）。 */
