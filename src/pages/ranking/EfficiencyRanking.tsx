@@ -133,6 +133,8 @@ interface Stored {
   startLB?: string;
   /** カラフルパスの course（ライボ上限とオート回数が決まる）。 */
   pass?: PassCourse;
+  /** 今日まだ残っているオートの回数。 */
+  autoLeft?: string;
 }
 
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
@@ -176,6 +178,7 @@ function loadStored(): Stored {
       startLB: str(s.startLB),
       pass:
         s.pass === "none" || s.pass === "deluxe" || s.pass === "precious" ? s.pass : undefined,
+      autoLeft: str(s.autoLeft),
     };
   } catch {
     return {};
@@ -423,6 +426,24 @@ export default function EfficiencyRanking() {
   const [startLB, setStartLB] = useState(stored.startLB ?? "25");
   const [pass, setPass] = useState<PassCourse>(stored.pass ?? "none");
   const limits = PASS_LIMITS[pass];
+  /**
+   * 今日まだ残っているオートの回数。
+   * ★ パスの上限そのものではない。**すでに何回か消化していれば残りは減る**ので、
+   *   上限を決め打ちすると「まわせる回数」を多く見積もる（Nori 指摘 2026-08-12）。
+   */
+  const [autoLeft, setAutoLeft] = useState(stored.autoLeft ?? String(PASS_LIMITS[stored.pass ?? "none"].autoPlays));
+
+  /**
+   * パスを変えたときは、**まだ触っていない場合だけ**残り回数を新しい上限へ合わせる。
+   * 手で入れた値を黙って書き換えると、戻したつもりの数字が変わっていて気付けない。
+   */
+  const changePass = (next: PassCourse) => {
+    setAutoLeft((cur) =>
+      Number(cur) === limits.autoPlays ? String(PASS_LIMITS[next].autoPlays) : cur
+    );
+    setPass(next);
+    persist({ pass: next });
+  };
 
   /**
    * オートの2つの入口ぶんの計算。**曲が決まらないと1周の秒数が出ない**ので、
@@ -435,7 +456,7 @@ export default function EfficiencyRanking() {
     cycleSec,
     regen,
     lbCap: limits.lbCap,
-    maxPlays: limits.autoPlays,
+    maxPlays: Math.max(0, Number(autoLeft) || 0),
   });
   const lbNeed = lbNeededForPlays({
     startLB: Number(startLB) || 0,
@@ -708,11 +729,7 @@ export default function EfficiencyRanking() {
             >
               <select
                 value={pass}
-                onChange={(e) => {
-                  const v = e.target.value as PassCourse;
-                  setPass(v);
-                  persist({ pass: v });
-                }}
+                onChange={(e) => changePass(e.target.value as PassCourse)}
                 aria-label="カラフルパスのコース"
                 className="neu-inset w-full rounded-lg px-3 py-2 text-sm text-slate-700"
               >
@@ -723,6 +740,22 @@ export default function EfficiencyRanking() {
                 ))}
               </select>
             </Field>
+            {autoFrom === "lb" && (
+              <Field
+                label="今日の残りオート回数"
+                hint={`上限 ${limits.autoPlays}回（毎日4:00にリセット）。消化ぶんを引いた数`}
+              >
+                <NeuInput
+                  inputMode="numeric"
+                  value={autoLeft}
+                  onChange={(e) => {
+                    const v = onlyDigits(e.target.value);
+                    setAutoLeft(v);
+                    persist({ autoLeft: v });
+                  }}
+                />
+              </Field>
+            )}
             {autoFrom === "plays" && (
               <Field label="プレイ回数" hint={`オートの上限は1日 ${limits.autoPlays}回（毎日4:00にリセット）`}>
                 <NeuInput
@@ -766,7 +799,7 @@ export default function EfficiencyRanking() {
                   sub={
                     autoFrom === "lb"
                       ? lbRun.stoppedBy === "plays"
-                        ? `オートの上限 ${limits.autoPlays}回で止まります`
+                        ? `オートの残り ${Math.max(0, Number(autoLeft) || 0)}回を使い切って止まります`
                         : `ライボ切れまで（回復 +${lbRun.regained}）`
                       : `1回 ${fmt(best.eventPt)} Pt`
                   }
@@ -808,7 +841,7 @@ export default function EfficiencyRanking() {
                           //   残りは「まだ回せるのに回せない」ぶんで、焚き数を上げれば使える。
                           //   ライボ切れなら「焚き数に足りない端数」で、下げれば使える。
                           lbRun.stoppedBy === "plays"
-                          ? "回数上限で余りました（焚き数を上げると使えます）"
+                          ? "オート回数を使い切って余りました（焚き数を上げると使えます）"
                           : `${taki}焚きに足りないので止まります`
                       : taki > 0
                         ? "Pt / ライボ1"
