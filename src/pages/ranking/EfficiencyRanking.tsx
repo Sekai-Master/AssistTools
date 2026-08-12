@@ -25,6 +25,13 @@ import {
   type EfficiencyParams,
 } from "./lib/efficiency";
 import { ProfileBar, SaveToProfile } from "../../components/ui/ProfileBar";
+import {
+  lbNeededForPlays,
+  PASS_LABEL,
+  PASS_LIMITS,
+  playsUntilEmpty,
+  type PassCourse,
+} from "./lib/lbRun";
 import { numOrUndef } from "../../lib/num";
 import { Delta } from "../../components/ui/Delta";
 import { useFlip } from "../../lib/useFlip";
@@ -120,6 +127,12 @@ interface Stored {
   pick?: string;
   /** ライボの自然回復を差し引くか。 */
   regen?: boolean;
+  /** オートの入口。ゲームの設定と同じ2択。 */
+  autoFrom?: "lb" | "plays";
+  /** いま持っているライブボーナス。 */
+  startLB?: string;
+  /** カラフルパスの course（ライボ上限とオート回数が決まる）。 */
+  pass?: PassCourse;
 }
 
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
@@ -159,6 +172,10 @@ function loadStored(): Stored {
       lvMax: lv(s.lvMax),
       pick: str(s.pick),
       regen: typeof s.regen === "boolean" ? s.regen : undefined,
+      autoFrom: s.autoFrom === "lb" || s.autoFrom === "plays" ? s.autoFrom : undefined,
+      startLB: str(s.startLB),
+      pass:
+        s.pass === "none" || s.pass === "deluxe" || s.pass === "precious" ? s.pass : undefined,
     };
   } catch {
     return {};
@@ -401,10 +418,33 @@ export default function EfficiencyRanking() {
    * ★ 定数は稼働時間計算から借りる。同じ規則を2箇所に書くと必ず片方だけ古くなる。
    */
   const [regen, setRegen] = useState(stored.regen ?? false);
-  const totalSec = best ? best.cycleSec * playCount : 0;
-  const regenLB = totalSec / 60 / LB_REGEN_MIN;
-  const grossLB = taki * playCount;
-  const netLB = Math.max(0, grossLB - regenLB);
+  /** ゲームのオート設定に合わせた2択。既定は「ライボがなくなるまで」。 */
+  const [autoFrom, setAutoFrom] = useState<"lb" | "plays">(stored.autoFrom ?? "lb");
+  const [startLB, setStartLB] = useState(stored.startLB ?? "25");
+  const [pass, setPass] = useState<PassCourse>(stored.pass ?? "none");
+  const limits = PASS_LIMITS[pass];
+
+  /**
+   * オートの2つの入口ぶんの計算。**曲が決まらないと1周の秒数が出ない**ので、
+   * best を待ってから走らせる（未確定のあいだは 0 のまま）。
+   */
+  const cycleSec = best?.cycleSec ?? 0;
+  const lbRun = playsUntilEmpty({
+    startLB: Number(startLB) || 0,
+    taki,
+    cycleSec,
+    regen,
+    lbCap: limits.lbCap,
+    maxPlays: limits.autoPlays,
+  });
+  const lbNeed = lbNeededForPlays({
+    startLB: Number(startLB) || 0,
+    taki,
+    plays: playCount,
+    cycleSec,
+    regen,
+    lbCap: limits.lbCap,
+  });
 
   // 並び替えを目で追わせる。演出オフの人と OS の視差軽減には出さない
   //（動き自体が情報なので控えめでは出す）。
@@ -604,6 +644,25 @@ export default function EfficiencyRanking() {
 
       {mode === "auto" && (
         <Panel title="まとめて回すと">
+          {/*
+           * ★ 入口はゲームのオート設定と同じ2択にしてある（Nori 指摘 2026-08-12）。
+           *   ライボがなくなるまで … 手持ちで何回まわせるか
+           *   回数を指定         … 決めた回数を走るのに、石やドリンクをいくら足すか
+           *   ゲーム側の言葉と揃えておけば、どちらを選ぶかで迷わない。
+           */}
+          <div className="mb-4">
+            <SegmentedControl
+              options={[
+                { value: "lb", label: "ライボがなくなるまで" },
+                { value: "plays", label: "回数を指定" },
+              ]}
+              value={autoFrom}
+              onChange={(v) => {
+                setAutoFrom(v);
+                persist({ autoFrom: v });
+              }}
+            />
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="曲" hint="上の表から選ぶ（既定は1位）">
               <select
@@ -632,20 +691,54 @@ export default function EfficiencyRanking() {
                 }}
               />
             </Field>
-            <Field label="プレイ回数">
+            <Field label="いまのライブボーナス" hint={`上限 ${limits.lbCap}`}>
               <NeuInput
                 inputMode="numeric"
-                value={plays}
+                value={startLB}
                 onChange={(e) => {
                   const v = onlyDigits(e.target.value);
-                  setPlays(v);
-                  persist({ plays: v });
+                  setStartLB(v);
+                  persist({ startLB: v });
                 }}
               />
             </Field>
+            <Field
+              label="カラフルパス"
+              hint={`ライボ上限 ${limits.lbCap}／オート ${limits.autoPlays}回`}
+            >
+              <select
+                value={pass}
+                onChange={(e) => {
+                  const v = e.target.value as PassCourse;
+                  setPass(v);
+                  persist({ pass: v });
+                }}
+                aria-label="カラフルパスのコース"
+                className="neu-inset w-full rounded-lg px-3 py-2 text-sm text-slate-700"
+              >
+                {(Object.keys(PASS_LIMITS) as PassCourse[]).map((k) => (
+                  <option key={k} value={k}>
+                    {PASS_LABEL[k]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {autoFrom === "plays" && (
+              <Field label="プレイ回数" hint={`オートの上限は1日 ${limits.autoPlays}回（毎日4:00にリセット）`}>
+                <NeuInput
+                  inputMode="numeric"
+                  value={plays}
+                  onChange={(e) => {
+                    const v = onlyDigits(e.target.value);
+                    setPlays(v);
+                    persist({ plays: v });
+                  }}
+                />
+              </Field>
+            )}
           </div>
 
-          {best && playCount > 0 ? (
+          {best && (autoFrom === "lb" ? lbRun.plays > 0 : playCount > 0) ? (
             <>
               <div className="mt-5">
                 <Switch
@@ -654,7 +747,7 @@ export default function EfficiencyRanking() {
                     setRegen(v);
                     persist({ regen: v });
                   }}
-                  label={`ライボの自然回復（${LB_REGEN_MIN}分に1）を差し引く`}
+                  label={`走っている間の自然回復（${LB_REGEN_MIN}分に1）を数える`}
                 />
               </div>
               <p className="mt-4 text-sm text-slate-600">
@@ -662,51 +755,86 @@ export default function EfficiencyRanking() {
                 <span className="ml-1">
                   <DifficultyBadge difficulty={best.difficulty} level={best.playLevel} />
                 </span>
-                を {taki}焚きで {fmt(playCount)}回 まわすと
+                {autoFrom === "lb"
+                  ? ` を ${taki}焚きで、ライボ ${Number(startLB) || 0} がなくなるまで まわすと`
+                  : ` を ${taki}焚きで ${fmt(playCount)}回 まわすと`}
               </p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <Stat
-                  label="獲得ポイント"
-                  value={fmt(best.eventPt * playCount)}
-                  sub={`1回 ${fmt(best.eventPt)} Pt`}
-                  // 焚き数・回数・編成を変えたときの効き目をその場で見せる。
-                  delta={best.eventPt * playCount}
+                  label={autoFrom === "lb" ? "まわせる回数" : "獲得ポイント"}
+                  value={autoFrom === "lb" ? fmt(lbRun.plays) : fmt(best.eventPt * playCount)}
+                  sub={
+                    autoFrom === "lb"
+                      ? lbRun.stoppedBy === "plays"
+                        ? `オートの上限 ${limits.autoPlays}回で止まります`
+                        : `ライボ切れまで（回復 +${lbRun.regained}）`
+                      : `1回 ${fmt(best.eventPt)} Pt`
+                  }
+                  delta={autoFrom === "lb" ? lbRun.plays : best.eventPt * playCount}
                 />
                 <Stat
-                  label={regen ? "実質の消費ライボ" : "消費ライブボーナス"}
-                  value={fmt(regen ? Math.round(netLB) : grossLB)}
+                  label={autoFrom === "lb" ? "獲得ポイント" : "足りないライボ"}
+                  value={autoFrom === "lb" ? fmt(best.eventPt * lbRun.plays) : fmt(lbNeed.deficit)}
                   sub={
-                    taki === 0
-                      ? "0焚きなので消費なし"
-                      : regen
-                        ? `消費 ${fmt(grossLB)} − 回復 ${Math.floor(regenLB)}`
-                        : `1回 ${taki}`
+                    autoFrom === "lb"
+                      ? `1回 ${fmt(best.eventPt)} Pt`
+                      : lbNeed.deficit > 0
+                        ? `石 ${fmt(lbNeed.crystals)}／大ドリンク ${lbNeed.drinksLarge}本`
+                        : "手持ちで足ります"
                   }
+                  delta={autoFrom === "lb" ? best.eventPt * lbRun.plays : undefined}
                 />
                 <Stat
                   label="所要時間"
-                  value={hhmm(best.cycleSec * playCount)}
+                  value={hhmm(autoFrom === "lb" ? lbRun.seconds : best.cycleSec * playCount)}
                   sub={`1回 ${best.cycleSec.toFixed(0)}秒（ロス込み）`}
-                  delta={Math.round(best.cycleSec * playCount)}
+                  delta={Math.round(autoFrom === "lb" ? lbRun.seconds : best.cycleSec * playCount)}
                   formatDelta={(n) => hhmm(n)}
                 />
                 <Stat
-                  label="ライボ1あたり"
-                  value={taki > 0 ? fmt(best.eventPt / taki) : "—"}
-                  sub={taki > 0 ? "Pt / ライボ1" : "0焚きでは計算しない"}
+                  label={autoFrom === "lb" ? "使い切れず残る" : "ライボ1あたり"}
+                  value={
+                    autoFrom === "lb"
+                      ? fmt(lbRun.leftover)
+                      : taki > 0
+                        ? fmt(best.eventPt / taki)
+                        : "—"
+                  }
+                  sub={
+                    autoFrom === "lb"
+                      ? lbRun.leftover > 0
+                        ? `${taki}焚きに足りないので止まります`
+                        : "きれいに使い切れます"
+                      : taki > 0
+                        ? "Pt / ライボ1"
+                        : "0焚きでは計算しない"
+                  }
                 />
               </div>
               <p className="mt-4 text-xs leading-relaxed text-slate-500">
                 所要時間は曲長＋ロス{custom ? `（${overhead || 0}秒）` : `（${DEFAULT_OVERHEAD_SEC[mode]}秒）`}
                 の単純な積み上げです。オートは放置できるので、この時間は拘束時間ではありません。
-                「ライボ1あたり」は焚き数の選び方を比べるための値で、
-                <span className="font-bold text-slate-600">焚き数を上げるほど下がります</span>
-                （倍率の伸びが6焚き以降は鈍るため）。
+                {autoFrom === "lb" ? (
+                  <>
+                    {" "}
+                    <span className="font-bold text-slate-600">残りが焚き数を下回ると止まります</span>
+                    （5焚きで残り2なら、2焚きでは回してくれません）。自然回復は上限{limits.lbCap}
+                    までで、上限に達している間は進みません。
+                  </>
+                ) : (
+                  <>
+                    {" "}
+                    足りないぶんは<span className="font-bold text-slate-600">石や回復アイテムで注ぎ足す前提</span>
+                    で数えています（石10でライボ1・大ドリンクは10）。
+                  </>
+                )}
               </p>
             </>
           ) : (
             <p className="mt-4 text-sm text-slate-500">
-              プレイ回数を入れると、獲得ポイント・消費ライボ・所要時間をまとめて出します。
+              {autoFrom === "lb"
+                ? "いまのライブボーナスと焚き数を入れると、何回まわせるかを出します。"
+                : "プレイ回数を入れると、獲得ポイント・足りないライボ・所要時間をまとめて出します。"}
             </p>
           )}
         </Panel>
