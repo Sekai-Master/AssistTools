@@ -12948,6 +12948,25 @@
     "event_rate": 113
   },
   {
+    "id": "728",
+    "title": "スターダストレイン",
+    "pronunciation": "すたーだすとれいん",
+    "creatorArtistId": 293,
+    "artistName": "STEAKA",
+    "default": 2368201,
+    "Unit": "2_MMJ",
+    "categories": [
+      "mv_3d"
+    ],
+    "publishedAt": 1786799100000,
+    "published": false,
+    "isNewlyWrittenMusic": true,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_728.webp",
+    "music_time": 120.6,
+    "event_rate": 113
+  },
+  {
     "id": "732",
     "title": "天藍のアイスヘヴン",
     "pronunciation": "てんらんのあいすへゔん",
@@ -13307,6 +13326,44 @@
     "jacketLink": "jacket_s_751.webp",
     "music_time": 122,
     "event_rate": 113
+  },
+  {
+    "id": "752",
+    "title": "アヤノの幸福理論",
+    "pronunciation": "あやののこうふくりろん",
+    "creatorArtistId": 29,
+    "artistName": "じん",
+    "default": 1668101,
+    "Unit": "5_25",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1786687200000,
+    "published": false,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_752.webp",
+    "music_time": 135.4,
+    "event_rate": 117
+  },
+  {
+    "id": "753",
+    "title": "空想フォレスト",
+    "pronunciation": "くうそうふぉれすと",
+    "creatorArtistId": 29,
+    "artistName": "じん",
+    "default": 1568001,
+    "Unit": "4_WxS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1786600800000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_753.webp",
+    "music_time": 118.1,
+    "event_rate": 112
   },
   {
     "id": "754",
