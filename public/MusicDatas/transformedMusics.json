@@ -13339,12 +13339,12 @@
       "image"
     ],
     "publishedAt": 1786687200000,
-    "published": false,
+    "published": true,
     "isNewlyWrittenMusic": false,
     "isFullLength": false,
     "jacketLink": "jacket_s_752.webp",
     "music_time": 135.4,
-    "event_rate": 117
+    "event_rate": 118
   },
   {
     "id": "753",
