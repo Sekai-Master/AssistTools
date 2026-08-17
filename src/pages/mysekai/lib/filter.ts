@@ -8,6 +8,7 @@
 import type { Fixture, ReactionKind } from "./types";
 
 export type SortKey = "talks" | "name" | "cost" | "size";
+export type PartyFilter = "any" | "solo" | "group";
 
 export interface FilterState {
   /** 選択中のキャラID。null は「キャラで絞らない」。 */
@@ -24,6 +25,14 @@ export interface FilterState {
   sketchableOnly: boolean;
   /** 「持っている」に印を付けた家具を隠す（＝これから取りに行くものだけ残す）。 */
   hideOwned: boolean;
+  /**
+   * 会話の人数条件。
+   * - `any`   … 問わない
+   * - `solo`  … ひとりでいるときに喋る（訪ねればすぐ聞ける）
+   * - `group` … 複数人が揃わないと喋らない（居合わせを作る必要がある）
+   * キャラを選んでいればその人について、選んでいなければ家具について判定する。
+   */
+  party: PartyFilter;
   mainGenreId: number | null;
   /** 名前・読みの部分一致。 */
   query: string;
@@ -41,6 +50,7 @@ export const DEFAULT_FILTER: FilterState = {
   reactiveOnly: true,
   sketchableOnly: false,
   hideOwned: false,
+  party: "any",
   mainGenreId: null,
   query: "",
   // ★ 既定は名前の昇順。会話数の降順（＝よく喋る家具が上）も考えたが、
@@ -77,6 +87,25 @@ export function matchesChar(f: Fixture, charId: number, kinds: ReactionKind[]): 
   });
 }
 
+/**
+ * 会話の人数条件に当てはまるか。
+ *
+ * ★ キャラを選んでいればその人について判定する。「司はひとりで喋るが、類は司と居ないと喋らない」
+ *   のように人によって違うため、家具単位で決めると誤る（実測で38件が該当）。
+ */
+export function matchesParty(f: Fixture, party: PartyFilter, charId: number | null): boolean {
+  if (party === "any") return true;
+  if (f.talkCount === 0) return false;
+  if (charId != null) {
+    if (!f.talkChars.includes(charId)) return false;
+    const solo = f.talkSoloBy.get(charId) ?? 0;
+    const total = f.talkCountBy.get(charId) ?? 0;
+    return party === "solo" ? solo > 0 : total - solo > 0;
+  }
+  const anySolo = f.talkChars.some((c) => (f.talkSoloBy.get(c) ?? 0) > 0);
+  return party === "solo" ? anySolo : f.maxParty >= 2;
+}
+
 /** キャラを選んでいないときの種別判定。 */
 function matchesKindOnly(f: Fixture, kinds: ReactionKind[]): boolean {
   if (kinds.length === 0) return true;
@@ -99,6 +128,7 @@ export function applyFilter(
   const out = fixtures.filter((f) => {
     if (state.hideOwned && owned.has(f.id)) return false;
     if (state.reactiveOnly && !f.reactive) return false;
+    if (state.party !== "any" && !matchesParty(f, state.party, state.charId)) return false;
     // 「設計図が無い家具」(null) は模写のしようが無いので、模写可のみでは落とす。
     if (state.sketchableOnly && f.sketch !== true) return false;
     if (state.mainGenreId != null && f.mainGenreId !== state.mainGenreId) return false;

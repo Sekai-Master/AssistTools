@@ -17,11 +17,28 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
+import sharp from "sharp";
 import { derive, summarize } from "./lib/deriveMysekaiData.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = path.join(__dirname, "../public/MysekaiDatas");
 const OUT_FILE = path.join(OUT_DIR, "fixtures.json");
+const THUMB_DIR = path.join(OUT_DIR, "thumb");
+
+/**
+ * 家具のサムネイル。
+ *
+ * ★★ **実行時に取りに行かない。** ★★
+ *   配信元は Referer 付きの要求を 403 で弾く（他サイトからの直リンクを意図的に塞いでいる）。
+ *   `referrerPolicy` で回避はできるが、**先方が明示的に塞いでいるものを迂回しない**
+ *  （Nori 判断 2026-08-02。立ち絵・イベントロゴと同じ扱い）。ビルド時に落として自前配信する。
+ *
+ * ★ パスは家具種別で2系統。正本は sekai-viewer の src/utils/mysekaiFixtureUtils.ts。
+ *   実測で 34/34 が 200（全8種別＋ランダム20件）、152×152 のアルファ付き WebP。
+ */
+const ASSET_BASE = "https://storage.sekai.best/sekai-jp-assets/mysekai/thumbnail";
+const THUMB_CONCURRENCY = 8;
+const THUMB_QUALITY = 82;
 
 /**
  * ★ 取得元が既存2スクリプト（raw.githubusercontent.com）と違う。
@@ -104,6 +121,69 @@ function reportDiff(before, after) {
   }
 }
 
+/**
+ * 家具1件ぶんのサムネイル取得元URL。out（派生データ）を起点にするので、
+ * 出力に残っていない家具のアセットは要求しない。
+ */
+function thumbUrl(f, vocab) {
+  if (!f.im) return null;
+  const type = vocab.type[f.ty];
+  if (type === "surface_appearance") {
+    // 内装だけ階層と拡張子が違う（assetbundleName が短いIDで、向きを挟む）。
+    const layout = vocab.layout[f.ly];
+    if (!layout) return null;
+    return `${ASSET_BASE}/surface_appearance/${f.im}/tex_${f.im}_${layout}_1.png`;
+  }
+  return `${ASSET_BASE}/fixture/${f.im}_1.webp`;
+}
+
+/**
+ * サムネイルを揃える。**既にあるファイルは触らない**（毎回1,500枚落とさない）。
+ * 取得できないものは警告に留める（画像が無くても一覧は成立する。画面側は名前だけ出す）。
+ */
+async function syncThumbnails(fixtures, vocab) {
+  fs.mkdirSync(THUMB_DIR, { recursive: true });
+  const wanted = fixtures
+    .map((f) => ({ name: f.im, url: thumbUrl(f, vocab) }))
+    .filter((x) => x.name && x.url);
+  const todo = wanted.filter((x) => !fs.existsSync(path.join(THUMB_DIR, `${x.name}.webp`)));
+  if (todo.length === 0) {
+    console.log(`サムネイル: ${wanted.length}枚すべて取得済み`);
+    return;
+  }
+
+  let next = 0;
+  const failures = [];
+  const worker = async () => {
+    for (;;) {
+      const item = todo[next++];
+      if (!item) return;
+      try {
+        // ★ Referer を付けない（付けると403。Node の fetch は既定で付かないが、明示しておく）。
+        const res = await fetch(item.url);
+        if (!res.ok) {
+          failures.push(`${item.name} (HTTP ${res.status})`);
+          continue;
+        }
+        // 元が152pxと小さいので拡大はしない。内装のPNGだけ webp にして揃える。
+        const buf = await sharp(Buffer.from(await res.arrayBuffer()))
+          .webp({ quality: THUMB_QUALITY })
+          .toBuffer();
+        fs.writeFileSync(path.join(THUMB_DIR, `${item.name}.webp`), buf);
+      } catch (err) {
+        failures.push(`${item.name} (${err.message})`);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: THUMB_CONCURRENCY }, worker));
+
+  const got = todo.length - failures.length;
+  console.log(
+    `サムネイル: 新規 ${got}枚 / 既存 ${wanted.length - todo.length}枚 / 失敗 ${failures.length}`
+  );
+  if (failures.length) console.warn("  取得できなかったもの:", failures.slice(0, 20).join(", "));
+}
+
 async function main() {
   // ★ 取得中に日付をまたいでも生成時刻が揺れないよう、最初に1回だけ固定する。
   const now = Date.now();
@@ -149,6 +229,9 @@ async function main() {
   console.log(
     `  fixtures.json ${byteKb(json).padStart(8)}  (brotli ${kb(zlib.brotliCompressSync(json).length)})`
   );
+
+  // ★ 画像は JSON を書き出したあとに取りに行く（out を起点にするため）。
+  await syncThumbnails(out.fixtures, out.vocab);
 
   console.log("完了");
 }

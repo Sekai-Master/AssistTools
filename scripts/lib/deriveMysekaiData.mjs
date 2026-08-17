@@ -55,6 +55,20 @@ function buildUnitToChara(gameCharacterUnits) {
   return map;
 }
 
+/**
+ * キャラID → メンバーカラー。
+ * ★ 同じキャラは所属ユニットが違っても同じ色を持つ（実測で確認）。最初に出たものを採る。
+ */
+function buildCharaColor(gameCharacterUnits) {
+  const map = new Map();
+  for (const u of gameCharacterUnits ?? []) {
+    const chara = toId(u?.gameCharacterId);
+    if (chara == null || map.has(chara)) continue;
+    if (typeof u.colorCode === "string" && u.colorCode) map.set(chara, u.colorCode);
+  }
+  return map;
+}
+
 /** unitGroupId → キャラIDの配列（重複排除済み）。 */
 function buildGroupToCharas(unitGroups, unitToChara) {
   const map = new Map();
@@ -140,11 +154,15 @@ function collectTalks(talks, groupToCharas, conditionGroupToFixtures) {
     for (const fid of fixtureIds) {
       let entry = byFixture.get(fid);
       if (!entry) {
-        entry = { perChara: new Map(), count: 0, maxParty: 0 };
+        entry = { perChara: new Map(), count: 0, maxParty: 0, parties: new Set() };
         byFixture.set(fid, entry);
       }
       entry.count += 1;
       entry.maxParty = Math.max(entry.maxParty, charas.size);
+      // ★ 「誰が居るときの会話か」を持つ。同じ家具でも「司ひとり」と「司＋類」は
+      //   別の条件で、揃えないと始まらない組がある。構成は重複を除いて持つ
+      //   （実測でユニーク5,251件・素朴なJSONで27KB なので、丸ごと持って構わない）。
+      if (charas.size > 0) entry.parties.add(sortedIds(charas).join(","));
       // ★ **キャラごとの本数を持つ。** 家具単位の総数をキャラ選択中の画面に出すと、
       //   「フレンチスタイルのソファ 91本」のうち一歌のぶんは4〜6本しかないのに
       //   91と表示されてしまう（実測で総数は本人分の19倍になった）。
@@ -261,6 +279,7 @@ const sortedIds = (set) => [...set].sort((a, b) => a - b);
  */
 export function derive(src, now) {
   const unitToChara = buildUnitToChara(src.gameCharacterUnits);
+  const charaColor = buildCharaColor(src.gameCharacterUnits);
   const groupToCharas = buildGroupToCharas(src.mysekaiGameCharacterUnitGroups, unitToChara);
   const conditionGroupToFixtures = buildConditionGroupToFixtures(
     src.mysekaiCharacterTalkConditions,
@@ -296,7 +315,17 @@ export function derive(src, now) {
     // ★ 所属ユニットは gameCharacters の unit を使う（gameCharacterUnits ではない）。
     //   あちらは「そのキャラが出演しうるユニット」の一覧で、ミクは6つ持つ。
     //   選択肢をユニットで束ねたいので、ここでは本籍にあたる1つを取る。
-    if (name) characters.push({ id, name, unit: typeof c.unit === "string" ? c.unit : "" });
+    if (!name) continue;
+    characters.push({
+      id,
+      name,
+      unit: typeof c.unit === "string" ? c.unit : "",
+      // 顔ぶれを名前で並べるとすぐ溢れるので、色と1文字で示す。
+      // ★ メンバーカラーはキャラごとに1つで、所属ユニットでは変わらない（実測確認）。
+      color: charaColor.get(id) ?? "",
+      // givenName の1文字目。26人で重複しないことを確認済み。
+      initial: typeof c.givenName === "string" && c.givenName ? c.givenName[0] : name[0],
+    });
   }
   characters.sort((a, b) => a.id - b.id);
 
@@ -338,6 +367,14 @@ export function derive(src, now) {
       st: intern(siteVocab, f.mysekaiSettableSiteType),
       ly: intern(layoutVocab, f.mysekaiSettableLayoutType),
       co: toId(f.firstPutCost) ?? undefined,
+      /**
+       * サムネイル画像のファイル名（拡張子なし）。
+       * ★ 配信元のパスは家具種別で2系統に分かれる（sekai-viewer の mysekaiFixtureUtils.ts が正本）:
+       *     通常          … mysekai/thumbnail/fixture/{ab}_1.webp
+       *     surface_appearance … mysekai/thumbnail/surface_appearance/{ab}/tex_{ab}_{layout}_1.png
+       *   画像は取得スクリプトが落として自前配信するので、画面はこの名前だけ見ればよい。
+       */
+      im: typeof f.assetbundleName === "string" && f.assetbundleName ? f.assetbundleName : undefined,
       // 設計図が無い家具（イベント配布の固定設置物など）は落とす。false（模写不可）とは別物。
       sk: bp ? Boolean(bp.isEnableSketch) : undefined,
       ac: f.isGameCharacterAction ? 1 : undefined,
@@ -356,6 +393,16 @@ export function derive(src, now) {
       tn: talk && talk.count ? talk.count : undefined,
       /** その家具で会話する最大人数（2以上なら複数人で集まる会話がある）。 */
       tp: talk && talk.maxParty > 1 ? talk.maxParty : undefined,
+      /**
+       * 会話が発生する顔ぶれの組み合わせ（キャラIDの配列の配列）。
+       * 人数の少ない順・ID順に並べる（画面がソロから見せられるように）。
+       */
+      pt:
+        talk && talk.parties.size
+          ? [...talk.parties]
+              .map((s) => s.split(",").map(Number))
+              .sort((a, b) => a.length - b.length || a[0] - b[0])
+          : undefined,
       lc: common && common.like.size ? sortedIds(common.like) : undefined,
       /**
        * ★ normal（無関心）は**出力しない**。

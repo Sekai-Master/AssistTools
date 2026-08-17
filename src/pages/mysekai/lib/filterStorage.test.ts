@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_FILTER } from "./filter";
 import { FILTER_STORAGE_KEY, loadFilter, saveFilter } from "./filterStorage";
-import { loadOwned, OWNED_STORAGE_KEY, saveOwned } from "./ownedStorage";
+import { loadProgress, OWNED_STORAGE_KEY, partyKey, saveProgress } from "./ownedStorage";
 
 /**
  * localStorage は旧バージョンの自分や手書きに汚染されうる。
@@ -82,31 +82,64 @@ describe("filterStorage", () => {
   });
 });
 
-describe("ownedStorage", () => {
-  it("保存して読み戻せる", () => {
-    saveOwned(new Set([3, 1, 2]));
-    expect([...loadOwned()].sort((a, b) => a - b)).toEqual([1, 2, 3]);
+describe("ownedStorage（進み具合）", () => {
+  const P = (owned: number[] = [], collected: string[] = []) => ({
+    owned: new Set(owned),
+    collected: new Set(collected),
   });
 
-  it("何も無ければ空", () => {
-    expect(loadOwned().size).toBe(0);
+  it("持っている家具と、見た会話を別々に保存して読み戻せる", () => {
+    saveProgress(P([3, 1, 2], ["10:1", "10:1,2"]));
+    const got = loadProgress();
+    expect([...got.owned].sort((a, b) => a - b)).toEqual([1, 2, 3]);
+    expect([...got.collected].sort()).toEqual(["10:1", "10:1,2"]);
   });
 
-  // 誤って「全部持っている」状態にしないこと。壊れていたら空に倒す。
+  it("何も無ければ両方とも空", () => {
+    const got = loadProgress();
+    expect(got.owned.size).toBe(0);
+    expect(got.collected.size).toBe(0);
+  });
+
+  // 誤って「全部持っている／全部見た」状態にしないこと。壊れていたら空に倒す。
   it("壊れていたら空に倒す", () => {
-    for (const bad of ["{oops", "[]", '{"v":1}', '{"v":99,"ids":[1]}', "null"]) {
+    for (const bad of ["{oops", "[]", '{"v":99,"ids":[1]}', "null", '"x"']) {
       localStorage.setItem(OWNED_STORAGE_KEY, bad);
-      expect(loadOwned().size).toBe(0);
+      const got = loadProgress();
+      expect(got.owned.size).toBe(0);
+      expect(got.collected.size).toBe(0);
     }
   });
 
-  it("整数でない要素は捨てる", () => {
+  it("整数でない家具IDは捨てる", () => {
     localStorage.setItem(OWNED_STORAGE_KEY, JSON.stringify({ v: 1, ids: [1, "2", null, 3.5, 4] }));
-    expect([...loadOwned()].sort((a, b) => a - b)).toEqual([1, 4]);
+    expect([...loadProgress().owned].sort((a, b) => a - b)).toEqual([1, 4]);
+  });
+
+  it("形の違う会話キーは捨てる", () => {
+    localStorage.setItem(
+      OWNED_STORAGE_KEY,
+      JSON.stringify({ v: 1, seen: ["10:1", "", "こわれた", "10:", 5, "11:2,3"] })
+    );
+    expect([...loadProgress().collected].sort()).toEqual(["10:1", "11:2,3"]);
   });
 
   it("並びを揃えて保存する（書き出しの差分が読めるように）", () => {
-    saveOwned(new Set([5, 1, 3]));
-    expect(JSON.parse(localStorage.getItem(OWNED_STORAGE_KEY)!).ids).toEqual([1, 3, 5]);
+    saveProgress(P([5, 1, 3], ["2:9", "1:1"]));
+    const raw = JSON.parse(localStorage.getItem(OWNED_STORAGE_KEY)!);
+    expect(raw.ids).toEqual([1, 3, 5]);
+    expect(raw.seen).toEqual(["1:1", "2:9"]);
+  });
+});
+
+describe("partyKey", () => {
+  // 並びが違うだけで別物になると、同じ会話に2つ印が立つ。
+  it("顔ぶれの並びが違っても同じキーになる", () => {
+    expect(partyKey(10, [2, 1])).toBe(partyKey(10, [1, 2]));
+    expect(partyKey(10, [1, 2])).toBe("10:1,2");
+  });
+
+  it("家具が違えば別のキー", () => {
+    expect(partyKey(10, [1])).not.toBe(partyKey(11, [1]));
   });
 });

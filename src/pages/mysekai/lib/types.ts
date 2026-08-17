@@ -18,6 +18,10 @@ export interface MysekaiCharacter {
   name: string;
   /** 所属ユニット（マスタの unit。light_sound / piapro など）。選択肢の見出しに使う。 */
   unit: string;
+  /** メンバーカラー（#rrggbb）。顔ぶれを名前で並べると溢れるので色で示す。 */
+  color: string;
+  /** 名前の1文字目。26人で重複しない。 */
+  initial: string;
 }
 
 /**
@@ -64,6 +68,8 @@ export interface Fixture {
   /** 設置の向き（floor / wall / rug など）。 */
   layout: string;
   cost: number | null;
+  /** サムネイルのファイル名（拡張子なし）。URL の組み立ては lib/thumb.ts。 */
+  image: string;
   /**
    * 模写できるか。**null は「設計図が存在しない家具」**で、false（模写不可）とは別物。
    * 他人のマイセカイへ取りに行けるかの判断に使うので、混ぜてはいけない。
@@ -88,6 +94,11 @@ export interface Fixture {
   talkSoloBy: Map<number, number>;
   /** B: その家具で会話する最大人数（2以上なら複数人で集まる会話がある）。 */
   maxParty: number;
+  /**
+   * B: 会話が発生する顔ぶれの組み合わせ。人数の少ない順。
+   * 「司ひとり」と「司＋類」は別の条件なので、揃えないと始まらない組が分かる。
+   */
+  parties: number[][];
   /** C: この家具を特に好むキャラ（positive のみ。normal は持たない）。 */
   likeChars: number[];
   /** 何らかの反応を持つか（既定の絞り込みで使う）。 */
@@ -158,9 +169,16 @@ export function normalize(raw: unknown): MysekaiData {
   if (Array.isArray(root.characters)) {
     for (const c of root.characters) {
       if (!c || typeof c !== "object") continue;
-      const { id, name, unit } = c as { id?: unknown; name?: unknown; unit?: unknown };
+      const { id, name, unit, color, initial } = c as Record<string, unknown>;
       if (isNum(id) && isStr(name)) {
-        characters.push({ id, name, unit: isStr(unit) ? unit : "" });
+        characters.push({
+          id,
+          name,
+          unit: isStr(unit) ? unit : "",
+          // 色が壊れていたら塗らない（不正な値を style に流し込まない）。
+          color: isStr(color) && /^#[0-9a-fA-F]{6}$/.test(color) ? color : "",
+          initial: isStr(initial) ? initial.slice(0, 1) : name.slice(0, 1),
+        });
       }
     }
   }
@@ -208,6 +226,8 @@ export function normalize(raw: unknown): MysekaiData {
         site: pickVocab(vocabRoot.site, f.st),
         layout: pickVocab(vocabRoot.layout, f.ly),
         cost: isNum(f.co) ? f.co : null,
+        // 画像はファイル名だけ持ち、パスの組み立ては lib/thumb.ts に閉じる。
+        image: isStr(f.im) ? f.im : "",
         sketch: typeof f.sk === "boolean" ? f.sk : null,
         action,
         talkChars,
@@ -215,6 +235,9 @@ export function normalize(raw: unknown): MysekaiData {
         talkCountBy,
         talkSoloBy,
         maxParty: isNum(f.tp) ? f.tp : 1,
+        parties: Array.isArray(f.pt)
+          ? f.pt.filter((p): p is number[] => Array.isArray(p) && p.length > 0 && p.every(isNum))
+          : [],
         likeChars,
         reactive: talkCount > 0 || action || likeChars.length > 0,
         charSet: new Set([...talkChars, ...likeChars]),

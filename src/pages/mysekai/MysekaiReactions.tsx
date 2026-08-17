@@ -6,9 +6,18 @@ import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { Switch } from "../../components/ui/Switch";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { cn } from "../../lib/utils";
-import { applyFilter, summary, talksOf, type FilterState, type SortKey } from "./lib/filter";
+import {
+  applyFilter,
+  summary,
+  talksOf,
+  type FilterState,
+  type PartyFilter,
+  type SortKey,
+} from "./lib/filter";
 import { loadFilter, saveFilter } from "./lib/filterStorage";
-import { loadOwned, saveOwned } from "./lib/ownedStorage";
+import { FixtureModal } from "./FixtureModal";
+import { loadProgress, partyKey, saveProgress } from "./lib/ownedStorage";
+import { thumbUrl } from "./lib/thumb";
 import {
   UNIT_NAME,
   UNIT_ORDER,
@@ -35,28 +44,18 @@ const KIND_LABEL: Record<ReactionKind, string> = {
   like: "好みの家具",
 };
 
+const PARTY_OPTIONS: { value: PartyFilter; label: string }[] = [
+  { value: "any", label: "人数問わず" },
+  { value: "solo", label: "ひとりで" },
+  { value: "group", label: "複数人で" },
+];
+
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "talks", label: "会話数" },
   { value: "name", label: "名前" },
   { value: "cost", label: "コスト" },
   { value: "size", label: "大きさ" },
 ];
-
-const SITE_LABEL: Record<string, string> = {
-  room: "部屋",
-  home: "屋外",
-  any: "どこでも",
-};
-
-/** 設置の向き。マスタの語彙をそのまま出すと英語が混じるので日本語にする。 */
-const LAYOUT_LABEL: Record<string, string> = {
-  floor: "床",
-  wall: "壁",
-  rug: "ラグ",
-  road: "道",
-  floor_appearance: "地面",
-  wall_appearance: "外壁",
-};
 
 /** 素の select にニューモーフィズムの見た目を与える。ネイティブUIのままにしたいので置換はしない。 */
 const SELECT_CLASS =
@@ -82,19 +81,18 @@ function SketchBadge({ sketch }: { sketch: boolean | null }) {
 function FixtureRow({
   fixture,
   charId,
-  characterName,
+  charById,
   owned,
-  onToggleOwned,
+  collectedCount,
+  onOpen,
 }: {
   fixture: Fixture;
   charId: number | null;
-  characterName: (id: number) => string;
+  charById: (id: number) => MysekaiCharacter | undefined;
   owned: boolean;
-  onToggleOwned: (id: number) => void;
+  collectedCount: number;
+  onOpen: (f: Fixture) => void;
 }) {
-  // キャラを選んでいるときは、その人がどう反応するかだけ出す（全員分は多すぎる）。
-  const talksHere = charId != null && fixture.talkChars.includes(charId);
-  const likesHere = charId != null && fixture.likeChars.includes(charId);
   // ★ 表示する本数は**選んだ人のぶん**。家具の総数を出すと実数の19倍になる。
   const talks = talksOf(fixture, charId);
   /**
@@ -106,89 +104,90 @@ function FixtureRow({
     (charId != null
       ? (fixture.talkSoloBy.get(charId) ?? 0) === 0
       : fixture.talkChars.every((c) => (fixture.talkSoloBy.get(c) ?? 0) === 0));
-  const size = fixture.size.some((n) => n > 0) ? fixture.size.join("×") : null;
+  const img = thumbUrl(fixture);
+  // 顔ぶれは先頭だけ出す。全部はモーダルで見る（1,500件を一覧で追えなくなるため）。
+  const facesShown = fixture.talkChars.slice(0, 8);
 
   return (
-    <li
-      className={cn(
-        "flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-[color:var(--neu-lo)]/40 py-2.5 last:border-b-0",
-        // 持っているものは沈ませる。消さずに残すのは、印の付け間違いに気づけるようにするため。
-        owned && "opacity-45"
-      )}
-    >
-      <label className="flex shrink-0 cursor-pointer items-center" title="持っている家具に印を付ける">
-        <input
-          type="checkbox"
-          checked={owned}
-          onChange={() => onToggleOwned(fixture.id)}
-          className="h-4 w-4 accent-[color:var(--unit-color)]"
-          aria-label={`${fixture.name} を持っている`}
-        />
-      </label>
-      <span className="min-w-0 flex-1 font-bold text-slate-700">{fixture.name}</span>
+    <li className="border-b border-[color:var(--neu-lo)]/40 last:border-b-0">
+      <button
+        type="button"
+        onClick={() => onOpen(fixture)}
+        className={cn(
+          "flex w-full items-center gap-3 py-2 text-left",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
+          owned && "opacity-45"
+        )}
+      >
+        {img ? (
+          <img
+            src={img}
+            alt=""
+            width={40}
+            height={40}
+            loading="lazy"
+            decoding="async"
+            className="h-10 w-10 shrink-0 rounded-lg bg-neu object-contain shadow-neu-inset"
+          />
+        ) : (
+          <span className="h-10 w-10 shrink-0 rounded-lg bg-neu shadow-neu-inset" />
+        )}
 
-      <span className="flex flex-wrap items-center gap-1.5">
-        {talks > 0 && (
-          <span
-            className={cn(
-              "rounded px-1.5 py-0.5 text-xs font-bold",
-              talksHere ? "text-white" : "bg-neu text-slate-500 shadow-neu-inset"
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-bold text-slate-700">{fixture.name}</span>
+          <span className="mt-0.5 flex flex-wrap items-center gap-1">
+            {facesShown.map((id) => {
+              const c = charById(id);
+              if (!c) return null;
+              return (
+                <span
+                  key={id}
+                  title={c.name}
+                  className={cn(
+                    "inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold text-white",
+                    charId != null && charId !== id && "opacity-30"
+                  )}
+                  style={{ backgroundColor: c.color || "var(--unit-color)" }}
+                >
+                  {c.initial}
+                </span>
+              );
+            })}
+            {fixture.talkChars.length > facesShown.length && (
+              <span className="text-[10px] text-slate-400">
+                +{fixture.talkChars.length - facesShown.length}
+              </span>
             )}
-            style={talksHere ? { backgroundColor: "var(--unit-color)" } : undefined}
-            title={
-              charId != null
-                ? `この家具の会話は全部で ${fixture.talkCount} 本`
-                : "会話パターンの本数（キャラの組み合わせごとに1本）"
-            }
-          >
-            会話 {talks}
           </span>
-        )}
-        {/* ★ ひとりで喋るか、誰かと居ないと始まらないかは家具を置く動機がまるで違う。
-            ソロが無い家具（ユニットのソファ等16件）は、その子ひとりを訪ねても何も起きない。 */}
-        {needsCompany && (
-          <span
-            className="rounded bg-neu px-1.5 py-0.5 text-xs font-bold text-slate-500 shadow-neu-inset"
-            title={
-              charId != null
-                ? "この家具では、ひとりでいるときの会話がありません（誰かと一緒に居る必要があります）"
-                : "ひとりで喋る会話がない家具です（複数人が揃うと会話します）"
-            }
-          >
-            {fixture.maxParty >= 2 ? `${fixture.maxParty}人以上で` : "誰かと一緒に"}
-          </span>
-        )}
-        {fixture.action && (
-          <span className="rounded bg-neu px-1.5 py-0.5 text-xs text-slate-500 shadow-neu-inset">
-            動く
-          </span>
-        )}
-        {(likesHere || (charId == null && fixture.likeChars.length > 0)) && (
-          <span className="rounded bg-neu px-1.5 py-0.5 text-xs text-slate-500 shadow-neu-inset">
-            {likesHere ? "お気に入り" : `好み ${fixture.likeChars.length}人`}
-          </span>
-        )}
-        <SketchBadge sketch={fixture.sketch} />
-      </span>
-
-      <span className="w-full text-xs text-slate-500 sm:w-auto sm:text-right">
-        {[
-          SITE_LABEL[fixture.site] ?? fixture.site,
-          LAYOUT_LABEL[fixture.layout] ?? fixture.layout,
-          size,
-          fixture.cost != null ? `${fixture.cost}` : null,
-        ]
-          .filter(Boolean)
-          .join(" / ")}
-      </span>
-
-      {/* キャラ未選択のときだけ、会話に出る顔ぶれを軽く見せる（誰向けの家具か分かるように）。 */}
-      {charId == null && fixture.talkChars.length > 0 && (
-        <span className="w-full text-xs text-slate-400">
-          {fixture.talkChars.slice(0, 6).map(characterName).filter(Boolean).join("・")}
-          {fixture.talkChars.length > 6 && ` ほか${fixture.talkChars.length - 6}人`}
         </span>
-      )}
+
+        <span className="flex shrink-0 flex-col items-end gap-1">
+          <span className="flex items-center gap-1">
+            {talks > 0 && (
+              <span
+                className="rounded px-1.5 py-0.5 text-xs font-bold text-white"
+                style={{ backgroundColor: "var(--unit-color)" }}
+              >
+                {collectedCount > 0 ? `${collectedCount}/${talks}` : talks}
+              </span>
+            )}
+            {needsCompany && (
+              <span
+                className="rounded bg-neu px-1.5 py-0.5 text-xs text-slate-500 shadow-neu-inset"
+                title="ひとりでは会話が始まりません"
+              >
+                揃うと
+              </span>
+            )}
+            {fixture.action && (
+              <span className="rounded bg-neu px-1.5 py-0.5 text-xs text-slate-500 shadow-neu-inset">
+                動く
+              </span>
+            )}
+          </span>
+          <SketchBadge sketch={fixture.sketch} />
+        </span>
+      </button>
     </li>
   );
 }
@@ -209,24 +208,53 @@ export default function MysekaiReactions() {
     setLimit(100);
   }, []);
 
-  /** 持っている家具の印。端末にだけ残す。 */
-  const [owned, setOwned] = useState(loadOwned);
+  /**
+   * 進み具合。端末にだけ残す。
+   * - owned     … 設計図を持っている（家具単位）
+   * - collected … その顔ぶれの会話を見た（家具×顔ぶれ単位）
+   * 別物なので分けて持つ（持っていても全部見たとは限らない）。
+   */
+  const [progress, setProgress] = useState(loadProgress);
+  const { owned, collected } = progress;
+  /** 詳細を開いている家具。null なら閉じている。 */
+  const [openFixture, setOpenFixture] = useState<Fixture | null>(null);
 
   useEffect(() => saveFilter(filter), [filter]);
-  useEffect(() => saveOwned(owned), [owned]);
+  useEffect(() => saveProgress(progress), [progress]);
 
   const toggleOwned = useCallback((id: number) => {
-    setOwned((prev) => {
-      const next = new Set(prev);
+    setProgress((prev) => {
+      const next = new Set(prev.owned);
       if (!next.delete(id)) next.add(id);
-      return next;
+      return { ...prev, owned: next };
     });
   }, []);
 
-  const charName = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const c of data?.characters ?? []) map.set(c.id, c.name);
-    return (id: number) => map.get(id) ?? "";
+  /** その家具の会話をまとめて既読／未読にする。 */
+  const toggleAllCollected = useCallback((f: Fixture, mark: boolean) => {
+    setProgress((prev) => {
+      const next = new Set(prev.collected);
+      for (const p of f.parties) {
+        const k = partyKey(f.id, p);
+        if (mark) next.add(k);
+        else next.delete(k);
+      }
+      return { ...prev, collected: next };
+    });
+  }, []);
+
+  const toggleCollected = useCallback((key: string) => {
+    setProgress((prev) => {
+      const next = new Set(prev.collected);
+      if (!next.delete(key)) next.add(key);
+      return { ...prev, collected: next };
+    });
+  }, []);
+
+  const charById = useMemo(() => {
+    const map = new Map<number, MysekaiCharacter>();
+    for (const c of data?.characters ?? []) map.set(c.id, c);
+    return (id: number) => map.get(id);
   }, [data]);
 
   /** 選択肢をユニットで束ねる。26人を1列に並べると選びにくい。 */
@@ -364,6 +392,22 @@ export default function MysekaiReactions() {
             </p>
           </div>
 
+          <div>
+            <SegmentedControl
+              options={PARTY_OPTIONS}
+              value={filter.party}
+              onChange={(v) => setFilter((f) => ({ ...f, party: v }))}
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              {filter.party === "solo"
+                ? "ひとりでいるときに喋る家具だけ。訪ねればすぐ聞けます"
+                : filter.party === "group"
+                  ? "複数人が揃わないと喋らない家具だけ。居合わせを作る必要があります"
+                  : "会話の人数で絞りません"}
+              {effectiveFilter.charId != null && "（選んだキャラについて判定します）"}
+            </p>
+          </div>
+
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
             <Switch
               checked={filter.reactiveOnly}
@@ -466,9 +510,14 @@ export default function MysekaiReactions() {
                   key={f.id}
                   fixture={f}
                   charId={effectiveFilter.charId}
-                  characterName={charName}
+                  charById={charById}
                   owned={owned.has(f.id)}
-                  onToggleOwned={toggleOwned}
+                  collectedCount={
+                    collected.size === 0
+                      ? 0
+                      : f.parties.reduce((n, p) => n + (collected.has(partyKey(f.id, p)) ? 1 : 0), 0)
+                  }
+                  onOpen={setOpenFixture}
                 />
               ))}
             </ul>
@@ -497,6 +546,19 @@ export default function MysekaiReactions() {
           「持っている」の印とフィルタの状態は<b>この端末にだけ</b>保存されます（設定画面から書き出し・削除できます）。
         </p>
       </Panel>
+      {openFixture && (
+        <FixtureModal
+          fixture={openFixture}
+          charById={charById}
+          highlight={effectiveFilter.charId}
+          owned={owned.has(openFixture.id)}
+          collected={collected}
+          onToggleOwned={toggleOwned}
+          onToggleCollected={toggleCollected}
+          onToggleAll={toggleAllCollected}
+          onClose={() => setOpenFixture(null)}
+        />
+      )}
     </ToolPage>
   );
 }

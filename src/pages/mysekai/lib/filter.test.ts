@@ -30,6 +30,10 @@ const fx = (
     ...rest,
     talkChars,
     talkCountBy: new Map(talkPairs),
+    // 既定は「全部ソロ」。人数条件のテストだけ明示的に上書きする。
+    talkSoloBy: over.talkSoloBy ?? new Map(talkPairs),
+    maxParty: over.maxParty ?? 1,
+    parties: over.parties ?? talkChars.map((c) => [c]),
     likeChars,
     talkCount,
     action,
@@ -126,6 +130,47 @@ describe("applyFilter", () => {
 
   it("条件を重ねられる（キャラ＋模写可）", () => {
     expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, charId: 2, sketchableOnly: true }))).toEqual([1]);
+  });
+});
+
+describe("会話の人数で絞る", () => {
+  // ソファ: 一歌はソロ4本、咲希はソロ0本（一歌と居るときの1本だけ）
+  const ソファ2 = fx({
+    id: 20,
+    name: "ソファ2",
+    talks: [[1, 4], [2, 1]],
+    talkSoloBy: new Map([[1, 4], [2, 0]]),
+    maxParty: 2,
+  });
+  const ベンチ = fx({ id: 21, name: "ベンチ", talks: [[3, 2]], talkSoloBy: new Map([[3, 2]]) });
+  const 二人掛け = fx({
+    id: 22,
+    name: "二人掛け",
+    talks: [[4, 3], [5, 3]],
+    talkSoloBy: new Map([[4, 0], [5, 0]]),
+    maxParty: 2,
+  });
+  const LIST = [ソファ2, ベンチ, 二人掛け];
+
+  it("ひとりで喋る家具だけに絞れる", () => {
+    expect(ids(applyFilter(LIST, { ...DEFAULT_FILTER, party: "solo" }))).toEqual([20, 21]);
+  });
+
+  it("複数人でしか喋らない家具だけに絞れる", () => {
+    expect(ids(applyFilter(LIST, { ...DEFAULT_FILTER, party: "group" }))).toEqual([20, 22]);
+  });
+
+  // ★ 同じ家具でも人によって違う（実測で38件が該当）。家具単位で決めると誤る。
+  it("キャラを選んだらその人について判定する", () => {
+    // 一歌はソファでソロ会話を持つ
+    expect(ids(applyFilter(LIST, { ...DEFAULT_FILTER, party: "solo", charId: 1 }))).toEqual([20]);
+    // 咲希は同じソファでソロ会話を持たない（一歌と居るときだけ）
+    expect(ids(applyFilter(LIST, { ...DEFAULT_FILTER, party: "solo", charId: 2 }))).toEqual([]);
+    expect(ids(applyFilter(LIST, { ...DEFAULT_FILTER, party: "group", charId: 2 }))).toEqual([20]);
+  });
+
+  it("any なら人数で絞らない", () => {
+    expect(ids(applyFilter(LIST, { ...DEFAULT_FILTER, party: "any" }))).toEqual([20, 21, 22]);
   });
 });
 

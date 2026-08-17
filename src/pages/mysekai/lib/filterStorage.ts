@@ -7,7 +7,7 @@
  * localStorage は旧バージョンの自分や手書きに汚染されうるので、
  * バージョンと型を見てから使う（EfficiencyRanking の loadStored と同じ流儀）。
  */
-import { DEFAULT_FILTER, type FilterState, type SortKey } from "./filter";
+import { DEFAULT_FILTER, type FilterState, type PartyFilter, type SortKey } from "./filter";
 import type { ReactionKind } from "./types";
 
 export const FILTER_STORAGE_KEY = "sekaimaster:mysekai:filters:v1";
@@ -15,6 +15,7 @@ const VERSION = 1;
 
 const KINDS: ReactionKind[] = ["talk", "action", "like"];
 const SORTS: SortKey[] = ["talks", "name", "cost", "size"];
+const PARTIES: PartyFilter[] = ["any", "solo", "group"];
 
 const bool = (v: unknown, fallback: boolean): boolean => (typeof v === "boolean" ? v : fallback);
 const numOrNull = (v: unknown): number | null =>
@@ -40,6 +41,9 @@ export function loadFilter(): FilterState {
       reactiveOnly: bool(s.reactiveOnly, DEFAULT_FILTER.reactiveOnly),
       sketchableOnly: bool(s.sketchableOnly, DEFAULT_FILTER.sketchableOnly),
       hideOwned: bool(s.hideOwned, DEFAULT_FILTER.hideOwned),
+      party: PARTIES.includes(s.party as PartyFilter)
+        ? (s.party as PartyFilter)
+        : DEFAULT_FILTER.party,
       mainGenreId: numOrNull(s.mainGenreId),
       // 検索語は保存しない（前回の入力が残っていると「0件」の理由が分からなくなる）。
       query: "",
