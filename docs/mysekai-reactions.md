@@ -104,18 +104,32 @@ const BASE = "https://sekai-world.github.io/sekai-master-db-diff";
 マイセカイ系は必要な表が12本あり、**raw を連続で叩くと 429 Too Many Requests に落ちる**ことを実測した。
 同じ内容が GitHub Pages 経由なら制限に当たらない。既存2本は動いているので移していない。
 
-## 会話本文と家具画像は扱わない
+## 会話本文は扱わない / 家具画像は自前配信する
 
 - **会話本文**: `mysekaiCharacterTalks` が持つのは lua スクリプト名だけ。
   `storage.sekai.best` を `.lua/.txt/.asset/.bytes` の4拡張子で試して全404（同ホストの楽曲ジャケットは200なので未配信）。
   Nori 判断でネタバレ回避のため扱わない
-- **家具画像**: `assetbundleName` は3Dモデル名。サムネイルのパスを3パターン試して全404、
-  `assetList.json` にも `mysekai`×`fixture` のパスは無い。パスが判明したら
-  `refresh-card-data.mjs` の `syncImages()` 相当を足せる
+- **家具画像**: サムネイルは存在する。正本は sekai-viewer の `src/utils/mysekaiFixtureUtils.ts`。
+
+```
+通常家具            mysekai/thumbnail/fixture/{assetbundleName}_1.webp
+内装(surface_appearance)  mysekai/thumbnail/surface_appearance/{ab}/tex_{ab}_{layout}_1.png
+```
+
+  152×152・アルファ付き。**Referer 付きは403**で弾かれるので、立ち絵と同じく
+  ビルド時に落として自前配信する（迂回しない）。
+
+  ⚠️ **内装は assetbundleName が壁紙と床で共通**。保存名を assetbundleName だけにすると
+  後勝ちで上書きされ、片方が別物の絵になる（実測31種類・のべ77件で発生）。
+  保存名には向きを含めること（`{ab}_{layout}`）。`deriveMysekaiData.mjs` の `thumbName()` が担当。
+
+  なお苗4件・種15件が同じ画像を共有するが、これは**上流が正当に共有しているもの**
+  （植えた直後は見た目が同じ）。「バラの種/赤」と「バラの種/青」は一覧では名前でしか区別できない。
 
 ## 配信データ
 
-`public/MysekaiDatas/fixtures.json`（330KB / **brotli 24KB**）。この画面でしか使わないので独立ファイル。
+`public/MysekaiDatas/fixtures.json`（412KB / **brotli 32KB**）とサムネイル 1,501枚（5.9MB）。
+この画面でしか使わないので独立させている。
 
 転送量を優先してキーを短くし、空の項目は落としてある。画面側は `src/pages/mysekai/lib/types.ts` の
 `normalize()` で読みやすい形に戻す（「無ければ既定値」を1箇所に閉じ込める）。
@@ -134,6 +148,8 @@ const BASE = "https://sekai-world.github.io/sekai-master-db-diff";
 | `tn` | 家具全体の会話本数 |
 | `tp` | 会話する最大人数（2以上のときだけ持つ） |
 | `lc` | 好み（positive）のキャラID配列 |
+| `pt` | 会話が起きる顔ぶれ（キャラIDの配列の配列）。**回収チェックの単位** |
+| `im` | サムネイルのファイル名。内装は向きを含む（後述） |
 
 **`sk` の3値を混ぜないこと。** 「模写不可」と「設計図が存在しない」は入手経路の話として別物で、
 どちらも模写では手に入らないが、後者はイベント配布などの固定設置物を含む。
@@ -154,13 +170,13 @@ const BASE = "https://sekai-world.github.io/sekai-master-db-diff";
 | **誰もソロ会話を持たない**（ユニットのソファ等） | **16** |
 | キャラによって分かれる | 38 |
 
-最大人数の分布は 1人=269 / 2人=93 / 3人=1 / 4人=6。画面では「2人以上で」「誰かと一緒に」と出す。
+最大人数の分布は 1人=269 / 2人=93 / 3人=1 / 4人=6。画面では「揃うと」バッジで示す。
 
 ## 検証
 
 ```bash
 npm run data:refresh-mysekai   # 生成。件数が実測値と合うか見る
-npm test                       # 結合ロジック16件 + 絞り込み16件
+npm test                       # derive 23 / filter 28 / storage 18 / types 15 / 実データ検算 12
 ```
 
 生成時に出る件数が次と一致すれば結合は正しい（2026-08-17 時点）。

@@ -1,6 +1,7 @@
 import { useId, useRef } from "react";
 import { useModalA11y } from "../../lib/a11y";
 import { cn } from "../../lib/utils";
+import { CHIP_SHADOW, chipBg } from "./lib/charaColor";
 import { thumbUrl } from "./lib/thumb";
 import { partyKey } from "./lib/ownedStorage";
 import type { Fixture, MysekaiCharacter } from "./lib/types";
@@ -29,15 +30,20 @@ const LAYOUT_LABEL: Record<string, string> = {
 
 function CharaChip({ c, dim }: { c: MysekaiCharacter | undefined; dim?: boolean }) {
   if (!c) return null;
+  // ★ 生のメンバーカラーは白文字だと26色中25色が AA 未満。読める濃さへ沈める。
+  const bg = c.color ? chipBg(c.color) : "var(--unit-color)";
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full py-0.5 pr-2 pl-0.5 text-xs font-bold text-white",
-        dim && "opacity-40"
+        "inline-flex items-center gap-1 rounded-full py-1 pr-2.5 pl-1 text-xs font-bold",
+        dim && "opacity-45"
       )}
-      style={{ backgroundColor: c.color || "var(--unit-color)" }}
+      style={{ backgroundColor: bg, color: "#ffffff", textShadow: CHIP_SHADOW }}
     >
-      <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/25">
+      <span
+        className="inline-flex h-4 w-4 items-center justify-center rounded-full"
+        style={{ backgroundColor: "rgba(255,255,255,0.28)" }}
+      >
         {c.initial}
       </span>
       {c.name}
@@ -54,6 +60,7 @@ export function FixtureModal({
   onToggleOwned,
   onToggleCollected,
   onToggleAll,
+  highlightName,
   onClose,
 }: {
   fixture: Fixture;
@@ -63,17 +70,26 @@ export function FixtureModal({
   collected: Set<string>;
   onToggleOwned: (id: number) => void;
   onToggleCollected: (key: string) => void;
-  /** 顔ぶれが多い家具を1件ずつ押すのは辛いので、まとめて切り替える。 */
-  onToggleAll: (f: Fixture, mark: boolean) => void;
+  /** 顔ぶれが多い家具を1件ずつ押すのは辛いので、まとめて切り替える。対象は呼び出し側が渡す。 */
+  onToggleAll: (f: Fixture, parties: number[][], mark: boolean) => void;
+  /** 選択中キャラの名前（見出しに出す）。 */
+  highlightName?: string;
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useModalA11y(true, onClose, dialogRef);
 
-  const solos = fixture.parties.filter((p) => p.length === 1);
-  const groups = fixture.parties.filter((p) => p.length > 1);
-  const seen = fixture.parties.filter((p) => collected.has(partyKey(fixture.id, p))).length;
+  /**
+   * ★ キャラを選んでいるときは**その人が出る顔ぶれだけ**を対象にする。
+   *   以前は家具の全顔ぶれを並べ、「すべて見た」も全件に効いていたため、
+   *   一歌を見に来た人が無関係な85件まで既読にしてしまっていた（取り消しは全解除しかない）。
+   */
+  const target = highlight == null ? fixture.parties : fixture.parties.filter((p) => p.includes(highlight));
+  const others = highlight == null ? [] : fixture.parties.filter((p) => !p.includes(highlight));
+  const solos = target.filter((p) => p.length === 1);
+  const groups = target.filter((p) => p.length > 1);
+  const seen = target.filter((p) => collected.has(partyKey(fixture.id, p))).length;
   const img = thumbUrl(fixture);
 
   /**
@@ -219,19 +235,20 @@ export function FixtureModal({
             <>
               <div className="mb-2 flex items-center gap-2">
                 <p className="text-xs text-slate-500">
-                  会話が起きる顔ぶれ {fixture.parties.length} 通り
+                  {highlight != null && highlightName ? `${highlightName}が出る顔ぶれ ` : "会話が起きる顔ぶれ "}
+                  {target.length} 通り
                   {seen > 0 && ` ／ 見た ${seen}`}
                 </p>
-                {fixture.parties.length > 1 && (
+                {target.length > 1 && (
                   <button
                     type="button"
-                    onClick={() => onToggleAll(fixture, seen < fixture.parties.length)}
+                    onClick={() => onToggleAll(fixture, target, seen < target.length)}
                     className={cn(
                       "ml-auto rounded-lg bg-neu px-2.5 py-1.5 text-xs font-bold text-slate-600 shadow-neu-sm neu-tactile",
                       "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]"
                     )}
                   >
-                    {seen < fixture.parties.length ? "すべて見た" : "すべて外す"}
+                    {seen < target.length ? "すべて見た" : "すべて外す"}
                   </button>
                 )}
               </div>
@@ -252,6 +269,12 @@ export function FixtureModal({
                 </>
               )}
             </>
+          )}
+
+          {others.length > 0 && (
+            <p className="mt-3 text-xs text-slate-400">
+              ほかの人だけで起きる会話が {others.length} 通りあります（キャラの選択を外すと出ます）。
+            </p>
           )}
 
           {fixture.likeChars.length > 0 && (

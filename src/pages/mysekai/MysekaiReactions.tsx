@@ -8,6 +8,8 @@ import { ToolPage } from "../../components/ui/ToolPage";
 import { cn } from "../../lib/utils";
 import {
   applyFilter,
+  DEFAULT_FILTER,
+  partiesOf,
   summary,
   talksOf,
   type FilterState,
@@ -18,6 +20,7 @@ import {
 import { loadFilter, saveFilter } from "./lib/filterStorage";
 import { FixtureModal } from "./FixtureModal";
 import { loadProgress, partyKey, saveProgress } from "./lib/ownedStorage";
+import { CHIP_SHADOW, chipBg } from "./lib/charaColor";
 import { thumbUrl } from "./lib/thumb";
 import {
   UNIT_NAME,
@@ -90,7 +93,8 @@ function FixtureRow({
   charId,
   charById,
   owned,
-  collectedCount,
+  seen,
+  total,
   onOpen,
   onToggleOwned,
 }: {
@@ -98,7 +102,10 @@ function FixtureRow({
   charId: number | null;
   charById: (id: number) => MysekaiCharacter | undefined;
   owned: boolean;
-  collectedCount: number;
+  /** 見た顔ぶれの数。分母(total)と必ず同じ単位で渡すこと。 */
+  seen: number;
+  /** 回収の分母。キャラを選んでいればその人が出る顔ぶれの数。 */
+  total: number;
   onOpen: (f: Fixture) => void;
   onToggleOwned: (id: number) => void;
 }) {
@@ -113,9 +120,16 @@ function FixtureRow({
     (charId != null
       ? (fixture.talkSoloBy.get(charId) ?? 0) === 0
       : fixture.talkChars.every((c) => (fixture.talkSoloBy.get(c) ?? 0) === 0));
+  const likesHere = charId != null && fixture.likeChars.includes(charId);
   const img = thumbUrl(fixture);
   // 顔ぶれは先頭だけ出す。全部はモーダルで見る（1,500件を一覧で追えなくなるため）。
-  const facesShown = fixture.talkChars.slice(0, 8);
+  // キャラを選んでいるときは、その人が会話に出るときだけ顔ぶれを見せる（他人の薄いチップは混乱の元）。
+  const facesShown =
+    charId == null
+      ? fixture.talkChars.slice(0, 6)
+      : fixture.talkChars.includes(charId)
+        ? [charId]
+        : [];
 
   return (
     <li className="flex items-center gap-1 border-b border-[color:var(--neu-lo)]/40 last:border-b-0">
@@ -125,9 +139,14 @@ function FixtureRow({
         type="button"
         onClick={() => onOpen(fixture)}
         className={cn(
-          "flex min-w-0 flex-1 items-center gap-3 py-2 text-left",
+          // ★ 狭い画面では縦積みにする。横一列だと家具名が truncate で2〜9文字まで
+          //   削られ、既定表示の49%が先頭8文字重複のため識別できなくなる（実測）。
+          "flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 py-2 text-left sm:flex-nowrap",
+          "cursor-pointer rounded-lg transition-colors",
+          "hover:bg-[color:color-mix(in_srgb,var(--unit-color)_8%,transparent)]",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
-          !owned && "opacity-60"
+          // 持っていない方を退かせるが、既定（印ゼロ）で全行が沈まない程度に留める。
+          !owned && "opacity-75"
         )}
       >
         {img ? (
@@ -144,7 +163,7 @@ function FixtureRow({
           <span className="h-10 w-10 shrink-0 rounded-lg bg-neu shadow-neu-inset" />
         )}
 
-        <span className="min-w-0 flex-1">
+        <span className="min-w-0 flex-1 basis-[60%] sm:basis-auto">
           <span className="block truncate font-bold text-slate-700">{fixture.name}</span>
           <span className="mt-0.5 flex flex-wrap items-center gap-1">
             {facesShown.map((id) => {
@@ -155,10 +174,17 @@ function FixtureRow({
                   key={id}
                   title={c.name}
                   className={cn(
-                    "inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold text-white",
-                    charId != null && charId !== id && "opacity-30"
+                    "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-bold",
+                    // 選択中の人を沈めない。他は退かせるが、消えるほど薄くはしない。
+                    charId != null && charId !== id && "opacity-45"
                   )}
-                  style={{ backgroundColor: c.color || "var(--unit-color)" }}
+                  style={{
+                    // ★ 生のメンバーカラーに白文字を載せると26色中25色が AA を割る
+                    //   （最悪 1.20:1）。色相を保ったまま読める濃さへ沈める（lib/charaColor.ts）。
+                    backgroundColor: c.color ? chipBg(c.color) : "var(--unit-color)",
+                    color: "#ffffff",
+                    textShadow: CHIP_SHADOW,
+                  }}
                 >
                   {c.initial}
                 </span>
@@ -172,14 +198,15 @@ function FixtureRow({
           </span>
         </span>
 
-        <span className="flex shrink-0 flex-col items-end gap-1">
+        <span className="flex shrink-0 flex-wrap items-center justify-end gap-1 sm:flex-col sm:items-end">
           <span className="flex items-center gap-1">
-            {talks > 0 && (
+            {total > 0 && (
               <span
-                className="rounded px-1.5 py-0.5 text-xs font-bold text-white"
+                className="rounded px-1.5 py-0.5 text-xs font-bold text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.38)]"
                 style={{ backgroundColor: "var(--unit-color)" }}
+                title={`会話が起きる顔ぶれ ${total} 通り${seen > 0 ? `（見た ${seen}）` : ""}`}
               >
-                {collectedCount > 0 ? `${collectedCount}/${talks}` : talks}
+                会話 {seen > 0 ? `${seen}/${total}` : total}
               </span>
             )}
             {needsCompany && (
@@ -190,7 +217,19 @@ function FixtureRow({
                 揃うと
               </span>
             )}
-            {fixture.action && (
+            {/* ★ 好みで一致した行に根拠が出ないと「なぜこの行が居るのか」が読めない
+                （実測で一歌265件中69件、瑞希314件中127件が無根拠だった）。 */}
+            {likesHere && (
+              <span className="rounded bg-neu px-1.5 py-0.5 text-xs text-slate-500 shadow-neu-inset">
+                好き
+              </span>
+            )}
+            {charId == null && fixture.likeChars.length > 0 && (
+              <span className="rounded bg-neu px-1.5 py-0.5 text-xs text-slate-500 shadow-neu-inset">
+                好み {fixture.likeChars.length}
+              </span>
+            )}
+            {fixture.action && charId == null && (
               <span className="rounded bg-neu px-1.5 py-0.5 text-xs text-slate-500 shadow-neu-inset">
                 動く
               </span>
@@ -252,6 +291,10 @@ export default function MysekaiReactions() {
   useEffect(() => saveFilter(filter), [filter]);
   useEffect(() => saveProgress(progress), [progress]);
 
+  // ★ 毎レンダー新しい関数を渡すと useModalA11y の effect が張り直され、
+  //   チェックを押すたびにフォーカスがダイアログ本体へ飛ぶ。安定化する。
+  const closeModal = useCallback(() => setOpenFixture(null), []);
+
   const toggleOwned = useCallback((id: number) => {
     setProgress((prev) => {
       const next = new Set(prev.owned);
@@ -261,10 +304,10 @@ export default function MysekaiReactions() {
   }, []);
 
   /** その家具の会話をまとめて既読／未読にする。 */
-  const toggleAllCollected = useCallback((f: Fixture, mark: boolean) => {
+  const toggleAllCollected = useCallback((f: Fixture, parties: number[][], mark: boolean) => {
     setProgress((prev) => {
       const next = new Set(prev.collected);
-      for (const p of f.parties) {
+      for (const p of parties) {
         const k = partyKey(f.id, p);
         if (mark) next.add(k);
         else next.delete(k);
@@ -323,6 +366,30 @@ export default function MysekaiReactions() {
     () => (data ? applyFilter(data.fixtures, effectiveFilter, owned) : []),
     [data, effectiveFilter, owned]
   );
+
+  const selectedChar: MysekaiCharacter | undefined = data?.characters.find(
+    (c) => c.id === effectiveFilter.charId
+  );
+
+  /** いま効いている絞り込みを日本語で並べる（0件の理由を画面で説明するため）。 */
+  const activeConditions = useMemo(() => {
+    const f = effectiveFilter;
+    const out: string[] = [];
+    if (f.charId != null) out.push(`キャラ: ${selectedChar?.name ?? "?"}`);
+    if (f.kinds.length > 0) out.push(`種類: ${f.kinds.map((k) => KIND_LABEL[k]).join("・")}`);
+    if (f.owned !== "any") out.push(f.owned === "owned" ? "持っている" : "持っていない");
+    if (f.party !== "any") out.push(f.party === "solo" ? "ひとりで" : "複数人で");
+    if (f.sketchableOnly) out.push("模写できるものだけ");
+    if (f.reactiveOnly) out.push("反応がある家具だけ");
+    if (f.mainGenreId != null) {
+      out.push(`ジャンル: ${data?.mainGenres.find((g) => g.id === f.mainGenreId)?.name ?? "?"}`);
+    }
+    if (f.query.trim()) out.push(`検索: ${f.query.trim()}`);
+    return out;
+  }, [effectiveFilter, selectedChar, data]);
+
+  const resetFilter = useCallback(() => setFilter(() => DEFAULT_FILTER), [setFilter]);
+
   const stats = useMemo(
     () => summary(list, effectiveFilter.charId),
     [list, effectiveFilter.charId]
@@ -332,9 +399,6 @@ export default function MysekaiReactions() {
     [list, owned]
   );
 
-  const selectedChar: MysekaiCharacter | undefined = data?.characters.find(
-    (c) => c.id === effectiveFilter.charId
-  );
 
   const toggleKind = (kind: ReactionKind) =>
     setFilter((f) => ({
@@ -342,22 +406,30 @@ export default function MysekaiReactions() {
       kinds: f.kinds.includes(kind) ? f.kinds.filter((k) => k !== kind) : [...f.kinds, kind],
     }));
 
-  if (loading) {
+  // ★ 読み込み中もパネル1枚に縮めない。データ到着で 6,000px 伸びると CLS を踏む
+  //   （このリポジトリは EfficiencyRanking で 0.37、DeckBuilder で 0.31 を実測して
+  //     対策済み。同じ轍を踏まない）。高さを予約し、状態は sr-only で伝える。
+  if (loading || error || !data) {
     return (
       <ToolPage unit="n25" title="マイセカイ リアクション図鑑" icon="weekend" morphKey="tool:mysekai" wide>
-        <Panel>
-          <p className="text-slate-500">読み込み中…</p>
-        </Panel>
-      </ToolPage>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <ToolPage unit="n25" title="マイセカイ リアクション図鑑" icon="weekend" morphKey="tool:mysekai" wide>
-        <Panel>
-          <p className="text-slate-600">{error ?? "家具データを読み込めませんでした。"}</p>
-        </Panel>
+        <div className="min-h-[80vh]">
+          <Panel>
+            {error || !data ? (
+              <div role="alert" className="space-y-3">
+                <p className="font-bold text-rose-600">
+                  {error ?? "家具データを読み込めませんでした。"}
+                </p>
+                <NeuButton onClick={() => window.location.reload()} className="min-h-11">
+                  再読み込み
+                </NeuButton>
+              </div>
+            ) : (
+              <p role="status" className="sr-only">
+                読み込み中
+              </p>
+            )}
+          </Panel>
+        </div>
       </ToolPage>
     );
   }
@@ -403,16 +475,28 @@ export default function MysekaiReactions() {
         <div className="space-y-4">
           <div>
             <div className="mb-2 flex flex-wrap gap-1.5">
-              {(Object.keys(KIND_LABEL) as ReactionKind[]).map((k) => (
-                <NeuButton
-                  key={k}
-                  active={filter.kinds.includes(k)}
-                  onClick={() => toggleKind(k)}
-                  className="px-3 py-1.5"
-                >
-                  {KIND_LABEL[k]}
-                </NeuButton>
-              ))}
+              {(Object.keys(KIND_LABEL) as ReactionKind[]).map((k) => {
+                // ★ 「キャラが動く」は家具単位のフラグで誰が動くかを持たないため、
+                //   キャラを選んでいる間は絞り込みに使えない。押せて光るのに何も起きない
+                //   状態が一番たちが悪いので、無効だと見えるようにする。
+                const disabled = k === "action" && effectiveFilter.charId != null;
+                return (
+                  <NeuButton
+                    key={k}
+                    active={!disabled && filter.kinds.includes(k)}
+                    disabled={disabled}
+                    onClick={() => toggleKind(k)}
+                    className={cn("px-3 py-1.5 min-h-11", disabled && "opacity-40 cursor-not-allowed")}
+                    title={
+                      disabled
+                        ? "誰が動くかはデータに無いため、キャラを選んでいる間は使えません"
+                        : undefined
+                    }
+                  >
+                    {KIND_LABEL[k]}
+                  </NeuButton>
+                );
+              })}
             </div>
             <p className="text-xs text-slate-500">
               {filter.kinds.length === 0
@@ -522,9 +606,10 @@ export default function MysekaiReactions() {
             「好み」の行が本人のどのセカイの話かは区別できないので、そう書く。 */}
         {selectedChar && data.multiUnitLikes.has(selectedChar.id) && (
           <p className="mb-3 rounded-lg bg-neu p-3 text-xs text-slate-500 shadow-neu-inset">
-            {selectedChar.name} は{data.multiUnitLikes.get(selectedChar.id)}
-            つのセカイぶんの「好み」がマスタに別々に登録されています。ここではそれらをまとめて出しているので、
-            <b>どのセカイの{selectedChar.name}にとっての好みかは区別できません</b>。会話のほうは影響を受けません。
+            {selectedChar.name} はセカイごとに別々のデータを持っています（
+            {data.multiUnitLikes.get(selectedChar.id)}つ）。ここではまとめて出しているので、
+            <b>どのセカイの{selectedChar.name}の話かは区別できません</b>。
+            好みだけでなく<b>会話も同じ</b>で、セカイごとの会話は1つの顔ぶれに畳まれています。
           </p>
         )}
 
@@ -541,7 +626,25 @@ export default function MysekaiReactions() {
         </p>
 
         {list.length === 0 ? (
-          <p className="text-slate-500">条件に合う家具がありません。</p>
+          <div className="space-y-3">
+            <p className="text-slate-600">
+              {effectiveFilter.owned === "owned" && owned.size === 0
+                ? "まだ「持っている」印を付けた家具がありません。一覧の右端のボタン（＋）で印を付けられます。"
+                : "条件に合う家具がありません。"}
+            </p>
+            {/* ★ 何が効いて0件なのかを並べ、その場で解除できるようにする。
+                絞り込みは保存されるので、次に開いたときも0件のまま始まってしまう。 */}
+            {activeConditions.length > 0 && (
+              <>
+                <p className="text-xs text-slate-500">
+                  いま効いている条件: {activeConditions.join(" / ")}
+                </p>
+                <NeuButton onClick={resetFilter} className="min-h-11">
+                  条件をすべて解除する
+                </NeuButton>
+              </>
+            )}
+          </div>
         ) : (
           <>
             <ul>
@@ -552,11 +655,15 @@ export default function MysekaiReactions() {
                   charId={effectiveFilter.charId}
                   charById={charById}
                   owned={owned.has(f.id)}
-                  collectedCount={
+                  seen={
                     collected.size === 0
                       ? 0
-                      : f.parties.reduce((n, p) => n + (collected.has(partyKey(f.id, p)) ? 1 : 0), 0)
+                      : partiesOf(f, effectiveFilter.charId).reduce(
+                          (n, p) => n + (collected.has(partyKey(f.id, p)) ? 1 : 0),
+                          0
+                        )
                   }
+                  total={partiesOf(f, effectiveFilter.charId).length}
                   onOpen={setOpenFixture}
                   onToggleOwned={toggleOwned}
                 />
@@ -578,9 +685,9 @@ export default function MysekaiReactions() {
           ゲーム内のリアクション絞り込みは自分が設計図を持っている家具しか出ないため、この一覧はマスタ側から全件を並べています。
           会話の本文は載せていません（発生するかどうかと、登場するキャラまで）。
           <br />
-          <b>「会話 ◯」は会話パターンの本数</b>です。同じ家具でも「Aひとり」「Bひとり」「A＋B」はそれぞれ別に数えるので、複数人が使える家具ほど数が伸びます。
+          <b>「会話 ◯」は会話が起きる顔ぶれの通り数</b>です。「Aひとり」「Bひとり」「A＋B」はそれぞれ別に数えます。回収のチェックもこの単位で付きます（同じ顔ぶれに複数の会話がある家具では、実際の本数の方が多くなります）。
           <br />
-          <b>「◯人以上で」「誰かと一緒に」</b>が付いた家具は、<b>ひとりで訪ねても会話が始まりません</b>。ユニットのソファなどが該当します（キャラを選んでいるときは、その子について判定します）。
+          <b>「揃うと」</b>が付いた家具は、<b>ひとりで訪ねても会話が始まりません</b>。ユニットのソファなどが該当します（キャラを選んでいるときは、その子について判定します）。
           <br />
           「模写できるもの」は他人のマイセカイで設計図を写せる家具です。「設計図なし」は模写以外の入手方法しかない家具を指します。
           <br />
@@ -597,7 +704,8 @@ export default function MysekaiReactions() {
           onToggleOwned={toggleOwned}
           onToggleCollected={toggleCollected}
           onToggleAll={toggleAllCollected}
-          onClose={() => setOpenFixture(null)}
+          highlightName={selectedChar?.name}
+          onClose={closeModal}
         />
       )}
     </ToolPage>

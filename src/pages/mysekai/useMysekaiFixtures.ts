@@ -10,7 +10,7 @@ import { normalize, type MysekaiData } from "./lib/types";
  *   - AbortController で後片付け
  *   - 外部由来のデータは1件ずつ検証（normalize が担当）
  *
- * ★ このファイルは 230KB（brotli 24KB）で、使うのはこの画面だけ。
+ * ★ このファイルは 412KB（brotli 32KB）で、使うのはこの画面だけ。
  *   他のツールの共通ファイルには同梱していない。
  */
 export function useMysekaiFixtures(): {

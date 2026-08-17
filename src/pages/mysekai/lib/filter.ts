@@ -160,6 +160,19 @@ export function talksOf(f: Fixture, charId: number | null): number {
   return f.talkCountBy.get(charId) ?? 0;
 }
 
+/**
+ * 回収の単位になる顔ぶれ。キャラを選んでいればその人が出るものだけ。
+ *
+ * ★ **進捗の分母はこれを使うこと。** 会話本数（talksOf）を分母にすると分子と単位が
+ *   食い違う——チェックは顔ぶれ単位に付くのに、同じ顔ぶれで複数の会話を持つ家具が
+ *   203件あるため、全部チェックしても「90/91」のように到達しない。
+ *   キャラを選んでいるときはさらにズレが大きく、実測で「90/5」のような値が出ていた。
+ */
+export function partiesOf(f: Fixture, charId: number | null): number[][] {
+  if (charId == null) return f.parties;
+  return f.parties.filter((p) => p.includes(charId));
+}
+
 export function sortFixtures(
   fixtures: Fixture[],
   sort: SortKey,
