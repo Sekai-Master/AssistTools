@@ -6,6 +6,7 @@ import {
   baseRate,
   skillWeights,
   rankSongs,
+  rankSongsInWindow,
   multiEffectiveSkill,
   FEVER_RATE,
   DECK_SIZE,
@@ -257,5 +258,92 @@ describe("rankSongs — モードで最適解が入れ替わる", () => {
     const low = rankSongs(entries, { ...PARAMS, power: 50_000 }, "manual");
     const high = rankSongs(entries, { ...PARAMS, power: 330_000 }, "manual");
     expect(low[1].index).not.toBeCloseTo(high[1].index, 3);
+  });
+});
+
+/**
+ * 窓付きランキング（残り時間で区切る）。
+ *
+ * ★ ここで縛りたいのは「**制約が入れ替わると答えが変わる**」こと。
+ *   1プレイあたり(Pt/プレイ)でも 時間あたり(Pt/時間)でも出せない答えが出るのが
+ *   この関数の存在意義なので、その差が消えたら気づけるようにする。
+ */
+describe("rankSongsInWindow — 残り時間で区切る", () => {
+  const entries = [ENVY, TENCHI];
+  const WIN = {
+    windowSec: 7200, // 2時間
+    startLB: 50,
+    lbCap: 50,
+    maxPlays: 99, // PRECIOUS
+    regen: true,
+    refill: false,
+  };
+
+  it("ライボが先に尽きるなら、1回が濃い曲が勝つ（＝Pt/プレイ と同じ答え）", () => {
+    // 5焚き・ライボ50 なら10回で尽きる。2時間もかからないので長尺が有利。
+    const r = rankSongsInWindow(entries, { ...PARAMS, taki: 5 }, WIN);
+    expect(r[0].title).toBe("初音天地開闢神話");
+    expect(r[0].limitedBy).toBe("lb");
+    // 1プレイあたりの答えとも一致する
+    expect(rankSongs(entries, { ...PARAMS, taki: 5 }, "auto")[0].title).toBe("初音天地開闢神話");
+  });
+
+  it("時間が先に尽きるなら、短い曲が勝つ（＝Pt/プレイ の答えとは変わる）", () => {
+    // 注ぎ足す前提ならライボは効かない。時間だけが制約になる。
+    const r = rankSongsInWindow(entries, { ...PARAMS, taki: 5 }, { ...WIN, refill: true });
+    expect(r[0].title).toBe("独りんぼエンヴィー");
+    expect(r[0].limitedBy).toBe("time");
+    // ★ 1プレイあたりの答え（初音天地）と食い違う。ここがこの関数の価値
+    expect(rankSongs(entries, { ...PARAMS, taki: 5 }, "auto")[0].title).not.toBe(r[0].title);
+  });
+
+  it("0焚きでも計算できる（消費しないので時間だけが制約）", () => {
+    const r = rankSongsInWindow(entries, { ...PARAMS, taki: 0 }, WIN);
+    expect(r[0].plays).toBeGreaterThan(0);
+    expect(r[0].limitedBy).toBe("time");
+    // 2時間 ÷ (74.8 + 20) = 75回
+    expect(r.find((x) => x.title === "独りんぼエンヴィー")!.plays).toBe(
+      Math.floor(7200 / (74.8 + PARAMS.overheadSec)),
+    );
+  });
+
+  it("オート回数が先に尽きるなら、そう報告する", () => {
+    // 通常パス（10回）・注ぎ足しありなら、時間もライボも余って回数で止まる
+    const r = rankSongsInWindow(entries, { ...PARAMS, taki: 5 }, { ...WIN, maxPlays: 10, refill: true });
+    expect(r[0].plays).toBe(10);
+    expect(r[0].limitedBy).toBe("plays");
+  });
+
+  // ★ 現行オートタブは焚き数で順位が動かない（倍率が全曲に等しく掛かるため）。
+  //   窓付きは動く。この差が消えたら、窓付きの意味が無くなっている。
+  it("焚き数を変えると順位が動きうる（現行オートタブとの本質的な差）", () => {
+    const auto1 = rankSongs(entries, { ...PARAMS, taki: 1 }, "auto").map((r) => r.title);
+    const auto5 = rankSongs(entries, { ...PARAMS, taki: 5 }, "auto").map((r) => r.title);
+    expect(auto1).toEqual(auto5); // 現行は動かない
+
+    const win0 = rankSongsInWindow(entries, { ...PARAMS, taki: 0 }, WIN)[0].title;
+    const win5 = rankSongsInWindow(entries, { ...PARAMS, taki: 5 }, WIN)[0].title;
+    expect(win0).not.toBe(win5); // 窓付きは動く
+  });
+
+  it("時間が足りなければ0回（回しきれない1回は数えない）", () => {
+    const r = rankSongsInWindow(entries, PARAMS, { ...WIN, windowSec: 30 });
+    expect(r.every((x) => x.plays === 0)).toBe(true);
+  });
+
+  it("合計Ptは 回数 × 1回のPt に一致する", () => {
+    const r = rankSongsInWindow(entries, PARAMS, WIN);
+    for (const x of r) expect(x.totalPt).toBe(x.plays * x.eventPt);
+  });
+
+  it("指数は1位が100", () => {
+    const r = rankSongsInWindow(entries, PARAMS, WIN);
+    expect(r[0].index).toBe(100);
+  });
+
+  it("入力の配列を書き換えない", () => {
+    const snapshot = JSON.stringify(entries);
+    rankSongsInWindow(entries, PARAMS, WIN);
+    expect(JSON.stringify(entries)).toBe(snapshot);
   });
 });

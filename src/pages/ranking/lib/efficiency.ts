@@ -57,6 +57,7 @@ import { calcLivePt, calcMultiLivePt } from "../../analyzer/lib/calcLivePt";
 // 1プレイの「曲以外」の秒数はサイト全体で1か所に置く（ランキングと周回プランで
 // 同じ値が別々に置かれ、2.7倍食い違っていた。2026-08-11 に統合）。
 import { OVERHEAD_SEC } from "../../../lib/overhead";
+import { playsUntilEmpty } from "./lbRun";
 
 /** ランキングの種類。 */
 export type RankingMode = "manual" | "auto" | "challenge";
@@ -287,4 +288,99 @@ export function rankSongs<T extends EfficiencyEntry>(
   // 指数は 1位=100。生の Pt を見せなくても差が読めるようにするための主指標。
   const top = scored.length > 0 ? scored[0].metric : 0;
   return scored.map((r) => ({ ...r, index: top > 0 ? (r.metric / top) * 100 : 0 }));
+}
+
+/** 窓付きランキングで各曲に付く値。 */
+export interface WindowMetrics {
+  /** その時間内に回せる回数。 */
+  plays: number;
+  /** その時間内に稼げるイベントPtの合計。**これが並べ替えの軸**。 */
+  totalPt: number;
+  /** 実際に使う秒数（回しきれない最後の1回は含めない）。 */
+  usedSec: number;
+  /** 何で止まるか。曲ごとに変わるので必ず添えて出す。 */
+  limitedBy: "lb" | "plays" | "time" | "none";
+}
+
+export interface WindowOptions {
+  /** 使える時間（秒）。 */
+  windowSec: number;
+  /** いま持っているライブボーナス。 */
+  startLB: number;
+  /** ライボの所持上限。 */
+  lbCap: number;
+  /** オートの残り回数。 */
+  maxPlays: number;
+  /** 自然回復を数えるか。 */
+  regen: boolean;
+  /**
+   * ライボが足りなくなったら石・ドリンクで注ぎ足す前提にするか。
+   * ★ **これで答えが正反対になる。** 注ぎ足さないならライボが先に尽きて
+   *   「1回が濃い曲」が勝ち、注ぎ足すなら時間が制約になって「短い曲」が勝つ。
+   */
+  refill: boolean;
+}
+
+/**
+ * 「この時間内に稼げる合計イベントPt」で並べ替える。
+ *
+ * ── なぜ既存の3モードで足りないか ─────────────────────────────
+ * オートタブは Pt/プレイ で並べている。「放置なので時間はコストにならない」
+ * という前提だからで、普段はそれで正しい。
+ * だが**オートの回数は毎日4:00に消える**（lbRun.ts の規則3）。
+ * 「4:00まであと2時間」のような締切のある窓では、1回あたりの効率ではなく
+ * **その窓に何回詰め込めるか**が効く。
+ *
+ * ── 何が起きるか（実測 2026-08-18・総合力25万/ボーナス400%/MASTER/ロス33秒）──
+ * 最適解は「**残り時間内にライボか回数を使い切れる、いちばん長い曲**」になる。
+ * 残り2時間・PRECIOUS・ライボ50 で焚き数を振ると:
+ *
+ *   5焚き → メルト(182s)        242,000pt  止:ライボ  （＝Pt/プレイ の答えと同じ）
+ *   1焚き → ビバハピ(94s)       224,720pt  止:ライボ  （両端どちらでもない曲が勝つ）
+ *   0焚き → 独りんぼエンヴィー   52,470pt  止:時間    （＝Pt/時間 の答えと同じ）
+ *
+ * **1焚きの答えは Pt/プレイ でも Pt/時間 でも出てこない。** ここがこの関数の存在意義。
+ *
+ * ★ 注意: ライボは翌日へ持ち越せるが、オート回数は4:00で消える。
+ *   したがって「窓内の合計最大化」が正しいのは**時間か回数が失われるとき**だけで、
+ *   イベント全体で見れば Pt/ライボ（＝焚き数が固定なら Pt/プレイ）が正しい軸。
+ *   画面はこの前提を必ず書くこと。
+ */
+export function rankSongsInWindow<T extends EfficiencyEntry>(
+  entries: T[],
+  params: EfficiencyParams,
+  opts: WindowOptions,
+): (T & EfficiencyMetrics & WindowMetrics)[] {
+  const base = rankSongs(entries, params, "auto");
+  const scored = base.map((r) => {
+    const run = playsUntilEmpty({
+      // 注ぎ足す前提なら、ライボは実質無制限として扱う（時間と回数だけが効く）。
+      startLB: opts.refill ? Number.MAX_SAFE_INTEGER : opts.startLB,
+      taki: opts.refill ? 0 : params.taki,
+      cycleSec: r.cycleSec,
+      regen: opts.regen,
+      lbCap: opts.lbCap,
+      maxPlays: opts.maxPlays,
+      windowSec: opts.windowSec,
+    });
+    const totalPt = run.plays * r.eventPt;
+    return {
+      ...r,
+      plays: run.plays,
+      totalPt,
+      usedSec: run.seconds,
+      limitedBy: run.stoppedBy,
+      metric: totalPt,
+    };
+  });
+
+  // 同点なら短い曲を上に（枠が余ったときに融通が利く）、それも同じならID順で安定させる。
+  scored.sort(
+    (a, b) =>
+      b.totalPt - a.totalPt ||
+      (a.musicTime ?? 0) - (b.musicTime ?? 0) ||
+      a.musicId.localeCompare(b.musicId),
+  );
+  const top = scored.length > 0 ? scored[0].totalPt : 0;
+  return scored.map((r) => ({ ...r, index: top > 0 ? (r.totalPt / top) * 100 : 0 }));
 }

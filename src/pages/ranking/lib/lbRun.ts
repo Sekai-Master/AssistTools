@@ -67,6 +67,14 @@ export interface LbRunInput {
   lbCap: number;
   /** 回数の上限（オートの1日の回数）。省略すると無制限。 */
   maxPlays?: number;
+  /**
+   * 使える時間（秒）。省略すると時間では止まらない。
+   *
+   * ★ オートは放置なので普段は時間がコストにならないが、**オートの回数は毎日4:00に
+   *   消える**（上の規則3）。「4:00まであと2時間」のような締切のある窓では、
+   *   1回あたりの効率ではなく**その窓に何回詰め込めるか**が効く。
+   */
+  windowSec?: number;
 }
 
 export interface LbRunResult {
@@ -78,8 +86,13 @@ export interface LbRunResult {
   regained: number;
   /** 使い切れずに残るライブボーナス（焚き数に足りないぶん）。 */
   leftover: number;
-  /** 何で止まったか。**回数上限で止まったのかライボ切れなのかで次の手が変わる。** */
-  stoppedBy: "lb" | "plays" | "none";
+  /**
+   * 何で止まったか。**次に効く手がまるで違うので、必ず添えて出すこと。**
+   *   lb    … ライボ切れ    → 焚き数を下げる／注ぎ足す
+   *   plays … 回数上限      → 焚き数を上げる（1回を濃くする）
+   *   time  … 時間切れ      → 短い曲に替える
+   */
+  stoppedBy: "lb" | "plays" | "time" | "none";
 }
 
 /** 0焚き・回数無制限で無限ループにしないための安全弁。 */
@@ -92,6 +105,7 @@ export function playsUntilEmpty({
   regen,
   lbCap,
   maxPlays,
+  windowSec,
 }: LbRunInput): LbRunResult {
   const idle: LbRunResult = {
     plays: 0,
@@ -100,9 +114,21 @@ export function playsUntilEmpty({
     leftover: Math.max(0, startLB),
     stoppedBy: "none",
   };
-  if (!(startLB > 0) || !(cycleSec > 0) || taki <= 0) return idle;
+  if (!(cycleSec > 0)) return idle;
+  /**
+   * ★ 0焚きは「0回」ではない。**ライボを消費しないので尽きようがなく、
+   *   時間か回数だけが制約**になる。以前はここで 0 を返していたため、
+   *   0焚き運用（時間だけが効く典型）が丸ごと計算できなかった。
+   */
+  const free = taki <= 0;
+  if (taki < 0) return idle;
+  // 消費するのに手持ちが無いなら1回も回せない。
+  if (!free && !(startLB > 0)) return idle;
+  // 消費もせず、時間も回数も区切られていないなら止まる理由が無い。数えない。
+  if (free && maxPlays == null && windowSec == null) return idle;
 
   const limit = Math.min(maxPlays ?? HARD_LIMIT, HARD_LIMIT);
+  const budget = windowSec != null && windowSec > 0 ? windowSec : Infinity;
   let lb = startLB;
   let seconds = 0;
   let plays = 0;
@@ -111,8 +137,9 @@ export function playsUntilEmpty({
   let carry = 0;
   const secPerLB = LB_REGEN_MIN * 60;
 
-  while (lb >= taki && plays < limit) {
-    lb -= taki;
+  // 途中で終わる1回は数えない（回しきれないので）。
+  while ((free || lb >= taki) && plays < limit && seconds + cycleSec <= budget) {
+    if (!free) lb -= taki;
     plays += 1;
     seconds += cycleSec;
 
@@ -132,6 +159,16 @@ export function playsUntilEmpty({
     }
   }
 
+  /**
+   * 止まった理由。**複数の制約が同時に効いていることがある**ので、
+   * 先に当たったものを返す（時間 → 回数 → ライボの順で見る）。
+   */
+  function stopReason(): LbRunResult["stoppedBy"] {
+    if (seconds + cycleSec > budget) return "time";
+    if (plays >= limit) return "plays";
+    return free ? "none" : "lb";
+  }
+
   return {
     plays,
     seconds,
@@ -139,7 +176,7 @@ export function playsUntilEmpty({
     leftover: lb,
     // ★ ライボが残っているのに止まったなら回数上限。次に効く手が違う
     //   （回数上限なら焚き数を上げる、ライボ切れなら下げる）。
-    stoppedBy: plays >= limit && lb >= taki ? "plays" : "lb",
+    stoppedBy: stopReason(),
   };
 }
 
