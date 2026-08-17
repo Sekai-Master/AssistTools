@@ -23,8 +23,18 @@ export interface FilterState {
    * 見たい反応の種類。空なら種類で絞らない。
    * ★ 複数選んだときは **OR**（どれかに当てはまれば出す）。
    *   他の条件（下のスイッチ・ジャンル・検索）は AND で重なる。
+   *
+   * ★ ここに入るのは**キャラとの関係**だけ（会話・お気に入り）。
+   *   「キャラが使うモーションがある」は家具そのものの属性で粒度が違うため、
+   *   `actionOnly` として分けてある。同じ列に並べると
+   *   「キャラが動くと好みの家具は何が違うのか」が読み取れなくなる（Nori 指摘）。
    */
   kinds: ReactionKind[];
+  /**
+   * キャラが使う（座る・遊ぶ）家具だけに絞る。
+   * キャラを選んでいればその子が使うものだけ（`actionChars` にデータがある）。
+   */
+  actionOnly: boolean;
   /** 反応がある家具だけに絞る。既定 true。 */
   reactiveOnly: boolean;
   /** 模写できる家具だけに絞る（他人のセカイに取りに行ける候補）。 */
@@ -54,6 +64,7 @@ export const DEFAULT_FILTER: FilterState = {
   //   反応データは実装とセットで作られるので、既定表示を反応ありにしておくと
   //   実装前の家具が既定で目に入ることを避けられる。全件は明示操作で開く。
   reactiveOnly: true,
+  actionOnly: false,
   sketchableOnly: false,
   owned: "any",
   party: "any",
@@ -76,21 +87,14 @@ export function normalizeQuery(s: string): string {
 
 /**
  * その家具が、指定キャラの指定種別の反応を持つか。
- *
- * ★ `action`（キャラが動く）は**家具単位のフラグで、誰が動くかを持たない**。
- *   以前は charSet で代用していたが、実測で偽陰性28件（誰を選んでも出ない家具）と
- *   偽陽性（会話も好みも無いのに出る）の両方が起きた。
- *   キャラを選んでいるときは action を条件に**使わない**——キャラで説明できないものを
- *   キャラの結果に混ぜない。動く家具を見たいときはキャラを外して探す。
+ * ★ 扱うのは**キャラとの関係**だけ（会話・お気に入り）。モーションの有無は
+ *   家具の属性なので `actionOnly` として AND で重ねる。
  */
 export function matchesChar(f: Fixture, charId: number, kinds: ReactionKind[]): boolean {
-  const kindsForChar = kinds.filter((k) => k !== "action");
-  // 種別の指定が無い（または action しか選ばれていない）ときは、会話か好みで当たればよい。
-  if (kindsForChar.length === 0) return f.charSet.has(charId);
-  return kindsForChar.some((k) => {
-    if (k === "talk") return f.talkChars.includes(charId);
-    return f.likeChars.includes(charId);
-  });
+  if (kinds.length === 0) return f.charSet.has(charId);
+  return kinds.some((k) =>
+    k === "talk" ? f.talkChars.includes(charId) : f.likeChars.includes(charId)
+  );
 }
 
 /**
@@ -115,11 +119,7 @@ export function matchesParty(f: Fixture, party: PartyFilter, charId: number | nu
 /** キャラを選んでいないときの種別判定。 */
 function matchesKindOnly(f: Fixture, kinds: ReactionKind[]): boolean {
   if (kinds.length === 0) return true;
-  return kinds.some((k) => {
-    if (k === "talk") return f.talkCount > 0;
-    if (k === "like") return f.likeChars.length > 0;
-    return f.action;
-  });
+  return kinds.some((k) => (k === "talk" ? f.talkCount > 0 : f.likeChars.length > 0));
 }
 
 /**
@@ -135,6 +135,20 @@ export function applyFilter(
     if (state.owned === "owned" && !owned.has(f.id)) return false;
     if (state.owned === "unowned" && owned.has(f.id)) return false;
     if (state.reactiveOnly && !f.reactive) return false;
+    // ★ キャラを選んでいれば「その子が使う家具」に絞れる（誰が使うかのデータがある）。
+    //   選んでいなければ家具の印（isGameCharacterAction）かアクションデータの有無で見る。
+    if (state.actionOnly) {
+      if (state.charId != null) {
+        // データがあればそれで判定。無い家具は「印つき かつ その子の会話がある」
+        // ときだけ拾う（座って喋る類）。印だけで誰が使うか不明なものは混ぜない。
+        const uses =
+          f.actionChars.includes(state.charId) ||
+          (f.action && f.talkChars.includes(state.charId));
+        if (!uses) return false;
+      } else if (!f.action && f.actionChars.length === 0) {
+        return false;
+      }
+    }
     if (state.party !== "any" && !matchesParty(f, state.party, state.charId)) return false;
     // 「設計図が無い家具」(null) は模写のしようが無いので、模写可のみでは落とす。
     if (state.sketchableOnly && f.sketch !== true) return false;

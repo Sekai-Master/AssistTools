@@ -10,8 +10,12 @@
  *   既存フックと同じ作法（useRankingMusics.ts / useCardData.ts）。
  */
 
-/** 反応の種類。UI の絞り込みと対応する。 */
-export type ReactionKind = "talk" | "action" | "like";
+/**
+ * 反応の種類。**キャラとの関係だけ**を並べる。
+ * ★ 「キャラが使うモーションがある」は家具そのものの属性で、誰が動くかのデータを
+ *   持たない。ここに混ぜると粒度が食い違うので入れない（FilterState.actionOnly を使う）。
+ */
+export type ReactionKind = "talk" | "like";
 
 export interface MysekaiCharacter {
   id: number;
@@ -76,10 +80,17 @@ export interface Fixture {
    */
   sketch: boolean | null;
   /**
-   * A: キャラがこの家具でモーションする。
-   * ★ **家具単位のフラグで、誰が動くかの情報は持たない。** キャラ別に見せてはいけない。
+   * A: この家具がキャラのアクション対象になりうる（`isGameCharacterAction`）。
+   * ★ これは**家具の印**で、誰が使うかは持たない。誰が使うかは `actionChars`。
+   *   実測で両者は一致しない（フラグ182件 / データ84件、食い違い120+22件）。
    */
   action: boolean;
+  /**
+   * A: その家具を実際に使うキャラ（会話を伴わないアクション）。
+   * 会話を伴うアクション（座って喋る等）は `talkChars` 側に出るので、
+   * 「誰が使うか」を出すときは両方を合わせる。
+   */
+  actionChars: number[];
   /** B: 固有会話に登場するキャラ（グループ会話の参加者も全員含む）。 */
   talkChars: number[];
   /** B: 家具全体の会話パターン数。キャラを選んでいる画面でこれを出すと実数の19倍になる。 */
@@ -196,6 +207,7 @@ export function normalize(raw: unknown): MysekaiData {
 
       const talkChars = charIds(f.tc);
       const likeChars = charIds(f.lc);
+      const actionChars = charIds(f.aa);
       const talkCount = isNum(f.tn) ? f.tn : 0;
       const action = f.ac === 1 || f.ac === true;
       const size =
@@ -231,6 +243,7 @@ export function normalize(raw: unknown): MysekaiData {
         sketch: typeof f.sk === "boolean" ? f.sk : null,
         action,
         talkChars,
+        actionChars,
         talkCount,
         talkCountBy,
         talkSoloBy,
@@ -239,8 +252,9 @@ export function normalize(raw: unknown): MysekaiData {
           ? f.pt.filter((p): p is number[] => Array.isArray(p) && p.length > 0 && p.every(isNum))
           : [],
         likeChars,
-        reactive: talkCount > 0 || action || likeChars.length > 0,
-        charSet: new Set([...talkChars, ...likeChars]),
+        reactive: talkCount > 0 || action || likeChars.length > 0 || actionChars.length > 0,
+        // 絞り込み用。会話・お気に入り・アクションのいずれかで名前が出るキャラ。
+        charSet: new Set([...talkChars, ...likeChars, ...actionChars]),
       });
     }
   }

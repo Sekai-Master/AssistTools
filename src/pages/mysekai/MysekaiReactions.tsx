@@ -44,8 +44,7 @@ import { useMysekaiFixtures } from "./useMysekaiFixtures";
 
 const KIND_LABEL: Record<ReactionKind, string> = {
   talk: "固有会話",
-  action: "キャラが動く",
-  like: "好みの家具",
+  like: "お気に入り",
 };
 
 const OWNED_OPTIONS: { value: OwnedFilter; label: string }[] = [
@@ -221,17 +220,28 @@ function FixtureRow({
                 （実測で一歌265件中69件、瑞希314件中127件が無根拠だった）。 */}
             {likesHere && (
               <span className="rounded bg-neu px-1.5 py-0.5 text-xs text-slate-500 shadow-neu-inset">
-                好き
+                お気に入り
               </span>
             )}
             {charId == null && fixture.likeChars.length > 0 && (
               <span className="rounded bg-neu px-1.5 py-0.5 text-xs text-slate-500 shadow-neu-inset">
-                好み {fixture.likeChars.length}
+お気に入り {fixture.likeChars.length}
               </span>
             )}
-            {fixture.action && charId == null && (
-              <span className="rounded bg-neu px-1.5 py-0.5 text-xs text-slate-500 shadow-neu-inset">
-                動く
+            {/* ★ 誰が使うかのデータ（actionChars）があるので、キャラ選択中も出せる。
+                データが無くて家具の印だけのものは、キャラ未選択のときだけ出す。 */}
+            {(charId != null ? fixture.actionChars.includes(charId) : fixture.action || fixture.actionChars.length > 0) && (
+              <span
+                className="rounded bg-neu px-1.5 py-0.5 text-xs text-slate-500 shadow-neu-inset"
+                title={
+                  charId != null
+                    ? "この家具を使います（座る・遊ぶなど）"
+                    : fixture.actionChars.length > 0
+                      ? `${fixture.actionChars.length}人が使います`
+                      : "キャラのアクション対象です（誰が使うかはデータにありません）"
+                }
+              >
+                使う{charId == null && fixture.actionChars.length > 0 && ` ${fixture.actionChars.length}`}
               </span>
             )}
           </span>
@@ -475,34 +485,25 @@ export default function MysekaiReactions() {
         <div className="space-y-4">
           <div>
             <div className="mb-2 flex flex-wrap gap-1.5">
-              {(Object.keys(KIND_LABEL) as ReactionKind[]).map((k) => {
-                // ★ 「キャラが動く」は家具単位のフラグで誰が動くかを持たないため、
-                //   キャラを選んでいる間は絞り込みに使えない。押せて光るのに何も起きない
-                //   状態が一番たちが悪いので、無効だと見えるようにする。
-                const disabled = k === "action" && effectiveFilter.charId != null;
-                return (
-                  <NeuButton
-                    key={k}
-                    active={!disabled && filter.kinds.includes(k)}
-                    disabled={disabled}
-                    onClick={() => toggleKind(k)}
-                    className={cn("px-3 py-1.5 min-h-11", disabled && "opacity-40 cursor-not-allowed")}
-                    title={
-                      disabled
-                        ? "誰が動くかはデータに無いため、キャラを選んでいる間は使えません"
-                        : undefined
-                    }
-                  >
-                    {KIND_LABEL[k]}
-                  </NeuButton>
-                );
-              })}
+              {(Object.keys(KIND_LABEL) as ReactionKind[]).map((k) => (
+                <NeuButton
+                  key={k}
+                  active={filter.kinds.includes(k)}
+                  onClick={() => toggleKind(k)}
+                  className="min-h-11 px-3 py-1.5"
+                >
+                  {KIND_LABEL[k]}
+                </NeuButton>
+              ))}
             </div>
             <p className="text-xs text-slate-500">
               {filter.kinds.length === 0
-                ? "反応の種類で絞りません（どれか1つでもあれば出ます）"
+                ? "そのキャラとの関わり方で絞りません"
                 : "選んだ種類の いずれか に当てはまる家具を出します（OR）"}
               。下のスイッチ・ジャンル・検索は<b>すべて満たすもの</b>だけに絞ります（AND）。
+              <br />
+              <b>固有会話</b>＝その家具を置くと専用の会話が起きる。<b>お気に入り</b>＝置くと褒めてくれる。
+              どちらも<b>キャラごと</b>に決まっています。
             </p>
           </div>
 
@@ -542,6 +543,11 @@ export default function MysekaiReactions() {
               checked={filter.reactiveOnly}
               onChange={(v) => setFilter((f) => ({ ...f, reactiveOnly: v }))}
               label="反応がある家具だけ"
+            />
+            <Switch
+              checked={filter.actionOnly}
+              onChange={(v) => setFilter((f) => ({ ...f, actionOnly: v }))}
+              label="キャラが使う家具だけ"
             />
             <Switch
               checked={filter.sketchableOnly}
@@ -684,6 +690,8 @@ export default function MysekaiReactions() {
         <p className="text-xs leading-relaxed text-slate-500">
           ゲーム内のリアクション絞り込みは自分が設計図を持っている家具しか出ないため、この一覧はマスタ側から全件を並べています。
           会話の本文は載せていません（発生するかどうかと、登場するキャラまで）。
+          <br />
+          <b>「使う」</b>は、その家具に座る・遊ぶといった動作をするという意味です（ブランコ・すべり台・ソファなど）。<b>84種類の家具については誰が使うかまで分かります</b>。それ以外は「アクション対象」という家具側の印だけがあり、誰が使うかは不明です。
           <br />
           <b>「会話 ◯」は会話が起きる顔ぶれの通り数</b>です。「Aひとり」「Bひとり」「A＋B」はそれぞれ別に数えます。回収のチェックもこの単位で付きます（同じ顔ぶれに複数の会話がある家具では、実際の本数の方が多くなります）。
           <br />

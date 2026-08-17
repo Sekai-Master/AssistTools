@@ -29,6 +29,7 @@ const fx = (
     sketch: null,
     ...rest,
     talkChars,
+    actionChars: over.actionChars ?? [],
     talkCountBy: new Map(talkPairs),
     // 既定は「全部ソロ」。人数条件のテストだけ明示的に上書きする。
     talkSoloBy: over.talkSoloBy ?? new Map(talkPairs),
@@ -37,8 +38,8 @@ const fx = (
     likeChars,
     talkCount,
     action,
-    reactive: talkCount > 0 || action || likeChars.length > 0,
-    charSet: new Set([...talkChars, ...likeChars]),
+    reactive: talkCount > 0 || action || likeChars.length > 0 || (over.actionChars?.length ?? 0) > 0,
+    charSet: new Set([...talkChars, ...likeChars, ...(over.actionChars ?? [])]),
   } as Fixture;
 };
 
@@ -46,8 +47,10 @@ const fx = (
 const ソファ = fx({ id: 1, name: "ソファ", reading: "そふぁ", talks: [[1, 4], [2, 1]], likeChars: [1], sketch: true, cost: 20 });
 const ベッド = fx({ id: 2, name: "ベッド", reading: "べっど", talks: [[2, 2]], sketch: false, cost: 30 });
 // 動くだけの家具。会話も好みも無い＝誰の反応とも言えない
+// 動く印はあるが「誰が使うか」のデータが無い家具（実データで120件ある形）
 const 作業台 = fx({ id: 3, name: "作業台", reading: "さぎょうだい", action: true, sketch: true, cost: 5, size: [2, 2, 1] });
-const ラグ = fx({ id: 4, name: "ラグ", reading: "らぐ", action: true, likeChars: [3], sketch: true, cost: 5 });
+// 誰が使うかまで分かる家具（実データで84種類ある形）
+const ラグ = fx({ id: 4, name: "ラグ", reading: "らぐ", action: true, likeChars: [3], actionChars: [2, 3], sketch: true, cost: 5 });
 const 置物 = fx({ id: 5, name: "置物", reading: "おきもの", sketch: true, cost: 1 });
 const ALL = [ソファ, ベッド, 作業台, ラグ, 置物];
 
@@ -64,7 +67,8 @@ describe("applyFilter", () => {
 
   it("キャラで絞ると、そのキャラが関わる家具だけになる", () => {
     expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, charId: 1 }))).toEqual([1]);
-    expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, charId: 2 }))).toEqual([1, 2]);
+    // キャラ2は ソファ(会話) / ベッド(会話) / ラグ(使う) に関わる
+    expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, charId: 2 }))).toEqual([1, 2, 4]);
     expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, charId: 3 }))).toEqual([4]);
   });
 
@@ -76,28 +80,37 @@ describe("applyFilter", () => {
     expect(a).not.toEqual(b);
   });
 
-  it("キャラ×種別で絞る（会話だけ・好みだけ）", () => {
+  it("キャラ×種別で絞る（会話だけ・お気に入りだけ）", () => {
     expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, charId: 1, kinds: ["talk"] }))).toEqual([1]);
     // キャラ3は好み(ラグ)のみ。会話で絞ると消える。
     expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, charId: 3, kinds: ["talk"] }))).toEqual([]);
     expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, charId: 3, kinds: ["like"] }))).toEqual([4]);
   });
 
-  // ★ isGameCharacterAction は家具単位のフラグで、誰が動くかを持たない。
-  //   キャラ選択中に action を条件へ混ぜると、会話も好みも無い家具（作業台）が
-  //   そのキャラの結果に紛れ込む（偽陽性）一方、誰の反応も無い動く家具は
-  //   どのキャラを選んでも出てこない（偽陰性）。キャラ選択時は action で絞らない。
-  it("キャラ選択中は「キャラが動く」で絞らない（誰が動くかの情報が無いため）", () => {
-    // 一歌＋action → action で絞られず、一歌が関わる家具がそのまま出る
-    expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, charId: 1, kinds: ["action"] }))).toEqual([1]);
-    // 作業台（動くが誰の反応も無い）はどのキャラを選んでも出ない
-    for (const charId of [1, 2, 3]) {
-      expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, charId, kinds: ["action"] }))).not.toContain(3);
-    }
+  /**
+   * ★ 「キャラが使う」(isGameCharacterAction) は**家具の属性**で、誰が使うかのデータを
+   *   持たない。反応の種類（会話・お気に入り＝キャラとの関係）と粒度が違うので、
+   *   同じ列に置かず AND で重ねる独立条件にしてある。
+   *   実データにも「座れるが会話もお気に入りも無い」家具が存在する（チェア類など）。
+   */
+  /**
+   * ★ 「誰が使うか」は `mysekaiCharacterTalkNoTalkMysekaiFixtureActions` に実在する
+   *   （実測84種類）。`isGameCharacterAction` は家具側の印にすぎず、両者は一致しない
+   *   （フラグ182件・データ84種類・食い違い120+22件）。キャラを選んだらデータの方で絞る。
+   */
+  it("キャラ未選択なら、使える印かデータのある家具を出す", () => {
+    expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, actionOnly: true }))).toEqual([3, 4]);
   });
 
-  it("キャラ未選択なら「キャラが動く」で絞れる", () => {
-    expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, kinds: ["action"] }))).toEqual([3, 4]);
+  it("キャラを選んだら、その子が使う家具だけに絞る", () => {
+    // ラグは 2 と 3 が使う
+    expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, charId: 3, actionOnly: true }))).toEqual([4]);
+    expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, charId: 2, actionOnly: true }))).toEqual([4]);
+    // 作業台は「使える印」はあるが誰が使うかのデータが無いので、キャラを選ぶと出ない
+    expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, charId: 1, actionOnly: true }))).toEqual([]);
+  });
+
+  it("反応の種類で絞れる（キャラ未選択）", () => {
     expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, kinds: ["talk"] }))).toEqual([1, 2]);
     expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, kinds: ["like"] }))).toEqual([1, 4]);
   });
@@ -137,7 +150,8 @@ describe("applyFilter", () => {
   });
 
   it("条件を重ねられる（キャラ＋模写可）", () => {
-    expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, charId: 2, sketchableOnly: true }))).toEqual([1]);
+    // ベッドは模写不可なので落ち、ソファとラグが残る
+    expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, charId: 2, sketchableOnly: true }))).toEqual([1, 4]);
   });
 });
 

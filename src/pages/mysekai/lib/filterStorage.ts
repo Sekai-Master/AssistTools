@@ -19,7 +19,7 @@ import type { ReactionKind } from "./types";
 export const FILTER_STORAGE_KEY = "sekaimaster:mysekai:filters:v1";
 const VERSION = 1;
 
-const KINDS: ReactionKind[] = ["talk", "action", "like"];
+const KINDS: ReactionKind[] = ["talk", "like"];
 const SORTS: SortKey[] = ["talks", "name", "cost", "size"];
 const PARTIES: PartyFilter[] = ["any", "solo", "group"];
 const OWNEDS: OwnedFilter[] = ["any", "owned", "unowned"];
@@ -46,6 +46,7 @@ export function loadFilter(): FilterState {
       charId: numOrNull(s.charId),
       kinds,
       reactiveOnly: bool(s.reactiveOnly, DEFAULT_FILTER.reactiveOnly),
+      actionOnly: bool(s.actionOnly, DEFAULT_FILTER.actionOnly),
       sketchableOnly: bool(s.sketchableOnly, DEFAULT_FILTER.sketchableOnly),
       owned: OWNEDS.includes(s.owned as OwnedFilter)
         ? (s.owned as OwnedFilter)

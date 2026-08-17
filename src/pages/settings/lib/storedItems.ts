@@ -92,6 +92,7 @@ function summarizeMysekaiFilters(raw: string): string | null {
     // 既定と違うものだけ数える（DEFAULT_FILTER: reactiveOnly=true / 他は false）。
     if (s.reactiveOnly === false) n++;
     if (s.sketchableOnly === true) n++;
+    if (s.actionOnly === true) n++;
     if (s.owned === "owned" || s.owned === "unowned") n++;
     if (typeof s.sort === "string" && s.sort !== "name") n++;
     if (s.desc === true) n++;

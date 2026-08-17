@@ -237,6 +237,30 @@ function collectCommons(fixtureCommons, fixtureCommonGroups, unitToChara) {
 }
 
 /**
+ * 家具ID → その家具でアクションするキャラの集合（会話を伴わないぶん）。
+ *
+ * ★★ `isGameCharacterAction` は「アクション対象になりうる」という**家具の印**でしかなく、
+ *   誰が動くかは持たない。**誰が動くかは別の表にある**——
+ *   `mysekaiCharacterTalkNoTalkMysekaiFixtureActions`（1,529行）が
+ *   gameCharacterUnitId × mysekaiFixtureId を持っている。
+ *   実測でフラグ182件に対しデータは84種類、**フラグ true でデータ無しが120件、
+ *   データありでフラグ false が22件**あり、両者は一致しない。
+ *   会話を伴うアクション（ソファに座って喋る等）は会話側(talks)に出るので、
+ *   画面はこの2つを合わせて「誰が使うか」を示す。
+ */
+function collectActions(rows, unitToChara) {
+  const byFixture = new Map();
+  for (const r of rows ?? []) {
+    const fid = toId(r?.mysekaiFixtureId);
+    const chara = unitToChara.get(toId(r?.gameCharacterUnitId));
+    if (fid == null || chara == null) continue;
+    if (!byFixture.has(fid)) byFixture.set(fid, new Set());
+    byFixture.get(fid).add(chara);
+  }
+  return byFixture;
+}
+
+/**
  * craftTargetId（家具ID）→ 設計図。
  *
  * ★ `mysekai_canvas` も**家具IDの名前空間を共有している**（craftTargetId 439〜444 が
@@ -314,6 +338,10 @@ export function derive(src, now) {
     unitToChara
   );
   const blueprintByFixture = buildBlueprints(src.mysekaiBlueprints);
+  const actionByFixture = collectActions(
+    src.mysekaiCharacterTalkNoTalkMysekaiFixtureActions,
+    unitToChara
+  );
 
   // 反応に登場するキャラだけを載せる（フィルタの選択肢になるので、出てこない人を並べない）。
   // ★ normal（無関心）は数えない。出力にも持たないので、選択肢の根拠にもしない。
@@ -323,6 +351,9 @@ export function derive(src, now) {
   }
   for (const { like } of commonByFixture.values()) {
     for (const c of like) usedCharas.add(c);
+  }
+  for (const set of actionByFixture.values()) {
+    for (const c of set) usedCharas.add(c);
   }
 
   const characters = [];
@@ -396,6 +427,8 @@ export function derive(src, now) {
       // 設計図が無い家具（イベント配布の固定設置物など）は落とす。false（模写不可）とは別物。
       sk: bp ? Boolean(bp.isEnableSketch) : undefined,
       ac: f.isGameCharacterAction ? 1 : undefined,
+      // その家具を使うキャラ（会話を伴わないアクション）。会話つきのぶんは tc 側に出る。
+      aa: actionByFixture.has(id) ? sortedIds(actionByFixture.get(id)) : undefined,
       tc: talk && talk.perChara.size ? sortedIds(new Set(talk.perChara.keys())) : undefined,
       // tc と同じ並びで、そのキャラが登場する会話の本数。
       tk:
@@ -476,6 +509,7 @@ export function summarize(out) {
     characters: out.characters.length,
     withTalk: out.fixtures.filter((f) => f.tn).length,
     withAction: out.fixtures.filter((f) => f.ac).length,
+    withActionActors: out.fixtures.filter((f) => f.aa?.length).length,
     withCommon: out.fixtures.filter(hasLike).length,
     reactive: reactive.length,
     talks: out.fixtures.reduce((a, f) => a + (f.tn ?? 0), 0),

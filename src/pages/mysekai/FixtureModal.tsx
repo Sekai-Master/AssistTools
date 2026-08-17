@@ -202,9 +202,9 @@ export function FixtureModal({
                 ? "模写できない"
                 : "設計図なし"}
           </span>
-          {fixture.action && (
+          {(fixture.action || fixture.actionChars.length > 0) && (
             <span className="rounded bg-neu px-2 py-1 text-xs text-slate-500 shadow-neu-inset">
-              キャラが動く
+              キャラが使う（座る・遊ぶ）
             </span>
           )}
           {/* 「持っている」も指で押せる大きさにする（チェックボックスは小さすぎる）。 */}
@@ -229,7 +229,7 @@ export function FixtureModal({
           {fixture.parties.length === 0 ? (
             <p className="text-sm text-slate-500">
               この家具に固有の会話はありません。
-              {fixture.likeChars.length > 0 && "（好みの家具としては反応します）"}
+              {fixture.likeChars.length > 0 && "（お気に入りとしては反応します）"}
             </p>
           ) : (
             <>
@@ -277,9 +277,20 @@ export function FixtureModal({
             </p>
           )}
 
+          {fixture.actionChars.length > 0 && (
+            <>
+              <h3 className="mt-4 mb-1 text-xs font-bold text-slate-500">この家具を使う人</h3>
+              <p className="flex flex-wrap gap-1">
+                {fixture.actionChars.map((id) => (
+                  <CharaChip key={id} c={charById(id)} dim={highlight != null && highlight !== id} />
+                ))}
+              </p>
+            </>
+          )}
+
           {fixture.likeChars.length > 0 && (
             <>
-              <h3 className="mt-4 mb-1 text-xs font-bold text-slate-500">この家具が好きな人</h3>
+              <h3 className="mt-4 mb-1 text-xs font-bold text-slate-500">この家具をお気に入りにしている人</h3>
               <p className="flex flex-wrap gap-1">
                 {fixture.likeChars.map((id) => (
                   <CharaChip key={id} c={charById(id)} dim={highlight != null && highlight !== id} />

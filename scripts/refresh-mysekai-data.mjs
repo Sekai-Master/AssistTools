@@ -62,6 +62,9 @@ const SOURCES = {
   mysekaiCharacterTalkFixtureCommons: "mysekaiCharacterTalkFixtureCommons.json",
   mysekaiCharacterTalkFixtureCommonMysekaiFixtureGroups:
     "mysekaiCharacterTalkFixtureCommonMysekaiFixtureGroups.json",
+  // 会話を伴わない家具アクション（誰がその家具を使うか）。
+  mysekaiCharacterTalkNoTalkMysekaiFixtureActions:
+    "mysekaiCharacterTalkNoTalkMysekaiFixtureActions.json",
   gameCharacterUnits: "gameCharacterUnits.json",
   gameCharacters: "gameCharacters.json",
 };
