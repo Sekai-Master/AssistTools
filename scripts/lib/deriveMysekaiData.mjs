@@ -258,6 +258,24 @@ function buildBlueprints(blueprints) {
   return map;
 }
 
+/**
+ * サムネイルの保存名（拡張子なし）。
+ *
+ * ★ 内装（surface_appearance）は **assetbundleName が壁紙と床で共通**で、
+ *   配信元は `tex_{ab}_{layout}_1.png` と向きで別画像を出し分けている。
+ *   assetbundleName だけを名前にすると壁紙と床が同じファイルに落ち、**後勝ちで
+ *   上書きされて片方が別物の絵になる**（実測で31種類・のべ77件が該当）。向きも名前に含める。
+ */
+function thumbName(f) {
+  const ab = f?.assetbundleName;
+  if (typeof ab !== "string" || !ab) return undefined;
+  if (f.mysekaiFixtureType === "surface_appearance") {
+    const layout = f.mysekaiSettableLayoutType;
+    return typeof layout === "string" && layout ? `${ab}_${layout}` : ab;
+  }
+  return ab;
+}
+
 /** id → name の一覧。UI のフィルタ表示に使う。 */
 function genreList(rows) {
   const out = [];
@@ -374,7 +392,7 @@ export function derive(src, now) {
        *     surface_appearance … mysekai/thumbnail/surface_appearance/{ab}/tex_{ab}_{layout}_1.png
        *   画像は取得スクリプトが落として自前配信するので、画面はこの名前だけ見ればよい。
        */
-      im: typeof f.assetbundleName === "string" && f.assetbundleName ? f.assetbundleName : undefined,
+      im: thumbName(f),
       // 設計図が無い家具（イベント配布の固定設置物など）は落とす。false（模写不可）とは別物。
       sk: bp ? Boolean(bp.isEnableSketch) : undefined,
       ac: f.isGameCharacterAction ? 1 : undefined,

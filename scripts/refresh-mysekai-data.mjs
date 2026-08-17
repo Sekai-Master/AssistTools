@@ -6,12 +6,8 @@
  * ★ この表は未公開判定ができない（日付欄が無い）。auditLeaks 相当の検算は書けないので、
  *   代わりに前回出力との差分件数をログに出す。詳細は deriveMysekaiData.mjs の冒頭。
  *
- * ★ 画像は扱わない。家具のサムネイルは storage.sekai.best 配下に見つからず
- *   （3パターン試して全404、assetList.json にも該当パスなし・2026-08-17 実測）、
- *   3Dモデル（assetbundleName）しか無いため。パスが判明したら syncImages 相当を足す。
- *
  * 使い方: node scripts/refresh-mysekai-data.mjs
- * 出力:   public/MysekaiDatas/fixtures.json
+ * 出力:   public/MysekaiDatas/fixtures.json と thumb/*.webp
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -129,10 +125,12 @@ function thumbUrl(f, vocab) {
   if (!f.im) return null;
   const type = vocab.type[f.ty];
   if (type === "surface_appearance") {
-    // 内装だけ階層と拡張子が違う（assetbundleName が短いIDで、向きを挟む）。
+    // ★ 内装は階層も拡張子も違ううえ、**assetbundleName が壁紙と床で共通**。
+    //   保存名(im)には向きが付いているので、取得元を組み立てるときは剥がす。
     const layout = vocab.layout[f.ly];
     if (!layout) return null;
-    return `${ASSET_BASE}/surface_appearance/${f.im}/tex_${f.im}_${layout}_1.png`;
+    const ab = f.im.endsWith(`_${layout}`) ? f.im.slice(0, -(layout.length + 1)) : f.im;
+    return `${ASSET_BASE}/surface_appearance/${ab}/tex_${ab}_${layout}_1.png`;
   }
   return `${ASSET_BASE}/fixture/${f.im}_1.webp`;
 }
