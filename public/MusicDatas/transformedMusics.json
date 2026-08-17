@@ -7874,7 +7874,8 @@
     "default": 1242301,
     "Unit": "1_L/n",
     "categories": [
-      "original"
+      "original",
+      "mv_2d"
     ],
     "publishedAt": 1721196000000,
     "published": true,
@@ -13648,6 +13649,25 @@
     "isFullLength": false,
     "jacketLink": "jacket_s_795.webp",
     "music_time": 123,
+    "event_rate": 113
+  },
+  {
+    "id": "802",
+    "title": "君に贈る未来",
+    "pronunciation": "きみにおくるみらい",
+    "creatorArtistId": 338,
+    "artistName": "木瀬のん",
+    "default": 1168301,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1787551200000,
+    "published": false,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_802.webp",
+    "music_time": 121.6,
     "event_rate": 113
   }
 ]
