@@ -280,6 +280,14 @@ export function FixtureModal({
           {fixture.actionChars.length > 0 && (
             <>
               <h3 className="mt-4 mb-1 text-xs font-bold text-slate-500">この家具を使う人</h3>
+              <p className="mb-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-slate-500">
+                <span aria-hidden className="material-icons mt-px text-[14px] leading-none">
+                  info
+                </span>
+                <span>
+                  座る・遊ぶなどの動作をします。<b>会話を伴わない動きなので、会話数には含まれません</b>。
+                </span>
+              </p>
               <p className="flex flex-wrap gap-1">
                 {fixture.actionChars.map((id) => (
                   <CharaChip key={id} c={charById(id)} dim={highlight != null && highlight !== id} />
@@ -290,7 +298,16 @@ export function FixtureModal({
 
           {fixture.likeChars.length > 0 && (
             <>
-              <h3 className="mt-4 mb-1 text-xs font-bold text-slate-500">この家具をお気に入りにしている人</h3>
+              <h3 className="mt-4 mb-1 text-xs font-bold text-slate-500">この家具を気に入っている人</h3>
+              <p className="mb-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-slate-500">
+                <span aria-hidden className="material-icons mt-px text-[14px] leading-none">
+                  info
+                </span>
+                <span>
+                  置くと「わあ……！これいいなー！」「これ、素敵だな」のような反応をします。
+                  <b>上の会話数には含まれません</b>（固有会話とは別のデータで、回収の対象にもなりません）。
+                </span>
+              </p>
               <p className="flex flex-wrap gap-1">
                 {fixture.likeChars.map((id) => (
                   <CharaChip key={id} c={charById(id)} dim={highlight != null && highlight !== id} />

@@ -44,7 +44,7 @@ import { useMysekaiFixtures } from "./useMysekaiFixtures";
 
 const KIND_LABEL: Record<ReactionKind, string> = {
   talk: "固有会話",
-  like: "お気に入り",
+  like: "気に入っている",
 };
 
 const OWNED_OPTIONS: { value: OwnedFilter; label: string }[] = [
@@ -220,12 +220,12 @@ function FixtureRow({
                 （実測で一歌265件中69件、瑞希314件中127件が無根拠だった）。 */}
             {likesHere && (
               <span className="rounded bg-neu px-1.5 py-0.5 text-xs text-slate-500 shadow-neu-inset">
-                お気に入り
+                気に入っている
               </span>
             )}
             {charId == null && fixture.likeChars.length > 0 && (
               <span className="rounded bg-neu px-1.5 py-0.5 text-xs text-slate-500 shadow-neu-inset">
-お気に入り {fixture.likeChars.length}
+気に入り {fixture.likeChars.length}
               </span>
             )}
             {/* ★ 誰が使うかのデータ（actionChars）があるので、キャラ選択中も出せる。
@@ -502,7 +502,8 @@ export default function MysekaiReactions() {
                 : "選んだ種類の いずれか に当てはまる家具を出します（OR）"}
               。下のスイッチ・ジャンル・検索は<b>すべて満たすもの</b>だけに絞ります（AND）。
               <br />
-              <b>固有会話</b>＝その家具を置くと専用の会話が起きる。<b>お気に入り</b>＝置くと褒めてくれる。
+              <b>固有会話</b>＝その家具を置くと専用の会話が起きる。<b>気に入っている</b>＝置くと
+              「わあ……！これいいなー！」のような反応をする（<b>会話数には含まれません</b>）。
               どちらも<b>キャラごと</b>に決まっています。
             </p>
           </div>
