@@ -9,6 +9,12 @@ import type { Fixture, ReactionKind } from "./types";
 
 export type SortKey = "talks" | "name" | "cost" | "size";
 export type PartyFilter = "any" | "solo" | "group";
+/**
+ * 所持で絞る。
+ * ★ 持っている家具は**会話をこれから回収できる対象**で、持っていない家具は
+ *   まず入手しないと何も始まらない。用途が正反対なので両方向に絞れる必要がある。
+ */
+export type OwnedFilter = "any" | "owned" | "unowned";
 
 export interface FilterState {
   /** 選択中のキャラID。null は「キャラで絞らない」。 */
@@ -23,8 +29,8 @@ export interface FilterState {
   reactiveOnly: boolean;
   /** 模写できる家具だけに絞る（他人のセカイに取りに行ける候補）。 */
   sketchableOnly: boolean;
-  /** 「持っている」に印を付けた家具を隠す（＝これから取りに行くものだけ残す）。 */
-  hideOwned: boolean;
+  /** 所持で絞る。持っている＝会話を回収できる、持っていない＝まず入手する対象。 */
+  owned: OwnedFilter;
   /**
    * 会話の人数条件。
    * - `any`   … 問わない
@@ -49,7 +55,7 @@ export const DEFAULT_FILTER: FilterState = {
   //   実装前の家具が既定で目に入ることを避けられる。全件は明示操作で開く。
   reactiveOnly: true,
   sketchableOnly: false,
-  hideOwned: false,
+  owned: "any",
   party: "any",
   mainGenreId: null,
   query: "",
@@ -117,7 +123,7 @@ function matchesKindOnly(f: Fixture, kinds: ReactionKind[]): boolean {
 }
 
 /**
- * @param owned 「持っている」と印を付けた家具ID。hideOwned のときだけ効く。
+ * @param owned 「持っている」と印を付けた家具ID。state.owned が any 以外のときに効く。
  */
 export function applyFilter(
   fixtures: Fixture[],
@@ -126,7 +132,8 @@ export function applyFilter(
 ): Fixture[] {
   const q = normalizeQuery(state.query);
   const out = fixtures.filter((f) => {
-    if (state.hideOwned && owned.has(f.id)) return false;
+    if (state.owned === "owned" && !owned.has(f.id)) return false;
+    if (state.owned === "unowned" && owned.has(f.id)) return false;
     if (state.reactiveOnly && !f.reactive) return false;
     if (state.party !== "any" && !matchesParty(f, state.party, state.charId)) return false;
     // 「設計図が無い家具」(null) は模写のしようが無いので、模写可のみでは落とす。

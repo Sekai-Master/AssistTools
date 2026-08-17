@@ -11,6 +11,7 @@ import {
   summary,
   talksOf,
   type FilterState,
+  type OwnedFilter,
   type PartyFilter,
   type SortKey,
 } from "./lib/filter";
@@ -43,6 +44,12 @@ const KIND_LABEL: Record<ReactionKind, string> = {
   action: "キャラが動く",
   like: "好みの家具",
 };
+
+const OWNED_OPTIONS: { value: OwnedFilter; label: string }[] = [
+  { value: "any", label: "所持問わず" },
+  { value: "owned", label: "持っている" },
+  { value: "unowned", label: "持っていない" },
+];
 
 const PARTY_OPTIONS: { value: PartyFilter; label: string }[] = [
   { value: "any", label: "人数問わず" },
@@ -85,6 +92,7 @@ function FixtureRow({
   owned,
   collectedCount,
   onOpen,
+  onToggleOwned,
 }: {
   fixture: Fixture;
   charId: number | null;
@@ -92,6 +100,7 @@ function FixtureRow({
   owned: boolean;
   collectedCount: number;
   onOpen: (f: Fixture) => void;
+  onToggleOwned: (id: number) => void;
 }) {
   // ★ 表示する本数は**選んだ人のぶん**。家具の総数を出すと実数の19倍になる。
   const talks = talksOf(fixture, charId);
@@ -109,14 +118,16 @@ function FixtureRow({
   const facesShown = fixture.talkChars.slice(0, 8);
 
   return (
-    <li className="border-b border-[color:var(--neu-lo)]/40 last:border-b-0">
+    <li className="flex items-center gap-1 border-b border-[color:var(--neu-lo)]/40 last:border-b-0">
+      {/* ★ 持っている家具を沈めない。**持っていて初めて会話を回収できる**ので、
+          むしろそちらが主役。持っていないものを少し退かせる。 */}
       <button
         type="button"
         onClick={() => onOpen(fixture)}
         className={cn(
-          "flex w-full items-center gap-3 py-2 text-left",
+          "flex min-w-0 flex-1 items-center gap-3 py-2 text-left",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
-          owned && "opacity-45"
+          !owned && "opacity-60"
         )}
       >
         {img ? (
@@ -187,6 +198,25 @@ function FixtureRow({
           </span>
           <SketchBadge sketch={fixture.sketch} />
         </span>
+      </button>
+
+      {/* 一覧のまま所持を切り替える。開いて閉じてを繰り返さずに済む。
+          行を開くボタンとは別の当たり判定にして、押し間違いを防ぐ。 */}
+      <button
+        type="button"
+        onClick={() => onToggleOwned(fixture.id)}
+        aria-pressed={owned}
+        title={owned ? "持っている（押すと外す）" : "持っていない（押すと印を付ける）"}
+        className={cn(
+          "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
+          owned ? "neu-selected" : "bg-neu text-slate-400 shadow-neu-sm neu-tactile"
+        )}
+      >
+        <span aria-hidden className="material-icons text-[20px] leading-none">
+          {owned ? "inventory_2" : "add"}
+        </span>
+        <span className="sr-only">{fixture.name} を持っている</span>
       </button>
     </li>
   );
@@ -394,6 +424,21 @@ export default function MysekaiReactions() {
 
           <div>
             <SegmentedControl
+              options={OWNED_OPTIONS}
+              value={filter.owned}
+              onChange={(v) => setFilter((f) => ({ ...f, owned: v }))}
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              {filter.owned === "owned"
+                ? "持っている家具だけ。ここから会話を回収していきます"
+                : filter.owned === "unowned"
+                  ? "持っていない家具だけ。まず入手する対象です"
+                  : "所持で絞りません。一覧の右端のボタンで印を付けられます"}
+            </p>
+          </div>
+
+          <div>
+            <SegmentedControl
               options={PARTY_OPTIONS}
               value={filter.party}
               onChange={(v) => setFilter((f) => ({ ...f, party: v }))}
@@ -419,11 +464,7 @@ export default function MysekaiReactions() {
               onChange={(v) => setFilter((f) => ({ ...f, sketchableOnly: v }))}
               label="模写できるものだけ"
             />
-            <Switch
-              checked={filter.hideOwned}
-              onChange={(v) => setFilter((f) => ({ ...f, hideOwned: v }))}
-              label="持っているものを隠す"
-            />
+
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -494,8 +535,7 @@ export default function MysekaiReactions() {
           {owned.size > 0 && (
             <>
               {" "}
-              ／ 持っている印 {owned.size} 件
-              {!filter.hideOwned && ownedInList > 0 && <>（この一覧に {ownedInList} 件）</>}
+              ／ この一覧で持っている {ownedInList} 件
             </>
           )}
         </p>
@@ -518,6 +558,7 @@ export default function MysekaiReactions() {
                       : f.parties.reduce((n, p) => n + (collected.has(partyKey(f.id, p)) ? 1 : 0), 0)
                   }
                   onOpen={setOpenFixture}
+                  onToggleOwned={toggleOwned}
                 />
               ))}
             </ul>

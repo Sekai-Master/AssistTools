@@ -111,11 +111,19 @@ describe("applyFilter", () => {
     expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, sketchableOnly: true }))).toEqual([1, 3, 4]);
   });
 
-  it("持っている家具を隠せる", () => {
+  // ★ 持っている家具は「会話を回収できる対象」、持っていない家具は「まず入手する対象」で
+  //   用途が正反対。どちらにも絞れる必要がある。
+  it("所持で両方向に絞れる", () => {
     const owned = new Set([1, 2]);
-    expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, hideOwned: true }, owned))).toEqual([3, 4]);
-    // hideOwned が false なら owned は効かない
+    expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, owned: "owned" }, owned))).toEqual([1, 2]);
+    expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, owned: "unowned" }, owned))).toEqual([3, 4]);
+    // any なら所持で絞らない
     expect(ids(applyFilter(ALL, DEFAULT_FILTER, owned))).toEqual([1, 2, 3, 4]);
+  });
+
+  it("印が1つも無ければ「持っている」で絞ると空になる", () => {
+    expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, owned: "owned" }))).toEqual([]);
+    expect(ids(applyFilter(ALL, { ...DEFAULT_FILTER, owned: "unowned" }))).toEqual([1, 2, 3, 4]);
   });
 
   it("名前でも読みでも検索できる", () => {

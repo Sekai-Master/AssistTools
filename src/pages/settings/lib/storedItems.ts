@@ -92,7 +92,7 @@ function summarizeMysekaiFilters(raw: string): string | null {
     // 既定と違うものだけ数える（DEFAULT_FILTER: reactiveOnly=true / 他は false）。
     if (s.reactiveOnly === false) n++;
     if (s.sketchableOnly === true) n++;
-    if (s.hideOwned === true) n++;
+    if (s.owned === "owned" || s.owned === "unowned") n++;
     if (typeof s.sort === "string" && s.sort !== "name") n++;
     if (s.desc === true) n++;
     return n === 0 ? null : `${n} 項目`;
@@ -155,15 +155,21 @@ export const STORED_ITEMS: StoredItem[] = [
   },
   {
     key: "sekaimaster:mysekai:owned:v1",
-    label: "持っているマイセカイ家具",
-    note: "「マイセカイ リアクション図鑑」で「持っている」に印を付けた家具",
+    label: "マイセカイ図鑑の進み具合",
+    note: "「マイセカイ リアクション図鑑」で印を付けた、持っている家具と見た会話",
     summarize: (raw) => {
       try {
         const parsed: unknown = JSON.parse(raw);
-        if (!parsed || typeof parsed !== "object") return BROKEN;
-        const ids = (parsed as { ids?: unknown }).ids;
-        if (!Array.isArray(ids)) return BROKEN;
-        return ids.length === 0 ? null : `${ids.length} 件`;
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return BROKEN;
+        const { ids, seen } = parsed as { ids?: unknown; seen?: unknown };
+        // 家具と会話は別々に数える（片方だけ付けている状態が普通にある）。
+        const n = Array.isArray(ids) ? ids.length : 0;
+        const m = Array.isArray(seen) ? seen.length : 0;
+        if (!Array.isArray(ids) && !Array.isArray(seen)) return BROKEN;
+        if (n === 0 && m === 0) return null;
+        return [n > 0 ? `家具 ${n} 件` : null, m > 0 ? `会話 ${m} 件` : null]
+          .filter(Boolean)
+          .join(" / ");
       } catch {
         return BROKEN;
       }

@@ -7,7 +7,13 @@
  * localStorage は旧バージョンの自分や手書きに汚染されうるので、
  * バージョンと型を見てから使う（EfficiencyRanking の loadStored と同じ流儀）。
  */
-import { DEFAULT_FILTER, type FilterState, type PartyFilter, type SortKey } from "./filter";
+import {
+  DEFAULT_FILTER,
+  type FilterState,
+  type OwnedFilter,
+  type PartyFilter,
+  type SortKey,
+} from "./filter";
 import type { ReactionKind } from "./types";
 
 export const FILTER_STORAGE_KEY = "sekaimaster:mysekai:filters:v1";
@@ -16,6 +22,7 @@ const VERSION = 1;
 const KINDS: ReactionKind[] = ["talk", "action", "like"];
 const SORTS: SortKey[] = ["talks", "name", "cost", "size"];
 const PARTIES: PartyFilter[] = ["any", "solo", "group"];
+const OWNEDS: OwnedFilter[] = ["any", "owned", "unowned"];
 
 const bool = (v: unknown, fallback: boolean): boolean => (typeof v === "boolean" ? v : fallback);
 const numOrNull = (v: unknown): number | null =>
@@ -40,7 +47,9 @@ export function loadFilter(): FilterState {
       kinds,
       reactiveOnly: bool(s.reactiveOnly, DEFAULT_FILTER.reactiveOnly),
       sketchableOnly: bool(s.sketchableOnly, DEFAULT_FILTER.sketchableOnly),
-      hideOwned: bool(s.hideOwned, DEFAULT_FILTER.hideOwned),
+      owned: OWNEDS.includes(s.owned as OwnedFilter)
+        ? (s.owned as OwnedFilter)
+        : DEFAULT_FILTER.owned,
       party: PARTIES.includes(s.party as PartyFilter)
         ? (s.party as PartyFilter)
         : DEFAULT_FILTER.party,
