@@ -1,0 +1,162 @@
+/**
+ * 家具一覧の絞り込みと並べ替え（純関数）。UIから分離してテストできるようにする。
+ *
+ * このツールの主動線は「キャラを選ぶ → そのキャラが反応する家具が出る」。
+ * ゲーム内のフィルタは**自分が設計図を持っている家具しか出さない**ので、
+ * 持っていない家具（＝これから取りに行く候補）を見るためにここがある。
+ */
+import type { Fixture, ReactionKind } from "./types";
+
+export type SortKey = "talks" | "name" | "cost" | "size";
+
+export interface FilterState {
+  /** 選択中のキャラID。null は「キャラで絞らない」。 */
+  charId: number | null;
+  /**
+   * 見たい反応の種類。空なら種類で絞らない。
+   * ★ 複数選んだときは **OR**（どれかに当てはまれば出す）。
+   *   他の条件（下のスイッチ・ジャンル・検索）は AND で重なる。
+   */
+  kinds: ReactionKind[];
+  /** 反応がある家具だけに絞る。既定 true。 */
+  reactiveOnly: boolean;
+  /** 模写できる家具だけに絞る（他人のセカイに取りに行ける候補）。 */
+  sketchableOnly: boolean;
+  /** 「持っている」に印を付けた家具を隠す（＝これから取りに行くものだけ残す）。 */
+  hideOwned: boolean;
+  mainGenreId: number | null;
+  /** 名前・読みの部分一致。 */
+  query: string;
+  sort: SortKey;
+  desc: boolean;
+}
+
+export const DEFAULT_FILTER: FilterState = {
+  charId: null,
+  kinds: [],
+  // ★ 既定で反応ありに絞る。
+  //   この表には未公開判定に使える日付欄が無く（deriveMysekaiData.mjs 参照）、
+  //   反応データは実装とセットで作られるので、既定表示を反応ありにしておくと
+  //   実装前の家具が既定で目に入ることを避けられる。全件は明示操作で開く。
+  reactiveOnly: true,
+  sketchableOnly: false,
+  hideOwned: false,
+  mainGenreId: null,
+  query: "",
+  // ★ 既定は名前の昇順。会話数の降順（＝よく喋る家具が上）も考えたが、
+  //   初見で並びの理由が分からない順序を既定にしない。あいうえお順なら
+  //   「探しているものが今どこにあるか」を予想できる（Nori 指摘 2026-08-17）。
+  sort: "name",
+  desc: false,
+};
+
+/** 検索の正規化。全角英数と大文字の揺れを吸収する。 */
+export function normalizeQuery(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+}
+
+/**
+ * その家具が、指定キャラの指定種別の反応を持つか。
+ *
+ * ★ `action`（キャラが動く）は**家具単位のフラグで、誰が動くかを持たない**。
+ *   以前は charSet で代用していたが、実測で偽陰性28件（誰を選んでも出ない家具）と
+ *   偽陽性（会話も好みも無いのに出る）の両方が起きた。
+ *   キャラを選んでいるときは action を条件に**使わない**——キャラで説明できないものを
+ *   キャラの結果に混ぜない。動く家具を見たいときはキャラを外して探す。
+ */
+export function matchesChar(f: Fixture, charId: number, kinds: ReactionKind[]): boolean {
+  const kindsForChar = kinds.filter((k) => k !== "action");
+  // 種別の指定が無い（または action しか選ばれていない）ときは、会話か好みで当たればよい。
+  if (kindsForChar.length === 0) return f.charSet.has(charId);
+  return kindsForChar.some((k) => {
+    if (k === "talk") return f.talkChars.includes(charId);
+    return f.likeChars.includes(charId);
+  });
+}
+
+/** キャラを選んでいないときの種別判定。 */
+function matchesKindOnly(f: Fixture, kinds: ReactionKind[]): boolean {
+  if (kinds.length === 0) return true;
+  return kinds.some((k) => {
+    if (k === "talk") return f.talkCount > 0;
+    if (k === "like") return f.likeChars.length > 0;
+    return f.action;
+  });
+}
+
+/**
+ * @param owned 「持っている」と印を付けた家具ID。hideOwned のときだけ効く。
+ */
+export function applyFilter(
+  fixtures: Fixture[],
+  state: FilterState,
+  owned: ReadonlySet<number> = new Set()
+): Fixture[] {
+  const q = normalizeQuery(state.query);
+  const out = fixtures.filter((f) => {
+    if (state.hideOwned && owned.has(f.id)) return false;
+    if (state.reactiveOnly && !f.reactive) return false;
+    // 「設計図が無い家具」(null) は模写のしようが無いので、模写可のみでは落とす。
+    if (state.sketchableOnly && f.sketch !== true) return false;
+    if (state.mainGenreId != null && f.mainGenreId !== state.mainGenreId) return false;
+    if (state.charId != null) {
+      if (!matchesChar(f, state.charId, state.kinds)) return false;
+    } else if (!matchesKindOnly(f, state.kinds)) {
+      return false;
+    }
+    if (q && !normalizeQuery(f.name).includes(q) && !normalizeQuery(f.reading).includes(q)) {
+      return false;
+    }
+    return true;
+  });
+  return sortFixtures(out, state.sort, state.desc, state.charId);
+}
+
+const volume = (f: Fixture) => f.size[0] * f.size[1] * f.size[2];
+
+/** 会話本数。キャラを選んでいればその人のぶん、選んでいなければ家具全体の総数。 */
+export function talksOf(f: Fixture, charId: number | null): number {
+  if (charId == null) return f.talkCount;
+  return f.talkCountBy.get(charId) ?? 0;
+}
+
+export function sortFixtures(
+  fixtures: Fixture[],
+  sort: SortKey,
+  desc: boolean,
+  charId: number | null = null
+): Fixture[] {
+  const dir = desc ? -1 : 1;
+  // 元配列を壊さない（呼び出し側が useMemo で保持しているため）。
+  return [...fixtures].sort((a, b) => {
+    let d = 0;
+    // キャラを選んでいるときは「その人の会話数」で並べる。
+    // 家具全体の総数で並べると、誰を選んでも同じ順（＝多人数で使えるソファが上）になる。
+    if (sort === "talks") d = talksOf(a, charId) - talksOf(b, charId);
+    else if (sort === "cost") d = (a.cost ?? 0) - (b.cost ?? 0);
+    else if (sort === "size") d = volume(a) - volume(b);
+    else d = a.reading.localeCompare(b.reading, "ja");
+    // 同点は名前順で固定する（並びが毎回変わると差分が読めない）。
+    if (d === 0) return a.reading.localeCompare(b.reading, "ja");
+    return d * dir;
+  });
+}
+
+/**
+ * 絞り込み結果の要約。件数だけでなく「取りに行ける数」を出す。
+ * ★ 会話本数は charId を渡せば**その人のぶんだけ**数える。家具の総数を足すと
+ *   実数の19倍になる（一歌で 4205 本と出て、実際は 220 本だった）。
+ */
+export function summary(
+  list: Fixture[],
+  charId: number | null = null
+): { total: number; sketchable: number; talks: number } {
+  return {
+    total: list.length,
+    sketchable: list.filter((f) => f.sketch === true).length,
+    talks: list.reduce((a, f) => a + talksOf(f, charId), 0),
+  };
+}

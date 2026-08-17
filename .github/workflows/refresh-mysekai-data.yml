@@ -1,0 +1,84 @@
+# マイセカイの家具・キャラ反応の派生データを更新する。
+#
+# ★ 頻度が日次なのはカード側（6時間おき）と違う理由がある。カードは「15:00 解禁」に
+#   追従するため詰めているが、家具はイベント単位で増えるので急がない。
+#
+# ★★ この表は未公開判定ができない。★★
+#   家具マスタは日付欄を持たず（全26キーを確認・2026-08-17）、
+#   カード側の auditLeaks に相当する検算が原理的に書けない。
+#   代わりに生成スクリプトが**前回出力との差分件数**をログに出す。
+#   一度に大量の家具が増えた回は、実装前のマスタが先行していないか目視で確かめること
+#   （画面側は既定で「反応あり」に絞ってあり、反応データは実装とセットで作られる）。
+#
+# ★ 画像は取りに行かない。家具のサムネイルは配信先が見つかっていないため
+#   （3パターン試して全404・assetList.json にも該当なし）。
+name: Refresh mysekai data
+
+on:
+  schedule:
+    - cron: "0 19 * * *" # 04:00 JST
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 家具が0件になった（＝結合に失敗した）場合はスクリプト自身が非ゼロで落ちる。
+      - name: Refresh
+        run: npm run data:refresh-mysekai
+
+      - name: Detect changes
+        id: diff
+        run: |
+          if git diff --quiet -- public/MysekaiDatas/; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "マイセカイデータに差分なし"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- public/MysekaiDatas/
+          fi
+
+      # ★★ ここが門番。結合ロジックのテストを含む。赤ければ main に入れない。
+      - name: Test
+        if: steps.diff.outputs.changed == 'true'
+        run: npm test
+
+      - name: Build
+        if: steps.diff.outputs.changed == 'true'
+        run: npm run build
+
+      # 直接コミット方式の理由はカード側（refresh-card-data.yml）と同じ。
+      # org 設定で Actions からの PR 作成が禁止されているため、test/build を門番にする。
+      - name: Commit
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # ★ 触るのは公開データだけ。他の差分は巻き込まない。
+          git add public/MysekaiDatas/
+          git commit -m "chore(data): マイセカイの家具・反応データを更新"
+          # 他のデータ更新と同時刻に走ると main がぶつかる。取り込み直して数回やり直す。
+          for i in 1 2 3 4 5; do
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              echo "push した（試行 $i 回目）"
+              exit 0
+            fi
+            echo "競合したのでやり直す（試行 $i 回目）"
+            sleep $((5 + RANDOM % 10))
+          done
+          echo "::error::main への push に繰り返し失敗した"
+          exit 1

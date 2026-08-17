@@ -75,6 +75,32 @@ function summarizeRanking(raw: string): string | null {
   }
 }
 
+/**
+ * マイセカイ図鑑の絞り込み。**既定から変えた項目だけ**数える。
+ * 保存形はキー数が固定なので、素直に Object.keys を数えると常に同じ数が出て、
+ * 何も設定していない人の画面にも項目が並んでしまう。
+ */
+function summarizeMysekaiFilters(raw: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return BROKEN;
+    const s = parsed as Record<string, unknown>;
+    let n = 0;
+    if (typeof s.charId === "number") n++;
+    if (Array.isArray(s.kinds) && s.kinds.length > 0) n++;
+    if (typeof s.mainGenreId === "number") n++;
+    // 既定と違うものだけ数える（DEFAULT_FILTER: reactiveOnly=true / 他は false）。
+    if (s.reactiveOnly === false) n++;
+    if (s.sketchableOnly === true) n++;
+    if (s.hideOwned === true) n++;
+    if (typeof s.sort === "string" && s.sort !== "name") n++;
+    if (s.desc === true) n++;
+    return n === 0 ? null : `${n} 項目`;
+  } catch {
+    return BROKEN;
+  }
+}
+
 export const STORED_ITEMS: StoredItem[] = [
   {
     key: "sekaimaster:profiles:v1",
@@ -118,6 +144,30 @@ export const STORED_ITEMS: StoredItem[] = [
     label: "ランキングの入力",
     note: "「効率曲ランキング」の総合力・イベントボーナスなど",
     summarize: summarizeRanking,
+  },
+  {
+    key: "sekaimaster:mysekai:filters:v1",
+    label: "マイセカイ図鑑の絞り込み",
+    note: "「マイセカイ リアクション図鑑」で選んだキャラ・絞り込み・並び順",
+    // ★ countKeys は使えない。保存形が常に同じキー数なので「8 項目」から動かず、
+    //   何も設定していない状態でも一覧に出てしまう。既定から変えた数を数える。
+    summarize: summarizeMysekaiFilters,
+  },
+  {
+    key: "sekaimaster:mysekai:owned:v1",
+    label: "持っているマイセカイ家具",
+    note: "「マイセカイ リアクション図鑑」で「持っている」に印を付けた家具",
+    summarize: (raw) => {
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return BROKEN;
+        const ids = (parsed as { ids?: unknown }).ids;
+        if (!Array.isArray(ids)) return BROKEN;
+        return ids.length === 0 ? null : `${ids.length} 件`;
+      } catch {
+        return BROKEN;
+      }
+    },
   },
   {
     key: "sekaimaster:motion:v1",

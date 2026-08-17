@@ -123,6 +123,17 @@ export const TOOLS: ToolDef[] = [
     status: "ready",
   },
   {
+    id: "mysekai",
+    path: "/mysekai",
+    name: "マイセカイ リアクション図鑑",
+    shortName: "マイセカイ",
+    description:
+      "キャラが反応する家具をキャラ別に一覧できます。ゲーム内の絞り込みは自分が設計図を持っている家具しか出ないので、まだ持っていない家具や、他人のセカイへ模写しに行く候補もここで探せます。",
+    icon: "weekend",
+    unit: "n25",
+    status: "ready",
+  },
+  {
     id: "efficiency",
     path: "/efficiency",
     name: "効率難易度検索",

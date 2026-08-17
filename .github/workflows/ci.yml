@@ -11,7 +11,7 @@ on:
   #   デプロイを CI 経由にした以上、ここを繋がないと日次のカード更新が本番に届かない
   #   （実際に届いていなかった。2026-08-03 に発覚）。
   workflow_run:
-    workflows: ["Refresh card data", "Refresh music data"]
+    workflows: ["Refresh card data", "Refresh music data", "Refresh mysekai data"]
     types: [completed]
 
 jobs:

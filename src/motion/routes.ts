@@ -21,6 +21,7 @@ export const ROUTE_LOADERS: Record<string, Loader> = {
   "/worktime": () => import("../pages/worktime/WorkTimeCalculator"),
   "/ranking": () => import("../pages/ranking/EfficiencyRanking"),
   "/deck": () => import("../pages/deck/DeckBuilder"),
+  "/mysekai": () => import("../pages/mysekai/MysekaiReactions"),
 };
 
 /**
@@ -101,6 +102,7 @@ export const RoutePages = {
   worktime: lazyOf("/worktime"),
   ranking: lazyOf("/ranking"),
   deck: lazyOf("/deck"),
+  mysekai: lazyOf("/mysekai"),
   terms: lazyOf("/terms"),
   privacy: lazyOf("/privacy"),
   changelog: lazyOf("/changelog"),
