@@ -45,6 +45,7 @@ export function BonusPanel({
   onSupportBonus,
   custom,
   onCustom,
+  deckPower,
 }: {
   cards: CatalogCard[];
   /** 計算はページ側で1回だけ行う（比較や編成プロフィールへの保存と同じ値を使うため）。 */
@@ -57,6 +58,12 @@ export function BonusPanel({
   /** 「カスタム」を選んでいるときの条件。 */
   custom?: CustomEvent;
   onCustom?: (next: CustomEvent) => void;
+  /**
+   * いま組んでいる編成の総合力。
+   * ★ 上限の告知を**警告色に上げてよいかの判定にだけ**使う。上限に触れていない人に
+   *   琥珀を出すと「自分に問題がある」と誤読され、警告色の意味が薄まる。
+   */
+  deckPower?: number;
 }) {
   const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
   /**
@@ -68,6 +75,8 @@ export function BonusPanel({
     () => events.find((e) => e.id === eventId)?.powerLimit,
     [events, eventId]
   );
+  /** 上限に実際に触れているか。触れていない人には警告色を出さない。 */
+  const over = powerLimit != null && (deckPower ?? 0) > powerLimit;
 
   return (
     <Panel title="イベントボーナス">
@@ -108,13 +117,23 @@ export function BonusPanel({
 
       {/* ★ 上限は「編成を組み終えてから気づく」と手戻りが大きいので、イベントを選んだ
           時点で知らせる。比較パネルを開かない人にも届かせたい。 */}
-      {powerLimit != null && (
-        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
-          このイベントは<b>発揮できる総合力が {powerLimit.toLocaleString()} で頭打ち</b>です
-          （ワールドリンク第3弾の仕様）。これを超えるぶんはスコアに乗らないので、
-          超えている人は<b>総合力ではなくイベントボーナスとスキルを伸ばす</b>のが正解になります。
-        </p>
-      )}
+      {powerLimit != null &&
+        (over ? (
+          <p
+            role="status"
+            className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700"
+          >
+            この編成は<b>発揮できる総合力の上限 {powerLimit.toLocaleString()} を超えています</b>
+            （ワールドリンク第3弾の仕様）。超えたぶんはスコアに乗らないので、
+            <b>ここから総合力を伸ばしても1点も増えません。</b>
+            イベントボーナスとスキルで差を付けることになります。
+          </p>
+        ) : (
+          <p className="mt-3 text-xs leading-relaxed text-slate-500">
+            このイベントは発揮できる総合力が {powerLimit.toLocaleString()} で頭打ちです
+            （ワールドリンク第3弾の仕様）。いまの編成はまだ上限に届いていません。
+          </p>
+        ))}
 
       {/* カスタムのときだけ、対象メンバーとタイプを置かせる。 */}
       {eventId === CUSTOM_EVENT_ID && custom && onCustom && (

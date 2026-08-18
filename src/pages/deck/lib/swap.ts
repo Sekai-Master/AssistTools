@@ -100,12 +100,20 @@ export function swapCandidates(
   }
 
   /**
-   * ★ 並べ替えは**最終Ptの差**が第一。出せないときだけ総合力の差で代用する。
+   * ★ 並べ替えは**最終Ptの差**が第一。出せないときだけ代用する。
    *   総合力だけで並べると、このツールが一番言いたいこと
    *  （ボーナスを落として総合力を取る判断）がそのまま消える。
+   *
+   * ★ **上限のあるイベントでは総合力での代用をしない。**
+   *   楽曲データ（428KB）が届く前と読み込み失敗時はこの経路を通るが、
+   *   上限帯では総合力を盛っても1点も増えないので、総合力順に並べると
+   *   **1点にもならない候補を最上位に並べてしまう**（破壊者指摘 2026-08-18）。
+   *   その窓ではボーナスの差で代用する。
    */
+  const capped = (opts.cond?.powerLimit ?? 0) > 0;
   rows.sort((a, b) => {
     if (a.deltaPt != null && b.deltaPt != null) return b.deltaPt - a.deltaPt;
+    if (capped) return b.deltaBonus - a.deltaBonus;
     return b.deltaPower - a.deltaPower;
   });
   return { baseline, rows };

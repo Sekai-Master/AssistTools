@@ -516,6 +516,7 @@ export default function DeckBuilder() {
           onSupportBonus={setSupportBonus}
           custom={custom}
           onCustom={setCustom}
+          deckPower={evaluated.power.total}
         />
       )}
 

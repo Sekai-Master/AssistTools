@@ -18,7 +18,7 @@
  *   （開催期間と上限値だけ・5行 625 バイト）を切り出して配っている。
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export interface PowerLimitEvent {
   id: number;
@@ -87,7 +87,14 @@ export interface PowerLimitInfo {
  * これが無いとランキングが出せないという性質のものではない）。
  */
 export function usePowerLimit(enabled = true): PowerLimitInfo {
-  const [event, setEvent] = useState<PowerLimitInfo>({ active: null, latest: null });
+  const [rows, setRows] = useState<PowerLimitEvent[]>([]);
+  /**
+   * ★ **「開催中か」を読み込み時刻で焼き付けない。**
+   *   これは放置周回のためのツールで、**タブを開きっぱなしにするのが普通の使い方**。
+   *   マウント時の Date.now() で固定すると、開いたまま開催が始まっても
+   *   「上限なし」のまま警告も出さずに過大なPtを出し続ける（破壊者指摘 2026-08-18）。
+   */
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (!enabled) return;
@@ -101,10 +108,9 @@ export function usePowerLimit(enabled = true): PowerLimitInfo {
         //   JSON として読めたうえで1行ずつ検証する。
         if (!res.ok) return;
         const raw: unknown = await res.json();
-        const rows = raw && typeof raw === "object" ? (raw as { events?: unknown }).events : null;
-        if (!Array.isArray(rows)) return;
-        const valid = rows.filter(isRow);
-        setEvent({ active: activeLimit(valid, Date.now()), latest: latestLimit(valid) });
+        const list = raw && typeof raw === "object" ? (raw as { events?: unknown }).events : null;
+        if (!Array.isArray(list)) return;
+        setRows(list.filter(isRow));
       } catch {
         // 上限が読めないときは「上限なし」として扱う。ここで画面を止めない。
       }
@@ -112,5 +118,21 @@ export function usePowerLimit(enabled = true): PowerLimitInfo {
     return () => controller.abort();
   }, [enabled]);
 
-  return event;
+  useEffect(() => {
+    if (!enabled) return;
+    const tick = () => setNow(Date.now());
+    // 1分ごと＋タブに戻ったとき。境目をまたいだ直後に気づければ十分で、
+    // これ以上細かくしても意味がない（イベントは数日単位）。
+    const id = setInterval(tick, 60_000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [enabled]);
+
+  return useMemo(
+    () => ({ active: activeLimit(rows, now), latest: latestLimit(rows) }),
+    [rows, now]
+  );
 }

@@ -34,6 +34,7 @@ import {
   type PassCourse,
 } from "./lib/lbRun";
 import { numOrUndef } from "../../lib/num";
+import { cn } from "../../lib/utils";
 import { cappedPower, usePowerLimit } from "../../lib/powerLimit";
 import { Delta } from "../../components/ui/Delta";
 import { useFlip } from "../../lib/useFlip";
@@ -302,12 +303,15 @@ function Stat({
   sub,
   delta,
   formatDelta,
+  tone,
 }: {
   label: string;
   value: string;
   sub?: string;
   delta?: number | null;
   formatDelta?: (n: number) => string;
+  /** "warn" は「財布から出ていく数字」用。**他と同じ見た目にすると見落とされる。** */
+  tone?: "warn";
 }) {
   return (
     <div className="rounded-xl bg-neu p-3 shadow-neu-inset">
@@ -315,8 +319,19 @@ function Stat({
         {label}
         {delta !== undefined && <Delta value={delta} format={formatDelta} />}
       </div>
-      <div className="mt-1 text-lg font-bold tabular-nums text-slate-700">{value}</div>
-      {sub && <div className="text-[11px] text-slate-400">{sub}</div>}
+      <div
+        className={cn(
+          "mt-1 text-lg font-bold tabular-nums",
+          tone === "warn" ? "text-amber-700" : "text-slate-700"
+        )}
+      >
+        {value}
+      </div>
+      {sub && (
+        <div className={cn("text-[11px]", tone === "warn" ? "text-amber-700" : "text-slate-400")}>
+          {sub}
+        </div>
+      )}
     </div>
   );
 }
@@ -386,12 +401,19 @@ export default function EfficiencyRanking() {
    *   「イベントが始まったのに OFF のまま」という置き去りが起きる。
    */
   const [applyLimit, setApplyLimit] = useState<boolean | undefined>(stored.applyLimit);
-  const limitOn = applyLimit ?? activeLimitEvent != null;
+  /**
+   * ★ **チャレンジライブはイベントの外**なので上限が掛からない。
+   *   編成ビルダー側では最初から除外していたのに、ここで漏らしていた（破壊者指摘 2026-08-18）。
+   *   漏らすとチャレライのスコアを16% 低く出すうえ、
+   *   「上限を入れてください」と**正しい値を出している人を誤りへ誘導する**警告まで出ていた。
+   */
+  const limitApplies = mode !== "challenge";
+  const limitOn = limitApplies && (applyLimit ?? activeLimitEvent != null);
   /** 期間外に効かせるときは直近の上限値を使う（上限そのものは毎回同じ値）。 */
   const limitEvent = activeLimitEvent ?? latestLimitEvent;
   /** 入力した総合力が上限を超えているか（切っているかどうかは問わない）。 */
   const overCap =
-    limitEvent != null && custom && (Number(power) || 0) > limitEvent.powerLimit;
+    limitApplies && limitEvent != null && custom && (Number(power) || 0) > limitEvent.powerLimit;
   /** 実際に頭打ちにして計算している。 */
   const powerOverCap = overCap && limitOn;
   /**
@@ -401,6 +423,13 @@ export default function EfficiencyRanking() {
    *   切っている側にもちゃんと知らせる。
    */
   const capIgnored = overCap && !limitOn && activeLimitEvent != null;
+  /**
+   * ★ **逆向きの置き去り。** 一度スイッチを入れると設定が残るので、
+   *   ワールドリンクが終わって通常のイベントになっても上限が掛かり続け、
+   *   **実際より低いPtと違う順位**を警告なしに見ることになる。
+   *   OFF固着（capIgnored）だけ塞いで ON固着を放置していた（破壊者指摘 2026-08-18）。
+   */
+  const capPreview = overCap && limitOn && activeLimitEvent == null;
   const [bonus, setBonus] = useState(stored.bonus ?? String(DEFAULT_PARAMS.bonus));
   const [taki, setTaki] = useState(stored.taki ?? DEFAULT_PARAMS.taki);
   const [skillLeader, setSkillLeader] = useState(
@@ -633,8 +662,17 @@ export default function EfficiencyRanking() {
       regen,
       lbCap: limits.lbCap,
     });
-    return { run, need, windowSec };
-  }, [isWindow, best, windowMin, refill, startLB, taki, regen, limits.lbCap, autoLeft]);
+    /**
+     * 時間が効き始める境目（分）。
+     *
+     * ★ 「どの曲でも回り切る」＝ 窓 ≧ 回数 × **一番長い曲の1周**。
+     *   これを下回って初めて曲ごとに回数が変わり、時間による最適化が意味を持つ。
+     *   一番**短い**曲で測ると「まだ効く」と嘘をつくので、必ず長い方で測る。
+     */
+    const maxCycle = ranked.reduce((m, r) => Math.max(m, r.cycleSec), 0);
+    const tightMin = (run.plays * maxCycle) / 60;
+    return { run, need, windowSec, tightMin };
+  }, [isWindow, best, windowMin, refill, startLB, taki, regen, limits.lbCap, autoLeft, ranked]);
 
   // 並び替えを目で追わせる。演出オフの人と OS の視差軽減には出さない
   //（動き自体が情報なので控えめでは出す）。
@@ -901,7 +939,7 @@ export default function EfficiencyRanking() {
                 </Field>
                 <Field
                   label="ライボが足りなくなったら"
-                  hint="「そこで止める」だと通常のオート周回と同じ順位になります"
+                  hint="手持ちを使い切れる長さの時間だと、「そこで止める」は通常のオート周回と同じ順位になります"
                 >
                   <SegmentedControl
                     options={[
@@ -1023,6 +1061,21 @@ export default function EfficiencyRanking() {
 
           {best && isWindow && windowRun ? (
             <>
+              {/*
+                ★ **この機能が退化している状態を黙って出さない。**
+                  放置時間が長いと、どの曲でも残りオート回数を回り切ってしまい、
+                  合計Pt = 回数 × Pt/回 になって**並びが通常のオート周回と同じ**になる。
+                  既定（次の4:00まで＝十数時間）ではほぼ必ずこうなるので、
+                  「時間で最適化した答え」だと誤解される（破壊者指摘 2026-08-18）。
+                  時間が効き始める境目も一緒に出して、次に何をすればいいか分かるようにする。
+              */}
+              {windowRun.run.stoppedBy === "plays" && (
+                <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
+                  この時間なら<b>どの曲でも残りオート{windowRun.run.plays}回を回り切ります</b>。
+                  そのため並びは<b>「1回あたりのPt」順と同じ</b>で、時間による最適化は効いていません。
+                  時間が効くのは<b>およそ{Math.max(1, Math.round(windowRun.tightMin))}分より短いとき</b>です。
+                </p>
+              )}
               <p className="mt-4 text-sm text-slate-600">
                 <span className="font-bold text-slate-700">「{best.title}」</span>
                 <span className="ml-1">
@@ -1044,12 +1097,15 @@ export default function EfficiencyRanking() {
                   delta={best.eventPt * windowRun.run.plays}
                 />
                 {/* ★ 注ぎ足す前提の推奨は、この数字が無いと採否を決められない。 */}
+                {/* ★ 4つの Stat のうち、ここだけが**財布から出ていく数字**。
+                    同じ見た目で並べると見落とされる（破壊者指摘 2026-08-18）。 */}
                 <Stat
                   label="足りないライボ"
                   value={fmt(windowRun.need.deficit)}
+                  tone={windowRun.need.deficit > 0 ? "warn" : undefined}
                   sub={
                     windowRun.need.deficit > 0
-                      ? `石 ${fmt(windowRun.need.crystals)}／大ドリンク ${windowRun.need.drinksLarge}本`
+                      ? `石 ${fmt(windowRun.need.crystals)} 個を使う前提です`
                       : "手持ちで足ります"
                   }
                 />
@@ -1213,26 +1269,17 @@ export default function EfficiencyRanking() {
           </div>
         )}
 
-        {capIgnored && activeLimitEvent && (
-          <p
-            role="status"
-            className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-xs leading-relaxed text-rose-800"
-          >
-            開催中の「{activeLimitEvent.name}」は総合力が{" "}
-            {activeLimitEvent.powerLimit.toLocaleString()} で頭打ちですが、
-            <b>上限を切っているので実際より高いポイントが出ています</b>。
-            いま走るための順位を見るなら、総合力の欄にある上限のスイッチを入れてください。
-          </p>
-        )}
-        {powerOverCap && limitEvent && (
-          <p
-            role="status"
-            className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800"
-          >
-            入力した総合力が上限を超えているので、<b>{limitEvent.powerLimit.toLocaleString()} として計算しています</b>。
-            この帯では総合力を伸ばしても1点も増えないため、<b>並ぶ曲の順番も上限なしのときとは変わります</b>。
-          </p>
-        )}
+        {/* ★ aria-live は「中身入りで DOM に挿入」されると読み上げが不安定なので、
+            空のまま常設して中身だけ差し替える（破壊者指摘 2026-08-18）。 */}
+        <p role="status" className="sr-only">
+          {capIgnored
+            ? "開催中のイベントには総合力の上限がありますが、いま上限を切っています。"
+            : capPreview
+              ? "いま開催中のイベントに総合力の上限はありません。下見の計算をしています。"
+              : powerOverCap
+                ? "入力した総合力が上限を超えたので、上限で頭打ちにして計算しています。"
+                : ""}
+        </p>
         {custom && (
           <>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -1248,7 +1295,7 @@ export default function EfficiencyRanking() {
                 />
                 {/* ★ 上限つきのイベントが存在するときだけ出す。関係ない時期に
                     見せても意味が分からないだけなので。 */}
-                {limitEvent && (
+                {limitApplies && limitEvent && (
                   <div className="mt-2">
                     <Switch
                       checked={limitOn}
@@ -1263,6 +1310,34 @@ export default function EfficiencyRanking() {
                         ? `開催中の「${activeLimitEvent.name}」は発揮できる総合力が頭打ちです。`
                         : `いまは対象のイベント期間外です。次のワールドリンクを見越して試すときに入れてください。`}
                     </p>
+                    {/* ★ 警告は**スイッチの直下**に置く。以前は入力グリッドの上に出していたが、
+                        本文が指す「上限のスイッチ」が画面の下にあって参照が遠く、しかも
+                        総合力を打って上限を超えた瞬間に入力欄の上へ box が挿入されて
+                        欄が下に跳んでいた（破壊者指摘 2026-08-18）。 */}
+                    {capIgnored && activeLimitEvent && (
+                      <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs leading-relaxed text-rose-600">
+                        開催中の「{activeLimitEvent.name}」は総合力が{" "}
+                        {activeLimitEvent.powerLimit.toLocaleString()} で頭打ちですが、
+                        <b>上限を切っているので実際より高いポイントが出ています</b>。
+                        いま走るための順位を見るなら、上のスイッチを入れてください。
+                      </p>
+                    )}
+                    {capPreview && limitEvent && (
+                      <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs leading-relaxed text-rose-600">
+                        <b>いま開催中のイベントに総合力の上限はありません。</b>
+                        {limitEvent.powerLimit.toLocaleString()} で頭打ちにした
+                        「次のワールドリンクの下見」の順位を出しています。
+                        いま走るための順位を見るなら、上のスイッチを切ってください。
+                      </p>
+                    )}
+                    {powerOverCap && limitEvent && activeLimitEvent && (
+                      <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
+                        入力した総合力が上限を超えているので、
+                        <b>{limitEvent.powerLimit.toLocaleString()} として計算しています</b>。
+                        この帯では総合力を伸ばしても1点も増えないため、
+                        <b>並ぶ曲の順番も上限なしのときとは変わります</b>。
+                      </p>
+                    )}
                   </div>
                 )}
               </Field>

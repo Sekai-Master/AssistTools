@@ -202,11 +202,10 @@ export function ComparePanel({
       ) : (
         <>
           {rows.some((r) => r.powerCapped) && (
-            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
-              このイベントは<b>発揮できる総合力が {n(ctx.powerLimit ?? 0)} で頭打ち</b>です（ワールドリンク第3弾の仕様）。
-              「上限」が付いた編成は、超えたぶんがスコアに乗りません。
-              <b>この帯では総合力を盛っても1点も増えないので、イベントボーナスとスキルだけが効きます。</b>
-              スコアと1回のPtは上限を掛けたあとの値で出しています。
+            <p role="status" className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
+              <b>「上限」が付いた編成は、超えたぶんがスコアに乗りません。</b>
+              スコアと1回のPtは、上限（{n(ctx.powerLimit ?? 0)}）で頭打ちにしたあとの値です。
+              この帯では総合力を盛っても増えないので、<b>イベントボーナスとスキルで差を付けることになります。</b>
             </p>
           )}
           <div className="mt-4 overflow-x-auto">
@@ -248,12 +247,17 @@ export function ComparePanel({
                       <td className="px-2 py-1.5 text-right tabular-nums">{r.bonus}%</td>
                     )}
                     <td className="px-2 py-1.5 text-right tabular-nums">
-                      {n(r.power)}
                       {/* ★ 「総合力を上げても1点も増えない」は、上げた本人には絶対に見えない。
-                          スコアは上限で計算しているので、その事実を数字の隣に出す。 */}
+                          スコアは上限で計算しているので、その事実を数字の隣に出す。
+                          ★ 印は**数字の前**に置く。後ろに足すと tabular-nums の桁揃えが
+                            バッジ付きの行だけ崩れて、列として比べられなくなる。
+                          ★ 形はこのリポジトリの既定のピル（β バッジと同じ）に揃える。 */}
                       {r.powerCapped && (
-                        <span className="ml-1 text-xs font-normal text-amber-600">上限</span>
+                        <span className="mr-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-normal text-amber-700">
+                          上限
+                        </span>
                       )}
+                      {n(r.power)}
                     </td>
                     <td className="px-2 py-1.5 text-right tabular-nums">
                       {Math.round(r.skillLeader)}/{Math.round(r.skillTotal)}

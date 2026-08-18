@@ -158,3 +158,30 @@ describe("1枠差し替え", () => {
     expect(rows[0].cardId).toBe(471);
   });
 });
+
+/**
+ * ★ 楽曲データ（428KB）が届く前と読み込み失敗時は deltaPt が出せず、
+ *   総合力の差で代用している。**上限のあるイベントではその代用が有害**で、
+ *   1点にもならない「総合力が上がる差し替え」を最上位に並べてしまう。
+ */
+describe("総合力の上限があるときの並べ替え", () => {
+  it("Ptが出せない間は、総合力ではなくボーナスの差で並べる", () => {
+    const { rows } = swapCandidates(DECK, 4, [card(101), card(102)], ctx, {
+      ...opts,
+      // entry を渡さないので deltaPt は出せない＝代用の経路に入る
+      cond: { ...cond, powerLimit: 336_000 },
+    });
+    expect(rows.every((r) => r.deltaPt == null)).toBe(true);
+    for (let i = 1; i < rows.length; i++) {
+      expect(rows[i - 1].deltaBonus).toBeGreaterThanOrEqual(rows[i].deltaBonus);
+    }
+  });
+
+  it("上限が無ければ、これまでどおり総合力の差で並べる", () => {
+    const { rows } = swapCandidates(DECK, 4, [card(101), card(102)], ctx, opts);
+    for (let i = 1; i < rows.length; i++) {
+      expect(rows[i - 1].deltaPower).toBeGreaterThanOrEqual(rows[i].deltaPower);
+    }
+  });
+});
+

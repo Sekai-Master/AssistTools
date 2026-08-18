@@ -386,6 +386,25 @@ describe("rankSongsInWindow — 残り時間で区切る", () => {
     expect(r.every((x) => x.plays === 0)).toBe(true);
   });
 
+  /**
+   * ★ 回数上限とライボ切れが同時に起きたら「回数上限」と言う。
+   *   ここでライボ切れと言うと「石で注ぎ足せ」と促すことになるが、
+   *   回数が尽きているので**石を割っても1回も増えない**（破壊者指摘 2026-08-18）。
+   *   既定のライボ25・5焚き・残り5回でそのまま起きる組み合わせ。
+   */
+  it("回数上限とライボ切れが同時なら、石で解決できない方（回数上限）を報告する", () => {
+    const r = rankSongsInWindow(entries, PARAMS, {
+      ...WIN,
+      refill: false,
+      startLB: 25,
+      maxPlays: 5,
+      windowSec: 7200,
+    });
+    const t = r.find((x) => x.title === "初音天地開闢神話")!;
+    expect(t.plays).toBe(5);
+    expect(t.limitedBy).toBe("plays");
+  });
+
   // ★ ライボを使い切って止まったのに「時間切れ」と出ると、短い曲に替えろと誤って促す。
   it("ライボ切れで止まったら time ではなく lb と報告する", () => {
     // 10炊き・ライボ50 → 5回でライボが尽きる。窓はぴったり5回ぶん

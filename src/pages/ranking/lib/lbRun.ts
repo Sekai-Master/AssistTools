@@ -166,15 +166,24 @@ export function playsUntilEmpty({
    * 先に当たったものを返す（時間 → 回数 → ライボの順で見る）。
    */
   function stopReason(): LbRunResult["stoppedBy"] {
-    // ★ 複数が同時に成立していることがある。**先に当たったものではなく、
-    //   実際に伸びしろを塞いでいるもの**を返す。ライボを使い切って止まったのに
-    //   「時間切れ」と出すと「短い曲に替えれば伸びる」と誤って促してしまう
-    //   （実測: 10炊き・LB50・窓18分で leftover=0 なのに time と出ていた）。
-    const outOfLb = !free && lb < taki;
+    /**
+     * ★ 複数が同時に成立していることがある。返すのは「先に当たったもの」ではなく
+     *   **いちばん硬い制約**＝それを外さない限り、他を何とかしても1回も増えないもの。
+     *
+     *   回数上限 … 石でもライボでも時間でも増やせない。**いちばん硬い**
+     *   ライボ   … 石やドリンクで足せる（時間では実質増えない）
+     *   時間     … 短い曲に替えれば詰められる
+     *
+     * ★ 硬い順に見るのが肝。逆順にすると実害が出る:
+     *   - 時間を先に見る → ライボ切れなのに「短い曲に替えろ」と促す
+     *   - ライボを先に見る → **回数上限と同時に尽きたときに「石で注ぎ足せ」と促し、
+     *     石を割っても1回も増えない**（既定のライボ25・5焚き・残り5回でそのまま起きる）
+     */
     const outOfPlays = plays >= limit;
+    const outOfLb = !free && lb < taki;
     const outOfTime = seconds + cycleSec > budget;
-    if (outOfLb) return "lb";
     if (outOfPlays) return "plays";
+    if (outOfLb) return "lb";
     if (outOfTime) return "time";
     return "none";
   }
