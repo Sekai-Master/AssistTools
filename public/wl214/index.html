@@ -195,6 +195,16 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
 .seg,.growline{transition:y .7s cubic-bezier(.2,.75,.3,1), height .7s cubic-bezier(.2,.75,.3,1),
   stroke-dashoffset 1.5s cubic-bezier(.35,.7,.25,1), opacity .15s ease}
 .nowline{stroke:var(--s2);stroke-width:1.5;stroke-dasharray:2 3}
+
+/* オートの炊き数トグル */
+.segctl{display:inline-flex;border:1px solid var(--line-strong);border-radius:999px;overflow:hidden;
+  font-size:12px;margin-left:4px}
+.segctl b{font-weight:600;padding:4px 10px;color:var(--ink-3);background:var(--surface-2);
+  align-self:center;border-right:1px solid var(--line-strong)}
+.segctl button{font:inherit;font-size:12px;border:0;background:transparent;color:var(--ink-2);
+  padding:4px 13px;cursor:pointer;transition:background .15s ease,color .15s ease}
+.segctl button:hover{background:var(--surface-2)}
+.segctl button.on{background:var(--s1);color:#fff}
 </style>
 </head>
 <body>
@@ -259,7 +269,9 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
   <h2>ライブボーナスの予算</h2>
   <p class="lede">周回は時間律速なので10炊きを落とせない。余剰の投入先はオートの焚き上げ。1〜5炊きは5.0倍/LB、6炊き以降の追加分は2.0倍/LBなので、<b>オートの5炊きぶんは周回の焚き上げより石効率が良い</b>。下の表は各日に周回とオートでいくら溶けるか。</p>
   <div class="chartcard">
-    <div class="charthead"><span class="charttitle">消費LBと予算</span><span class="legend" id="legend4"></span></div>
+    <div class="charthead"><span class="charttitle">消費LBと予算</span>
+      <span class="segctl" id="autoboost"></span>
+      <span class="legend" id="legend4"></span></div>
     <div class="svgwrap"><svg id="chart4" role="img" aria-label="ライブボーナスの消費と予算"></svg></div>
     <div class="tip" id="tip4"></div>
   </div>
@@ -545,8 +557,21 @@ function cumChart(svg, tipEl, days, P){
   /* ボーダー中央値（予測） */
   svg.appendChild(el('polyline',{points:bd.map(b=>`${X(b.h)},${Y(b.m)}`).join(' '),
     fill:'none', stroke:css('--ink-3'), 'stroke-width':2, 'stroke-dasharray':'5 4'}));
+  /* 50位。100位と同じ「ボーダー」なので別の色相は当てず、同系の淡い色＋細線で段を表す */
+  const R50 = P.border.rank50Ratio;
+  if(R50){
+    svg.appendChild(el('polyline',{points:bd.map(b=>`${X(b.h)},${Y(b.m*R50)}`).join(' '),
+      fill:'none', stroke:css('--ink-3'), 'stroke-width':1.5, 'stroke-dasharray':'3 4', opacity:.8}));
+    const t=el('text',{x:X(240)-6,y:Y(C*R50)-7,'text-anchor':'end',class:'axis'});
+    t.textContent='50位 '+oku(C*R50)+'億'; svg.appendChild(t);
+  }
   /* ボーダーの実測。予測と同じ主体なので色は変えず、実線／破線で状態を分ける */
   if(LIVE && LIVE.border && LIVE.border.length){
+    if(R50){
+      const p50=LIVE.border.filter(b=>b[4]);
+      if(p50.length) svg.appendChild(el('polyline',{points:p50.map(b=>`${X(b[0])},${Y(b[4])}`).join(' '),
+        fill:'none', stroke:css('--ink-3'), 'stroke-width':1.5, 'stroke-linejoin':'round'}));
+    }
     svg.appendChild(el('polyline',{points:LIVE.border.map(b=>`${X(b[0])},${Y(b[1])}`).join(' '),
       fill:'none', stroke:css('--ink-2'), 'stroke-width':2.5, 'stroke-linejoin':'round'}));
     const lb=LIVE.border[LIVE.border.length-1];
@@ -696,7 +721,7 @@ function render(){
       <p class="n">周回 ${oku(DAYS.reduce((a,d)=>a+d.manual,0))} ／ オート ${oku(DAYS.reduce((a,d)=>a+d.auto,0))} ／ マイセカイ ${oku(DAYS.reduce((a,d)=>a+d.mys,0))}</p></div>
     <div class="tile"><p class="k">推定ボーダー（総合100位）</p>
       <p class="v num" style="font-size:clamp(24px,4.2vw,36px)">${oku(P.border.lowPt)}<small>〜</small>${oku(P.border.highPt)}<small>億</small></p>
-      <p class="n">中央 ${oku(C)}億 ／ ${liveNote}</p></div>
+      <p class="n">中央 ${oku(C)}億${P.border.rank50Ratio?` ／ <b>50位なら ${oku(P.border.lowPt*P.border.rank50Ratio)}〜${oku(P.border.highPt*P.border.rank50Ratio)}億</b>`:''}<br>${liveNote}</p></div>
     <div class="tile ${mLo>=0?'okline':''}"><p class="k">マージン</p>
       <p class="v num" style="font-size:clamp(24px,4.2vw,36px);color:${mLo>=0?'var(--good)':'var(--ink)'}">${mLo>=0?'+':''}${(mLo*100).toFixed(0)}<small>〜</small>${mHi>=0?'+':''}${(mHi*100).toFixed(0)}<small>%</small></p>
       <p class="n"><span class="pill ${cls}">${mLo>=0.08?'どちらに転んでも足りる':(mLo>=0?'上振れするとぎりぎり':'上振れすると届かない')}</span>
@@ -747,11 +772,20 @@ function render(){
   document.getElementById('legend3').innerHTML =
     `<span><span class="dot" style="background:var(--s1)"></span>走者の計画</span>
      <span><span class="dot" style="background:var(--s1);transform:rotate(45deg)"></span>走者の実測</span>
-     <span><span class="dot" style="background:var(--ink-2)"></span>ボーダー実測</span>
-     <span><span class="dot" style="background:var(--ink-3)"></span>ボーダー予測（帯はレンジ）</span>`;
+     <span><span class="dot" style="background:var(--ink-2)"></span>100位（太線＝実測 / 破線＝予測）</span>
+     <span><span class="dot" style="background:var(--ink-3);width:8px;height:8px"></span>50位</span>`;
   document.getElementById('legend4').innerHTML =
     `<span><span class="dot" style="background:var(--s1)"></span>周回</span>
      <span><span class="dot" style="background:var(--s2)"></span>オート</span>`;
+  /* オートの炊き数トグル（8/19 以降に適用。8/17〜18 は実績で固定） */
+  const ab=document.getElementById('autoboost');
+  ab.innerHTML = `<b>8/19以降のオート</b>` + [5,10].map(v=>
+    `<button type="button" data-v="${v}" class="${P.boost.auto===v?'on':''}">${v}炊き</button>`).join('');
+  ab.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
+    P.boost.auto = Number(btn.dataset.v);
+    localStorage.setItem(LSKEY, JSON.stringify(P));
+    buildEditor(); render();
+  }));
   document.getElementById('totalhours').textContent = DAYS.reduce((a,d)=>a+d.hours,0);
 
   /* --- charts --- */
