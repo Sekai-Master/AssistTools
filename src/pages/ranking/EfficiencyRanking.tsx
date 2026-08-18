@@ -341,6 +341,14 @@ function windowInfo(row: unknown): WindowRow | null {
     : null;
 }
 
+/** サマリ用。**次に何をすれば伸びるか**まで書く。 */
+const WINDOW_STOP_NOTE: Record<WindowRow["limitedBy"], string> = {
+  time: "時間を使い切ります（短い曲にすると回数が伸びます）",
+  lb: "ライボ切れで止まります（注ぎ足すか焚き数を下げると伸びます）",
+  plays: "オートの残り回数を使い切ります（焚き数を上げると1回が濃くなります）",
+  none: "制約に当たりません",
+};
+
 /** 何で止まるか。**次に効く手が違う**ので、言葉で書く。 */
 const LIMIT_LABEL: Record<WindowRow["limitedBy"], string> = {
   time: "時間切れ",
@@ -443,10 +451,15 @@ export default function EfficiencyRanking() {
   const [windowMin, setWindowMin] = useState(stored.windowMin ?? String(minutesUntilReset()));
   /**
    * ライボが足りなくなったら石・ドリンクで注ぎ足す前提にするか。
-   * ★ **これで答えが正反対になる**（注ぎ足さない＝長尺有利／注ぎ足す＝短尺有利）ので、
-   *   既定は「注ぎ足さない」＝手持ちで走る、にしておく。
+   *
+   * ★ **既定は ON。** 注ぎ足さない設定だと、この機能は通常のオートタブと
+   *   同じ順位しか返さない——手持ちだけで走ると全曲が同じ回数（所持÷焚き数）で
+   *   止まり、並びが Pt/回 と一致するため。10炊き・ライボ50 なら境界は18分で、
+   *   それを超えたらどれだけ長い窓を入れても答えが変わらない。
+   *   **「ライボを度外視してでも時間効率を取りに行く」のがこの機能を使う場面**
+   *  （Nori 指摘 2026-08-18）なので、既定をそちらに合わせる。
    */
-  const [refill, setRefill] = useState(stored.refill ?? false);
+  const [refill, setRefill] = useState(stored.refill ?? true);
 
   const ranked = useMemo(() => {
     if (diffs.size === 0) return [];
@@ -551,6 +564,36 @@ export default function EfficiencyRanking() {
     regen,
     lbCap: limits.lbCap,
   });
+
+  /**
+   * 窓モードの走行。**必要な石まで出す。**
+   * ★ 「注ぎ足す」を選んだ推奨は、コストを出さないと採否を判断できない
+   *   （同じ時間を手動で回した方が Pt が高い場合があり、それでも選ぶかは
+   *     石をいくら払うか次第）。ここを出さずに順位だけ見せてはいけない。
+   */
+  const windowRun = useMemo(() => {
+    if (!isWindow || !best) return null;
+    const windowSec = Math.max(0, Number(windowMin) || 0) * 60;
+    const run = playsUntilEmpty({
+      startLB: refill ? Number.MAX_SAFE_INTEGER : Number(startLB) || 0,
+      taki: refill ? 0 : taki,
+      cycleSec: best.cycleSec,
+      regen,
+      lbCap: limits.lbCap,
+      maxPlays: Math.max(0, Number(autoLeft) || 0),
+      windowSec,
+    });
+    // 実際に回した回数ぶんの消費を、手持ちから数え直す（refill でも本当の焚き数で）。
+    const need = lbNeededForPlays({
+      startLB: Number(startLB) || 0,
+      taki,
+      plays: run.plays,
+      cycleSec: best.cycleSec,
+      regen,
+      lbCap: limits.lbCap,
+    });
+    return { run, need, windowSec };
+  }, [isWindow, best, windowMin, refill, startLB, taki, regen, limits.lbCap, autoLeft]);
 
   // 並び替えを目で追わせる。演出オフの人と OS の視差軽減には出さない
   //（動き自体が情報なので控えめでは出す）。
@@ -677,7 +720,12 @@ export default function EfficiencyRanking() {
                   <th className="px-2 py-2 font-bold">楽曲</th>
                   <th className="px-2 py-2 font-bold">難易度</th>
                   <th className="px-2 py-2 text-right font-bold">指数</th>
-                  {custom && <th className="px-2 py-2 text-right font-bold">{note.metricLabel}</th>}
+                  {custom && (
+                    <th className="px-2 py-2 text-right font-bold">
+                      {/* ★ 窓モードの metric は「窓内の合計Pt」。Pt/回 のままだと嘘になる。 */}
+                      {isWindow ? "合計Pt" : note.metricLabel}
+                    </th>
+                  )}
                   <th className="px-2 py-2 text-right font-bold">曲長</th>
                   <th className="px-2 py-2 text-right font-bold">ノーツ</th>
                   <th className="px-2 py-2 text-right font-bold">
@@ -783,7 +831,7 @@ export default function EfficiencyRanking() {
               options={[
                 { value: "lb", label: "ライボがなくなるまで" },
                 { value: "plays", label: "回数を指定" },
-                { value: "window", label: "残り時間で区切る" },
+                { value: "window", label: "この時間で最大化" },
               ]}
               value={autoFrom}
               onChange={(v) => {
@@ -796,8 +844,8 @@ export default function EfficiencyRanking() {
             <div className="mb-4 space-y-3">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field
-                  label="残り時間（分）"
-                  hint="既定は次の4:00まで。オートの回数はそこで消える"
+                  label="放置できる時間（分）"
+                  hint="既定は次の4:00まで（オートの回数がそこで消えるため）"
                 >
                   <NeuInput
                     type="number"
@@ -810,7 +858,10 @@ export default function EfficiencyRanking() {
                     }}
                   />
                 </Field>
-                <Field label="ライボが足りなくなったら" hint="どちらを選ぶかで最適な曲が変わる">
+                <Field
+                  label="ライボが足りなくなったら"
+                  hint="「そこで止める」だと通常のオート周回と同じ順位になります"
+                >
                   <SegmentedControl
                     options={[
                       { value: "stop", label: "そこで止める" },
@@ -898,7 +949,7 @@ export default function EfficiencyRanking() {
                 ))}
               </select>
             </Field>
-            {autoFrom === "lb" && (
+            {(autoFrom === "lb" || autoFrom === "window") && (
               <Field
                 label="今日の残りオート回数"
                 hint={`上限 ${limits.autoPlays}回（毎日4:00にリセット）。消化ぶんを引いた数`}
@@ -929,7 +980,58 @@ export default function EfficiencyRanking() {
             )}
           </div>
 
-          {best && (autoFrom === "lb" ? lbRun.plays > 0 : playCount > 0) ? (
+          {best && isWindow && windowRun ? (
+            <>
+              <p className="mt-4 text-sm text-slate-600">
+                <span className="font-bold text-slate-700">「{best.title}」</span>
+                <span className="ml-1">
+                  <DifficultyBadge difficulty={best.difficulty} level={best.playLevel} />
+                </span>
+                {` を ${taki}焚きで ${Math.max(0, Number(windowMin) || 0)}分 まわすと`}
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Stat
+                  label="まわせる回数"
+                  value={fmt(windowRun.run.plays)}
+                  sub={WINDOW_STOP_NOTE[windowRun.run.stoppedBy]}
+                  delta={windowRun.run.plays}
+                />
+                <Stat
+                  label="獲得ポイント"
+                  value={fmt(best.eventPt * windowRun.run.plays)}
+                  sub={`1回 ${fmt(best.eventPt)} Pt`}
+                  delta={best.eventPt * windowRun.run.plays}
+                />
+                {/* ★ 注ぎ足す前提の推奨は、この数字が無いと採否を決められない。 */}
+                <Stat
+                  label="足りないライボ"
+                  value={fmt(windowRun.need.deficit)}
+                  sub={
+                    windowRun.need.deficit > 0
+                      ? `石 ${fmt(windowRun.need.crystals)}／大ドリンク ${windowRun.need.drinksLarge}本`
+                      : "手持ちで足ります"
+                  }
+                />
+                <Stat
+                  label="実際に使う時間"
+                  value={hhmm(windowRun.run.seconds)}
+                  sub={`1回 ${best.cycleSec.toFixed(0)}秒（ロス込み）`}
+                  delta={Math.round(windowRun.run.seconds)}
+                  formatDelta={(n) => hhmm(n)}
+                />
+              </div>
+              <div className="mt-4">
+                <Switch
+                  checked={regen}
+                  onChange={(v) => {
+                    setRegen(v);
+                    persist({ regen: v });
+                  }}
+                  label={`走っている間の自然回復（${LB_REGEN_MIN}分に1）を数える`}
+                />
+              </div>
+            </>
+          ) : best && (autoFrom === "lb" ? lbRun.plays > 0 : playCount > 0) ? (
             <>
               <div className="mt-5">
                 <Switch

@@ -128,7 +128,9 @@ export function playsUntilEmpty({
   if (free && maxPlays == null && windowSec == null) return idle;
 
   const limit = Math.min(maxPlays ?? HARD_LIMIT, HARD_LIMIT);
-  const budget = windowSec != null && windowSec > 0 ? windowSec : Infinity;
+  // ★ 0 を「無制限」にしない。入力欄を空にしたら 0 回であるべきで、
+  //   時間の縛りが消えて全曲が回りきる方が事故（未指定は undefined で表す）。
+  const budget = windowSec != null ? Math.max(0, windowSec) : Infinity;
   let lb = startLB;
   let seconds = 0;
   let plays = 0;
@@ -164,9 +166,17 @@ export function playsUntilEmpty({
    * 先に当たったものを返す（時間 → 回数 → ライボの順で見る）。
    */
   function stopReason(): LbRunResult["stoppedBy"] {
-    if (seconds + cycleSec > budget) return "time";
-    if (plays >= limit) return "plays";
-    return free ? "none" : "lb";
+    // ★ 複数が同時に成立していることがある。**先に当たったものではなく、
+    //   実際に伸びしろを塞いでいるもの**を返す。ライボを使い切って止まったのに
+    //   「時間切れ」と出すと「短い曲に替えれば伸びる」と誤って促してしまう
+    //   （実測: 10炊き・LB50・窓18分で leftover=0 なのに time と出ていた）。
+    const outOfLb = !free && lb < taki;
+    const outOfPlays = plays >= limit;
+    const outOfTime = seconds + cycleSec > budget;
+    if (outOfLb) return "lb";
+    if (outOfPlays) return "plays";
+    if (outOfTime) return "time";
+    return "none";
   }
 
   return {

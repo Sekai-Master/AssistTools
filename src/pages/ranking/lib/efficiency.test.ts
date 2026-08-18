@@ -346,4 +346,58 @@ describe("rankSongsInWindow — 残り時間で区切る", () => {
     rankSongsInWindow(entries, PARAMS, WIN);
     expect(JSON.stringify(entries)).toBe(snapshot);
   });
+
+  /**
+   * ★★ **この機能が無意味になる条件を、仕様として固定する。** ★★
+   *
+   * 手持ちだけで走る（refill=false）と、窓が
+   *   (所持ライボ ÷ 焚き数) × 最長曲の cycleSec
+   * を超えた時点で全曲の回数が同じになり、totalPt = 回数 × Pt/回 なので
+   * **並びが通常のオートタブと完全に一致する**。
+   * 10炊き・ライボ50 では境界がわずか18分で、それ以降どれだけ長い窓を入れても答えが変わらない。
+   *
+   * だから既定は refill=true にしてある（画面側）。ここを false に戻すと
+   * この機能は対象ユーザーに対して no-op になる。**変えたらこのテストで気づけるようにしておく。**
+   */
+  it("手持ちだけで走ると、窓を伸ばしても通常オートと同じ順位になる（no-op 帯）", () => {
+    const heavy = { ...PARAMS, taki: 10 };
+    const auto = rankSongs(entries, heavy, "auto").map((r) => r.title);
+    for (const hours of [1, 2, 6, 24]) {
+      const win = rankSongsInWindow(entries, heavy, {
+        ...WIN,
+        refill: false,
+        windowSec: hours * 3600,
+      }).map((r) => r.title);
+      expect(win, `${hours}h で順位が変わってしまった`).toEqual(auto);
+    }
+  });
+
+  it("注ぎ足す前提なら、窓の長さで答えが変わる（＝機能が効いている）", () => {
+    const heavy = { ...PARAMS, taki: 10 };
+    const short = rankSongsInWindow(entries, heavy, { ...WIN, refill: true, windowSec: 3600 });
+    const long = rankSongsInWindow(entries, heavy, { ...WIN, refill: true, windowSec: 24 * 3600 });
+    // 短い窓では時間が制約になり、短い曲が有利になる
+    expect(short[0].limitedBy).toBe("time");
+    expect(short[0].musicTime!).toBeLessThan(long[0].musicTime!);
+  });
+
+  it("残り時間0なら0回（入力欄を空にして時間無制限にしない）", () => {
+    const r = rankSongsInWindow(entries, PARAMS, { ...WIN, windowSec: 0 });
+    expect(r.every((x) => x.plays === 0)).toBe(true);
+  });
+
+  // ★ ライボを使い切って止まったのに「時間切れ」と出ると、短い曲に替えろと誤って促す。
+  it("ライボ切れで止まったら time ではなく lb と報告する", () => {
+    // 10炊き・ライボ50 → 5回でライボが尽きる。窓はぴったり5回ぶん
+    const heavy = { ...PARAMS, taki: 10 };
+    const cycle = (TENCHI.musicTime ?? 0) + heavy.overheadSec;
+    const r = rankSongsInWindow(entries, heavy, {
+      ...WIN,
+      refill: false,
+      windowSec: Math.ceil(cycle * 5),
+    });
+    const t = r.find((x) => x.title === "初音天地開闢神話")!;
+    expect(t.plays).toBe(5);
+    expect(t.limitedBy).toBe("lb");
+  });
 });
