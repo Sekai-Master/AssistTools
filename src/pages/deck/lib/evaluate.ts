@@ -21,6 +21,15 @@ export interface EvalContext {
   /** スキルの一部はキャラクターランクで伸びるので、プレイヤー設定から渡す。 */
   characterRanks?: Record<number, number>;
   eventId: number | undefined;
+  /**
+   * 選んでいるイベントの「発揮可能総合力」の上限（無いイベントでは undefined）。
+   *
+   * ★ **総合力の計算には使わない。スコアに渡すときだけ効く。**
+   *   総合力の表示は実機と突き合わせた検算資産なので丸めない（PowerPanel の「実機との差」）。
+   *   ここに持たせているのは、イベント行そのものを比較パネルや差し替えまで
+   *   配り回さずに済ませるため。
+   */
+  powerLimit?: number;
 }
 
 export interface DeckEval {

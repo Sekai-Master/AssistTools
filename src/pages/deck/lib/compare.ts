@@ -43,9 +43,27 @@ export interface CompareCondition {
   live: LiveType;
   taki: number;
   overheadSec: number;
+  /**
+   * 「発揮可能総合力」の上限。**ワールドリンク第3弾（イベント202以降）だけに掛かる。**
+   * 総合力がこれを超えても、超えたぶんはスコアに乗らない。
+   *
+   * ★ ここを入れないと、**上限に張り付いた人に対してこのツールは損をする推奨を出す。**
+   *   「ボーナスを5%落として総合力を盛る」がこのツールの売りだが、上限帯ではその
+   *   盛りぶんが1点にもならないので、主張がそのまま逆になる。
+   *
+   * ★ 上限を CompareCondition に置くのは、**スコアを出す経路がここ1本**だから。
+   *   差し替え候補（swap.ts）も横並び比較も compareDecks を通るので、
+   *   ここで頭打ちにすれば漏れない。総合力の表示側は丸めない（実機との検算が壊れる）。
+   */
+  powerLimit?: number;
 }
 
 export interface CompareRow extends DeckCandidate {
+  /**
+   * 総合力の上限で頭打ちになったか。**画面で必ず知らせること。**
+   * 「総合力を上げても1点も増えない」は、上げた本人には絶対に見えない事実なので。
+   */
+  powerCapped: boolean;
   /** データが欠けていて計算できなければ null（黙って0にしない）。 */
   score: number | null;
   eventPt: number | null;
@@ -64,9 +82,11 @@ export function compareDecks(
   cond: CompareCondition
 ): CompareRow[] {
   const cycleSec = (entry.musicTime ?? 0) + cond.overheadSec;
+  const cap = typeof cond.powerLimit === "number" && cond.powerLimit > 0 ? cond.powerLimit : null;
   return decks.map((d) => {
     const params: EfficiencyParams = {
-      power: d.power,
+      // 表示に出す d.power は丸めない。スコア式に渡すぶんだけ頭打ちにする。
+      power: cap == null ? d.power : Math.min(d.power, cap),
       bonus: d.bonus,
       taki: cond.taki,
       skillLeader: d.skillLeader,
@@ -78,6 +98,7 @@ export function compareDecks(
       score == null || entry.eventRate == null ? null : eventPtFor(cond.live, score, entry.eventRate, params);
     return {
       ...d,
+      powerCapped: cap != null && d.power > cap,
       score,
       eventPt,
       cycleSec,

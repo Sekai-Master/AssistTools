@@ -59,6 +59,15 @@ export function BonusPanel({
   onCustom?: (next: CustomEvent) => void;
 }) {
   const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
+  /**
+   * このイベントの「発揮可能総合力」の上限。**欄がある回だけ**。
+   * ★ ワールドリンクなら一律、ではない（旧ワールドリンクには上限が無い）。
+   *   type で判定せず、必ず powerLimit の有無で見ること。
+   */
+  const powerLimit = useMemo(
+    () => events.find((e) => e.id === eventId)?.powerLimit,
+    [events, eventId]
+  );
 
   return (
     <Panel title="イベントボーナス">
@@ -96,6 +105,16 @@ export function BonusPanel({
           />
         </Field>
       </div>
+
+      {/* ★ 上限は「編成を組み終えてから気づく」と手戻りが大きいので、イベントを選んだ
+          時点で知らせる。比較パネルを開かない人にも届かせたい。 */}
+      {powerLimit != null && (
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+          このイベントは<b>発揮できる総合力が {powerLimit.toLocaleString()} で頭打ち</b>です
+          （ワールドリンク第3弾の仕様）。これを超えるぶんはスコアに乗らないので、
+          超えている人は<b>総合力ではなくイベントボーナスとスキルを伸ばす</b>のが正解になります。
+        </p>
+      )}
 
       {/* カスタムのときだけ、対象メンバーとタイプを置かせる。 */}
       {eventId === CUSTOM_EVENT_ID && custom && onCustom && (

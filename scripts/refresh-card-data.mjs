@@ -75,6 +75,9 @@ const SOURCES = {
   eventCards: "eventCards.json",
   eventDeckBonuses: "eventDeckBonuses.json",
   eventCardBonusLimits: "eventCardBonusLimits.json",
+  // ★ ワールドリンク第3弾（イベント202以降）の「発揮可能総合力」の上限。
+  //   日付欄を持たないが、中身は eventId と数値だけで未公開の名前を含まないので出してよい。
+  eventTotalPowerLimits: "eventTotalPowerLimits.json",
   eventRarityBonusRates: "eventRarityBonusRates.json",
   masterLessons: "masterLessons.json",
   characterRanks: "characterRanks.json",
@@ -265,6 +268,27 @@ async function main() {
       cardBonuses: out.cardBonuses,
       rarityBonuses: out.rarityBonuses,
       bonusLimits: out.bonusLimits,
+    },
+    /**
+     * 総合力の上限だけを抜いた極小ファイル。**5行しかない。**
+     *
+     * ★ なぜ bonuses.json と別に出すか: 上限は効率曲ランキングでも要るが、
+     *   ランキングに bonuses.json（270KB）を読ませるのは
+     *   「各ツールが編成ビルダーのデータを直接読むとどのページも重くなる」という
+     *   既存方針（src/lib/profiles.ts）に反する。上限の判定に要るのは
+     *   開催期間と数値だけなので、それだけを切り出して配る。
+     */
+    "powerLimits.json": {
+      generatedAt: out.generatedAt,
+      events: out.events
+        .filter((e) => e.powerLimit != null)
+        .map((e) => ({
+          id: e.id,
+          name: e.name,
+          startAt: e.startAt,
+          aggregateAt: e.aggregateAt,
+          powerLimit: e.powerLimit,
+        })),
     },
     "power.json": {
       generatedAt: out.generatedAt,

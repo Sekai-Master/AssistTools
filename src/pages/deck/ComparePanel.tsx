@@ -94,9 +94,14 @@ export function ComparePanel({
   const rows = useMemo(() => {
     // ★ ロスは選ばれたライブ種別に追随させる。固定にするとオートで比べたときに
     //   協力ライブのロスで Pt/時 を出してしまい、ランキングと数字が合わない。
-    const cond: CompareCondition = { live, taki, overheadSec: OVERHEAD_BY_LIVE[live] };
+    const cond: CompareCondition = {
+      live,
+      taki,
+      overheadSec: OVERHEAD_BY_LIVE[live],
+      powerLimit: ctx.powerLimit,
+    };
     return entry ? compareDecks(candidates, entry, cond) : [];
-  }, [candidates, entry, live, taki]);
+  }, [candidates, entry, live, taki, ctx.powerLimit]);
   // チャレンジライブは Pt が付かないので、スコアの一番高い編成を最良にする。
   const challenge = mode === "challenge";
   const best = challenge
@@ -196,6 +201,14 @@ export function ComparePanel({
         </p>
       ) : (
         <>
+          {rows.some((r) => r.powerCapped) && (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+              このイベントは<b>発揮できる総合力が {n(ctx.powerLimit ?? 0)} で頭打ち</b>です（ワールドリンク第3弾の仕様）。
+              「上限」が付いた編成は、超えたぶんがスコアに乗りません。
+              <b>この帯では総合力を盛っても1点も増えないので、イベントボーナスとスキルだけが効きます。</b>
+              スコアと1回のPtは上限を掛けたあとの値で出しています。
+            </p>
+          )}
           <div className="mt-4 overflow-x-auto">
             <table className="w-full min-w-[520px] text-sm">
               <thead>
@@ -234,7 +247,14 @@ export function ComparePanel({
                     {!challenge && (
                       <td className="px-2 py-1.5 text-right tabular-nums">{r.bonus}%</td>
                     )}
-                    <td className="px-2 py-1.5 text-right tabular-nums">{n(r.power)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">
+                      {n(r.power)}
+                      {/* ★ 「総合力を上げても1点も増えない」は、上げた本人には絶対に見えない。
+                          スコアは上限で計算しているので、その事実を数字の隣に出す。 */}
+                      {r.powerCapped && (
+                        <span className="ml-1 text-xs font-normal text-amber-600">上限</span>
+                      )}
+                    </td>
                     <td className="px-2 py-1.5 text-right tabular-nums">
                       {Math.round(r.skillLeader)}/{Math.round(r.skillTotal)}
                     </td>

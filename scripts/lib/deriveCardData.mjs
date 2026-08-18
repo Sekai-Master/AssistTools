@@ -190,6 +190,20 @@ export function derive(src, nowMs) {
   const events = published(src.events, nowMs);
   const eventIds = new Set(events.map((e) => e.id));
 
+  /**
+   * 「発揮可能総合力」の上限。**ワールドリンク第3弾（イベント202以降）で入った仕様**で、
+   * 編成の総合力がこの値を超えても、超えたぶんはスコアに乗らない（実測値は全件 336,000）。
+   *
+   * ★ **ワールドリンクなら一律で掛かる、ではない。** 旧ワールドリンク（112〜180）には
+   *   上限が無い。`eventType === "world_bloom"` で判定すると、上限の無い過去イベントまで
+   *   巻き込んで計算を誤らせるので、必ずこの表を引くこと。
+   */
+  const powerLimits = new Map(
+    (src.eventTotalPowerLimits ?? [])
+      .filter((r) => Number.isFinite(r?.eventId) && Number.isFinite(r?.upperTotalPower))
+      .map((r) => [r.eventId, r.upperTotalPower]),
+  );
+
   // ★ カードとイベントの両方が公開済みの行だけ残す。片方でも未公開なら、
   //   その行の存在自体が未公開の内容を示唆する。
   const eventCards = withoutDangling(
@@ -220,6 +234,8 @@ export function derive(src, nowMs) {
       unit: e.unit,
       startAt: e.startAt,
       aggregateAt: e.aggregateAt,
+      // 上限が無いイベントでは欄ごと落とす（「上限0」と読み違えられないように）。
+      ...(powerLimits.has(e.id) ? { powerLimit: powerLimits.get(e.id) } : {}),
       // 紹介カードに載せるロゴを引くためのアセット名。画像自体は持たない（実行時に取る）。
       asset: e.assetbundleName,
     })),

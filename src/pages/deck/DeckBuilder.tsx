@@ -134,6 +134,12 @@ export default function DeckBuilder() {
             characterRanks: player.characterRanks,
             // チャレンジライブにイベントボーナスは無い。ここで外すと下流が全部止まる。
             eventId: mode === "challenge" ? undefined : eventId,
+            // ★ 総合力の上限はイベント固有（ワールドリンク第3弾のみ）。チャレンジライブと
+            //   カスタム条件では効かせない（どちらも実在イベントの制約から外れるため）。
+            powerLimit:
+              mode === "challenge" || eventId === CUSTOM_EVENT_ID
+                ? undefined
+                : data.events.find((e) => e.id === eventId)?.powerLimit,
           }
         : null,
     [data, catalog, states, player, eventId, custom, mode]
@@ -266,7 +272,13 @@ export default function DeckBuilder() {
       supportBonus: Number(supportBonus) || 0,
       // 曲が読めていれば最終Ptの差まで出す（読めるまでは総合力とボーナスの差だけ）。
       entry: swapEntry,
-      cond: { live: "multi", taki: swapTaki, overheadSec: OVERHEAD_BY_LIVE.multi },
+      cond: {
+        live: "multi",
+        taki: swapTaki,
+        overheadSec: OVERHEAD_BY_LIVE.multi,
+        // 上限帯では「総合力を盛る」候補が1点にもならない。入れないと推奨が逆になる。
+        powerLimit: ctx.powerLimit,
+      },
     });
     // 候補が1枚も残らないなら絞り込み自体を出さない（空の一覧を見せない）。
     if (rows.length === 0) return undefined;

@@ -41,6 +41,10 @@ function isCard(v: unknown): v is CatalogCard {
 function isEvent(v: unknown): v is EventRow {
   if (!v || typeof v !== "object") return false;
   const e = v as Partial<EventRow>;
+  // powerLimit は無いイベントの方が多いので必須にしない。
+  // ただし**入っているのに数値でない**ものは落とす（黙って上限なし扱いにすると
+  // 上限帯の人に過大なPtを出し続けることになる）。
+  if (e.powerLimit != null && !isNum(e.powerLimit)) return false;
   return isNum(e.id) && isStr(e.name) && isNum(e.startAt) && isNum(e.aggregateAt);
 }
 

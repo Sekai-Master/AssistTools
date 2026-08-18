@@ -34,6 +34,7 @@ import {
   type PassCourse,
 } from "./lib/lbRun";
 import { numOrUndef } from "../../lib/num";
+import { cappedPower, usePowerLimit } from "../../lib/powerLimit";
 import { Delta } from "../../components/ui/Delta";
 import { useFlip } from "../../lib/useFlip";
 import { resolvePlan } from "../../motion/plan";
@@ -140,6 +141,8 @@ interface Stored {
   pass?: PassCourse;
   /** 今日まだ残っているオートの回数。 */
   autoLeft?: string;
+  /** 開催中のイベントの総合力上限を効かせるか（既定 ON）。 */
+  applyLimit?: boolean;
 }
 
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
@@ -179,6 +182,7 @@ function loadStored(): Stored {
       lvMax: lv(s.lvMax),
       pick: str(s.pick),
       regen: typeof s.regen === "boolean" ? s.regen : undefined,
+      applyLimit: typeof s.applyLimit === "boolean" ? s.applyLimit : undefined,
       autoFrom:
         s.autoFrom === "lb" || s.autoFrom === "plays" || s.autoFrom === "window"
           ? s.autoFrom
@@ -367,6 +371,27 @@ export default function EfficiencyRanking() {
   // 既定は「入力なしで一般的な順位を見る」。自分の条件で計算したい人だけスイッチを入れる。
   const [custom, setCustom] = useState(stored.custom ?? false);
   const [power, setPower] = useState(stored.power ?? String(DEFAULT_PARAMS.power));
+  /**
+   * 総合力の上限（ワールドリンク第3弾のみ）。
+   * ★ 読めなくても画面は動く。上限は補助情報で、順位を出す前提条件ではない。
+   */
+  const { active: activeLimitEvent, latest: latestLimitEvent } = usePowerLimit();
+  /**
+   * 上限を効かせるか。
+   *
+   * ★ **未設定なら「開催中かどうか」に従う**（開催中は ON・期間外は OFF）。
+   *   そのうえで手で切り替えられる。**イベント期間外にも上限つきで確かめたい**
+   *   （次のワールドリンクの下見）という使い方があるため（Nori 指摘 2026-08-18）。
+   *   undefined を保つのが肝で、true/false に固めると
+   *   「イベントが始まったのに OFF のまま」という置き去りが起きる。
+   */
+  const [applyLimit, setApplyLimit] = useState<boolean | undefined>(stored.applyLimit);
+  const limitOn = applyLimit ?? activeLimitEvent != null;
+  /** 期間外に効かせるときは直近の上限値を使う（上限そのものは毎回同じ値）。 */
+  const limitEvent = activeLimitEvent ?? latestLimitEvent;
+  /** 実際に頭打ちになっている（＝入力が上限を超えている）ときだけ知らせる。 */
+  const powerOverCap =
+    limitOn && limitEvent != null && custom && (Number(power) || 0) > limitEvent.powerLimit;
   const [bonus, setBonus] = useState(stored.bonus ?? String(DEFAULT_PARAMS.bonus));
   const [taki, setTaki] = useState(stored.taki ?? DEFAULT_PARAMS.taki);
   const [skillLeader, setSkillLeader] = useState(
@@ -401,14 +426,21 @@ export default function EfficiencyRanking() {
     //   1曲あたり13秒ぶん速く見積もってしまう（99回で20分以上ずれる）。
     if (!custom) return { ...DEFAULT_PARAMS, taki, overheadSec: DEFAULT_OVERHEAD_SEC[mode] };
     return {
-      power: Number(power) || 0,
+      /**
+       * ★ 開催中のイベントに総合力の上限があるなら、そこで頭打ちにする。
+       *   上限帯では総合力を伸ばしても1点も増えないので、入力どおりに計算すると
+       *   **曲の順位そのものが変わる**（総合力はスコアの線形係数で、定数項の
+       *   効き方が変わるため並びがずれる）。
+       *   「入力値をそのまま尊重する」より「実際に出る順位を出す」を優先する。
+       */
+      power: limitOn ? cappedPower(Number(power) || 0, limitEvent?.powerLimit) : Number(power) || 0,
       bonus: Number(bonus) || 0,
       taki,
       skillLeader: Number(skillLeader) || 0,
       skillTotal: Number(skillTotal) || 0,
       overheadSec: Number(overhead) || 0,
     };
-  }, [custom, mode, power, bonus, taki, skillLeader, skillTotal, overhead]);
+  }, [custom, mode, power, bonus, taki, skillLeader, skillTotal, overhead, limitOn, limitEvent]);
 
   /**
    * モードを切り替える。
@@ -1172,6 +1204,15 @@ export default function EfficiencyRanking() {
           </div>
         )}
 
+        {powerOverCap && limitEvent && (
+          <p
+            role="status"
+            className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800"
+          >
+            入力した総合力が上限を超えているので、<b>{limitEvent.powerLimit.toLocaleString()} として計算しています</b>。
+            この帯では総合力を伸ばしても1点も増えないため、<b>並ぶ曲の順番も上限なしのときとは変わります</b>。
+          </p>
+        )}
         {custom && (
           <>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -1185,6 +1226,25 @@ export default function EfficiencyRanking() {
                     persist({ power: v });
                   }}
                 />
+                {/* ★ 上限つきのイベントが存在するときだけ出す。関係ない時期に
+                    見せても意味が分からないだけなので。 */}
+                {limitEvent && (
+                  <div className="mt-2">
+                    <Switch
+                      checked={limitOn}
+                      onChange={(v) => {
+                        setApplyLimit(v);
+                        persist({ applyLimit: v });
+                      }}
+                      label={`総合力の上限 ${limitEvent.powerLimit.toLocaleString()} を効かせる`}
+                    />
+                    <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                      {activeLimitEvent
+                        ? `開催中の「${activeLimitEvent.name}」は発揮できる総合力が頭打ちです。`
+                        : `いまは対象のイベント期間外です。次のワールドリンクを見越して試すときに入れてください。`}
+                    </p>
+                  </div>
+                )}
               </Field>
               {mode !== "challenge" && (
                 <Field label="イベントボーナス（%）">
