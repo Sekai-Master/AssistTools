@@ -389,9 +389,18 @@ export default function EfficiencyRanking() {
   const limitOn = applyLimit ?? activeLimitEvent != null;
   /** 期間外に効かせるときは直近の上限値を使う（上限そのものは毎回同じ値）。 */
   const limitEvent = activeLimitEvent ?? latestLimitEvent;
-  /** 実際に頭打ちになっている（＝入力が上限を超えている）ときだけ知らせる。 */
-  const powerOverCap =
-    limitOn && limitEvent != null && custom && (Number(power) || 0) > limitEvent.powerLimit;
+  /** 入力した総合力が上限を超えているか（切っているかどうかは問わない）。 */
+  const overCap =
+    limitEvent != null && custom && (Number(power) || 0) > limitEvent.powerLimit;
+  /** 実際に頭打ちにして計算している。 */
+  const powerOverCap = overCap && limitOn;
+  /**
+   * ★ **開催中なのに上限を切っている。**
+   *   一度切ると設定が残るので、次のワールドリンクが始まっても切れたままになる。
+   *   黙っていると「警告も出ないまま過大なPtを見続ける」ことになるので、
+   *   切っている側にもちゃんと知らせる。
+   */
+  const capIgnored = overCap && !limitOn && activeLimitEvent != null;
   const [bonus, setBonus] = useState(stored.bonus ?? String(DEFAULT_PARAMS.bonus));
   const [taki, setTaki] = useState(stored.taki ?? DEFAULT_PARAMS.taki);
   const [skillLeader, setSkillLeader] = useState(
@@ -1204,6 +1213,17 @@ export default function EfficiencyRanking() {
           </div>
         )}
 
+        {capIgnored && activeLimitEvent && (
+          <p
+            role="status"
+            className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-xs leading-relaxed text-rose-800"
+          >
+            開催中の「{activeLimitEvent.name}」は総合力が{" "}
+            {activeLimitEvent.powerLimit.toLocaleString()} で頭打ちですが、
+            <b>上限を切っているので実際より高いポイントが出ています</b>。
+            いま走るための順位を見るなら、総合力の欄にある上限のスイッチを入れてください。
+          </p>
+        )}
         {powerOverCap && limitEvent && (
           <p
             role="status"
