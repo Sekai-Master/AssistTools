@@ -237,7 +237,7 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
   </div>
   <div style="height:14px"></div>
   <div class="chartcard">
-    <div class="charthead"><span class="charttitle">手動の稼働時間</span>
+    <div class="charthead"><span class="charttitle">周回の稼働時間</span>
       <span class="legend"><span>合計 <b id="totalhours" class="num"></b> 時間</span></span></div>
     <div class="svgwrap"><svg id="chart2" role="img" aria-label="日別の稼働時間"></svg></div>
     <div class="tip" id="tip2"></div>
@@ -257,7 +257,7 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
 
 <section>
   <h2>ライブボーナスの予算</h2>
-  <p class="lede">手動は時間律速なので10炊きを落とせない。余剰の投入先はオートの焚き上げ。1〜5炊きは5.0倍/LB、6炊き以降の追加分は2.0倍/LBなので、<b>オートの5炊きぶんは手動の焚き上げより石効率が良い</b>。下の表は各日に周回とオートでいくら溶けるか。</p>
+  <p class="lede">周回は時間律速なので10炊きを落とせない。余剰の投入先はオートの焚き上げ。1〜5炊きは5.0倍/LB、6炊き以降の追加分は2.0倍/LBなので、<b>オートの5炊きぶんは周回の焚き上げより石効率が良い</b>。下の表は各日に周回とオートでいくら溶けるか。</p>
   <div class="chartcard">
     <div class="charthead"><span class="charttitle">消費LBと予算</span><span class="legend" id="legend4"></span></div>
     <div class="svgwrap"><svg id="chart4" role="img" aria-label="ライブボーナスの消費と予算"></svg></div>
@@ -284,7 +284,7 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
     <div class="editbody">
       <p class="lede" style="margin-top:14px">変更はこのブラウザにだけ保存される（他の人には影響しない）。確定させたいときは「JSONを出力」して <code>params.json</code> を差し替える。</p>
       <div class="fields" id="fields"></div>
-      <div style="font-size:12px;color:var(--ink-3);margin-top:6px">各日の手動稼働時間</div>
+      <div style="font-size:12px;color:var(--ink-3);margin-top:6px">各日の周回稼働時間</div>
       <div class="hoursgrid" id="hoursgrid"></div>
       <div class="btnrow">
         <button class="act primary" id="apply" type="button">再計算</button>
@@ -340,7 +340,7 @@ function computeRates(P, songs){
   const sup = P.support.effective;
   const empty = P.support.emptySlots || 0;
 
-  /* ---- 手動（協力ライブ）----
+  /* ---- 周回（協力ライブ）----
      走者は1〜5枠のどれかに等確率で入る。残り4枠とアンコール枠は支援者。
      空き枠はついぼ（実効値150と仮定）で埋まる。 */
   const mid = P.songs.multi.musicId, mdif = P.songs.multi.difficulty;
@@ -631,7 +631,7 @@ function lbChart(svg, tipEl, days, P, R){
   svg.innerHTML='';
   const scale=Math.max(budget,used)*1.02, iw=W-m.l-m.r, X=v=>m.l+iw*v/scale;
   svg.appendChild(el('rect',{x:m.l,y:m.t,width:iw,height:34,rx:8,fill:css('--surface-2')}));
-  const segs=[['手動 '+P.boost.multi+'炊き',lbM,'--s1'],['オート '+P.boost.auto+'炊き',lbA,'--s2']];
+  const segs=[['周回 '+P.boost.multi+'炊き',lbM,'--s1'],['オート '+P.boost.auto+'炊き',lbA,'--s2']];
   let acc=0;
   segs.forEach(([label,v,c])=>{
     const w=Math.max(2,X(acc+v)-X(acc)-2);
@@ -705,7 +705,7 @@ function render(){
   countUp(document.getElementById('v-total'), total/1e8);
   const short = P.boost.budgetLb - lbUsed;
   document.getElementById('verdict').textContent =
-    `手動 ${DAYS.reduce((a,d)=>a+d.hours,0)} 時間（実稼働率 ${(DAYS.reduce((a,d)=>a+d.hours,0)/240*100).toFixed(0)}%）で ${oku(total)}億。`
+    `周回 ${DAYS.reduce((a,d)=>a+d.hours,0)} 時間（実稼働率 ${(DAYS.reduce((a,d)=>a+d.hours,0)/240*100).toFixed(0)}%）で ${oku(total)}億。`
     + (short>=0 ? `予算は ${fmt(short)} LB 残る。` : `予算を ${fmt(-short)} LB 超過するので、オートの焚き上げから削る。`);
 
   /* --- rate cards --- */
@@ -750,7 +750,7 @@ function render(){
      <span><span class="dot" style="background:var(--ink-2)"></span>ボーダー実測</span>
      <span><span class="dot" style="background:var(--ink-3)"></span>ボーダー予測（帯はレンジ）</span>`;
   document.getElementById('legend4').innerHTML =
-    `<span><span class="dot" style="background:var(--s1)"></span>手動</span>
+    `<span><span class="dot" style="background:var(--s1)"></span>周回</span>
      <span><span class="dot" style="background:var(--s2)"></span>オート</span>`;
   document.getElementById('totalhours').textContent = DAYS.reduce((a,d)=>a+d.hours,0);
 
@@ -823,7 +823,7 @@ function render(){
     `<b>ボーダーは中盤で凍り、チャプター終盤に跳ねる。</b>過去実測で ch2 の伸びの55〜85%が最後の12時間に集中。ch1終から約36時間はほぼ動かないので、8/19・8/20 の稼働は相対的に一番効く`,
     `<b>8/27 を「調整のみ」にする代償。</b>最後の12時間だけでボーダーは終値の6.9〜10.9pp（2.6億なら1,800万〜2,900万Pt）伸びる。ここに乗らないぶんを事前に積んでおく必要がある`,
     `<b>感度。</b>効くのは周回のオーバーヘッド。既定の${P.overheadSec.multi}秒は event214 開幕の実測値だが、瑞希ラン(2026-07)の実測平均54秒に置くと ${(3600/(R.multi.song+54)).toFixed(1)} 周/h まで落ち、着地は約 ${oku(DAYS.reduce((a,d)=>a+(d.actualPt!=null?d.actualPt:d.hours*(3600/(R.multi.song+54))*R.multi.pt)+d.auto+d.mys,0))} 億になる。<b>石よりも部屋待ちを作らないことが直接効く</b>`,
-    `<b>オートの所要時間。</b>${P.auto.playsPerDay}回で ${R.auto.hoursForDay.toFixed(1)} 時間かかる。手動の稼働時間とは重ねられないので、就寝中に回す枠`,
+    `<b>オートの所要時間。</b>${P.auto.playsPerDay}回で ${R.auto.hoursForDay.toFixed(1)} 時間かかる。周回の稼働時間とは重ねられないので、就寝中に回す枠`,
     `<b>🚧 マイセカイのLB消費が未計測。</b>全回収するには資材の回復にLBが要るはずで、その量が分かっていない。<b>下のLBの表と予算にはマイセカイぶんが入っていない</b>ので、実消費はここに書いてある数字より多くなる。開幕の全回収は12分で61万Pt（実測）、以降は控えめに1回${fmt(R.mysekai.per/1e4)}万Ptで置いている`
   ].map(s=>`<li>${s}</li>`).join('');
 
@@ -885,8 +885,8 @@ function buildEditor(){
   const f=[
     ['runner.lead','先頭'],['runner.inner','内部'],['runner.talentMan','総合力(万)'],['runner.bonusPct','ボーナス(%)'],
     ['support.effective','支援者の実効値'],['support.emptySlots','空き枠(0-4)'],
-    ['overheadSec.multi','手動OH(秒)'],['overheadSec.auto','オートOH(秒)'],
-    ['boost.multi','手動の炊き数'],['boost.auto','オートの炊き数'],['boost.budgetLb','予算(LB)'],
+    ['overheadSec.multi','周回OH(秒)'],['overheadSec.auto','オートOH(秒)'],
+    ['boost.multi','周回の炊き数'],['boost.auto','オートの炊き数'],['boost.budgetLb','予算(LB)'],
     ['auto.playsPerDay','オート回数/日'],
     ['mysekai.perHarvestPt','マイセカイ1回(Pt)'],['mysekai.harvestsPerDay','マイセカイ回数/日'],
     ['border.centralPt','推定ボーダー(Pt)']
