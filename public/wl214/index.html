@@ -530,10 +530,33 @@ function cumChart(svg, tipEl, days, P){
   svg.innerHTML='';
   const C = P.border.centralPt;
   const pts = days.map(d=>({h:d.endH, v:d.cum, d}));
-  const bd  = days.map(d=>{ const s=shareAt(P.border.shareCurve,d.endH);
-                            return {h:d.endH, m:C*s[1], lo:P.border.lowPt*s[2], hi:P.border.highPt*s[3]}; });
+  /* 予測は実測を起点にする。
+     「終値シナリオ × シェア曲線」をそのまま引くと、いま観測できている値を通らない線になり、
+     帯も過去に向かって無意味に開いてしまう。現在地は確定しているので、
+     過去は実測に一致させ、未来だけシナリオ差で開かせる。
+       h <= now : 実測（シェア比で内挿）
+       h >  now : 実測 + (終値 − 実測) × 残りシェアの消化率
+     終値シナリオが実測を下回った場合はそのシナリオが既に否定されているので実測で下限を切る。 */
+  const obsH   = (LIVE && LIVE.latest) ? LIVE.latest.h : 0;
+  const obsNow = (LIVE && LIVE.latest) ? LIVE.latest.r100 : 0;
+  const sNow   = shareAt(P.border.shareCurve, obsH)[1];
+  const proj = (h, F) => {
+    const s = shareAt(P.border.shareCurve, h)[1];
+    if(!obsNow) return F * s;                       /* 実測が無いときは従来どおり */
+    if(h <= obsH) return sNow>0 ? obsNow * s / sNow : obsNow;
+    const Fe = Math.max(F, obsNow);                 /* 実測を下回るシナリオは既に否定されている */
+    const rest = 1 - sNow;
+    return rest>0 ? obsNow + (Fe - obsNow) * (s - sNow) / rest : Fe;
+  };
+  const loF = Math.max(P.border.lowPt, obsNow);
+  const at3 = h => ({h, m:proj(h,C), lo:proj(h,loF), hi:proj(h,P.border.highPt)});
+  const bd  = days.map(d=>at3(d.endH));                       /* ツールチップ用（日付に対応） */
+  /* 描画用は細かい格子。現在地でぴったり閉じるよう obsH を必ず含める */
+  const grid = [...new Set([...Array.from({length:41},(_,i)=>i*6), obsH, 240])]
+                 .filter(h=>h>=0 && h<=240).sort((a,b)=>a-b);
+  const bdF = grid.map(at3);
   const rr = (VIEW==='50' || VIEW==='both') && P.border.rank50Ratio ? P.border.rank50Ratio : 1;
-  const max = Math.max(...pts.map(p=>p.v), ...bd.map(b=>b.hi*rr))*1.08;
+  const max = Math.max(...pts.map(p=>p.v), ...bdF.map(b=>b.hi*rr))*1.08;
   const iw=W-m.l-m.r, ih=H-m.t-m.b;
   const X=h=>m.l+iw*h/240, Y=v=>m.t+ih*(1-v/max);
 
@@ -554,8 +577,8 @@ function cumChart(svg, tipEl, days, P){
   });
   /* ボーダーのレンジ帯。表示中の順位のぶんだけ出す（2本重ねると読めなくなる） */
   const R50v = P.border.rank50Ratio || 1;
-  const mk = f => bd.map(b=>`${X(b.h)},${Y(b.hi*f)}`).join(' ') + ' ' +
-                  bd.slice().reverse().map(b=>`${X(b.h)},${Y(b.lo*f)}`).join(' ');
+  const mk = f => bdF.map(b=>`${X(b.h)},${Y(b.hi*f)}`).join(' ') + ' ' +
+                  bdF.slice().reverse().map(b=>`${X(b.h)},${Y(b.lo*f)}`).join(' ');
   if(VIEW==='100' || VIEW==='both')
     svg.appendChild(el('polygon',{points:mk(1), fill:css('--s1'), opacity: VIEW==='both'?.07:.10}));
   if(VIEW==='50')
@@ -564,10 +587,10 @@ function cumChart(svg, tipEl, days, P){
   const show100 = VIEW==='100' || VIEW==='both';
   const show50  = (VIEW==='50' || VIEW==='both') && P.border.rank50Ratio;
   if(show100)
-    svg.appendChild(el('polyline',{points:bd.map(b=>`${X(b.h)},${Y(b.m)}`).join(' '),
+    svg.appendChild(el('polyline',{points:bdF.map(b=>`${X(b.h)},${Y(b.m)}`).join(' '),
       fill:'none', stroke:css('--ink-3'), 'stroke-width':2, 'stroke-dasharray':'5 4'}));
   if(show50){
-    svg.appendChild(el('polyline',{points:bd.map(b=>`${X(b.h)},${Y(b.m*R50v)}`).join(' '),
+    svg.appendChild(el('polyline',{points:bdF.map(b=>`${X(b.h)},${Y(b.m*R50v)}`).join(' '),
       fill:'none', stroke:css('--ink-3'), 'stroke-width': VIEW==='50'?2:1.5,
       'stroke-dasharray':'5 4', opacity: VIEW==='50'?1:.75}));
     const t=el('text',{x:X(240)-6,y:Y(C*R50v)+17,'text-anchor':'end',class:'axis'});
