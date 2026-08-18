@@ -18,6 +18,7 @@ import {
 } from "./useRankingMusics";
 import {
   rankSongs,
+  rankSongsInWindow,
   multiEffectiveSkill,
   DEFAULT_OVERHEAD_SEC,
   DEFAULT_PARAMS,
@@ -128,7 +129,11 @@ interface Stored {
   /** ライボの自然回復を差し引くか。 */
   regen?: boolean;
   /** オートの入口。ゲームの設定と同じ2択。 */
-  autoFrom?: "lb" | "plays";
+  autoFrom?: "lb" | "plays" | "window";
+  /** 「残り時間で区切る」で使う残り分数。 */
+  windowMin?: string;
+  /** 足りないライボを石・ドリンクで注ぎ足す前提にするか。 */
+  refill?: boolean;
   /** いま持っているライブボーナス。 */
   startLB?: string;
   /** カラフルパスの course（ライボ上限とオート回数が決まる）。 */
@@ -174,7 +179,12 @@ function loadStored(): Stored {
       lvMax: lv(s.lvMax),
       pick: str(s.pick),
       regen: typeof s.regen === "boolean" ? s.regen : undefined,
-      autoFrom: s.autoFrom === "lb" || s.autoFrom === "plays" ? s.autoFrom : undefined,
+      autoFrom:
+        s.autoFrom === "lb" || s.autoFrom === "plays" || s.autoFrom === "window"
+          ? s.autoFrom
+          : undefined,
+      windowMin: str(s.windowMin),
+      refill: typeof s.refill === "boolean" ? s.refill : undefined,
       startLB: str(s.startLB),
       pass:
         s.pass === "none" || s.pass === "deluxe" || s.pass === "precious" ? s.pass : undefined,
@@ -307,6 +317,38 @@ function Stat({
   );
 }
 
+/**
+ * いまから次の 4:00 までの分数。
+ * ★ **オートの回数は毎日4:00に消える**（lbRun.ts の規則3）。「残り時間」の既定値は
+ *   ここに合わせるのが実際の使い方に一番近い。手で上書きできる。
+ */
+function minutesUntilReset(now: Date = new Date()): number {
+  const reset = new Date(now);
+  reset.setHours(4, 0, 0, 0);
+  if (reset <= now) reset.setDate(reset.getDate() + 1);
+  return Math.max(1, Math.round((reset.getTime() - now.getTime()) / 60000));
+}
+
+/** 窓モードの行に付く値（rankSongsInWindow の返り値）。 */
+type WindowRow = { plays: number; limitedBy: "lb" | "plays" | "time" | "none" };
+
+/** 窓モードの行だけが持つ値を安全に取り出す（通常モードの行には無い）。 */
+function windowInfo(row: unknown): WindowRow | null {
+  if (!row || typeof row !== "object") return null;
+  const r = row as Partial<WindowRow>;
+  return typeof r.plays === "number" && typeof r.limitedBy === "string"
+    ? { plays: r.plays, limitedBy: r.limitedBy }
+    : null;
+}
+
+/** 何で止まるか。**次に効く手が違う**ので、言葉で書く。 */
+const LIMIT_LABEL: Record<WindowRow["limitedBy"], string> = {
+  time: "時間切れ",
+  lb: "ライボ切れ",
+  plays: "回数上限",
+  none: "止まらず",
+};
+
 export default function EfficiencyRanking() {
   const { entries, loading, error } = useRankingMusics();
   const stored = useMemo(() => loadStored(), []);
@@ -396,7 +438,16 @@ export default function EfficiencyRanking() {
    *   表の並び順がこれで変わるので、下のパネルの state を参照させると
    *   宣言順で詰まる（const は巻き上がらない）。
    */
-  const [autoFrom, setAutoFrom] = useState<"lb" | "plays">(stored.autoFrom ?? "lb");
+  const [autoFrom, setAutoFrom] = useState<"lb" | "plays" | "window">(stored.autoFrom ?? "lb");
+  /** 残り時間（分）。既定は「いまから次の4:00まで」＝オート回数が消えるまで。 */
+  const [windowMin, setWindowMin] = useState(stored.windowMin ?? String(minutesUntilReset()));
+  /**
+   * ライボが足りなくなったら石・ドリンクで注ぎ足す前提にするか。
+   * ★ **これで答えが正反対になる**（注ぎ足さない＝長尺有利／注ぎ足す＝短尺有利）ので、
+   *   既定は「注ぎ足さない」＝手持ちで走る、にしておく。
+   */
+  const [refill, setRefill] = useState(stored.refill ?? false);
+
   const ranked = useMemo(() => {
     if (diffs.size === 0) return [];
     const filtered = entries.filter(
@@ -405,8 +456,35 @@ export default function EfficiencyRanking() {
         // Lv が不明な譜面は、範囲を絞っているときだけ落とす
         (e.playLevel == null ? !levelFiltered : e.playLevel >= loLv && e.playLevel <= hiLv),
     );
+    // 「残り時間で区切る」ときだけ、合計Ptで並べ替える（別の指標になる）。
+    if (mode === "auto" && autoFrom === "window") {
+      const win = Math.max(0, Number(windowMin) || 0) * 60;
+      return rankSongsInWindow(filtered, params, {
+        windowSec: win,
+        startLB: Number(startLB) || 0,
+        lbCap: PASS_LIMITS[pass].lbCap,
+        maxPlays: Number(autoLeft) || 0,
+        regen,
+        refill,
+      }).slice(0, ROW_LIMIT);
+    }
     return rankSongs(filtered, params, mode).slice(0, ROW_LIMIT);
-  }, [entries, params, mode, diffs, loLv, hiLv, levelFiltered]);
+  }, [
+    entries,
+    params,
+    mode,
+    diffs,
+    loLv,
+    hiLv,
+    levelFiltered,
+    autoFrom,
+    windowMin,
+    startLB,
+    pass,
+    autoLeft,
+    regen,
+    refill,
+  ]);
 
   const toggleDiff = (d: Difficulty) =>
     setDiffs((prev) => {
@@ -416,6 +494,8 @@ export default function EfficiencyRanking() {
       return next;
     });
 
+  /** 表が「この時間内の合計Pt」で並んでいるか。 */
+  const isWindow = mode === "auto" && autoFrom === "window";
   const note = MODE_NOTE[mode];
   const playCount = Number(plays) || 0;
   const osReduce = useReducedMotion();
@@ -572,7 +652,13 @@ export default function EfficiencyRanking() {
        *   ★ 表の高さは選択条件で変わるので、正確に一致させることはできない。
        *     狙いは「一致させる」ことではなく「動きを画面の外に追い出す」こと。
        */}
-      <Panel title={`ランキング（上位${ranked.length}件）`}>
+      <Panel
+        title={
+          isWindow
+            ? `ランキング（残り${Math.max(0, Number(windowMin) || 0)}分で稼げる合計Pt順・上位${ranked.length}件）`
+            : `ランキング（上位${ranked.length}件）`
+        }
+      >
         <div className={loading ? "min-h-[80vh]" : undefined}>
         {loading && <p className="text-sm text-slate-500">楽曲データを読み込んでいます…</p>}
         {error && <p className="text-sm font-bold text-rose-600">{error}</p>}
@@ -622,6 +708,18 @@ export default function EfficiencyRanking() {
                        * ★ 何で止まるかは曲ごとに変わる（短い曲は時間、長い曲はライボ）。
                        *   これを出さないと「なぜこの曲が上なのか」が読めない。
                        */}
+                      {(() => {
+                        const w = isWindow ? windowInfo(r) : null;
+                        if (!w) return null;
+                        return (
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-slate-500">
+                            <span className="tabular-nums">{w.plays} 回</span>
+                            <span className="rounded bg-neu px-1 py-0.5 shadow-neu-inset">
+                              {LIMIT_LABEL[w.limitedBy]}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="whitespace-nowrap px-2 py-2">
                       <DifficultyBadge difficulty={r.difficulty} level={r.playLevel} />
@@ -685,6 +783,7 @@ export default function EfficiencyRanking() {
               options={[
                 { value: "lb", label: "ライボがなくなるまで" },
                 { value: "plays", label: "回数を指定" },
+                { value: "window", label: "残り時間で区切る" },
               ]}
               value={autoFrom}
               onChange={(v) => {
@@ -693,6 +792,56 @@ export default function EfficiencyRanking() {
               }}
             />
           </div>
+          {autoFrom === "window" && (
+            <div className="mb-4 space-y-3">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="残り時間（分）"
+                  hint="既定は次の4:00まで。オートの回数はそこで消える"
+                >
+                  <NeuInput
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={windowMin}
+                    onChange={(e) => {
+                      setWindowMin(e.target.value);
+                      persist({ windowMin: e.target.value });
+                    }}
+                  />
+                </Field>
+                <Field label="ライボが足りなくなったら" hint="どちらを選ぶかで最適な曲が変わる">
+                  <SegmentedControl
+                    options={[
+                      { value: "stop", label: "そこで止める" },
+                      { value: "refill", label: "石・ドリンクで足す" },
+                    ]}
+                    value={refill ? "refill" : "stop"}
+                    onChange={(v) => {
+                      const next = v === "refill";
+                      setRefill(next);
+                      persist({ refill: next });
+                    }}
+                  />
+                </Field>
+              </div>
+              {/*
+               * ★ この機能が正しいのは「その窓で使わなかった枠が失われる」ときだけ。
+               *   オート回数は4:00で消えるが、**ライボは翌日へ持ち越せる**。
+               *   イベント全体で見れば Pt/プレイ（＝上の既定の並び）が正しい軸なので、
+               *   短い曲が有利という結論を無条件に持ち帰られないよう明記する。
+               */}
+              <p className="text-xs leading-relaxed text-slate-500">
+                <b>上の表が「この時間内に稼げる合計Pt」の順に並び替わります。</b>
+                何で止まるか（時間／ライボ／回数）も各行に出ます。
+                <br />
+                オートの回数は4:00に消えるので、締切前に使い切る計画にはこれが効きます。
+                ただし<b>ライボは翌日に持ち越せる</b>ので、イベント全体で見るなら
+                「ライボがなくなるまで」の並び（1回あたりの効率）の方が正しい軸です。
+              </p>
+            </div>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="曲" hint="上の表から選ぶ（既定は1位）">
               <select
