@@ -164,6 +164,37 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
 @media (prefers-reduced-motion: reduce){*{transition:none !important;animation:none !important}}
 .appear{animation:rise .5s cubic-bezier(.2,.7,.3,1) both}
 @keyframes rise{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+
+/* ---------- ライブ帯（カウントダウン・現在のチャプター） ---------- */
+.livebar{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px 20px;margin:0 0 26px;display:grid;gap:16px}
+@media(min-width:820px){.livebar{grid-template-columns:auto 1fr auto;align-items:center}}
+.clock{display:flex;gap:18px;align-items:baseline}
+.clock .unit{display:flex;flex-direction:column;align-items:center;min-width:52px}
+.clock .cv{font-size:30px;font-weight:700;letter-spacing:-0.03em;line-height:1;
+  font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+.clock .cl{font-size:10px;color:var(--ink-3);letter-spacing:.12em;margin-top:5px}
+.clock .sep{font-size:22px;color:var(--line-strong);font-weight:300;align-self:center}
+.chline{display:flex;gap:5px}
+.chip{flex:1;position:relative;padding:8px 6px 9px;border-radius:9px;background:var(--surface-2);
+  border:1px solid transparent;text-align:center;overflow:hidden;transition:border-color .3s ease,background .3s ease}
+.chip .cn{font-size:10px;color:var(--ink-3);letter-spacing:.08em}
+.chip .cc{font-size:12.5px;font-weight:620;margin-top:2px;white-space:nowrap}
+.chip.done{opacity:.5}
+.chip.now{border-color:var(--s1);background:color-mix(in srgb, var(--s1) 9%, var(--surface))}
+.chip.now .cc{color:var(--s1)}
+.chip .fill{position:absolute;left:0;bottom:0;height:2px;background:var(--s1);
+  transition:width 1s linear}
+.pulse{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--s1);
+  margin-right:7px;animation:beat 2.4s ease-in-out infinite;vertical-align:middle}
+@keyframes beat{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.72)}}
+.livemeta{text-align:right;font-size:12px;color:var(--ink-2);line-height:1.6;white-space:nowrap}
+.livemeta b{font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* チャート要素の登場 */
+.seg,.growline{transition:y .7s cubic-bezier(.2,.75,.3,1), height .7s cubic-bezier(.2,.75,.3,1),
+  stroke-dashoffset 1.5s cubic-bezier(.35,.7,.25,1), opacity .15s ease}
+.nowline{stroke:var(--s2);stroke-width:1.5;stroke-dasharray:2 3}
 </style>
 </head>
 <body>
@@ -175,6 +206,12 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
   <h1>ワールドリンク Part5<br>総合ラン アナライズ</h1>
   <p class="sub" id="subline">読み込み中…</p>
 </header>
+
+<div class="livebar" id="livebar">
+  <div class="clock" id="clock"></div>
+  <div class="chline" id="chline"></div>
+  <div class="livemeta" id="livemeta"></div>
+</div>
 
 <section id="hero">
   <div class="grid g3" id="tiles"></div>
@@ -220,7 +257,7 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
 
 <section>
   <h2>ライブボーナスの予算</h2>
-  <p class="lede">手動は時間律速なので10炊きを落とせない。余剰の投入先はオートの焚き上げ。1〜5炊きは5.0倍/LB、6炊き以降の追加分は2.0倍/LBなので、<b>オートの5炊きぶんは手動の焚き上げより石効率が良い</b>。</p>
+  <p class="lede">手動は時間律速なので10炊きを落とせない。余剰の投入先はオートの焚き上げ。1〜5炊きは5.0倍/LB、6炊き以降の追加分は2.0倍/LBなので、<b>オートの5炊きぶんは手動の焚き上げより石効率が良い</b>。下の表は各日に周回とオートでいくら溶けるか。</p>
   <div class="chartcard">
     <div class="charthead"><span class="charttitle">消費LBと予算</span><span class="legend" id="legend4"></span></div>
     <div class="svgwrap"><svg id="chart4" role="img" aria-label="ライブボーナスの消費と予算"></svg></div>
@@ -412,7 +449,10 @@ function stackedChart(svg, tipEl, days, R){
       const v = d[key]; if(v<=0){acc+=v;return;}
       const y0 = y(acc), y1 = y(acc+v);
       const h = Math.max(1, y0-y1-2);   /* 2px の隙間 */
-      const rect = el('rect',{x:x(i)-bw/2, y:y1, width:bw, height:h, rx:3, fill:css(c), class:'seg'});
+      const rect = el('rect',{x:x(i)-bw/2, y:REDUCED?y1:y(0), width:bw, height:REDUCED?h:0,
+                              rx:3, fill:css(c), class:'seg'});
+      rect.dataset.y = y1; rect.dataset.h = h;
+      rect.style.transitionDelay = (i*35)+'ms';
       g.appendChild(rect); acc += v;
     });
     const hit = el('rect',{x:x(i)-bw/2-6, y:m.t, width:bw+12, height:ih, fill:'transparent', style:'cursor:pointer'});
@@ -431,6 +471,9 @@ function stackedChart(svg, tipEl, days, R){
     const lab = el('text',{x:x(i), y:H-14,'text-anchor':'middle',class:'axis'});
     lab.textContent = d.label; svg.appendChild(lab);
   });
+  if(!REDUCED) requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    svg.querySelectorAll('.seg').forEach(r=>{ r.setAttribute('y',r.dataset.y); r.setAttribute('height',r.dataset.h); });
+  }));
 }
 
 function hoursChart(svg, tipEl, days){
@@ -448,8 +491,11 @@ function hoursChart(svg, tipEl, days){
   });
   days.forEach((d,i)=>{
     if(d.hours>0){
-      svg.appendChild(el('rect',{x:x(i)-bw/2,y:y(d.hours),width:bw,height:Math.max(2,ih-(y(d.hours)-m.t)),rx:3,
-                                 fill:css('--s1'),opacity:.85,class:'seg'}));
+      const hh=Math.max(2,ih-(y(d.hours)-m.t));
+      const r=el('rect',{x:x(i)-bw/2,y:REDUCED?y(d.hours):y(0),width:bw,height:REDUCED?hh:0,rx:3,
+                         fill:css('--s1'),opacity:.85,class:'seg'});
+      r.dataset.y=y(d.hours); r.dataset.h=hh; r.style.transitionDelay=(i*35)+'ms';
+      svg.appendChild(r);
       const t=el('text',{x:x(i),y:y(d.hours)-6,'text-anchor':'middle',class:'axis'});
       t.textContent=d.hours+'h'; svg.appendChild(t);
     }else{
@@ -457,6 +503,9 @@ function hoursChart(svg, tipEl, days){
     }
     const lab=el('text',{x:x(i),y:H-12,'text-anchor':'middle',class:'axis'}); lab.textContent=d.label; svg.appendChild(lab);
   });
+  if(!REDUCED) requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    svg.querySelectorAll('.seg').forEach(r=>{ r.setAttribute('y',r.dataset.y); r.setAttribute('height',r.dataset.h); });
+  }));
 }
 
 function cumChart(svg, tipEl, days, P){
@@ -491,15 +540,54 @@ function cumChart(svg, tipEl, days, P){
   const band = bd.map(b=>`${X(b.h)},${Y(b.hi)}`).join(' ') + ' ' +
                bd.slice().reverse().map(b=>`${X(b.h)},${Y(b.lo)}`).join(' ');
   svg.appendChild(el('polygon',{points:band, fill:css('--s1'), opacity:.10}));
-  /* ボーダー中央値 */
+  /* ボーダー中央値（予測） */
   svg.appendChild(el('polyline',{points:bd.map(b=>`${X(b.h)},${Y(b.m)}`).join(' '),
     fill:'none', stroke:css('--ink-3'), 'stroke-width':2, 'stroke-dasharray':'5 4'}));
-  /* 走者の累積 */
-  svg.appendChild(el('polyline',{points:pts.map(p=>`${X(p.h)},${Y(p.v)}`).join(' '),
-    fill:'none', stroke:css('--s1'), 'stroke-width':2.5, 'stroke-linejoin':'round'}));
+  /* ボーダーの実測。予測と同じ主体なので色は変えず、実線／破線で状態を分ける */
+  if(LIVE && LIVE.border && LIVE.border.length){
+    svg.appendChild(el('polyline',{points:LIVE.border.map(b=>`${X(b[0])},${Y(b[1])}`).join(' '),
+      fill:'none', stroke:css('--ink-2'), 'stroke-width':2.5, 'stroke-linejoin':'round'}));
+    const lb=LIVE.border[LIVE.border.length-1];
+    svg.appendChild(el('circle',{cx:X(lb[0]),cy:Y(lb[1]),r:4,fill:css('--ink-2'),
+      stroke:css('--surface'),'stroke-width':2}));
+  }
+  /* 走者の累積（計画） */
+  const plan = el('polyline',{points:pts.map(p=>`${X(p.h)},${Y(p.v)}`).join(' '),
+    fill:'none', stroke:css('--s1'), 'stroke-width':2.5, 'stroke-linejoin':'round',
+    'stroke-dasharray':'6 5', class:'growline'});
+  svg.appendChild(plan);
+  if(!REDUCED){
+    const L = plan.getTotalLength();
+    plan.setAttribute('stroke-dasharray', L);
+    plan.setAttribute('stroke-dashoffset', L);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      plan.setAttribute('stroke-dashoffset', 0);
+      setTimeout(()=>plan.setAttribute('stroke-dasharray','6 5'), 1550);
+    }));
+  }
+  /* いまここ */
+  const nowH = (Date.now() - new Date(P.event.startJst).getTime())/36e5;
+  if(nowH>0 && nowH<240){
+    svg.appendChild(el('line',{x1:X(nowH),x2:X(nowH),y1:m.t,y2:m.t+ih,class:'nowline'}));
+    const nt=el('text',{x:X(nowH)+5,y:m.t+ih-6,class:'axis',style:`fill:${css('--s2')}`});
+    nt.textContent='now'; svg.appendChild(nt);
+  }
   pts.forEach(p=>{
     svg.appendChild(el('circle',{cx:X(p.h),cy:Y(p.v),r:4.5,fill:css('--s1'),stroke:css('--surface'),'stroke-width':2}));
   });
+  /* 走者の実測（申告値）。計画と同じ主体なので色は同じ、形で区別する */
+  if(LIVE && LIVE.runner){
+    LIVE.runner.forEach(r=>{
+      const s=6;
+      svg.appendChild(el('rect',{x:X(r.h)-s/2,y:Y(r.pt)-s/2,width:s,height:s,
+        transform:`rotate(45 ${X(r.h)} ${Y(r.pt)})`,fill:css('--s1'),
+        stroke:css('--surface'),'stroke-width':2}));
+    });
+    const lr=LIVE.runner[LIVE.runner.length-1];
+    const t=el('text',{x:X(lr.h)+10,y:Y(lr.pt)+4,class:'axis'});
+    t.textContent=`実測 ${(lr.pt/1e4).toFixed(0)}万${lr.rank?`（${lr.rank}位）`:''}`;
+    svg.appendChild(t);
+  }
   /* 終点ラベル */
   const last = pts[pts.length-1];
   const lt = el('text',{x:X(last.h)-6,y:Y(last.v)-12,'text-anchor':'end',
@@ -566,7 +654,7 @@ function lbChart(svg, tipEl, days, P, R){
 
 <script>
 /* ===================== 起動 ===================== */
-let DEFAULTS=null, P=null, SONGS=null, DAYS=null, R=null;
+let DEFAULTS=null, P=null, SONGS=null, DAYS=null, R=null, LIVE=null;
 const LSKEY='wl214-params-v1';
 
 async function loadSongs(P){
@@ -597,17 +685,22 @@ function render(){
   const lbUsed = DAYS.reduce((a,d)=>a+d.lbManual+d.lbAuto,0);
 
   /* --- hero --- */
-  const cls = margin>=0.08?'ok':(margin>=0?'warn':'bad');
+  const mLo = total/P.border.highPt - 1;      /* ボーダーが上振れした場合 */
+  const mHi = total/P.border.lowPt  - 1;      /* 下振れした場合 */
+  const cls = mLo>=0.08?'ok':(mLo>=0?'warn':'bad');
+  const liveNote = LIVE ? `実測 ${fmt(LIVE.latest.r100/1e4)}万（経過${LIVE.latest.h.toFixed(1)}h）` : '';
   document.getElementById('tiles').innerHTML = `
-    <div class="tile accent"><p class="k">着地見込み</p><p class="v num">${oku(total)}<small>億</small></p>
+    <div class="tile accent"><p class="k">着地見込み</p><p class="v num"><span id="v-total">0.00</span><small>億</small></p>
       <p class="n">周回 ${oku(DAYS.reduce((a,d)=>a+d.manual,0))} ／ オート ${oku(DAYS.reduce((a,d)=>a+d.auto,0))} ／ マイセカイ ${oku(DAYS.reduce((a,d)=>a+d.mys,0))}</p></div>
-    <div class="tile"><p class="k">推定ボーダー（総合100位）</p><p class="v num">${oku(C)}<small>億</small></p>
-      <p class="n">レンジ ${oku(P.border.lowPt)}〜${oku(P.border.highPt)}億</p></div>
-    <div class="tile ${margin>=0?'okline':''}"><p class="k">マージン</p>
-      <p class="v num" style="color:${margin>=0?'var(--good)':'var(--bad)'}">${margin>=0?'+':''}${(margin*100).toFixed(0)}<small>%</small></p>
-      <p class="n"><span class="pill ${cls}">${margin>=0.08?'余裕あり':(margin>=0?'ぎりぎり':'届かない')}</span>
+    <div class="tile"><p class="k">推定ボーダー（総合100位）</p>
+      <p class="v num" style="font-size:clamp(24px,4.2vw,36px)">${oku(P.border.lowPt)}<small>〜</small>${oku(P.border.highPt)}<small>億</small></p>
+      <p class="n">中央 ${oku(C)}億 ／ ${liveNote}</p></div>
+    <div class="tile ${mLo>=0?'okline':''}"><p class="k">マージン</p>
+      <p class="v num" style="font-size:clamp(24px,4.2vw,36px);color:${mLo>=0?'var(--good)':'var(--ink)'}">${mLo>=0?'+':''}${(mLo*100).toFixed(0)}<small>〜</small>${mHi>=0?'+':''}${(mHi*100).toFixed(0)}<small>%</small></p>
+      <p class="n"><span class="pill ${cls}">${mLo>=0.08?'どちらに転んでも足りる':(mLo>=0?'上振れするとぎりぎり':'上振れすると届かない')}</span>
         消費LB ${fmt(lbUsed)} / 予算 ${fmt(P.boost.budgetLb)}</p></div>`;
 
+  countUp(document.getElementById('v-total'), total/1e8);
   const short = P.boost.budgetLb - lbUsed;
   document.getElementById('verdict').textContent =
     `手動 ${DAYS.reduce((a,d)=>a+d.hours,0)} 時間（実稼働率 ${(DAYS.reduce((a,d)=>a+d.hours,0)/240*100).toFixed(0)}%）で ${oku(total)}億。`
@@ -640,18 +733,20 @@ function render(){
   + rc('--s3','マイセカイ', '全回収 ×'+R.mysekai.times+'/日', fmt(R.mysekai.perDay/1e4), '万Pt / 日',
        [['1回あたり', fmt(R.mysekai.per/1e4)+' 万Pt'],
         ['開幕の実測', fmt(R.mysekai.opening/1e4)+' 万Pt（12分）'],
-        ['LB消費', '0'],
+        ['LB消費', '<b style="color:var(--warn)">?</b> <span class="ch1">未計測</span>'],
         ['支援者', '不要'],
         ['期間合計', oku(DAYS.reduce((a,d)=>a+d.mys,0))+' 億']],
-       `LBを消費しないので純増。資材は 5:00 と 17:00 に更新。<br>ついぼ待ちの隙間に差し込むのが最も価値が高い。`);
+       `資材は 5:00 と 17:00 に更新。<br><b>全回収するにはLBを使った資材回復が要る。その消費量が未計測</b>なので、下のLBの表と予算にはマイセカイぶんが入っていない。実数が分かり次第ここに入れる。`);
 
   /* --- legends --- */
   document.getElementById('legend1').innerHTML =
     [['--s1','周回'],['--s2','オート'],['--s3','マイセカイ']]
       .map(([c,l])=>`<span><span class="dot" style="background:var(${c})"></span>${l}</span>`).join('');
   document.getElementById('legend3').innerHTML =
-    `<span><span class="dot" style="background:var(--s1)"></span>走者の累積</span>
-     <span><span class="dot" style="background:var(--ink-3)"></span>推定ボーダー（帯はレンジ）</span>`;
+    `<span><span class="dot" style="background:var(--s1)"></span>走者の計画</span>
+     <span><span class="dot" style="background:var(--s1);transform:rotate(45deg)"></span>走者の実測</span>
+     <span><span class="dot" style="background:var(--ink-2)"></span>ボーダー実測</span>
+     <span><span class="dot" style="background:var(--ink-3)"></span>ボーダー予測（帯はレンジ）</span>`;
   document.getElementById('legend4').innerHTML =
     `<span><span class="dot" style="background:var(--s1)"></span>手動</span>
      <span><span class="dot" style="background:var(--s2)"></span>オート</span>`;
@@ -663,18 +758,26 @@ function render(){
   cumChart(document.getElementById('chart3'), document.getElementById('tip3'), DAYS, P);
   lbChart(document.getElementById('chart4'), document.getElementById('tip4'), DAYS, P, R);
 
-  /* --- LB table --- */
+  /* --- 日別のLB消費 --- */
   const lbM=DAYS.reduce((a,d)=>a+d.lbManual,0), lbA=DAYS.reduce((a,d)=>a+d.lbAuto,0);
-  const ladder=[
-    ['手動 1〜5炊き', 5.0*Math.round(R.multi.pt/LB_MULT[R.multi.lb]), '時間律速。最優先で埋める'],
-    ['オート 1〜5炊き', 5.0*Math.round(R.auto.pt/LB_MULT[R.auto.lb]), '回数律速。手動の焚き上げより効率が良い'],
-    ['手動 6〜10炊き', 2.0*Math.round(R.multi.pt/LB_MULT[R.multi.lb]), '窓に収めるために必要'],
-    ['オート 6〜10炊き', 2.0*Math.round(R.auto.pt/LB_MULT[R.auto.lb]), '最初に削るのはここ']
-  ].sort((a,b)=>b[1]-a[1]);
+  let run=0;
   document.getElementById('lbtable').innerHTML =
-    `<thead><tr><th>使い道</th><th>限界効率 Pt/LB</th><th style="text-align:left">位置づけ</th></tr></thead><tbody>`
-    + ladder.map(([k,v,n])=>`<tr><td>${k}</td><td>${fmt(v)}</td><td style="text-align:left" class="ch1">${n}</td></tr>`).join('')
-    + `</tbody><tfoot><tr><td>消費合計</td><td>${fmt(lbM+lbA)} LB</td><td style="text-align:left" class="ch1">手動 ${fmt(lbM)} ／ オート ${fmt(lbA)}</td></tr></tfoot>`;
+    `<thead><tr><th style="text-align:left">日</th><th>周回</th><th>周回LB</th><th>オート</th><th>オートLB</th>
+      <th>その日</th><th>累積</th><th>残予算</th></tr></thead><tbody>`
+    + DAYS.map(d=>{
+        const day=d.lbManual+d.lbAuto; run+=day;
+        const left=P.boost.budgetLb-run;
+        return `<tr><td style="text-align:left">${d.label}(${d.dow}) <span class="ch1">${d.blocks||''}</span></td>
+          <td>${d.plays?Math.round(d.plays)+'周':'—'}</td><td>${d.lbManual?fmt(d.lbManual):'—'}</td>
+          <td>${d.autoPlays?d.autoPlays+'回':'—'}</td><td>${d.lbAuto?fmt(d.lbAuto):'—'}</td>
+          <td><b>${fmt(day)}</b></td><td>${fmt(run)}</td>
+          <td style="color:${left<0?'var(--bad)':'var(--ink-2)'}">${fmt(left)}</td></tr>`;
+      }).join('')
+    + `</tbody><tfoot><tr><td style="text-align:left">合計</td>
+        <td>${fmt(DAYS.reduce((a,d)=>a+d.plays,0))}周</td><td>${fmt(lbM)}</td>
+        <td>${fmt(DAYS.reduce((a,d)=>a+d.autoPlays,0))}回</td><td>${fmt(lbA)}</td>
+        <td>${fmt(lbM+lbA)}</td><td>${fmt(lbM+lbA)}</td>
+        <td>${fmt(P.boost.budgetLb-lbM-lbA)}</td></tr></tfoot>`;
 
   /* --- chapter table --- */
   const chs = P.event.chapters.map((c,i)=>({...c, start:i*48, end:(i+1)*48, hours:0, pt:0}));
@@ -712,20 +815,68 @@ function render(){
     `<b>単価は編成から計算している。</b>実効値 ${R.eff.toFixed(0)}（先頭${P.runner.lead}＋(内部${P.runner.inner}−先頭)×0.2）、総合力${P.runner.talentMan}万、イベントボーナス${P.runner.bonusPct}%。楽曲データの取得元は ${srcLive}`,
     `<b>協力ライブの枠の置き方。</b>走者は1〜5枠のどれかに等確率で入り、残り4枠とアンコール枠は支援者（実効値${P.support.effective}）が取る前提。<code>efficiency.ts</code> は「6枠すべてに同じ実効値を置いても曲の順位は変わらない、変わるのは絶対Pt」と明記しているので、絶対Ptを出すここでは分けて置いている`,
     `<b>検算。</b>2026-08-18 02:00 の順位136位からボーダー階層で逆算した周回ぶんは6.0時間で1,865万Pt＝時速3.11M。上の計算値は時速 ${(R.multi.pt*R.multi.perHour/1e6).toFixed(2)}M で、実測と一致する`,
-    `<b>推定ボーダー。</b>過去WL3（205 / 207 / 211）の「経過4h時点シェア」4.94 / 5.66 / 5.14% で割り戻した。精度は時間とともにしか締まらず、ch1終（8/19 20:00）で±14%、ch4終（8/25 20:00）でようやく±3%`,
+    `<b>推定ボーダーを幅で出している理由。</b>2つのモデルが食い違っている。①過去WL3の同経過シェアで素朴に割り戻すと <b>2.73億</b>。②214の ch1（東雲彰人・人気指数1.206）が全体の <b>24.1%</b> を占め、参照イベントの ch1（13.7〜18.4%）より著しく重いぶんを補正すると <b>2.03億</b>。指数はWL2/WL3の10イベント47チャプターの100位終値をイベント内平均で正規化して算出（彰人1.206 / 絵名1.075 / 寧々1.042 / 愛莉0.901 / MEIKO0.774）。②はn=1の指数に依存し夏休み・最終Partの上振れを織り込んでいないので、実際は①と②の間`,
+    `<b>答え合わせのタイミング。</b>ch2（寧々）に入って伸びが鈍ればキャラ差モデルが効いている証拠。鈍らなければキャラ人気では説明できない要因が効いているので①側へ寄せる。推定の幅そのものは時間でしか締まらず、ch1終（8/19 20:00）で±14%、ch4終（8/25 20:00）でようやく±3%`,
+    `<b>実測の反映。</b>ボーダーの実測は NAS の sekai-border-tracker が10分間隔で集めたものを <code>live.json</code> として置いている（ブラウザから sekai.best API は CORS で叩けない）。走者の実測は申告があった時点の値`,
     `<b>ボーダーは中盤で凍り、チャプター終盤に跳ねる。</b>過去実測で ch2 の伸びの55〜85%が最後の12時間に集中。ch1終から約36時間はほぼ動かないので、8/19・8/20 の稼働は相対的に一番効く`,
     `<b>8/27 を「調整のみ」にする代償。</b>最後の12時間だけでボーダーは終値の6.9〜10.9pp（2.6億なら1,800万〜2,900万Pt）伸びる。ここに乗らないぶんを事前に積んでおく必要がある`,
     `<b>感度。</b>効くのは周回のオーバーヘッド。既定の${P.overheadSec.multi}秒は event214 開幕の実測値だが、瑞希ラン(2026-07)の実測平均54秒に置くと ${(3600/(R.multi.song+54)).toFixed(1)} 周/h まで落ち、着地は約 ${oku(DAYS.reduce((a,d)=>a+(d.actualPt!=null?d.actualPt:d.hours*(3600/(R.multi.song+54))*R.multi.pt)+d.auto+d.mys,0))} 億になる。<b>石よりも部屋待ちを作らないことが直接効く</b>`,
     `<b>オートの所要時間。</b>${P.auto.playsPerDay}回で ${R.auto.hoursForDay.toFixed(1)} 時間かかる。手動の稼働時間とは重ねられないので、就寝中に回す枠`,
-    `<b>マイセカイはLBを消費しない。</b>開幕の全回収は12分で61万Pt（実測）。以降は控えめに1回${fmt(R.mysekai.per/1e4)}万Ptで置いている`
+    `<b>🚧 マイセカイのLB消費が未計測。</b>全回収するには資材の回復にLBが要るはずで、その量が分かっていない。<b>下のLBの表と予算にはマイセカイぶんが入っていない</b>ので、実消費はここに書いてある数字より多くなる。開幕の全回収は12分で61万Pt（実測）、以降は控えめに1回${fmt(R.mysekai.per/1e4)}万Ptで置いている`
   ].map(s=>`<li>${s}</li>`).join('');
 
   document.getElementById('subline').innerHTML =
-    `event${P.event.id}「${P.event.title}」${P.event.part} ／ 2026-08-17 20:00 〜 08-27 20:00 JST ／ データ版 ${P.version}`;
+    `event${P.event.id}「${P.event.title}」${P.event.part} ／ 2026-08-17 20:00 〜 08-27 20:00 JST`
+    + (LIVE ? ` ／ <b>実測は ${LIVE.generatedAt.replace('T',' ').slice(0,16)} 時点</b>（観測 ${LIVE.border.length} 点）` : '')
+    + ` ／ 前提 ${P.version}`;
   document.getElementById('foot').innerHTML =
     `計算式の出典: AssistTools <code>efficiency.ts</code> / <code>calcLivePt.ts</code> / <code>overhead.ts</code>。`
     + `ボーダー実測: sekai.best API を sekai-border-tracker で10分間隔収集。`
     + `数値を変えるには <code>params.json</code> を編集する。`;
+}
+
+/* ===== ライブ帯：残り時間と現在のチャプター。1秒ごとに動く ===== */
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function renderLive(){
+  if(!P) return;
+  const now = new Date();
+  const t0 = new Date(P.event.startJst), t1 = new Date(P.event.endJst);
+  const left = Math.max(0, t1 - now);
+  const d = Math.floor(left/864e5), h = Math.floor(left/36e5)%24,
+        m = Math.floor(left/6e4)%60, s = Math.floor(left/1e3)%60;
+  const unit = (v,l)=>`<div class="unit"><span class="cv">${String(v).padStart(2,'0')}</span><span class="cl">${l}</span></div>`;
+  document.getElementById('clock').innerHTML =
+    `<div class="unit" style="min-width:auto"><span class="cl" style="margin:0 0 6px">
+       <span class="pulse"></span>終了まで</span></div>`
+    + unit(d,'DAYS') + `<span class="sep">:</span>` + unit(h,'HRS')
+    + `<span class="sep">:</span>` + unit(m,'MIN') + `<span class="sep">:</span>` + unit(s,'SEC');
+
+  const elapsedH = (now - t0)/36e5;
+  document.getElementById('chline').innerHTML = P.event.chapters.map((c,i)=>{
+    const st=i*48, en=(i+1)*48;
+    const state = elapsedH>=en ? 'done' : (elapsedH>=st ? 'now' : '');
+    const prog = Math.min(100, Math.max(0, (elapsedH-st)/48*100));
+    return `<div class="chip ${state}"><div class="cn">CH${c.n}</div><div class="cc">${c.chara}</div>
+      <div class="fill" style="width:${state==='done'?100:(state==='now'?prog:0)}%"></div></div>`;
+  }).join('');
+
+  const cur = P.event.chapters[Math.min(4, Math.max(0, Math.floor(elapsedH/48)))];
+  const chLeft = Math.max(0, (Math.floor(elapsedH/48)+1)*48 - elapsedH);
+  document.getElementById('livemeta').innerHTML =
+    `いま <b>ch${cur.n} ${cur.chara}</b><br>この章はあと <b>${chLeft.toFixed(1)}</b> 時間`
+    + (LIVE ? `<br>ボーダー実測 <b>${fmt(LIVE.latest.r100/1e4)}</b> 万Pt` : '');
+}
+
+/* 数字を数え上げる。派手さのためではなく、更新があったことを目で拾えるようにするため */
+function countUp(el, to, suffix='', dur=900){
+  if(REDUCED){ el.textContent = to.toFixed(2)+suffix; return; }
+  const t0=performance.now();
+  const step=t=>{
+    const k=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-k,3);
+    el.textContent=(to*e).toFixed(2)+suffix;
+    if(k<1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 
 function buildEditor(){
@@ -770,11 +921,13 @@ function applyEdits(){
   const saved=localStorage.getItem('wl214-theme'); if(saved) document.documentElement.dataset.theme=saved;
 
   DEFAULTS = await fetch('./params.json').then(r=>r.json());
+  LIVE = await fetch('./live.json?t='+Date.now()).then(r=>r.ok?r.json():null).catch(()=>null);
   const stored = localStorage.getItem(LSKEY);
   P = stored ? JSON.parse(stored) : JSON.parse(JSON.stringify(DEFAULTS));
   if(P.version !== DEFAULTS.version){ P = JSON.parse(JSON.stringify(DEFAULTS)); localStorage.removeItem(LSKEY); }
   const s = await loadSongs(P); SONGS = s.songs;
   buildEditor(); render();
+  renderLive(); setInterval(renderLive, 1000);
   document.querySelectorAll('section').forEach((el,i)=>{ el.classList.add('appear'); el.style.animationDelay=(i*45)+'ms'; });
 
   document.getElementById('apply').addEventListener('click',applyEdits);
@@ -786,7 +939,12 @@ function applyEdits(){
     const ta=document.getElementById('jsonout');
     ta.hidden=false; ta.value=JSON.stringify(P,null,1); ta.select();
   });
-  window.addEventListener('resize',()=>{ if(P) render(); });
+  let rt; let lastW = innerWidth;
+  window.addEventListener('resize',()=>{
+    if(innerWidth===lastW) return;      /* モバイルのスクロールで高さだけ変わるのは無視 */
+    lastW = innerWidth;
+    clearTimeout(rt); rt = setTimeout(()=>{ if(P) render(); }, 250);
+  });
 })();
 </script>
 </body>
