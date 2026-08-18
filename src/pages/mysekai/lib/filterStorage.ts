@@ -22,7 +22,7 @@ const VERSION = 1;
 const KINDS: ReactionKind[] = ["talk", "like"];
 const SORTS: SortKey[] = ["talks", "name", "cost", "size"];
 const PARTIES: PartyFilter[] = ["any", "solo", "group"];
-const OWNEDS: OwnedFilter[] = ["any", "owned", "unowned"];
+const OWNEDS: OwnedFilter[] = ["any", "owned", "unowned", "wish"];
 
 const bool = (v: unknown, fallback: boolean): boolean => (typeof v === "boolean" ? v : fallback);
 const numOrNull = (v: unknown): number | null =>

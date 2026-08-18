@@ -83,9 +83,10 @@ describe("filterStorage", () => {
 });
 
 describe("ownedStorage（進み具合）", () => {
-  const P = (owned: number[] = [], collected: string[] = []) => ({
+  const P = (owned: number[] = [], collected: string[] = [], wish: number[] = []) => ({
     owned: new Set(owned),
     collected: new Set(collected),
+    wish: new Set(wish),
   });
 
   it("持っている家具と、見た会話を別々に保存して読み戻せる", () => {
@@ -125,10 +126,28 @@ describe("ownedStorage（進み具合）", () => {
   });
 
   it("並びを揃えて保存する（書き出しの差分が読めるように）", () => {
-    saveProgress(P([5, 1, 3], ["2:9", "1:1"]));
+    saveProgress(P([5, 1, 3], ["2:9", "1:1"], [9, 2]));
     const raw = JSON.parse(localStorage.getItem(OWNED_STORAGE_KEY)!);
     expect(raw.ids).toEqual([1, 3, 5]);
     expect(raw.seen).toEqual(["1:1", "2:9"]);
+    expect(raw.wish).toEqual([2, 9]);
+  });
+
+  it("ほしいものリストを所持とは別に保存して読み戻せる", () => {
+    saveProgress(P([1], ["10:1"], [4, 7]));
+    const got = loadProgress();
+    expect([...got.owned]).toEqual([1]);
+    expect([...got.wish].sort((a, b) => a - b)).toEqual([4, 7]);
+  });
+
+  /** ★ v1.13 までの保存には wish が無い。読めずに全部消える、が起きないこと。 */
+  it("wish の無い古い保存を読んでも、所持と既読は生き残る", () => {
+    localStorage.setItem(OWNED_STORAGE_KEY,
+      JSON.stringify({ v: 1, ids: [1, 2], seen: ["10:1"] }));
+    const got = loadProgress();
+    expect([...got.owned].sort((a, b) => a - b)).toEqual([1, 2]);
+    expect([...got.collected]).toEqual(["10:1"]);
+    expect(got.wish.size).toBe(0);
   });
 });
 

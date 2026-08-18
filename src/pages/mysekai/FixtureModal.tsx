@@ -56,8 +56,10 @@ export function FixtureModal({
   charById,
   highlight,
   owned,
+  wished,
   collected,
   onToggleOwned,
+  onToggleWish,
   onToggleCollected,
   onToggleAll,
   highlightName,
@@ -67,8 +69,11 @@ export function FixtureModal({
   charById: (id: number) => MysekaiCharacter | undefined;
   highlight: number | null;
   owned: boolean;
+  /** 自分のほしいものリストに入れているか。 */
+  wished: boolean;
   collected: Set<string>;
   onToggleOwned: (id: number) => void;
+  onToggleWish: (id: number) => void;
   onToggleCollected: (key: string) => void;
   /** 顔ぶれが多い家具を1件ずつ押すのは辛いので、まとめて切り替える。対象は呼び出し側が渡す。 */
   onToggleAll: (f: Fixture, parties: number[][], mark: boolean) => void;
@@ -222,6 +227,23 @@ export function FixtureModal({
               {owned ? "check_circle" : "radio_button_unchecked"}
             </span>
             持っている
+          </button>
+          {/* ★ 持っていない家具は模写しに行くしかない。ここから直接
+              ほしいものリストへ入れられると、探している最中に溜められる。 */}
+          <button
+            type="button"
+            onClick={() => onToggleWish(fixture.id)}
+            aria-pressed={wished}
+            className={cn(
+              "flex min-h-11 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
+              wished ? "neu-selected" : "bg-neu text-slate-600 shadow-neu-sm neu-tactile"
+            )}
+          >
+            <span aria-hidden className="material-icons text-[18px] leading-none">
+              {wished ? "favorite" : "favorite_border"}
+            </span>
+            ほしい
           </button>
         </div>
 

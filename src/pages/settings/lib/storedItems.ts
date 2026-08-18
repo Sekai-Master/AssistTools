@@ -157,18 +157,24 @@ export const STORED_ITEMS: StoredItem[] = [
   {
     key: "sekaimaster:mysekai:owned:v1",
     label: "マイセカイ図鑑の進み具合",
-    note: "「マイセカイ リアクション図鑑」で印を付けた、持っている家具と見た会話",
+    note: "「マイセカイ リアクション図鑑」で印を付けた、持っている家具・見た会話・ほしいものリスト",
     summarize: (raw) => {
       try {
         const parsed: unknown = JSON.parse(raw);
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return BROKEN;
-        const { ids, seen } = parsed as { ids?: unknown; seen?: unknown };
-        // 家具と会話は別々に数える（片方だけ付けている状態が普通にある）。
+        const { ids, seen, wish } = parsed as { ids?: unknown; seen?: unknown; wish?: unknown };
+        // 家具・会話・ほしいものは別々に数える（どれか1つだけ付けている状態が普通にある）。
         const n = Array.isArray(ids) ? ids.length : 0;
         const m = Array.isArray(seen) ? seen.length : 0;
+        // ★ wish は v1.14 で足した。古い保存には無いので、無くても壊れ扱いにしない。
+        const w = Array.isArray(wish) ? wish.length : 0;
         if (!Array.isArray(ids) && !Array.isArray(seen)) return BROKEN;
-        if (n === 0 && m === 0) return null;
-        return [n > 0 ? `家具 ${n} 件` : null, m > 0 ? `会話 ${m} 件` : null]
+        if (n === 0 && m === 0 && w === 0) return null;
+        return [
+          n > 0 ? `家具 ${n} 件` : null,
+          m > 0 ? `会話 ${m} 件` : null,
+          w > 0 ? `ほしいもの ${w} 件` : null,
+        ]
           .filter(Boolean)
           .join(" / ");
       } catch {

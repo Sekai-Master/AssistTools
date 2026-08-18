@@ -20,6 +20,7 @@ import {
 import { loadFilter, saveFilter } from "./lib/filterStorage";
 import { FixtureModal } from "./FixtureModal";
 import { loadProgress, partyKey, saveProgress } from "./lib/ownedStorage";
+import { readWishFromUrl, wishUrl } from "./lib/wishlist";
 import { CHIP_SHADOW, chipBg } from "./lib/charaColor";
 import { thumbUrl } from "./lib/thumb";
 import {
@@ -51,6 +52,7 @@ const OWNED_OPTIONS: { value: OwnedFilter; label: string }[] = [
   { value: "any", label: "所持問わず" },
   { value: "owned", label: "持っている" },
   { value: "unowned", label: "持っていない" },
+  { value: "wish", label: "ほしい" },
 ];
 
 const PARTY_OPTIONS: { value: PartyFilter; label: string }[] = [
@@ -87,26 +89,43 @@ function SketchBadge({ sketch }: { sketch: boolean | null }) {
   );
 }
 
+/** 相手のリストに入っていて、自分が持っている＝置いてあげられる家具。 */
+function OfferBadge() {
+  return (
+    <span className="ml-1.5 inline-flex shrink-0 items-center rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+      置いてあげられる
+    </span>
+  );
+}
+
 function FixtureRow({
   fixture,
   charId,
   charById,
   owned,
+  wished,
+  wanted,
   seen,
   total,
   onOpen,
   onToggleOwned,
+  onToggleWish,
 }: {
   fixture: Fixture;
   charId: number | null;
   charById: (id: number) => MysekaiCharacter | undefined;
   owned: boolean;
+  /** 自分のほしいものリストに入れているか。 */
+  wished: boolean;
+  /** 共有リンクで渡された相手のリストに入っているか。 */
+  wanted: boolean;
   /** 見た顔ぶれの数。分母(total)と必ず同じ単位で渡すこと。 */
   seen: number;
   /** 回収の分母。キャラを選んでいればその人が出る顔ぶれの数。 */
   total: number;
   onOpen: (f: Fixture) => void;
   onToggleOwned: (id: number) => void;
+  onToggleWish: (id: number) => void;
 }) {
   // ★ 表示する本数は**選んだ人のぶん**。家具の総数を出すと実数の19倍になる。
   const talks = talksOf(fixture, charId);
@@ -246,6 +265,7 @@ function FixtureRow({
             )}
           </span>
           <SketchBadge sketch={fixture.sketch} />
+          {wanted && owned && <OfferBadge />}
         </span>
       </button>
 
@@ -266,6 +286,25 @@ function FixtureRow({
           {owned ? "inventory_2" : "add"}
         </span>
         <span className="sr-only">{fixture.name} を持っている</span>
+      </button>
+
+      {/* ★ ほしいもの印。持っていない家具は他人のセカイへ模写しに行くしかないので、
+          「どれが要るか」を相手に渡せる形で溜める場所が要る。 */}
+      <button
+        type="button"
+        onClick={() => onToggleWish(fixture.id)}
+        aria-pressed={wished}
+        title={wished ? "ほしいものリストに入れている（押すと外す）" : "ほしいものリストに入れる"}
+        className={cn(
+          "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
+          wished ? "neu-selected" : "bg-neu text-slate-400 shadow-neu-sm neu-tactile"
+        )}
+      >
+        <span aria-hidden className="material-icons text-[20px] leading-none">
+          {wished ? "favorite" : "favorite_border"}
+        </span>
+        <span className="sr-only">{fixture.name} をほしいものリストに入れる</span>
       </button>
     </li>
   );
@@ -294,7 +333,20 @@ export default function MysekaiReactions() {
    * 別物なので分けて持つ（持っていても全部見たとは限らない）。
    */
   const [progress, setProgress] = useState(loadProgress);
-  const { owned, collected } = progress;
+  const { owned, collected, wish } = progress;
+  /**
+   * 共有リンクで渡された「相手のほしいものリスト」。
+   * ★ URL にしか無い（サーバにも端末にも保存しない）。読み取りは一度だけ。
+   */
+  const [shared] = useState<Set<number>>(() =>
+    typeof window === "undefined" ? new Set() : readWishFromUrl(window.location.search)
+  );
+  /** 共有リストのうち、自分が持っているもの＝**置いてあげられるもの**。 */
+  const canOffer = useMemo(
+    () => [...shared].filter((id) => owned.has(id)),
+    [shared, owned]
+  );
+  const [copied, setCopied] = useState(false);
   /** 詳細を開いている家具。null なら閉じている。 */
   const [openFixture, setOpenFixture] = useState<Fixture | null>(null);
 
@@ -310,6 +362,14 @@ export default function MysekaiReactions() {
       const next = new Set(prev.owned);
       if (!next.delete(id)) next.add(id);
       return { ...prev, owned: next };
+    });
+  }, []);
+
+  const toggleWish = useCallback((id: number) => {
+    setProgress((prev) => {
+      const next = new Set(prev.wish);
+      if (!next.delete(id)) next.add(id);
+      return { ...prev, wish: next };
     });
   }, []);
 
@@ -373,8 +433,8 @@ export default function MysekaiReactions() {
   }, [data, filter]);
 
   const list = useMemo(
-    () => (data ? applyFilter(data.fixtures, effectiveFilter, owned) : []),
-    [data, effectiveFilter, owned]
+    () => (data ? applyFilter(data.fixtures, effectiveFilter, owned, wish) : []),
+    [data, effectiveFilter, owned, wish]
   );
 
   const selectedChar: MysekaiCharacter | undefined = data?.characters.find(
@@ -480,6 +540,101 @@ export default function MysekaiReactions() {
           )}
         </div>
       </Panel>
+
+      {/* ★★ 共有リンクで開かれたとき。★★
+          相手が「これがほしい」と渡してきたリストを、こちらの所持と突き合わせる。
+          **置いてあげられるものが分かって初めて意味がある**ので、そこを主役にする。 */}
+      {shared.size > 0 && (
+        <Panel title="受け取ったほしいものリスト">
+          <p className="text-sm leading-relaxed text-slate-600">
+            <b>{shared.size}件</b>のリストを受け取りました。そのうち
+            <b className="text-[color:var(--unit-color)]"> あなたが持っているのは {canOffer.length}件</b>です。
+            {canOffer.length > 0 ? (
+              <>
+                {" "}
+                これをマイセカイに置いておけば、相手が来て模写できます。
+                一覧では<b>「置いてあげられる」</b>の印が付いています。
+              </>
+            ) : (
+              <> 残念ながら、いま置いてあげられるものはありません。</>
+            )}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <NeuButton
+              onClick={() =>
+                setFilter((f) => ({ ...f, owned: "any", reactiveOnly: false, charId: null, kinds: [] }))
+              }
+              className="min-h-11 px-3 py-1.5"
+            >
+              条件を外して全部見る
+            </NeuButton>
+            <NeuButton
+              onClick={() => {
+                const u = new URL(window.location.href);
+                u.searchParams.delete("wish");
+                window.location.replace(u.toString());
+              }}
+              className="min-h-11 px-3 py-1.5"
+            >
+              リストを閉じる
+            </NeuButton>
+          </div>
+          <p className="mt-3 text-xs leading-relaxed text-slate-500">
+            このリストは<b>URL にだけ入っています</b>。サイトには保存されないので、
+            リンクを閉じれば消えます。<b>あなたの所持や進み具合は相手に伝わりません。</b>
+          </p>
+        </Panel>
+      )}
+
+      {/* ★ 自分のほしいものリストを渡す。持っていない家具は他人のセカイに
+          行って模写するしかないので、「何が要るか」を伝えられないと始まらない。 */}
+      {wish.size > 0 && (
+        <Panel title="ほしいものリストを渡す">
+          <p className="text-sm leading-relaxed text-slate-600">
+            <b>{wish.size}件</b>を入れています。リンクを渡すと、相手の画面で
+            <b>「自分が持っていて、あなたが欲しいもの」</b>に印が付きます。
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <NeuButton
+              onClick={async () => {
+                const u = wishUrl(wish, window.location.origin + window.location.pathname);
+                if (!u) return;
+                try {
+                  await navigator.clipboard.writeText(u);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2600);
+                } catch {
+                  // クリップボードが使えない環境では、選べる形で出す
+                  window.prompt("このリンクをコピーしてください", u);
+                }
+              }}
+              className="min-h-11 px-3 py-1.5"
+            >
+              {copied ? "コピーしました" : "共有リンクをコピー"}
+            </NeuButton>
+            <NeuButton
+              onClick={() => setFilter((f) => ({ ...f, owned: "wish", reactiveOnly: false }))}
+              className="min-h-11 px-3 py-1.5"
+            >
+              入れたものだけ見る
+            </NeuButton>
+            <NeuButton
+              onClick={() => {
+                if (window.confirm("ほしいものリストを空にします。よろしいですか。")) {
+                  setProgress((prev) => ({ ...prev, wish: new Set() }));
+                }
+              }}
+              className="min-h-11 px-3 py-1.5"
+            >
+              空にする
+            </NeuButton>
+          </div>
+          <p className="mt-3 text-xs leading-relaxed text-slate-500">
+            リンクには<b>ほしいものだけ</b>が入ります。持っている家具・見た会話・絞り込みの設定は
+            <b>一切含まれません</b>。サーバにも保存されないので、リンクを渡した相手以外には見えません。
+          </p>
+        </Panel>
+      )}
 
       <Panel title="条件">
         <div className="space-y-4">
@@ -662,6 +817,8 @@ export default function MysekaiReactions() {
                   charId={effectiveFilter.charId}
                   charById={charById}
                   owned={owned.has(f.id)}
+                  wished={wish.has(f.id)}
+                  wanted={shared.has(f.id)}
                   seen={
                     collected.size === 0
                       ? 0
@@ -671,6 +828,7 @@ export default function MysekaiReactions() {
                         )
                   }
                   total={partiesOf(f, effectiveFilter.charId).length}
+                  onToggleWish={toggleWish}
                   onOpen={setOpenFixture}
                   onToggleOwned={toggleOwned}
                 />
@@ -709,6 +867,8 @@ export default function MysekaiReactions() {
           charById={charById}
           highlight={effectiveFilter.charId}
           owned={owned.has(openFixture.id)}
+          wished={wish.has(openFixture.id)}
+          onToggleWish={toggleWish}
           collected={collected}
           onToggleOwned={toggleOwned}
           onToggleCollected={toggleCollected}

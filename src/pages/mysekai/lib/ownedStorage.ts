@@ -3,6 +3,7 @@
  *
  * - `owned`     … その家具の設計図を**持っている**（家具単位）。模写しに行く候補から外すため
  * - `collected` … その顔ぶれの会話を**見た**（家具×顔ぶれ単位）。会話の回収管理のため
+ * - `wish`      … **ほしい**（家具単位）。他人に「これを置いてほしい」と渡すためのリスト
  *
  * 別物なので混ぜない。設計図を持っていても会話を全部見たとは限らないし、
  * 会話を見たからといって自分が設計図を持っているとも限らない（他人のセカイで見た場合）。
@@ -18,6 +19,12 @@ export interface Progress {
   owned: Set<number>;
   /** 会話を見た顔ぶれ。キーは partyKey() で作る。 */
   collected: Set<string>;
+  /**
+   * ほしい家具のID。
+   * ★ 「持っていない」の全部ではなく、**選んだものだけ**。
+   *   持っていない家具は1000件以上あるので、そのまま渡されても相手は困る。
+   */
+  wish: Set<number>;
 }
 
 /**
@@ -46,16 +53,18 @@ const strSet = (v: unknown): Set<string> =>
 export function loadProgress(): Progress {
   try {
     const raw = localStorage.getItem(OWNED_STORAGE_KEY);
-    if (!raw) return { owned: new Set(), collected: new Set() };
+    if (!raw) return { owned: new Set(), collected: new Set(), wish: new Set() };
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return { owned: new Set(), collected: new Set() };
+      return { owned: new Set(), collected: new Set(), wish: new Set() };
     }
-    const o = parsed as { v?: unknown; ids?: unknown; seen?: unknown };
-    if (o.v !== VERSION) return { owned: new Set(), collected: new Set() };
-    return { owned: intSet(o.ids), collected: strSet(o.seen) };
+    const o = parsed as { v?: unknown; ids?: unknown; seen?: unknown; wish?: unknown };
+    if (o.v !== VERSION) return { owned: new Set(), collected: new Set(), wish: new Set() };
+    // ★ wish は v1.14 で足した。古い保存には無いので、欠けていても空として読む
+    //   （バージョンを上げると既存の所持・既読が全部消えるので上げない）。
+    return { owned: intSet(o.ids), collected: strSet(o.seen), wish: intSet(o.wish) };
   } catch {
-    return { owned: new Set(), collected: new Set() };
+    return { owned: new Set(), collected: new Set(), wish: new Set() };
   }
 }
 
@@ -64,7 +73,8 @@ export function saveProgress(p: Progress): void {
     // 並びを固定しておくと、書き出し・取り込みの差分が読める。
     const ids = [...p.owned].sort((a, b) => a - b);
     const seen = [...p.collected].sort();
-    localStorage.setItem(OWNED_STORAGE_KEY, JSON.stringify({ v: VERSION, ids, seen }));
+    const wish = [...p.wish].sort((a, b) => a - b);
+    localStorage.setItem(OWNED_STORAGE_KEY, JSON.stringify({ v: VERSION, ids, seen, wish }));
   } catch {
     // 保存できなくても操作は続けられる（プライベートモード等）。
   }
