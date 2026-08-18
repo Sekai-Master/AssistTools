@@ -1,0 +1,793 @@
+<!doctype html>
+<html lang="ja" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>WL3 Part5 総合ラン アナライズ — SekaiMaster</title>
+<meta name="description" content="event214 ワールドリンク Part5 の総合ランキング分析。周回・オート・マイセカイの積み上げと推定ボーダー。">
+<style>
+:root{
+  color-scheme: light;
+  --bg:#f4f4f1; --surface:#fcfcfb; --surface-2:#f0f0ec; --line:#e2e1db; --line-strong:#cfcec6;
+  --ink:#0b0b0b; --ink-2:#52514e; --ink-3:#84837c;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --good:#0f7a4d; --warn:#a5680a; --bad:#c0392f;
+  --grid:#e8e7e1; --band:#2a78d61a;
+  --radius:14px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --bg:#121211; --surface:#1a1a19; --surface-2:#212120; --line:#2f2f2c; --line-strong:#414038;
+    --ink:#ffffff; --ink-2:#c3c2b7; --ink-3:#8d8c83;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --good:#3fa876; --warn:#d0a03c; --bad:#e66767;
+    --grid:#282826; --band:#3987e526;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#121211; --surface:#1a1a19; --surface-2:#212120; --line:#2f2f2c; --line-strong:#414038;
+  --ink:#ffffff; --ink-2:#c3c2b7; --ink-3:#8d8c83;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --good:#3fa876; --warn:#d0a03c; --bad:#e66767;
+  --grid:#282826; --band:#3987e526;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--sans);
+  font-size:15px; line-height:1.7; -webkit-font-smoothing:antialiased;
+  font-feature-settings:"palt" 1;
+}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px 96px}
+a{color:var(--s1)}
+.num{font-variant-numeric:tabular-nums;letter-spacing:-0.01em}
+
+/* ---------- header ---------- */
+header.top{padding:44px 0 28px;border-bottom:1px solid var(--line);margin-bottom:32px;position:relative}
+.eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin:0 0 10px}
+h1{font-size:clamp(26px,4.2vw,40px);line-height:1.22;margin:0 0 10px;letter-spacing:-0.02em;font-weight:680}
+.sub{color:var(--ink-2);margin:0;font-size:14px}
+.themebtn{position:absolute;top:44px;right:0;background:var(--surface);border:1px solid var(--line);
+  color:var(--ink-2);border-radius:999px;padding:6px 14px;font-size:12px;cursor:pointer;
+  transition:border-color .18s ease, color .18s ease}
+.themebtn:hover{border-color:var(--line-strong);color:var(--ink)}
+
+/* ---------- layout ---------- */
+section{margin:0 0 44px}
+h2{font-size:13px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);
+  margin:0 0 4px;font-weight:640}
+.lede{color:var(--ink-2);font-size:14px;margin:0 0 18px;max-width:70ch}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+.grid{display:grid;gap:14px}
+@media(min-width:760px){ .g3{grid-template-columns:repeat(3,1fr)} .g2{grid-template-columns:1fr 1fr} }
+
+/* ---------- hero tiles ---------- */
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;
+  position:relative;overflow:hidden}
+.tile .k{font-size:12px;color:var(--ink-3);margin:0 0 6px;letter-spacing:.04em}
+.tile .v{font-size:clamp(30px,5.2vw,44px);font-weight:700;letter-spacing:-0.03em;line-height:1.05;margin:0}
+.tile .v small{font-size:.44em;font-weight:600;letter-spacing:0;margin-left:3px;color:var(--ink-2)}
+.tile .n{font-size:12.5px;color:var(--ink-2);margin:8px 0 0}
+.tile.accent::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--s1)}
+.tile.okline::before{background:var(--good)}
+.pill{display:inline-block;font-size:11.5px;padding:2px 9px;border-radius:999px;
+  border:1px solid currentColor;line-height:1.6}
+.pill.ok{color:var(--good)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)}
+
+/* ---------- rate cards ---------- */
+.rate{display:flex;flex-direction:column;gap:2px}
+.rate .head{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+.dot{width:11px;height:11px;border-radius:3px;flex:none}
+.rate .name{font-weight:660;font-size:15px}
+.rate .song{font-size:12px;color:var(--ink-3);margin-left:auto;text-align:right}
+.rate .big{font-size:30px;font-weight:700;letter-spacing:-0.025em;line-height:1.15}
+.rate .big small{font-size:13px;font-weight:500;color:var(--ink-2);margin-left:4px;letter-spacing:0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 14px;margin-top:14px;
+  padding-top:13px;border-top:1px solid var(--line);font-size:12.5px}
+.kv dt{color:var(--ink-3)} .kv dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.formula{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:12px;line-height:1.6;
+  word-break:break-all}
+
+/* ---------- charts ---------- */
+.chartcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px 20px 12px;position:relative}
+.charthead{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 16px;margin-bottom:14px}
+.charttitle{font-weight:650;font-size:14.5px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-left:auto;font-size:12px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.svgwrap{overflow-x:auto;overflow-y:hidden}
+svg{display:block}
+svg text{font-family:var(--sans);fill:var(--ink-2)}
+.axis{font-size:11px;fill:var(--ink-3)}
+.gridline{stroke:var(--grid);stroke-width:1}
+.zeroline{stroke:var(--line-strong);stroke-width:1}
+.seg{transition:opacity .15s ease}
+.dim{opacity:.32}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line-strong);
+  border-radius:9px;padding:9px 12px;font-size:12.5px;box-shadow:0 6px 22px rgba(0,0,0,.13);
+  opacity:0;transition:opacity .12s ease;z-index:20;min-width:160px}
+.tip.on{opacity:1}
+.tip .t{font-weight:660;margin-bottom:5px}
+.tip .r{display:flex;justify-content:space-between;gap:16px;font-variant-numeric:tabular-nums}
+.tip .r i{font-style:normal;color:var(--ink-2);display:inline-flex;align-items:center;gap:6px}
+
+/* ---------- table ---------- */
+table{width:100%;min-width:600px;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+#daytable{min-width:780px}
+th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+thead th{font-size:11.5px;letter-spacing:.05em;color:var(--ink-3);font-weight:600;
+  border-bottom:1px solid var(--line-strong)}
+tbody tr:hover{background:var(--surface-2)}
+tfoot td{font-weight:680;border-top:1px solid var(--line-strong);border-bottom:none}
+.ch1{color:var(--ink-3);font-size:11.5px}
+
+/* ---------- editor ---------- */
+details.editor{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:0;overflow:hidden}
+details.editor>summary{padding:16px 20px;cursor:pointer;font-weight:640;font-size:14px;
+  list-style:none;display:flex;align-items:center;gap:10px;transition:background .15s ease}
+details.editor>summary:hover{background:var(--surface-2)}
+details.editor>summary::-webkit-details-marker{display:none}
+details.editor>summary::before{content:"▸";color:var(--ink-3);transition:transform .2s ease;display:inline-block}
+details.editor[open]>summary::before{transform:rotate(90deg)}
+.editbody{padding:4px 20px 20px;border-top:1px solid var(--line)}
+.fields{display:grid;gap:12px 18px;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));margin:16px 0}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-3)}
+input,select{font:inherit;font-size:14px;background:var(--surface-2);color:var(--ink);
+  border:1px solid var(--line-strong);border-radius:9px;padding:8px 10px;width:100%;
+  font-variant-numeric:tabular-nums;transition:border-color .15s ease}
+input:focus,select:focus{outline:none;border-color:var(--s1)}
+.hoursgrid{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));margin-top:6px}
+.hoursgrid label.f input{padding:6px 8px}
+.btnrow{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+button.act{font:inherit;font-size:13px;background:var(--surface-2);color:var(--ink);
+  border:1px solid var(--line-strong);border-radius:9px;padding:8px 16px;cursor:pointer;
+  transition:border-color .15s ease,background .15s ease}
+button.act:hover{border-color:var(--s1);background:var(--surface)}
+button.act.primary{background:var(--s1);border-color:var(--s1);color:#fff}
+button.act.primary:hover{filter:brightness(1.07)}
+textarea{width:100%;min-height:150px;font-family:var(--mono);font-size:11.5px;background:var(--surface-2);
+  color:var(--ink-2);border:1px solid var(--line);border-radius:9px;padding:12px;margin-top:12px;resize:vertical}
+
+/* ---------- notes ---------- */
+.notes{font-size:12.5px;color:var(--ink-2);line-height:1.85}
+.notes li{margin-bottom:7px}
+.notes code{font-family:var(--mono);font-size:11.5px;background:var(--surface-2);padding:1px 5px;border-radius:4px}
+footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-size:12px;color:var(--ink-3)}
+.status{font-size:12px;color:var(--ink-3);margin-top:10px}
+@media (prefers-reduced-motion: reduce){*{transition:none !important;animation:none !important}}
+.appear{animation:rise .5s cubic-bezier(.2,.7,.3,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <button class="themebtn" id="themebtn" type="button">テーマ</button>
+  <p class="eyebrow">SekaiMaster / event214 analysis</p>
+  <h1>ワールドリンク Part5<br>総合ラン アナライズ</h1>
+  <p class="sub" id="subline">読み込み中…</p>
+</header>
+
+<section id="hero">
+  <div class="grid g3" id="tiles"></div>
+  <p class="status" id="verdict"></p>
+</section>
+
+<section>
+  <h2>収入の3本柱</h2>
+  <p class="lede">単価は編成から計算している。楽曲データは SekaiMaster と同じ <code>/MusicDatas/</code> を読み、丸めは <code>calcLivePt</code> と同じ手順。編成を書き換えれば全部の数字が動く。</p>
+  <div class="grid g3" id="rates"></div>
+</section>
+
+<section>
+  <h2>日別の積み上げ</h2>
+  <p class="lede">稼働時間そのものと、そこから生まれるPt。オートとマイセカイは稼働時間に依存しないので、手が空いている日ほど比率が上がる。</p>
+  <div class="chartcard">
+    <div class="charthead">
+      <span class="charttitle">1日あたりの獲得Pt</span>
+      <span class="legend" id="legend1"></span>
+    </div>
+    <div class="svgwrap"><svg id="chart1" role="img" aria-label="日別の獲得ポイント積み上げグラフ"></svg></div>
+    <div class="tip" id="tip1"></div>
+  </div>
+  <div style="height:14px"></div>
+  <div class="chartcard">
+    <div class="charthead"><span class="charttitle">手動の稼働時間</span>
+      <span class="legend"><span>合計 <b id="totalhours" class="num"></b> 時間</span></span></div>
+    <div class="svgwrap"><svg id="chart2" role="img" aria-label="日別の稼働時間"></svg></div>
+    <div class="tip" id="tip2"></div>
+  </div>
+</section>
+
+<section>
+  <h2>累積と推定ボーダー</h2>
+  <p class="lede">灰色の帯が総合100位ボーダーの推定レンジ。前半で置いていかれるのは72時間組がボーダーを吊り上げているためで、設計どおり。交差する位置がこのランの勝敗ライン。</p>
+  <div class="chartcard">
+    <div class="charthead"><span class="charttitle">累積Pt の推移</span>
+      <span class="legend" id="legend3"></span></div>
+    <div class="svgwrap"><svg id="chart3" role="img" aria-label="累積ポイントと推定ボーダーの推移"></svg></div>
+    <div class="tip" id="tip3"></div>
+  </div>
+</section>
+
+<section>
+  <h2>ライブボーナスの予算</h2>
+  <p class="lede">手動は時間律速なので10炊きを落とせない。余剰の投入先はオートの焚き上げ。1〜5炊きは5.0倍/LB、6炊き以降の追加分は2.0倍/LBなので、<b>オートの5炊きぶんは手動の焚き上げより石効率が良い</b>。</p>
+  <div class="chartcard">
+    <div class="charthead"><span class="charttitle">消費LBと予算</span><span class="legend" id="legend4"></span></div>
+    <div class="svgwrap"><svg id="chart4" role="img" aria-label="ライブボーナスの消費と予算"></svg></div>
+    <div class="tip" id="tip4"></div>
+  </div>
+  <div style="height:14px"></div>
+  <div class="card"><div class="svgwrap"><table id="lbtable"></table></div></div>
+</section>
+
+<section>
+  <h2>チャプター別の配分</h2>
+  <p class="lede">稼働ブロックが日付をまたぐので、チャプター境界で割り直したもの。総合だけを狙うなら本命集中は不要で、この配分で問題ない。</p>
+  <div class="card"><div class="svgwrap"><table id="chaptable"></table></div></div>
+</section>
+
+<section>
+  <h2>日別の内訳（表）</h2>
+  <div class="card"><div class="svgwrap"><table id="daytable"></table></div></div>
+</section>
+
+<section>
+  <details class="editor" id="editor">
+    <summary>数値を書き換える</summary>
+    <div class="editbody">
+      <p class="lede" style="margin-top:14px">変更はこのブラウザにだけ保存される（他の人には影響しない）。確定させたいときは「JSONを出力」して <code>params.json</code> を差し替える。</p>
+      <div class="fields" id="fields"></div>
+      <div style="font-size:12px;color:var(--ink-3);margin-top:6px">各日の手動稼働時間</div>
+      <div class="hoursgrid" id="hoursgrid"></div>
+      <div class="btnrow">
+        <button class="act primary" id="apply" type="button">再計算</button>
+        <button class="act" id="reset" type="button">既定に戻す</button>
+        <button class="act" id="dump" type="button">JSONを出力</button>
+      </div>
+      <textarea id="jsonout" hidden readonly></textarea>
+    </div>
+  </details>
+</section>
+
+<section>
+  <h2>前提と出典</h2>
+  <div class="card">
+    <ul class="notes" id="notes"></ul>
+  </div>
+</section>
+
+<footer>
+  <div id="foot"></div>
+</footer>
+</div>
+
+<script>
+/* =========================================================================
+   計算部。式の出典は AssistTools:
+     src/pages/ranking/lib/efficiency.ts  … スコア式・イベントPt係数
+     src/pages/analyzer/lib/calcLivePt.ts … 丸めの作法
+     src/lib/overhead.ts                  … 1プレイの曲以外の秒数
+   ========================================================================= */
+const LB_MULT = {0:1,1:5,2:10,3:15,4:20,5:25,6:27,7:29,8:31,9:33,10:35};
+
+/* 楽曲データが取れなかったときの埋め込みフォールバック（対象2曲だけ） */
+const FALLBACK = {"74":{"master":{"baseScore":1.13309,"feverScore":0.140221,"skillScoreMulti":[0.073695,0.064296,0.070625,0.082429,0.069849,0.128681],"baseScoreAuto":0.7735,"skillScoreAuto":[0.051586,0.044845,0.048948,0.056569,0.047483,0.057741],"playLevel":26,"noteCount":589},"title":"独りんぼエンヴィー","event_rate":100,"music_time":74.8},"186":{"master":{"baseScore":1.226808,"feverScore":0.156391,"skillScoreMulti":[0.018903,0.030565,0.045559,0.023581,0.070534,0.049961],"baseScoreAuto":0.798,"skillScoreAuto":[0.013047,0.020572,0.029834,0.015006,0.029923,0.031794],"playLevel":33,"noteCount":2021},"title":"初音天地開闢神話","event_rate":130,"music_time":182.4}};
+
+const fmt = n => Math.round(n).toLocaleString('ja-JP');
+const oku  = n => (n/1e8).toFixed(2);
+const man  = n => (n/1e4).toFixed(0);
+const pct  = n => (n*100).toFixed(1);
+
+/** calcLivePt と同じ丸め。coef はイベントPt係数。 */
+function calcPt(coef, eventRate, bonusPct, lb){
+  const num = coef * (Math.round(bonusPct*100) + 10000);
+  const step2x10 = Math.floor(num/1000);
+  const step3 = Math.floor(step2x10*eventRate/1000);
+  return step3 * (LB_MULT[lb] ?? 1);
+}
+
+function computeRates(P, songs){
+  const talent = P.runner.talentMan * 10000;
+  const eff = P.runner.lead + (P.runner.inner - P.runner.lead) * 0.2;
+  const avgCard = P.runner.inner / 5;
+  const sup = P.support.effective;
+  const empty = P.support.emptySlots || 0;
+
+  /* ---- 手動（協力ライブ）----
+     走者は1〜5枠のどれかに等確率で入る。残り4枠とアンコール枠は支援者。
+     空き枠はついぼ（実効値150と仮定）で埋まる。 */
+  const mid = P.songs.multi.musicId, mdif = P.songs.multi.difficulty;
+  const md = songs[mid][mdif], mmeta = songs[mid];
+  const TSUIBO = 150;
+  const others = Array.from({length:4}, (_,i) => i < 4-empty ? sup : TSUIBO);
+  const e15 = (eff + others.reduce((a,b)=>a+b,0)) / 5;
+  const enc = (P.support.encoreBySupport && empty < 4) ? sup : TSUIBO;
+  let rateM = md.baseScore + md.feverScore*0.5;
+  for(let i=0;i<5;i++) rateM += e15 * md.skillScoreMulti[i] / 100;
+  rateM += enc * md.skillScoreMulti[5] / 100;
+  const scoreM = Math.floor(rateM * talent * 4);
+  const coefM = 110 + Math.floor(scoreM/17000) + 13;   /* 他4人合計は上限13に到達している前提 */
+  const cycleM = mmeta.music_time + P.overheadSec.multi;
+  const ptM = calcPt(coefM, mmeta.event_rate, P.runner.bonusPct, P.boost.multi);
+
+  /* ---- オート（ソロ）----
+     5枚が1回ずつ＋リーダーがもう1回。内部値を5で割った平均を全枠に置く。 */
+  const aid = P.songs.auto.musicId, adif = P.songs.auto.difficulty;
+  const ad = songs[aid][adif], ameta = songs[aid];
+  let rateA = ad.baseScoreAuto;
+  for(let i=0;i<6;i++) rateA += avgCard * ad.skillScoreAuto[i] / 100;
+  const scoreA = Math.floor(rateA * talent * 4);
+  const coefA = 100 + Math.floor(scoreA/20000);
+  const cycleA = ameta.music_time + P.overheadSec.auto;
+  const ptA = calcPt(coefA, ameta.event_rate, P.runner.bonusPct, P.boost.auto);
+  const ptA10 = calcPt(coefA, ameta.event_rate, P.runner.bonusPct, 10);
+
+  return {
+    eff, avgCard,
+    multi:{title:mmeta.title, score:scoreM, coef:coefM, cycle:cycleM,
+           perHour:3600/cycleM, pt:ptM, ptPerLb:ptM/P.boost.multi,
+           base:mmeta.event_rate, song:mmeta.music_time, lb:P.boost.multi},
+    auto:{ title:ameta.title, score:scoreA, coef:coefA, cycle:cycleA,
+           pt:ptA, pt10:ptA10, ptPerLb:ptA/P.boost.auto, hoursForDay:P.auto.playsPerDay*cycleA/3600,
+           base:ameta.event_rate, song:ameta.music_time, lb:P.boost.auto},
+    mysekai:{ perDay:P.mysekai.perHarvestPt*P.mysekai.harvestsPerDay,
+              per:P.mysekai.perHarvestPt, times:P.mysekai.harvestsPerDay, opening:P.mysekai.openingPt }
+  };
+}
+
+function buildDays(P, R){
+  let cum = 0;
+  return P.schedule.map((d,i) => {
+    const manual = (d.actualPt != null) ? d.actualPt : d.hours * R.multi.perHour * R.multi.pt;
+    const autoPlays = (d.autoPlays != null) ? d.autoPlays : (i===0 ? 0 : P.auto.playsPerDay);
+    const auto = autoPlays * R.auto.pt;
+    const mys  = (d.mysekaiPt != null) ? d.mysekaiPt : (i===0 ? R.mysekai.opening : R.mysekai.perDay);
+    const total = manual + auto + mys;
+    cum += total;
+    const plays = (d.actualPt != null) ? Math.round(d.actualPt / R.multi.pt) : d.hours * R.multi.perHour;
+    return {...d, manual, auto, mys, total, cum, plays, autoPlays,
+            lbManual: plays * P.boost.multi, lbAuto: autoPlays * P.boost.auto};
+  });
+}
+
+function shareAt(curve, h){
+  if(h <= curve[0][0]) return curve[0];
+  for(let i=1;i<curve.length;i++){
+    if(curve[i][0] >= h){
+      const [ha,ma,la,ua] = curve[i-1], [hb,mb,lb2,ub] = curve[i];
+      const f = (h-ha)/(hb-ha);
+      return [h, ma+f*(mb-ma), la+f*(lb2-la), ua+f*(ub-ua)];
+    }
+  }
+  return curve[curve.length-1];
+}
+
+/* ===================== 描画 ===================== */
+const SV='http://www.w3.org/2000/svg';
+const el=(t,a={})=>{const e=document.createElementNS(SV,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+function tipShow(tip, host, x, y, html){
+  tip.innerHTML = html; tip.classList.add('on');
+  const r = host.getBoundingClientRect(), tr = tip.getBoundingClientRect();
+  let left = x + 14; if(left + tr.width > r.width - 8) left = x - tr.width - 14;
+  tip.style.left = Math.max(6,left)+'px';
+  tip.style.top  = Math.min(Math.max(6,y-tr.height/2), r.height-tr.height-6)+'px';
+}
+const tipHide = tip => tip.classList.remove('on');
+
+function stackedChart(svg, tipEl, days, R){
+  const host = svg.closest('.chartcard');
+  const W = Math.max(640, days.length*74), H = 300;
+  const m = {t:14,r:16,b:36,l:60};
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width',W); svg.setAttribute('height',H);
+  svg.innerHTML='';
+  const max = Math.max(...days.map(d=>d.total))*1.12;
+  const iw = W-m.l-m.r, ih = H-m.t-m.b;
+  const x = i => m.l + iw*(i+0.5)/days.length;
+  const y = v => m.t + ih*(1 - v/max);
+  const bw = Math.min(38, iw/days.length*0.62);
+
+  for(let k=0;k<=4;k++){
+    const v = max*k/4;
+    svg.appendChild(el('line',{x1:m.l,x2:W-m.r,y1:y(v),y2:y(v),class:k?'gridline':'zeroline'}));
+    const t = el('text',{x:m.l-9,y:y(v)+4,'text-anchor':'end',class:'axis'});
+    t.textContent = k? (v/1e6).toFixed(0)+'M' : '0'; svg.appendChild(t);
+  }
+  const series = [['manual','周回','--s1'],['auto','オート','--s2'],['mys','マイセカイ','--s3']];
+  days.forEach((d,i)=>{
+    let acc = 0;
+    const g = el('g',{});
+    series.forEach(([key,label,c])=>{
+      const v = d[key]; if(v<=0){acc+=v;return;}
+      const y0 = y(acc), y1 = y(acc+v);
+      const h = Math.max(1, y0-y1-2);   /* 2px の隙間 */
+      const rect = el('rect',{x:x(i)-bw/2, y:y1, width:bw, height:h, rx:3, fill:css(c), class:'seg'});
+      g.appendChild(rect); acc += v;
+    });
+    const hit = el('rect',{x:x(i)-bw/2-6, y:m.t, width:bw+12, height:ih, fill:'transparent', style:'cursor:pointer'});
+    hit.addEventListener('pointerenter', ev=>{
+      svg.querySelectorAll('.seg').forEach(s=>s.classList.add('dim'));
+      g.querySelectorAll('.seg').forEach(s=>s.classList.remove('dim'));
+      const rows = series.map(([k,l,c])=>`<div class="r"><i><span class="dot" style="background:${css(c)}"></span>${l}</i><b>${fmt(d[k]/1e4)}万</b></div>`).join('');
+      const rect = host.getBoundingClientRect();
+      tipShow(tipEl, host, ev.clientX-rect.left, ev.clientY-rect.top,
+        `<div class="t">${d.label}(${d.dow}) ${d.blocks||''}</div>${rows}
+         <div class="r" style="margin-top:5px;padding-top:5px;border-top:1px solid var(--line)"><i>合計</i><b>${fmt(d.total/1e4)}万</b></div>
+         <div class="r"><i>累積</i><b>${oku(d.cum)}億</b></div>`);
+    });
+    hit.addEventListener('pointerleave', ()=>{ svg.querySelectorAll('.seg').forEach(s=>s.classList.remove('dim')); tipHide(tipEl); });
+    svg.appendChild(g); svg.appendChild(hit);
+    const lab = el('text',{x:x(i), y:H-14,'text-anchor':'middle',class:'axis'});
+    lab.textContent = d.label; svg.appendChild(lab);
+  });
+}
+
+function hoursChart(svg, tipEl, days){
+  const host = svg.closest('.chartcard');
+  const W = Math.max(640, days.length*74), H = 132, m={t:12,r:16,b:34,l:60};
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width',W); svg.setAttribute('height',H);
+  svg.innerHTML='';
+  const max = Math.max(...days.map(d=>d.hours),1)*1.2;
+  const iw=W-m.l-m.r, ih=H-m.t-m.b;
+  const x=i=>m.l+iw*(i+0.5)/days.length, y=v=>m.t+ih*(1-v/max);
+  const bw=Math.min(38, iw/days.length*0.62);
+  [0,max/2,max].forEach((v,k)=>{
+    svg.appendChild(el('line',{x1:m.l,x2:W-m.r,y1:y(v),y2:y(v),class:k?'gridline':'zeroline'}));
+    const t=el('text',{x:m.l-9,y:y(v)+4,'text-anchor':'end',class:'axis'}); t.textContent=v.toFixed(0)+'h'; svg.appendChild(t);
+  });
+  days.forEach((d,i)=>{
+    if(d.hours>0){
+      svg.appendChild(el('rect',{x:x(i)-bw/2,y:y(d.hours),width:bw,height:Math.max(2,ih-(y(d.hours)-m.t)),rx:3,
+                                 fill:css('--s1'),opacity:.85,class:'seg'}));
+      const t=el('text',{x:x(i),y:y(d.hours)-6,'text-anchor':'middle',class:'axis'});
+      t.textContent=d.hours+'h'; svg.appendChild(t);
+    }else{
+      const t=el('text',{x:x(i),y:y(0)-8,'text-anchor':'middle',class:'axis'}); t.textContent='—'; svg.appendChild(t);
+    }
+    const lab=el('text',{x:x(i),y:H-12,'text-anchor':'middle',class:'axis'}); lab.textContent=d.label; svg.appendChild(lab);
+  });
+}
+
+function cumChart(svg, tipEl, days, P){
+  const host = svg.closest('.chartcard');
+  const W = Math.max(680, 820), H = 340, m={t:16,r:18,b:38,l:62};
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width',W); svg.setAttribute('height',H);
+  svg.innerHTML='';
+  const C = P.border.centralPt;
+  const pts = days.map(d=>({h:d.endH, v:d.cum, d}));
+  const bd  = days.map(d=>{ const s=shareAt(P.border.shareCurve,d.endH);
+                            return {h:d.endH, m:C*s[1], lo:P.border.lowPt*s[2], hi:P.border.highPt*s[3]}; });
+  const max = Math.max(...pts.map(p=>p.v), ...bd.map(b=>b.hi))*1.08;
+  const iw=W-m.l-m.r, ih=H-m.t-m.b;
+  const X=h=>m.l+iw*h/240, Y=v=>m.t+ih*(1-v/max);
+
+  for(let k=0;k<=4;k++){
+    const v=max*k/4;
+    svg.appendChild(el('line',{x1:m.l,x2:W-m.r,y1:Y(v),y2:Y(v),class:k?'gridline':'zeroline'}));
+    const t=el('text',{x:m.l-9,y:Y(v)+4,'text-anchor':'end',class:'axis'});
+    t.textContent=k?(v/1e8).toFixed(1)+'億':'0'; svg.appendChild(t);
+  }
+  /* チャプター境界 */
+  P.event.chapters.forEach((c,i)=>{
+    const h=i*48; if(i===0) return;
+    svg.appendChild(el('line',{x1:X(h),x2:X(h),y1:m.t,y2:m.t+ih,stroke:css('--line-strong'),'stroke-width':1,'stroke-dasharray':'3 4'}));
+  });
+  P.event.chapters.forEach((c,i)=>{
+    const t=el('text',{x:X(i*48+24),y:m.t+12,'text-anchor':'middle',class:'axis'});
+    t.textContent='ch'+c.n+' '+c.chara; svg.appendChild(t);
+  });
+  /* ボーダーのレンジ帯 */
+  const band = bd.map(b=>`${X(b.h)},${Y(b.hi)}`).join(' ') + ' ' +
+               bd.slice().reverse().map(b=>`${X(b.h)},${Y(b.lo)}`).join(' ');
+  svg.appendChild(el('polygon',{points:band, fill:css('--s1'), opacity:.10}));
+  /* ボーダー中央値 */
+  svg.appendChild(el('polyline',{points:bd.map(b=>`${X(b.h)},${Y(b.m)}`).join(' '),
+    fill:'none', stroke:css('--ink-3'), 'stroke-width':2, 'stroke-dasharray':'5 4'}));
+  /* 走者の累積 */
+  svg.appendChild(el('polyline',{points:pts.map(p=>`${X(p.h)},${Y(p.v)}`).join(' '),
+    fill:'none', stroke:css('--s1'), 'stroke-width':2.5, 'stroke-linejoin':'round'}));
+  pts.forEach(p=>{
+    svg.appendChild(el('circle',{cx:X(p.h),cy:Y(p.v),r:4.5,fill:css('--s1'),stroke:css('--surface'),'stroke-width':2}));
+  });
+  /* 終点ラベル */
+  const last = pts[pts.length-1];
+  const lt = el('text',{x:X(last.h)-6,y:Y(last.v)-12,'text-anchor':'end',
+                        style:`fill:${css('--ink')};font-weight:700;font-size:13px`});
+  lt.textContent = oku(last.v)+'億'; svg.appendChild(lt);
+  const bl = el('text',{x:X(240)-6,y:Y(C)+18,'text-anchor':'end',class:'axis'});
+  bl.textContent='推定ボーダー '+oku(C)+'億'; svg.appendChild(bl);
+  /* x軸 */
+  let lastX=-99;
+  days.forEach(d=>{ const px=X(d.endH);
+                    if(px-lastX < 34) return;      /* 近すぎるラベルは間引く */
+                    lastX=px;
+                    const t=el('text',{x:px,y:H-14,'text-anchor':'middle',class:'axis'});
+                    t.textContent=d.label; svg.appendChild(t); });
+  /* hover */
+  pts.forEach((p,i)=>{
+    const b=bd[i];
+    const hit=el('rect',{x:X(p.h)-18,y:m.t,width:36,height:ih,fill:'transparent',style:'cursor:pointer'});
+    hit.addEventListener('pointerenter',ev=>{
+      const r=host.getBoundingClientRect();
+      const diff=p.v-b.m;
+      tipShow(tipEl,host,ev.clientX-r.left,ev.clientY-r.top,
+        `<div class="t">${p.d.label} 終了時（経過${p.h}h）</div>
+         <div class="r"><i><span class="dot" style="background:${css('--s1')}"></span>累積</i><b>${oku(p.v)}億</b></div>
+         <div class="r"><i>推定ボーダー</i><b>${oku(b.m)}億</b></div>
+         <div class="r" style="margin-top:5px;padding-top:5px;border-top:1px solid var(--line)">
+           <i>差</i><b style="color:${diff>=0?css('--good'):css('--bad')}">${diff>=0?'+':''}${oku(diff)}億</b></div>`);
+    });
+    hit.addEventListener('pointerleave',()=>tipHide(tipEl));
+    svg.appendChild(hit);
+  });
+}
+
+function lbChart(svg, tipEl, days, P, R){
+  const host=svg.closest('.chartcard');
+  const lbM=days.reduce((a,d)=>a+d.lbManual,0), lbA=days.reduce((a,d)=>a+d.lbAuto,0);
+  const budget=P.boost.budgetLb, used=lbM+lbA, W=820, H=112, m={t:22,r:18,b:34,l:18};
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width',W); svg.setAttribute('height',H);
+  svg.innerHTML='';
+  const scale=Math.max(budget,used)*1.02, iw=W-m.l-m.r, X=v=>m.l+iw*v/scale;
+  svg.appendChild(el('rect',{x:m.l,y:m.t,width:iw,height:34,rx:8,fill:css('--surface-2')}));
+  const segs=[['手動 '+P.boost.multi+'炊き',lbM,'--s1'],['オート '+P.boost.auto+'炊き',lbA,'--s2']];
+  let acc=0;
+  segs.forEach(([label,v,c])=>{
+    const w=Math.max(2,X(acc+v)-X(acc)-2);
+    const r=el('rect',{x:X(acc),y:m.t,width:w,height:34,rx:6,fill:css(c),class:'seg'});
+    r.addEventListener('pointerenter',ev=>{
+      const rc=host.getBoundingClientRect();
+      tipShow(tipEl,host,ev.clientX-rc.left,ev.clientY-rc.top,
+        `<div class="t">${label}</div><div class="r"><i>消費LB</i><b>${fmt(v)}</b></div>
+         <div class="r"><i>石換算</i><b>${fmt(v*P.boost.crystalPerLb/1e4)}万</b></div>`);
+    });
+    r.addEventListener('pointerleave',()=>tipHide(tipEl));
+    svg.appendChild(r); acc+=v;
+  });
+  svg.appendChild(el('line',{x1:X(budget),x2:X(budget),y1:m.t-8,y2:m.t+42,stroke:css('--ink'),'stroke-width':2}));
+  const bt=el('text',{x:X(budget),y:m.t-12,'text-anchor':'middle',style:`fill:${css('--ink')};font-size:12px;font-weight:650`});
+  bt.textContent='予算 '+fmt(budget)+' LB'; svg.appendChild(bt);
+  const ut=el('text',{x:m.l,y:H-12,class:'axis'});
+  ut.textContent=`消費 ${fmt(used)} LB（${fmt(used*P.boost.crystalPerLb/1e4)}万石相当）/ 残 ${fmt(budget-used)} LB`;
+  svg.appendChild(ut);
+}
+</script>
+
+<script>
+/* ===================== 起動 ===================== */
+let DEFAULTS=null, P=null, SONGS=null, DAYS=null, R=null;
+const LSKEY='wl214-params-v1';
+
+async function loadSongs(P){
+  const ids=[P.songs.multi.musicId, P.songs.auto.musicId];
+  try{
+    const [sc,tm]=await Promise.all([
+      fetch('/MusicDatas/musicScoreData.json').then(r=>{if(!r.ok)throw 0;return r.json()}),
+      fetch('/MusicDatas/transformedMusics.json').then(r=>{if(!r.ok)throw 0;return r.json()})
+    ]);
+    const S={}; for(const k in sc) S[String(Number(k))]=sc[k];
+    const M={}; for(const m of tm) M[String(Number(m.id))]=m;
+    const out={};
+    for(const id of ids){
+      if(!S[id]||!M[id]) throw 0;
+      out[id]={...S[id], title:M[id].title, event_rate:M[id].event_rate, music_time:M[id].music_time};
+    }
+    return {songs:out, live:true};
+  }catch(e){ return {songs:FALLBACK, live:false}; }
+}
+
+function render(){
+  R = computeRates(P, SONGS);
+  DAYS = buildDays(P, R);
+
+  const total = DAYS[DAYS.length-1].cum;
+  const C = P.border.centralPt;
+  const margin = total/C - 1;
+  const lbUsed = DAYS.reduce((a,d)=>a+d.lbManual+d.lbAuto,0);
+
+  /* --- hero --- */
+  const cls = margin>=0.08?'ok':(margin>=0?'warn':'bad');
+  document.getElementById('tiles').innerHTML = `
+    <div class="tile accent"><p class="k">着地見込み</p><p class="v num">${oku(total)}<small>億</small></p>
+      <p class="n">周回 ${oku(DAYS.reduce((a,d)=>a+d.manual,0))} ／ オート ${oku(DAYS.reduce((a,d)=>a+d.auto,0))} ／ マイセカイ ${oku(DAYS.reduce((a,d)=>a+d.mys,0))}</p></div>
+    <div class="tile"><p class="k">推定ボーダー（総合100位）</p><p class="v num">${oku(C)}<small>億</small></p>
+      <p class="n">レンジ ${oku(P.border.lowPt)}〜${oku(P.border.highPt)}億</p></div>
+    <div class="tile ${margin>=0?'okline':''}"><p class="k">マージン</p>
+      <p class="v num" style="color:${margin>=0?'var(--good)':'var(--bad)'}">${margin>=0?'+':''}${(margin*100).toFixed(0)}<small>%</small></p>
+      <p class="n"><span class="pill ${cls}">${margin>=0.08?'余裕あり':(margin>=0?'ぎりぎり':'届かない')}</span>
+        消費LB ${fmt(lbUsed)} / 予算 ${fmt(P.boost.budgetLb)}</p></div>`;
+
+  const short = P.boost.budgetLb - lbUsed;
+  document.getElementById('verdict').textContent =
+    `手動 ${DAYS.reduce((a,d)=>a+d.hours,0)} 時間（実稼働率 ${(DAYS.reduce((a,d)=>a+d.hours,0)/240*100).toFixed(0)}%）で ${oku(total)}億。`
+    + (short>=0 ? `予算は ${fmt(short)} LB 残る。` : `予算を ${fmt(-short)} LB 超過するので、オートの焚き上げから削る。`);
+
+  /* --- rate cards --- */
+  const rc = (c,name,song,big,unit,rows,formula)=>`
+    <div class="card rate">
+      <div class="head"><span class="dot" style="background:var(${c})"></span>
+        <span class="name">${name}</span><span class="song">${song}</span></div>
+      <div class="big num">${big}<small>${unit}</small></div>
+      <dl class="kv">${rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+      <div class="formula">${formula}</div>
+    </div>`;
+  document.getElementById('rates').innerHTML =
+    rc('--s1','周回（協力）', R.multi.title, fmt(R.multi.pt), 'Pt / 周',
+       [['1時間あたり', R.multi.perHour.toFixed(1)+' 周 = '+(R.multi.pt*R.multi.perHour/1e6).toFixed(2)+'M/h'],
+        ['周期', R.multi.cycle.toFixed(1)+' 秒（曲'+R.multi.song+'＋OH'+P.overheadSec.multi+'）'],
+        ['自スコア', fmt(R.multi.score)],
+        ['イベントPt係数', R.multi.coef],
+        ['LB効率', fmt(R.multi.ptPerLb)+' Pt/LB']],
+       `係数 = 110 + floor(${fmt(R.multi.score)}/17000) + 13 = ${R.multi.coef}<br>Pt = floor(floor(${R.multi.coef}×${(P.runner.bonusPct/100+1).toFixed(2)}×10)/10 × ${R.multi.base}/100) × ${LB_MULT[R.multi.lb]}`)
+  + rc('--s2','オート（ソロ）', R.auto.title, fmt(R.auto.pt), 'Pt / 回',
+       [['1日 '+P.auto.playsPerDay+'回', fmt(R.auto.pt*P.auto.playsPerDay/1e4)+' 万Pt'],
+        ['所要', R.auto.hoursForDay.toFixed(1)+' 時間 / 日'],
+        ['オートscore', fmt(R.auto.score)],
+        ['イベントPt係数', R.auto.coef],
+        ['LB効率', fmt(R.auto.ptPerLb)+' Pt/LB']],
+       `係数 = 100 + floor(${fmt(R.auto.score)}/20000) = ${R.auto.coef}<br>10炊きなら ${fmt(R.auto.pt10)} Pt/回（LB効率 ${fmt(R.auto.pt10/10)}）`)
+  + rc('--s3','マイセカイ', '全回収 ×'+R.mysekai.times+'/日', fmt(R.mysekai.perDay/1e4), '万Pt / 日',
+       [['1回あたり', fmt(R.mysekai.per/1e4)+' 万Pt'],
+        ['開幕の実測', fmt(R.mysekai.opening/1e4)+' 万Pt（12分）'],
+        ['LB消費', '0'],
+        ['支援者', '不要'],
+        ['期間合計', oku(DAYS.reduce((a,d)=>a+d.mys,0))+' 億']],
+       `LBを消費しないので純増。資材は 5:00 と 17:00 に更新。<br>ついぼ待ちの隙間に差し込むのが最も価値が高い。`);
+
+  /* --- legends --- */
+  document.getElementById('legend1').innerHTML =
+    [['--s1','周回'],['--s2','オート'],['--s3','マイセカイ']]
+      .map(([c,l])=>`<span><span class="dot" style="background:var(${c})"></span>${l}</span>`).join('');
+  document.getElementById('legend3').innerHTML =
+    `<span><span class="dot" style="background:var(--s1)"></span>走者の累積</span>
+     <span><span class="dot" style="background:var(--ink-3)"></span>推定ボーダー（帯はレンジ）</span>`;
+  document.getElementById('legend4').innerHTML =
+    `<span><span class="dot" style="background:var(--s1)"></span>手動</span>
+     <span><span class="dot" style="background:var(--s2)"></span>オート</span>`;
+  document.getElementById('totalhours').textContent = DAYS.reduce((a,d)=>a+d.hours,0);
+
+  /* --- charts --- */
+  stackedChart(document.getElementById('chart1'), document.getElementById('tip1'), DAYS, R);
+  hoursChart(document.getElementById('chart2'), document.getElementById('tip2'), DAYS);
+  cumChart(document.getElementById('chart3'), document.getElementById('tip3'), DAYS, P);
+  lbChart(document.getElementById('chart4'), document.getElementById('tip4'), DAYS, P, R);
+
+  /* --- LB table --- */
+  const lbM=DAYS.reduce((a,d)=>a+d.lbManual,0), lbA=DAYS.reduce((a,d)=>a+d.lbAuto,0);
+  const ladder=[
+    ['手動 1〜5炊き', 5.0*Math.round(R.multi.pt/LB_MULT[R.multi.lb]), '時間律速。最優先で埋める'],
+    ['オート 1〜5炊き', 5.0*Math.round(R.auto.pt/LB_MULT[R.auto.lb]), '回数律速。手動の焚き上げより効率が良い'],
+    ['手動 6〜10炊き', 2.0*Math.round(R.multi.pt/LB_MULT[R.multi.lb]), '窓に収めるために必要'],
+    ['オート 6〜10炊き', 2.0*Math.round(R.auto.pt/LB_MULT[R.auto.lb]), '最初に削るのはここ']
+  ].sort((a,b)=>b[1]-a[1]);
+  document.getElementById('lbtable').innerHTML =
+    `<thead><tr><th>使い道</th><th>限界効率 Pt/LB</th><th style="text-align:left">位置づけ</th></tr></thead><tbody>`
+    + ladder.map(([k,v,n])=>`<tr><td>${k}</td><td>${fmt(v)}</td><td style="text-align:left" class="ch1">${n}</td></tr>`).join('')
+    + `</tbody><tfoot><tr><td>消費合計</td><td>${fmt(lbM+lbA)} LB</td><td style="text-align:left" class="ch1">手動 ${fmt(lbM)} ／ オート ${fmt(lbA)}</td></tr></tfoot>`;
+
+  /* --- chapter table --- */
+  const chs = P.event.chapters.map((c,i)=>({...c, start:i*48, end:(i+1)*48, hours:0, pt:0}));
+  DAYS.forEach(d=>{
+    const startH = d.endH - d.hours;
+    for(const c of chs){
+      const ov = Math.max(0, Math.min(d.endH, c.end) - Math.max(startH, c.start));
+      if(ov>0){ c.hours += ov; c.pt += (d.manual) * (ov/Math.max(d.hours,0.0001)); }
+    }
+  });
+  document.getElementById('chaptable').innerHTML =
+    `<thead><tr><th>ch</th><th style="text-align:left">キャラ</th><th>期間</th><th>稼働</th><th>周回Pt</th></tr></thead><tbody>`
+    + chs.map(c=>`<tr><td>ch${c.n}</td><td style="text-align:left">${c.chara}</td>
+        <td class="ch1">${['8/17 20:00','8/19 20:00','8/21 20:00','8/23 20:00','8/25 20:00'][c.n-1]} 〜</td>
+        <td>${c.hours.toFixed(1)}h</td><td>${oku(c.pt)}億</td></tr>`).join('')
+    + `</tbody><tfoot><tr><td colspan="3">合計</td><td>${chs.reduce((a,c)=>a+c.hours,0).toFixed(1)}h</td>
+        <td>${oku(chs.reduce((a,c)=>a+c.pt,0))}億</td></tr></tfoot>`;
+
+  /* --- day table --- */
+  document.getElementById('daytable').innerHTML =
+    `<thead><tr><th style="text-align:left">日</th><th>稼働</th><th>周回</th><th>オート</th><th>マイセカイ</th><th>その日</th><th>累積</th><th>推定ボーダー</th></tr></thead><tbody>`
+    + DAYS.map(d=>{
+        const s=shareAt(P.border.shareCurve,d.endH), b=P.border.centralPt*s[1];
+        const diff=d.cum-b;
+        return `<tr><td style="text-align:left">${d.label}(${d.dow}) <span class="ch1">${d.blocks||''}</span></td>
+          <td>${d.hours?d.hours+'h':'—'}</td><td>${fmt(d.manual/1e4)}万</td><td>${fmt(d.auto/1e4)}万</td>
+          <td>${fmt(d.mys/1e4)}万</td><td>${fmt(d.total/1e4)}万</td><td><b>${oku(d.cum)}億</b></td>
+          <td style="color:${diff>=0?'var(--good)':'var(--ink-2)'}">${oku(b)}億 <span class="ch1">(${diff>=0?'+':''}${oku(diff)})</span></td></tr>`;
+      }).join('')
+    + `</tbody>`;
+
+  /* --- notes --- */
+  const srcLive = SONGS===FALLBACK ? '埋め込みフォールバック' : '/MusicDatas/（このサイトの実データ）';
+  document.getElementById('notes').innerHTML = [
+    `<b>単価は編成から計算している。</b>実効値 ${R.eff.toFixed(0)}（先頭${P.runner.lead}＋(内部${P.runner.inner}−先頭)×0.2）、総合力${P.runner.talentMan}万、イベントボーナス${P.runner.bonusPct}%。楽曲データの取得元は ${srcLive}`,
+    `<b>協力ライブの枠の置き方。</b>走者は1〜5枠のどれかに等確率で入り、残り4枠とアンコール枠は支援者（実効値${P.support.effective}）が取る前提。<code>efficiency.ts</code> は「6枠すべてに同じ実効値を置いても曲の順位は変わらない、変わるのは絶対Pt」と明記しているので、絶対Ptを出すここでは分けて置いている`,
+    `<b>検算。</b>2026-08-18 02:00 の順位136位からボーダー階層で逆算した周回ぶんは6.0時間で1,865万Pt＝時速3.11M。上の計算値は時速 ${(R.multi.pt*R.multi.perHour/1e6).toFixed(2)}M で、実測と一致する`,
+    `<b>推定ボーダー。</b>過去WL3（205 / 207 / 211）の「経過4h時点シェア」4.94 / 5.66 / 5.14% で割り戻した。精度は時間とともにしか締まらず、ch1終（8/19 20:00）で±14%、ch4終（8/25 20:00）でようやく±3%`,
+    `<b>ボーダーは中盤で凍り、チャプター終盤に跳ねる。</b>過去実測で ch2 の伸びの55〜85%が最後の12時間に集中。ch1終から約36時間はほぼ動かないので、8/19・8/20 の稼働は相対的に一番効く`,
+    `<b>8/27 を「調整のみ」にする代償。</b>最後の12時間だけでボーダーは終値の6.9〜10.9pp（2.6億なら1,800万〜2,900万Pt）伸びる。ここに乗らないぶんを事前に積んでおく必要がある`,
+    `<b>感度。</b>効くのは周回のオーバーヘッド。既定の${P.overheadSec.multi}秒は event214 開幕の実測値だが、瑞希ラン(2026-07)の実測平均54秒に置くと ${(3600/(R.multi.song+54)).toFixed(1)} 周/h まで落ち、着地は約 ${oku(DAYS.reduce((a,d)=>a+(d.actualPt!=null?d.actualPt:d.hours*(3600/(R.multi.song+54))*R.multi.pt)+d.auto+d.mys,0))} 億になる。<b>石よりも部屋待ちを作らないことが直接効く</b>`,
+    `<b>オートの所要時間。</b>${P.auto.playsPerDay}回で ${R.auto.hoursForDay.toFixed(1)} 時間かかる。手動の稼働時間とは重ねられないので、就寝中に回す枠`,
+    `<b>マイセカイはLBを消費しない。</b>開幕の全回収は12分で61万Pt（実測）。以降は控えめに1回${fmt(R.mysekai.per/1e4)}万Ptで置いている`
+  ].map(s=>`<li>${s}</li>`).join('');
+
+  document.getElementById('subline').innerHTML =
+    `event${P.event.id}「${P.event.title}」${P.event.part} ／ 2026-08-17 20:00 〜 08-27 20:00 JST ／ データ版 ${P.version}`;
+  document.getElementById('foot').innerHTML =
+    `計算式の出典: AssistTools <code>efficiency.ts</code> / <code>calcLivePt.ts</code> / <code>overhead.ts</code>。`
+    + `ボーダー実測: sekai.best API を sekai-border-tracker で10分間隔収集。`
+    + `数値を変えるには <code>params.json</code> を編集する。`;
+}
+
+function buildEditor(){
+  const f=[
+    ['runner.lead','先頭'],['runner.inner','内部'],['runner.talentMan','総合力(万)'],['runner.bonusPct','ボーナス(%)'],
+    ['support.effective','支援者の実効値'],['support.emptySlots','空き枠(0-4)'],
+    ['overheadSec.multi','手動OH(秒)'],['overheadSec.auto','オートOH(秒)'],
+    ['boost.multi','手動の炊き数'],['boost.auto','オートの炊き数'],['boost.budgetLb','予算(LB)'],
+    ['auto.playsPerDay','オート回数/日'],
+    ['mysekai.perHarvestPt','マイセカイ1回(Pt)'],['mysekai.harvestsPerDay','マイセカイ回数/日'],
+    ['border.centralPt','推定ボーダー(Pt)']
+  ];
+  document.getElementById('fields').innerHTML = f.map(([path,label])=>{
+    const v = path.split('.').reduce((o,k)=>o[k],P);
+    return `<label class="f">${label}<input data-path="${path}" type="number" step="any" value="${v}"></label>`;
+  }).join('');
+  document.getElementById('hoursgrid').innerHTML = P.schedule.map((d,i)=>
+    `<label class="f">${d.label}(${d.dow})<input data-hour="${i}" type="number" step="0.5" min="0" value="${d.hours}"></label>`).join('');
+}
+
+function applyEdits(){
+  document.querySelectorAll('#fields input').forEach(inp=>{
+    const ks=inp.dataset.path.split('.'); let o=P;
+    for(let i=0;i<ks.length-1;i++) o=o[ks[i]];
+    o[ks[ks.length-1]] = Number(inp.value);
+  });
+  document.querySelectorAll('#hoursgrid input').forEach(inp=>{
+    P.schedule[Number(inp.dataset.hour)].hours = Number(inp.value);
+  });
+  localStorage.setItem(LSKEY, JSON.stringify(P));
+  render();
+}
+
+(async function(){
+  const btn=document.getElementById('themebtn');
+  const setTheme=t=>{document.documentElement.dataset.theme=t; localStorage.setItem('wl214-theme',t);};
+  btn.addEventListener('click',()=>{
+    const cur=document.documentElement.dataset.theme;
+    setTheme(cur==='dark'?'light':cur==='light'?'auto':'dark');
+    if(P) render();
+  });
+  const saved=localStorage.getItem('wl214-theme'); if(saved) document.documentElement.dataset.theme=saved;
+
+  DEFAULTS = await fetch('./params.json').then(r=>r.json());
+  const stored = localStorage.getItem(LSKEY);
+  P = stored ? JSON.parse(stored) : JSON.parse(JSON.stringify(DEFAULTS));
+  if(P.version !== DEFAULTS.version){ P = JSON.parse(JSON.stringify(DEFAULTS)); localStorage.removeItem(LSKEY); }
+  const s = await loadSongs(P); SONGS = s.songs;
+  buildEditor(); render();
+  document.querySelectorAll('section').forEach((el,i)=>{ el.classList.add('appear'); el.style.animationDelay=(i*45)+'ms'; });
+
+  document.getElementById('apply').addEventListener('click',applyEdits);
+  document.getElementById('reset').addEventListener('click',()=>{
+    localStorage.removeItem(LSKEY); P=JSON.parse(JSON.stringify(DEFAULTS)); buildEditor(); render();
+    document.getElementById('jsonout').hidden=true;
+  });
+  document.getElementById('dump').addEventListener('click',()=>{
+    const ta=document.getElementById('jsonout');
+    ta.hidden=false; ta.value=JSON.stringify(P,null,1); ta.select();
+  });
+  window.addEventListener('resize',()=>{ if(P) render(); });
+})();
+</script>
+</body>
+</html>
