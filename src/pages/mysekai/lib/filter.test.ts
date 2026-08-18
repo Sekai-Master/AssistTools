@@ -262,3 +262,44 @@ describe("summary", () => {
     expect(summary(ALL, 2).talks).toBe(3);
   });
 });
+
+/**
+ * 「持っていて未回収の会話がある」で絞る。
+ * ★ 所持と既読の登録が一段落したあと、**次に何をすればいいか**を出すためのもの。
+ */
+describe("未回収の会話があるものだけ", () => {
+  const ALL = [ソファ, ベッド, 作業台, ラグ, 置物];
+  const seenAll = () => true;
+  const seenNone = () => false;
+
+  it("持っていない家具は出さない（会話を回収しようが無い）", () => {
+    const out = applyFilter(
+      ALL,
+      { ...DEFAULT_FILTER, unseenOnly: true, reactiveOnly: false },
+      new Set(), new Set(), new Set(), seenNone
+    );
+    expect(out).toHaveLength(0);
+  });
+
+  it("持っていて全部見ていれば出さない", () => {
+    const owned = new Set(ALL.map((f) => f.id));
+    const out = applyFilter(
+      ALL,
+      { ...DEFAULT_FILTER, unseenOnly: true, reactiveOnly: false },
+      owned, new Set(), new Set(), seenAll
+    );
+    expect(out).toHaveLength(0);
+  });
+
+  it("持っていて未回収が残っていれば出す", () => {
+    const owned = new Set(ALL.map((f) => f.id));
+    const out = applyFilter(
+      ALL,
+      { ...DEFAULT_FILTER, unseenOnly: true, reactiveOnly: false },
+      owned, new Set(), new Set(), seenNone
+    );
+    expect(out.length).toBeGreaterThan(0);
+    // 会話が1つも無い家具は対象にならない
+    for (const f of out) expect(f.parties.length).toBeGreaterThan(0);
+  });
+});

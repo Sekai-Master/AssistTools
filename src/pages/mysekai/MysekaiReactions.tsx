@@ -66,6 +66,9 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "name", label: "名前" },
   { value: "cost", label: "コスト" },
   { value: "size", label: "大きさ" },
+  // ★ ゲーム内（キャラクターランクの家具一覧）と同じ並び。
+  //   実機の画面と突き合わせながら消し込めるので、回収作業ではこれが一番速い。
+  { value: "cr", label: "ゲーム内" },
 ];
 
 /** 素の select にニューモーフィズムの見た目を与える。ネイティブUIのままにしたいので置換はしない。 */
@@ -150,7 +153,7 @@ function FixtureRow({
         : [];
 
   return (
-    <li className="flex items-center gap-1 border-b border-[color:var(--neu-lo)]/40 last:border-b-0">
+    <li className="flex items-center gap-2 border-b border-[color:var(--neu-lo)]/40 pr-1 last:border-b-0">
       {/* ★ 持っている家具を沈めない。**持っていて初めて会話を回収できる**ので、
           むしろそちらが主役。持っていないものを少し退かせる。 */}
       <button
@@ -182,7 +185,10 @@ function FixtureRow({
         )}
 
         <span className="min-w-0 flex-1 basis-[60%] sm:basis-auto">
-          <span className="block truncate font-bold text-slate-700">{fixture.name}</span>
+          {/* ★ 1行で省略すると「鮮やかなユニゾン…」が4行続いて見分けが付かなくなる。
+              既定表示の49%が先頭8文字重複という実測がある（元のコメント参照）。
+              「ほしい」ボタンを足して幅が減ったぶん、2行まで許して識別できるようにする。 */}
+          <span className="line-clamp-2 font-bold text-slate-700">{fixture.name}</span>
           <span className="mt-0.5 flex flex-wrap items-center gap-1">
             {facesShown.map((id) => {
               const c = charById(id);
@@ -269,6 +275,10 @@ function FixtureRow({
         </span>
       </button>
 
+      {/* ★ 同じ大きさ・同じ形のボタンを2つ並べるので、**間隔を詰めない**。
+          4px で並べていたときは「持っている」と「ほしい」を押し間違えやすかった
+          （Nori 指摘 2026-08-18）。隣り合うタップ目標は 8px 以上あける。 */}
+      <div className="flex shrink-0 items-center gap-2">
       {/* 一覧のまま所持を切り替える。開いて閉じてを繰り返さずに済む。
           行を開くボタンとは別の当たり判定にして、押し間違いを防ぐ。 */}
       <button
@@ -306,6 +316,7 @@ function FixtureRow({
         </span>
         <span className="sr-only">{fixture.name} をほしいものリストに入れる</span>
       </button>
+      </div>
     </li>
   );
 }
@@ -365,6 +376,33 @@ export default function MysekaiReactions() {
   //   チェックを押すたびにフォーカスがダイアログ本体へ飛ぶ。安定化する。
   const closeModal = useCallback(() => setOpenFixture(null), []);
 
+  /**
+   * `家具:顔ぶれ` → 同じ会話が起きる**ほかの家具**のID。
+   * ★ ソファ・オーディオ・花壇・彫刻の左右など、別の家具でも中身が同じ会話がある。
+   *   片方で見たらもう片方も見たはずなので、印を連動させる（Nori 指摘 2026-08-18）。
+   *   生成側は**会話集合が完全に一致する組だけ**を出しているので、
+   *   見ていない固有会話まで既読になることはない。
+   */
+  const linkMap = useMemo(() => {
+    const m = new Map<string, number[]>();
+    for (const l of data?.talkLinks ?? []) {
+      for (const fid of l.fixtures) {
+        m.set(partyKey(fid, l.party), l.fixtures.filter((o) => o !== fid));
+      }
+    }
+    return m;
+  }, [data]);
+
+  /** その顔ぶれに連動するキー（自分を含む）。 */
+  const linkedKeys = useCallback(
+    (fixtureId: number, party: readonly number[]) => {
+      const self = partyKey(fixtureId, party);
+      const peers = linkMap.get(self);
+      return peers ? [self, ...peers.map((o) => partyKey(o, party))] : [self];
+    },
+    [linkMap]
+  );
+
   const toggleOwned = useCallback((id: number) => {
     setProgress((prev) => {
       const next = new Set(prev.owned);
@@ -386,21 +424,32 @@ export default function MysekaiReactions() {
     setProgress((prev) => {
       const next = new Set(prev.collected);
       for (const p of parties) {
-        const k = partyKey(f.id, p);
-        if (mark) next.add(k);
-        else next.delete(k);
+        for (const k of linkedKeys(f.id, p)) {
+          if (mark) next.add(k);
+          else next.delete(k);
+        }
       }
       return { ...prev, collected: next };
     });
-  }, []);
+  }, [linkedKeys]);
 
-  const toggleCollected = useCallback((key: string) => {
-    setProgress((prev) => {
-      const next = new Set(prev.collected);
-      if (!next.delete(key)) next.add(key);
-      return { ...prev, collected: next };
-    });
-  }, []);
+  const toggleCollected = useCallback(
+    (key: string) => {
+      setProgress((prev) => {
+        const next = new Set(prev.collected);
+        // ★ 連動先も同じ状態に揃える。片方だけ残ると「見たのに未回収」が残り続ける。
+        const [fid, party] = key.split(":");
+        const keys = linkedKeys(Number(fid), party.split(",").map(Number));
+        const mark = !next.has(key);
+        for (const k of keys) {
+          if (mark) next.add(k);
+          else next.delete(k);
+        }
+        return { ...prev, collected: next };
+      });
+    },
+    [linkedKeys]
+  );
 
   const charById = useMemo(() => {
     const map = new Map<number, MysekaiCharacter>();
@@ -457,8 +506,10 @@ export default function MysekaiReactions() {
   }, [data, filter, sharedView, shared]);
 
   const list = useMemo(
-    () => (data ? applyFilter(data.fixtures, effectiveFilter, owned, wish, shared) : []),
-    [data, effectiveFilter, owned, wish, shared]
+    () => (data ? applyFilter(data.fixtures, effectiveFilter, owned, wish, shared, (fid, p) =>
+            collected.has(partyKey(fid, p))
+          ) : []),
+    [data, effectiveFilter, owned, wish, shared, collected]
   );
 
   const selectedChar: MysekaiCharacter | undefined = data?.characters.find(
@@ -473,6 +524,7 @@ export default function MysekaiReactions() {
     if (f.kinds.length > 0) out.push(`種類: ${f.kinds.map((k) => KIND_LABEL[k]).join("・")}`);
     if (f.owned !== "any") out.push(f.owned === "owned" ? "持っている" : "持っていない");
     if (f.party !== "any") out.push(f.party === "solo" ? "ひとりで" : "複数人で");
+    if (f.unseenOnly) out.push("未回収の会話がある");
     if (f.sketchableOnly) out.push("模写できるものだけ");
     if (f.reactiveOnly) out.push("反応がある家具だけ");
     if (f.mainGenreId != null) {
@@ -743,6 +795,11 @@ export default function MysekaiReactions() {
               checked={filter.actionOnly}
               onChange={(v) => setFilter((f) => ({ ...f, actionOnly: v }))}
               label="キャラが使う家具だけ"
+            />
+            <Switch
+              checked={filter.unseenOnly}
+              onChange={(v) => setFilter((f) => ({ ...f, unseenOnly: v }))}
+              label="持っていて未回収の会話がある"
             />
             <Switch
               checked={filter.sketchableOnly}

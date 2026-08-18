@@ -319,6 +319,63 @@ const sortedIds = (set) => [...set].sort((a, b) => a - b);
  * @param {object} src 取得したマスタ（refresh-mysekai-data.mjs の SOURCES と同じキー）
  * @param {number} now 生成時刻（ミリ秒）。取得中に日をまたいでも揺れないよう呼び出し側で固定する
  */
+/**
+ * 同じ会話が複数の家具で起きる組を洗い出す。
+ *
+ * ★★ なぜ要るか ★★
+ * ソファ・オーディオ・花壇・彫刻の左右など、**別の家具なのに中身が同じ会話**がある。
+ * 片方で見たらもう片方も見たはずなのに、画面上は未回収のまま残っていた
+ * （Nori 指摘 2026-08-18。例: ロマンティックガーデンの彫刻/右・左）。
+ *
+ * ★★ 巻き込まない条件 ★★
+ * ソファ類は「どのソファでも起きる共通会話」に加えて**各自固有の会話も持つ**。
+ * 共通が1つでもあれば連動させると、**見ていない固有会話まで既読になる**。
+ * そこで **(家具, 顔ぶれ) の会話集合が完全に一致する組だけ**を連動対象にする。
+ * 集合が同じなら「片方を見た＝もう片方も見た」が厳密に成り立つ。
+ *
+ * 実測（2026-08-18）: (家具,顔ぶれ) 5,251 件のうち、完全一致で複数家具に
+ * またがるのは **179 組・690 件・家具29件**。
+ *
+ * 会話の同一性は `characterArchiveMysekaiCharacterTalkGroupId` で見る
+ * （アーカイブ上で同じ会話としてまとめられる単位。`lua` で見ても同じ結果になる）。
+ */
+function collectTalkLinks(talks, groupToCharas, conditionGroupToFixtures) {
+  /** `家具:顔ぶれ` → 会話IDの集合 */
+  const arcs = new Map();
+  for (const t of talks ?? []) {
+    const fixtureIds = conditionGroupToFixtures.get(toId(t?.mysekaiCharacterTalkConditionGroupId));
+    const arc = toId(t?.characterArchiveMysekaiCharacterTalkGroupId);
+    if (!fixtureIds || fixtureIds.length === 0 || arc == null) continue;
+    const charas = groupToCharas.get(toId(t?.mysekaiGameCharacterUnitGroupId)) ?? new Set();
+    if (charas.size === 0) continue;
+    const party = sortedIds(charas).join(",");
+    for (const fid of fixtureIds) {
+      const k = `${fid}|${party}`;
+      if (!arcs.has(k)) arcs.set(k, new Set());
+      arcs.get(k).add(arc);
+    }
+  }
+  /** 会話集合が同じものを寄せる。 */
+  const bySig = new Map();
+  for (const [k, set] of arcs) {
+    const sig = [...set].sort((a, b) => a - b).join(",");
+    if (!bySig.has(sig)) bySig.set(sig, []);
+    bySig.get(sig).push(k);
+  }
+  const links = [];
+  for (const members of bySig.values()) {
+    if (members.length < 2) continue;
+    const party = members[0].split("|")[1];
+    const fixtures = [...new Set(members.map((m) => Number(m.split("|")[0])))].sort((a, b) => a - b);
+    // 同じ家具の中で顔ぶれが違うだけのものは連動対象ではない。
+    if (fixtures.length < 2) continue;
+    links.push({ p: party.split(",").map(Number), f: fixtures });
+  }
+  // 並びを固定して差分を読めるようにする。
+  links.sort((a, b) => a.f[0] - b.f[0] || a.p.length - b.p.length || a.p[0] - b.p[0]);
+  return links;
+}
+
 export function derive(src, now) {
   const unitToChara = buildUnitToChara(src.gameCharacterUnits);
   const charaColor = buildCharaColor(src.gameCharacterUnits);
@@ -338,6 +395,11 @@ export function derive(src, now) {
     unitToChara
   );
   const blueprintByFixture = buildBlueprints(src.mysekaiBlueprints);
+  const talkLinks = collectTalkLinks(
+    src.mysekaiCharacterTalks,
+    groupToCharas,
+    conditionGroupToFixtures
+  );
   const actionByFixture = collectActions(
     src.mysekaiCharacterTalkNoTalkMysekaiFixtureActions,
     unitToChara
@@ -417,6 +479,14 @@ export function derive(src, now) {
       ly: intern(layoutVocab, f.mysekaiSettableLayoutType),
       co: toId(f.firstPutCost) ?? undefined,
       /**
+       * ゲーム内（キャラクターランクの家具一覧）の並び順。
+       * ★ 名前順やジャンル順では**ゲーム画面と突き合わせられない**。
+       *   実機の並びと同じ順で出せると、回収の消し込みがそのまま照合になる。
+       *   咲希の実例（きらめく流星のチェスト→ベッド→テーブル→ラグ→レコードプレーヤー
+       *   →蓄音機→ナチュラルなチェスト）が seq の昇順と完全に一致することを確認済み。
+       */
+      sq: toId(f.seq) ?? undefined,
+      /**
        * サムネイル画像のファイル名（拡張子なし）。
        * ★ 配信元のパスは家具種別で2系統に分かれる（sekai-viewer の mysekaiFixtureUtils.ts が正本）:
        *     通常          … mysekai/thumbnail/fixture/{ab}_1.webp
@@ -490,6 +560,11 @@ export function derive(src, now) {
     multiUnitLikes: Object.fromEntries(multiUnit),
     /** AND 条件を OR として展開している件数（0 でないなら結合の見直しが要る）。 */
     multiFixtureConditionGroups: countMultiFixtureGroups(conditionGroupToFixtures),
+    /**
+     * 中身が同じ会話を持つ (顔ぶれ × 家具) の組。片方を見たら他も見たことになる。
+     * `{ p: [キャラID...], f: [家具ID...] }` の配列。
+     */
+    talkLinks,
     fixtures,
   };
 }

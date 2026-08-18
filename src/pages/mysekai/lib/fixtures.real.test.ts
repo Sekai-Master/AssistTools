@@ -164,3 +164,83 @@ describe("サムネイル", () => {
     expect(data.fixtures.filter((f) => !f.image).map((f) => f.name)).toEqual([]);
   });
 });
+
+/**
+ * ★★ 会話の連動（v1.17.0）★★
+ * 別の家具でも中身が同じ会話がある（ソファ・オーディオ・花壇・彫刻の左右）。
+ * 片方を見たら他も見たことになるが、**巻き込んではいけない**——
+ * ソファ類は共通会話に加えて固有会話も持つので、共通が1つあるだけで連動させると
+ * 見ていない固有会話まで既読になる。生成側は**会話集合が完全一致する組だけ**を出す。
+ */
+describe("会話の連動（talkLinks）", () => {
+  const links = data.talkLinks;
+
+  it("組が存在し、どれも家具2件以上・顔ぶれ1件以上", () => {
+    expect(links.length).toBeGreaterThan(0);
+    for (const l of links) {
+      expect(l.fixtures.length).toBeGreaterThanOrEqual(2);
+      expect(l.party.length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it("ロマンティックガーデンの彫刻の左右が連動する（Nori の実例）", () => {
+    const byName = new Map(data.fixtures.map((f) => [f.name, f.id]));
+    const right = byName.get("ロマンティックガーデンの彫刻/右");
+    const left = byName.get("ロマンティックガーデンの彫刻/左");
+    expect(right).toBeDefined();
+    expect(left).toBeDefined();
+    const hit = links.filter((l) => l.fixtures.includes(right!) && l.fixtures.includes(left!));
+    expect(hit.length).toBeGreaterThan(0);
+  });
+
+  it("連動先の家具は実在する", () => {
+    const ids = new Set(data.fixtures.map((f) => f.id));
+    for (const l of links) for (const f of l.fixtures) expect(ids.has(f)).toBe(true);
+  });
+
+  /** ★ 連動する顔ぶれは、連動先の家具にも実際に存在すること（無い顔ぶれに印を立てない）。 */
+  it("連動先の家具にも、その顔ぶれの会話がある", () => {
+    const byId = new Map(data.fixtures.map((f) => [f.id, f]));
+    for (const l of links) {
+      const key = [...l.party].sort((a, b) => a - b).join(",");
+      for (const fid of l.fixtures) {
+        const f = byId.get(fid);
+        expect(f).toBeDefined();
+        const has = f!.parties.some((p) => [...p].sort((a, b) => a - b).join(",") === key);
+        expect(has, `家具${fid} に顔ぶれ ${key} が無い`).toBe(true);
+      }
+    }
+  });
+
+  it("同じ (家具,顔ぶれ) が2つ以上の組に現れない（連動先が割れない）", () => {
+    const seen = new Set<string>();
+    for (const l of links) {
+      for (const fid of l.fixtures) {
+        const k = `${fid}:${[...l.party].sort((a, b) => a - b).join(",")}`;
+        expect(seen.has(k), `重複 ${k}`).toBe(false);
+        seen.add(k);
+      }
+    }
+  });
+});
+
+/** ゲーム内の並び順（キャラクターランクの家具一覧と同じ順）。 */
+describe("並び順 seq", () => {
+  it("ほとんどの家具が seq を持つ", () => {
+    const withSeq = data.fixtures.filter((f) => f.seq != null).length;
+    expect(withSeq / data.fixtures.length).toBeGreaterThan(0.95);
+  });
+
+  it("咲希の例（きらめく流星→レコードプレーヤー→蓄音機→ナチュラル）が昇順に並ぶ", () => {
+    const byName = new Map(data.fixtures.map((f) => [f.name, f]));
+    const order = [
+      "きらめく流星のチェスト", "きらめく流星のベッド", "きらめく流星のテーブル",
+      "きらめく流星のラグ", "レコードプレーヤー", "蓄音機", "ナチュラルなチェスト",
+    ];
+    const seqs = order.map((n) => byName.get(n)?.seq ?? null);
+    expect(seqs.every((s) => s != null)).toBe(true);
+    for (let i = 1; i < seqs.length; i++) {
+      expect(seqs[i]!, `${order[i]} が ${order[i - 1]} より前に来ている`).toBeGreaterThan(seqs[i - 1]!);
+    }
+  });
+});

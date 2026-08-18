@@ -20,7 +20,7 @@ export const FILTER_STORAGE_KEY = "sekaimaster:mysekai:filters:v1";
 const VERSION = 1;
 
 const KINDS: ReactionKind[] = ["talk", "like"];
-const SORTS: SortKey[] = ["talks", "name", "cost", "size"];
+const SORTS: SortKey[] = ["talks", "name", "cost", "size", "cr"];
 const PARTIES: PartyFilter[] = ["any", "solo", "group"];
 // ★ shared は URL 由来の一時的な状態なので、保存には載せない
 //   （リンクを閉じたあとも「受け取ったリスト」で絞られたままになる）。
@@ -50,6 +50,7 @@ export function loadFilter(): FilterState {
       reactiveOnly: bool(s.reactiveOnly, DEFAULT_FILTER.reactiveOnly),
       actionOnly: bool(s.actionOnly, DEFAULT_FILTER.actionOnly),
       sketchableOnly: bool(s.sketchableOnly, DEFAULT_FILTER.sketchableOnly),
+      unseenOnly: bool(s.unseenOnly, DEFAULT_FILTER.unseenOnly),
       owned: OWNEDS.includes(s.owned as OwnedFilter)
         ? (s.owned as OwnedFilter)
         : DEFAULT_FILTER.owned,

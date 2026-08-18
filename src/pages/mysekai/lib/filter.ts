@@ -7,7 +7,11 @@
  */
 import type { Fixture, ReactionKind } from "./types";
 
-export type SortKey = "talks" | "name" | "cost" | "size";
+/**
+ * 並び順。`cr` は**ゲーム内（キャラクターランクの家具一覧）と同じ順**。
+ * 実機の画面と突き合わせながら消し込めるので、回収作業ではこれが一番速い。
+ */
+export type SortKey = "talks" | "name" | "cost" | "size" | "cr";
 export type PartyFilter = "any" | "solo" | "group";
 /**
  * 所持で絞る。
@@ -44,6 +48,11 @@ export interface FilterState {
   reactiveOnly: boolean;
   /** 模写できる家具だけに絞る（他人のセカイに取りに行ける候補）。 */
   sketchableOnly: boolean;
+  /**
+   * 持っているのに未回収の会話が残っている家具だけに絞る。
+   * ★ 所持と既読を登録し終えたあとの「次にやること」がここに出る。
+   */
+  unseenOnly: boolean;
   /** 所持で絞る。持っている＝会話を回収できる、持っていない＝まず入手する対象。 */
   owned: OwnedFilter;
   /**
@@ -71,6 +80,7 @@ export const DEFAULT_FILTER: FilterState = {
   reactiveOnly: true,
   actionOnly: false,
   sketchableOnly: false,
+  unseenOnly: false,
   owned: "any",
   party: "any",
   mainGenreId: null,
@@ -135,7 +145,9 @@ export function applyFilter(
   state: FilterState,
   owned: ReadonlySet<number> = new Set(),
   wish: ReadonlySet<number> = new Set(),
-  shared: ReadonlySet<number> = new Set()
+  shared: ReadonlySet<number> = new Set(),
+  /** その顔ぶれの会話を見たか。`unseen` で絞るときだけ使う。 */
+  seenParty: (fixtureId: number, party: readonly number[]) => boolean = () => false
 ): Fixture[] {
   const q = normalizeQuery(state.query);
   const out = fixtures.filter((f) => {
@@ -143,6 +155,17 @@ export function applyFilter(
     if (state.owned === "unowned" && owned.has(f.id)) return false;
     if (state.owned === "wish" && !wish.has(f.id)) return false;
     if (state.owned === "shared" && !shared.has(f.id)) return false;
+    // ★ 「持っているのに、まだ見ていない会話が残っている」家具。
+    //   所持と既読の登録が一段落したあと、**次に何をすればいいか**がここに出る。
+    // ★ 「持っているのに、まだ見ていない会話が残っている」家具だけに絞る。
+    //   所持と既読の登録が一段落したあと、**次に何をすればいいか**がここに出る。
+    //   持っていない家具は会話を回収しようがないので、暗黙に所持で絞る。
+    if (state.unseenOnly) {
+      if (!owned.has(f.id)) return false;
+      const ps = partiesOf(f, state.charId);
+      if (ps.length === 0) return false;
+      if (ps.every((p) => seenParty(f.id, p))) return false;
+    }
     if (state.reactiveOnly && !f.reactive) return false;
     // ★ キャラを選んでいれば「その子が使う家具」に絞れる（誰が使うかのデータがある）。
     //   選んでいなければ家具の印（isGameCharacterAction）かアクションデータの有無で見る。
@@ -211,6 +234,8 @@ export function sortFixtures(
     if (sort === "talks") d = talksOf(a, charId) - talksOf(b, charId);
     else if (sort === "cost") d = (a.cost ?? 0) - (b.cost ?? 0);
     else if (sort === "size") d = volume(a) - volume(b);
+    // ★ ゲーム内の並び。seq が無い家具は末尾へ送る（0 にすると先頭に集まる）。
+    else if (sort === "cr") d = (a.seq ?? Number.MAX_SAFE_INTEGER) - (b.seq ?? Number.MAX_SAFE_INTEGER);
     else d = a.reading.localeCompare(b.reading, "ja");
     // 同点は名前順で固定する（並びが毎回変わると差分が読めない）。
     if (d === 0) return a.reading.localeCompare(b.reading, "ja");

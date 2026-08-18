@@ -1,4 +1,4 @@
-import { useId, useRef } from "react";
+import { useId, useRef, useState } from "react";
 import { useModalA11y } from "../../lib/a11y";
 import { cn } from "../../lib/utils";
 import { CHIP_SHADOW, chipBg } from "./lib/charaColor";
@@ -95,6 +95,9 @@ export function FixtureModal({
   const solos = target.filter((p) => p.length === 1);
   const groups = target.filter((p) => p.length > 1);
   const seen = target.filter((p) => collected.has(partyKey(fixture.id, p))).length;
+  /** ほかの人だけの会話も、見たなら印を付けられるべき（Nori 指摘 2026-08-18）。 */
+  const [showOthers, setShowOthers] = useState(false);
+  const othersSeen = others.filter((p) => collected.has(partyKey(fixture.id, p))).length;
   const img = thumbUrl(fixture);
 
   /**
@@ -294,9 +297,55 @@ export function FixtureModal({
           )}
 
           {others.length > 0 && (
-            <p className="mt-3 text-xs text-slate-400">
-              ほかの人だけで起きる会話が {others.length} 通りあります（キャラの選択を外すと出ます）。
-            </p>
+            <div className="mt-4 border-t border-slate-200/60 pt-3">
+              {/* ★ 以前はここで件数を出して「キャラの選択を外すと出ます」と案内するだけだった。
+                  他の人の会話でも**見たなら印を付けたい**のに、そのためだけに
+                  絞り込みを解除して開き直す必要があり、操作が途切れていた。 */}
+              <button
+                type="button"
+                onClick={() => setShowOthers((v) => !v)}
+                aria-expanded={showOthers}
+                className={cn(
+                  "flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2 text-left",
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
+                  "bg-neu shadow-neu-sm neu-tactile"
+                )}
+              >
+                <span aria-hidden className="material-icons text-[20px] leading-none text-slate-400">
+                  {showOthers ? "expand_less" : "expand_more"}
+                </span>
+                <span className="text-xs font-bold text-slate-600">
+                  ほかの人だけで起きる会話 {others.length} 通り
+                </span>
+                <span className="ml-auto shrink-0 text-[11px] text-slate-400">
+                  {othersSeen > 0 ? `見た ${othersSeen}` : "未"}
+                </span>
+              </button>
+
+              {showOthers && (
+                <div className="mt-2">
+                  <div className="mb-2 flex items-center gap-2">
+                    <p className="text-[11px] leading-relaxed text-slate-500">
+                      {highlightName}は出ません。見たものがあれば印を付けられます。
+                    </p>
+                    {others.length > 1 && (
+                      <button
+                        type="button"
+                        // ★ 対象は others だけ。選択中のキャラのぶんに巻き込まないこと。
+                        onClick={() => onToggleAll(fixture, others, othersSeen < others.length)}
+                        className={cn(
+                          "ml-auto shrink-0 rounded-lg bg-neu px-2.5 py-1.5 text-xs font-bold text-slate-600 shadow-neu-sm neu-tactile",
+                          "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]"
+                        )}
+                      >
+                        {othersSeen < others.length ? "すべて見た" : "すべて外す"}
+                      </button>
+                    )}
+                  </div>
+                  <ul>{others.map(partyRow)}</ul>
+                </div>
+              )}
+            </div>
           )}
 
           {fixture.actionChars.length > 0 && (

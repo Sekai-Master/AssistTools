@@ -80,6 +80,11 @@ export interface Fixture {
    */
   sketch: boolean | null;
   /**
+   * ゲーム内（キャラクターランクの家具一覧）の並び順。
+   * これで並べると実機の画面と同じ順になり、回収の消し込みがそのまま照合になる。
+   */
+  seq: number | null;
+  /**
    * A: この家具がキャラのアクション対象になりうる（`isGameCharacterAction`）。
    * ★ これは**家具の印**で、誰が使うかは持たない。誰が使うかは `actionChars`。
    *   実測で両者は一致しない（フラグ182件 / データ84件、食い違い120+22件）。
@@ -132,7 +137,21 @@ export interface MysekaiData {
    * 実データではミクだけが該当し、5つのセカイぶんの好みが1つに混ざっている。
    */
   multiUnitLikes: Map<number, number>;
+  /**
+   * 中身が同じ会話を持つ (顔ぶれ × 家具) の組。片方を見たら他も見たことになる。
+   * ★ **会話集合が完全に一致する組だけ**が入っている。共通会話を1つ持つだけの
+   *   家具（ソファ類など）を混ぜると、見ていない固有会話まで既読になるため。
+   */
+  talkLinks: TalkLink[];
   fixtures: Fixture[];
+}
+
+/** 中身が同じ会話を共有する家具の組。 */
+export interface TalkLink {
+  /** 顔ぶれ（キャラIDの昇順）。 */
+  party: number[];
+  /** その顔ぶれで同じ会話が起きる家具のID。 */
+  fixtures: number[];
 }
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -241,6 +260,7 @@ export function normalize(raw: unknown): MysekaiData {
         // 画像はファイル名だけ持ち、パスの組み立ては lib/thumb.ts に閉じる。
         image: isStr(f.im) ? f.im : "",
         sketch: typeof f.sk === "boolean" ? f.sk : null,
+        seq: isNum(f.sq) ? f.sq : null,
         action,
         talkChars,
         actionChars,
@@ -272,6 +292,17 @@ export function normalize(raw: unknown): MysekaiData {
     characters,
     mainGenres: parseGenres(genresRoot.main),
     multiUnitLikes,
+    talkLinks: Array.isArray(root.talkLinks)
+      ? (root.talkLinks as unknown[])
+          .map((l) => {
+            const o = l as { p?: unknown; f?: unknown };
+            const party = Array.isArray(o.p) ? o.p.filter(isNum) : [];
+            const fixtures = Array.isArray(o.f) ? o.f.filter(isNum) : [];
+            // 家具が2件未満の組は連動のしようが無い（壊れた入力として捨てる）。
+            return party.length > 0 && fixtures.length > 1 ? { party, fixtures } : null;
+          })
+          .filter((l): l is TalkLink => l !== null)
+      : [],
     fixtures,
   };
 }
