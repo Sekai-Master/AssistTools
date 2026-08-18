@@ -64,7 +64,9 @@ h2{font-size:13px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-
 .lede{color:var(--ink-2);font-size:14px;margin:0 0 18px;max-width:70ch}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
 .grid{display:grid;gap:14px}
+@media(min-width:560px){ .g4{grid-template-columns:1fr 1fr} }
 @media(min-width:760px){ .g3{grid-template-columns:repeat(3,1fr)} .g2{grid-template-columns:1fr 1fr} }
+@media(min-width:1000px){ .g4{grid-template-columns:repeat(4,1fr)} }
 
 /* ---------- hero tiles ---------- */
 .tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;
@@ -73,6 +75,11 @@ h2{font-size:13px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-
 .tile .v{font-size:clamp(30px,5.2vw,44px);font-weight:700;letter-spacing:-0.03em;line-height:1.05;margin:0}
 .tile .v small{font-size:.44em;font-weight:600;letter-spacing:0;margin-left:3px;color:var(--ink-2)}
 .tile .n{font-size:12.5px;color:var(--ink-2);margin:8px 0 0}
+.tile .sub{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;margin:9px 0 0;padding-top:9px;
+  border-top:1px solid var(--line);font-size:12px;color:var(--ink-3)}
+.tile .sub>*{white-space:nowrap}
+.tile .sub b{font-size:17px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums}
+.tile.rank50::before{background:var(--ink-3)}
 .tile.accent::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--s1)}
 .tile.okline::before{background:var(--good)}
 .pill{display:inline-block;font-size:11.5px;padding:2px 9px;border-radius:999px;
@@ -224,7 +231,7 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
 </div>
 
 <section id="hero">
-  <div class="grid g3" id="tiles"></div>
+  <div class="grid g4" id="tiles"></div>
   <p class="status" id="verdict"></p>
 </section>
 
@@ -750,26 +757,43 @@ function render(){
   const lbUsed = DAYS.reduce((a,d)=>a+d.lbManual+d.lbAuto,0);
 
   /* --- hero --- */
-  const mLo = total/P.border.highPt - 1;      /* ボーダーが上振れした場合 */
-  const mHi = total/P.border.lowPt  - 1;      /* 下振れした場合 */
-  const cls = mLo>=0.08?'ok':(mLo>=0?'warn':'bad');
-  const liveNote = LIVE ? `実測 ${fmt(LIVE.latest.r100/1e4)}万（経過${LIVE.latest.h.toFixed(1)}h）` : '';
+  /* 順位ごとのパネルを組む。lo/hi はボーダーのレンジで、マージンは上振れ側が最悪ケース */
+  const rankTile = (label, lo, hi, obs, extra, cls2='') => {
+    const mLo = total/hi - 1, mHi = total/lo - 1;
+    const st = mLo>=0.08?'ok':(mLo>=0?'warn':'bad');
+    const msg = mLo>=0.08?'◎ 足りる':(mLo>=0?'△ ぎりぎり':'× 上振れで届かない');
+    return `<div class="tile ${cls2} ${mLo>=0?'okline':''}"><p class="k">${label}</p>
+      <p class="v num" style="font-size:clamp(22px,3.6vw,32px)">${oku(lo)}<small>〜</small>${oku(hi)}<small>億</small></p>
+      <div class="sub"><span>マージン <b style="color:${mLo>=0?'var(--good)':'var(--bad)'}">${mLo>=0?'+':''}${(mLo*100).toFixed(0)}〜${mHi>=0?'+':''}${(mHi*100).toFixed(0)}%</b></span>
+        <span class="pill ${st}" style="margin-left:auto">${msg}</span></div>
+      <p class="n">${obs}${extra?'<br>'+extra:''}</p></div>`;
+  };
+  const R50t = P.border.rank50Ratio || 0;
+  const mLoAll = total/P.border.highPt - 1;
+  const obs100 = LIVE ? `実測 ${fmt(LIVE.latest.r100/1e4)}万（経過${LIVE.latest.h.toFixed(1)}h）` : '';
+  const obs50  = (LIVE && LIVE.latest.r50) ? `実測 ${fmt(LIVE.latest.r50/1e4)}万（経過${LIVE.latest.h.toFixed(1)}h）` : '';
+  const short2 = P.boost.budgetLb - lbUsed;
   document.getElementById('tiles').innerHTML = `
     <div class="tile accent"><p class="k">着地見込み</p><p class="v num"><span id="v-total">0.00</span><small>億</small></p>
-      <p class="n">周回 ${oku(DAYS.reduce((a,d)=>a+d.manual,0))} ／ オート ${oku(DAYS.reduce((a,d)=>a+d.auto,0))} ／ マイセカイ ${oku(DAYS.reduce((a,d)=>a+d.mys,0))}</p></div>
-    <div class="tile"><p class="k">推定ボーダー（総合100位）</p>
-      <p class="v num" style="font-size:clamp(24px,4.2vw,36px)">${oku(P.border.lowPt)}<small>〜</small>${oku(P.border.highPt)}<small>億</small></p>
-      <p class="n">中央 ${oku(C)}億${P.border.rank50Ratio?` ／ <b>50位なら ${oku(P.border.lowPt*P.border.rank50Ratio)}〜${oku(P.border.highPt*P.border.rank50Ratio)}億</b>`:''}<br>${liveNote}</p></div>
-    <div class="tile ${mLo>=0?'okline':''}"><p class="k">マージン</p>
-      <p class="v num" style="font-size:clamp(24px,4.2vw,36px);color:${mLo>=0?'var(--good)':'var(--ink)'}">${mLo>=0?'+':''}${(mLo*100).toFixed(0)}<small>〜</small>${mHi>=0?'+':''}${(mHi*100).toFixed(0)}<small>%</small></p>
-      <p class="n"><span class="pill ${cls}">${mLo>=0.08?'どちらに転んでも足りる':(mLo>=0?'上振れするとぎりぎり':'上振れすると届かない')}</span>
-        消費LB ${fmt(lbUsed)} / 予算 ${fmt(P.boost.budgetLb)}</p></div>`;
+      <div class="sub"><span>周回 <b>${oku(DAYS.reduce((a,d)=>a+d.manual,0))}</b></span><span>オート <b>${oku(DAYS.reduce((a,d)=>a+d.auto,0))}</b></span><span>マイセカイ <b>${oku(DAYS.reduce((a,d)=>a+d.mys,0))}</b></span></div>
+      <p class="n">周回 ${DAYS.reduce((a,d)=>a+d.hours,0)} 時間（実稼働率 ${(DAYS.reduce((a,d)=>a+d.hours,0)/240*100).toFixed(0)}%）</p></div>
+    ${rankTile('総合100位 ボーダー', P.border.lowPt, P.border.highPt, obs100, `中央 ${oku(C)}億`)}
+    ${R50t ? rankTile('総合50位 ボーダー', P.border.lowPt*R50t, P.border.highPt*R50t, obs50,
+        `中央 ${oku(C*R50t)}億 ／ <b>100位が ${oku(total/R50t)}億以下なら圏内</b>`, 'rank50') : ''}
+    <div class="tile"><p class="k">ライブボーナス</p>
+      <p class="v num" style="font-size:clamp(22px,3.6vw,32px)">${fmt(lbUsed)}<small> LB</small></p>
+      <div class="sub"><span>予算 ${fmt(P.boost.budgetLb)}</span>
+        <span style="margin-left:auto"><b style="color:${short2<0?'var(--warn)':'var(--good)'}">${short2>=0?'残 ':'超過 '}${fmt(Math.abs(short2))}</b></span></div>
+      <p class="n">石換算 ${fmt(lbUsed*P.boost.crystalPerLb/1e4)}万 ／ オートは8/19以降 ${P.boost.auto}炊き
+        ${P.mysekai.lbPerHarvest==null?'<br>⚠️ マイセカイの回復ぶんは未計上':''}</p></div>`;
 
   countUp(document.getElementById('v-total'), total/1e8);
   const short = P.boost.budgetLb - lbUsed;
-  document.getElementById('verdict').textContent =
-    `周回 ${DAYS.reduce((a,d)=>a+d.hours,0)} 時間（実稼働率 ${(DAYS.reduce((a,d)=>a+d.hours,0)/240*100).toFixed(0)}%）で ${oku(total)}億。`
-    + (short>=0 ? `予算は ${fmt(short)} LB 残る。` : `予算を ${fmt(-short)} LB 超過するので、オートの焚き上げから削る。`);
+  const thr = R50t ? total/R50t : 0;
+  document.getElementById('verdict').innerHTML =
+    (mLoAll>=0 ? `100位は<b>どちらに転んでも足りる</b>見込み。` : `100位は上振れすると届かない。`)
+    + (R50t ? `50位は<b>100位ボーダーが ${oku(thr)}億以下に収まるか</b>で決まる（いまの中央推定は ${oku(C)}億）。` : '')
+    + (short<0 ? `予算は ${fmt(-short)} LB 超過。` : `予算は ${fmt(short)} LB 残る。`);
 
   /* --- rate cards --- */
   const rc = (c,name,song,big,unit,rows,formula)=>`
