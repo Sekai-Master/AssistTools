@@ -15,11 +15,18 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   className,
+  compact = false,
 }: {
   options: Option<T>[];
   value: T;
   onChange: (value: T) => void;
   className?: string;
+  /**
+   * 詰めて描く。**5択や日本語5文字以上のラベル**でないと使わないこと。
+   * ★ 既定のままだと 390px で「持って/いない」のように**単語の途中で折れる**。
+   *   この部品は等幅なので、1つでも長いラベルがあると全体が割れる。
+   */
+  compact?: boolean;
 }) {
   const idx = Math.max(
     0,
@@ -50,7 +57,8 @@ export function SegmentedControl<T extends string>({
           onClick={() => onChange(o.value)}
           aria-checked={value === o.value}
           className={cn(
-            "relative z-10 flex-1 rounded-lg px-3 py-1.5 text-sm font-bold transition-colors",
+            "relative z-10 flex-1 rounded-lg py-1.5 font-bold transition-colors",
+            compact ? "px-1 text-xs" : "px-3 text-sm",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
             value === o.value
               ? "text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]"

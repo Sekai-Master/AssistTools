@@ -193,6 +193,10 @@
   --color-amber-100: light-dark(#fef3c7, #3d3320);
   --color-amber-50: light-dark(#fffbeb, #332b1c);
   --color-emerald-500: light-dark(#10b981, #34d399);
+  /* ★ 「置いてあげられる」バッジ用。remap しないと、暗い面の中でここだけ
+     淡いミントの色面として浮く（amber の「淡い色面ではなく色を帯びた暗い面へ」に反する）。 */
+  --color-emerald-100: light-dark(#d1fae5, #17352a);
+  --color-emerald-800: light-dark(#065f46, #74e0ae);
   --color-teal-600: light-dark(#0d9488, #2dd4bf);
 }
 

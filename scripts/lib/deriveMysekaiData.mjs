@@ -345,6 +345,8 @@ function collectTalkLinks(talks, groupToCharas, conditionGroupToFixtures) {
   for (const t of talks ?? []) {
     const fixtureIds = conditionGroupToFixtures.get(toId(t?.mysekaiCharacterTalkConditionGroupId));
     const arc = toId(t?.characterArchiveMysekaiCharacterTalkGroupId);
+    // ★ 会話IDが無い行は同一性を判定できない。混ぜると署名から抜け落ちて
+    //   別物どうしが一致してしまうので、リンクの対象にしない。
     if (!fixtureIds || fixtureIds.length === 0 || arc == null) continue;
     const charas = groupToCharas.get(toId(t?.mysekaiGameCharacterUnitGroupId)) ?? new Set();
     if (charas.size === 0) continue;
@@ -355,10 +357,18 @@ function collectTalkLinks(talks, groupToCharas, conditionGroupToFixtures) {
       arcs.get(k).add(arc);
     }
   }
-  /** 会話集合が同じものを寄せる。 */
+  /**
+   * 会話集合が同じものを寄せる。
+   * ★ 署名に**顔ぶれも含める**。会話集合だけで束ねると、
+   *   「顔ぶれAの家具1」と「顔ぶれBの家具2」がたまたま同じ会話集合になったとき、
+   *   先頭メンバーの顔ぶれを全員に代表させてしまい、
+   *   **存在しない顔ぶれへリンクを張る**。現行データでは起きていないが、
+   *   マスタが更新されれば無言で壊れる。仮定ではなく構造で防ぐ。
+   */
   const bySig = new Map();
   for (const [k, set] of arcs) {
-    const sig = [...set].sort((a, b) => a - b).join(",");
+    const party = k.split("|")[1];
+    const sig = `${party}|${[...set].sort((a, b) => a - b).join(",")}`;
     if (!bySig.has(sig)) bySig.set(sig, []);
     bySig.get(sig).push(k);
   }

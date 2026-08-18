@@ -70,6 +70,33 @@ export interface FilterState {
   desc: boolean;
 }
 
+/**
+ * 「何を出すか」を狭める側のフィールド。並び順（sort/desc）は含めない。
+ *
+ * ★★ ここを増やしたら `NARROWING` にも足すこと。TypeScript が強制する。 ★★
+ *   共有リンクを開いたときは**渡されたリストだけ**を出す必要があり、
+ *   絞り込みが1つでも残っていると「渡されたのに何も出ない」が起きる。
+ *   v1.16 で一度この事故を起こして直したのに、v1.17 で `unseenOnly` を
+ *   足したときに外し忘れて**同じ事故を再発させた**。列挙漏れを型で検出する。
+ */
+type NarrowingKey =
+  | "charId" | "kinds" | "actionOnly" | "reactiveOnly" | "sketchableOnly"
+  | "unseenOnly" | "owned" | "party" | "mainGenreId" | "query";
+
+/** 絞り込みを全部外した状態。並び順はそのまま。 */
+export const NARROWING: { [K in NarrowingKey]: FilterState[K] } = {
+  charId: null,
+  kinds: [],
+  actionOnly: false,
+  reactiveOnly: false,
+  sketchableOnly: false,
+  unseenOnly: false,
+  owned: "any",
+  party: "any",
+  mainGenreId: null,
+  query: "",
+};
+
 export const DEFAULT_FILTER: FilterState = {
   charId: null,
   kinds: [],
@@ -155,8 +182,6 @@ export function applyFilter(
     if (state.owned === "unowned" && owned.has(f.id)) return false;
     if (state.owned === "wish" && !wish.has(f.id)) return false;
     if (state.owned === "shared" && !shared.has(f.id)) return false;
-    // ★ 「持っているのに、まだ見ていない会話が残っている」家具。
-    //   所持と既読の登録が一段落したあと、**次に何をすればいいか**がここに出る。
     // ★ 「持っているのに、まだ見ていない会話が残っている」家具だけに絞る。
     //   所持と既読の登録が一段落したあと、**次に何をすればいいか**がここに出る。
     //   持っていない家具は会話を回収しようがないので、暗黙に所持で絞る。

@@ -112,16 +112,33 @@ export function wishUrl(ids: Iterable<number>, base: string): string | null {
   const code = encodeWish(ids);
   if (!code) return null;
   const u = new URL(base);
-  u.searchParams.set(WISH_PARAM, code);
+  // ★ フラグメントに載せる。サーバへ送信されないので、リストが通信経路に残らない。
+  u.hash = `${WISH_PARAM}=${code}`;
   return u.toString();
 }
 
+export interface WishFromUrl {
+  ids: Set<number>;
+  /**
+   * リンクに `wish=` は付いているのに、中身が読めなかった。
+   * ★ 黙ってふつうの図鑑を出すと、渡した側は「リンクを送ったのに普通のサイトが開く」と
+   *   言われて機能ごと壊れていると誤解する。壊れていることは伝える。
+   */
+  broken: boolean;
+}
+
 /** いま開いている URL に共有リストが載っていれば取り出す。 */
-export function readWishFromUrl(search: string): Set<number> {
+export function readWishFromUrl(search: string, hash = ""): WishFromUrl {
   try {
-    const code = new URLSearchParams(search).get(WISH_PARAM);
-    return code ? decodeWish(code) : new Set();
+    // ★ フラグメント（#wish=）を先に見る。**フラグメントはサーバに送信されない**ので、
+    //   アクセスログにも解析にも載らない。クエリだけだと「サーバに保存されない」とは
+    //   言えても「送信されない」とは言えなかった。古いリンク（?wish=）も読めるようにしておく。
+    const fromHash = new URLSearchParams(hash.replace(/^#/, "")).get(WISH_PARAM);
+    const code = fromHash ?? new URLSearchParams(search).get(WISH_PARAM);
+    if (!code) return { ids: new Set(), broken: false };
+    const ids = decodeWish(code);
+    return { ids, broken: ids.size === 0 };
   } catch {
-    return new Set();
+    return { ids: new Set(), broken: false };
   }
 }

@@ -95,8 +95,10 @@ describe("URL の組み立てと読み取り", () => {
   it("リンクを作って読み戻せる", () => {
     const url = wishUrl([3, 14, 15], "https://example.com/mysekai");
     expect(url).toBeTruthy();
-    const back = readWishFromUrl(new URL(url!).search);
-    expect([...back].sort((a, b) => a - b)).toEqual([3, 14, 15]);
+    const u = new URL(url!);
+    const back = readWishFromUrl(u.search, u.hash);
+    expect([...back.ids].sort((a, b) => a - b)).toEqual([3, 14, 15]);
+    expect(back.broken).toBe(false);
   });
 
   it("空のリストならリンクを作らない", () => {
@@ -109,9 +111,30 @@ describe("URL の組み立てと読み取り", () => {
     expect(url).toContain(WISH_PARAM + "=");
   });
 
+  /** ★ リストはフラグメントに載せる。フラグメントはサーバへ送信されない。 */
+  it("リストはフラグメントに入り、クエリには入らない", () => {
+    const u = new URL(wishUrl([3, 14], "https://example.com/mysekai")!);
+    expect(u.hash).toContain(WISH_PARAM + "=");
+    expect(u.search).toBe("");
+  });
+
+  it("古い形式（?wish=）のリンクも読める", () => {
+    const code = encodeWish([5, 9]);
+    const r = readWishFromUrl(`?${WISH_PARAM}=${code}`, "");
+    expect([...r.ids].sort((a, b) => a - b)).toEqual([5, 9]);
+  });
+
+  /** ★ 壊れたリンクを黙って「ふつうの図鑑」にしない。壊れたと分かること。 */
+  it("wish= はあるのに読めないときは broken を立てる", () => {
+    expect(readWishFromUrl("", `#${WISH_PARAM}=!!!`).broken).toBe(true);
+    expect(readWishFromUrl(`?${WISH_PARAM}=%%%`, "").broken).toBe(true);
+  });
+
   it("パラメータが無ければ空", () => {
-    expect(readWishFromUrl("?other=1").size).toBe(0);
-    expect(readWishFromUrl("").size).toBe(0);
+    expect(readWishFromUrl("?other=1").ids.size).toBe(0);
+    expect(readWishFromUrl("").ids.size).toBe(0);
+    // パラメータが無いのは「壊れている」ではない
+    expect(readWishFromUrl("").broken).toBe(false);
   });
 });
 

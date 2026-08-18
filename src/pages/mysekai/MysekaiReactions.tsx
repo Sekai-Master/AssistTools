@@ -8,6 +8,7 @@ import { ToolPage } from "../../components/ui/ToolPage";
 import { cn } from "../../lib/utils";
 import {
   applyFilter,
+  NARROWING,
   DEFAULT_FILTER,
   partiesOf,
   summary,
@@ -49,11 +50,29 @@ const KIND_LABEL: Record<ReactionKind, string> = {
 };
 
 const OWNED_OPTIONS: { value: OwnedFilter; label: string }[] = [
-  { value: "any", label: "所持問わず" },
-  { value: "owned", label: "持っている" },
-  { value: "unowned", label: "持っていない" },
+  { value: "any", label: "すべて" },
+  { value: "owned", label: "所持済" },
+  { value: "unowned", label: "未所持" },
   { value: "wish", label: "ほしい" },
 ];
+
+/** 「いま効いている条件」に出す文言。OwnedFilter を増やしたらここも足す。 */
+const OWNED_SUMMARY: Record<OwnedFilter, string> = {
+  any: "",
+  owned: "持っている",
+  unowned: "持っていない",
+  wish: "ほしいものリスト",
+  shared: "受け取ったリスト",
+};
+
+/** 選んだ絞り込みが何をするかの説明。分岐で書くと選択肢を足したとき必ずずれる。 */
+const OWNED_NOTE: Record<OwnedFilter, string> = {
+  any: "所持で絞りません。一覧の ＋ ボタン（右から2番目）で印を付けられます",
+  owned: "持っている家具だけ。ここから会話を回収していきます",
+  unowned: "持っていない家具だけ。まず入手する対象です",
+  wish: "ほしいものリストに入れた家具だけ。共有リンクで渡せます",
+  shared: "受け取ったリストの家具だけ",
+};
 
 const PARTY_OPTIONS: { value: PartyFilter; label: string }[] = [
   { value: "any", label: "人数問わず" },
@@ -70,6 +89,15 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   //   実機の画面と突き合わせながら消し込めるので、回収作業ではこれが一番速い。
   { value: "cr", label: "ゲーム内" },
 ];
+
+/** 並び順の補足。「ゲーム内」だけでは何の順か伝わらない。 */
+const SORT_NOTE: Record<SortKey, string> = {
+  talks: "会話が多い家具から。キャラを選んでいればその人のぶんで数えます",
+  name: "名前のあいうえお順",
+  cost: "設置コスト順",
+  size: "置いたときの大きさ順",
+  cr: "キャラクターランクの家具一覧と同じ順。ゲームの画面と見比べながら消し込めます",
+};
 
 /** 素の select にニューモーフィズムの見た目を与える。ネイティブUIのままにしたいので置換はしない。 */
 const SELECT_CLASS =
@@ -95,7 +123,7 @@ function SketchBadge({ sketch }: { sketch: boolean | null }) {
 /** 相手のリストに入っていて、自分が持っている＝置いてあげられる家具。 */
 function OfferBadge() {
   return (
-    <span className="ml-1.5 inline-flex shrink-0 items-center rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+    <span className="ml-1.5 inline-flex shrink-0 items-center rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-bold text-emerald-800">
       置いてあげられる
     </span>
   );
@@ -188,7 +216,9 @@ function FixtureRow({
           {/* ★ 1行で省略すると「鮮やかなユニゾン…」が4行続いて見分けが付かなくなる。
               既定表示の49%が先頭8文字重複という実測がある（元のコメント参照）。
               「ほしい」ボタンを足して幅が減ったぶん、2行まで許して識別できるようにする。 */}
-          <span className="line-clamp-2 font-bold text-slate-700">{fixture.name}</span>
+          {/* text-wrap:balance で2行の割れ目が中央寄りになり、「ソフ／ァ」のような
+              1文字だけのぶら下がりが減る。非対応ブラウザは今までどおり。 */}
+          <span className="line-clamp-2 text-balance font-bold text-slate-700">{fixture.name}</span>
           <span className="mt-0.5 flex flex-wrap items-center gap-1">
             {facesShown.map((id) => {
               const c = charById(id);
@@ -349,9 +379,21 @@ export default function MysekaiReactions() {
    * 共有リンクで渡された「相手のほしいものリスト」。
    * ★ URL にしか無い（サーバにも端末にも保存しない）。読み取りは一度だけ。
    */
-  const [shared] = useState<Set<number>>(() =>
-    typeof window === "undefined" ? new Set() : readWishFromUrl(window.location.search)
+  const [incoming] = useState(() =>
+    typeof window === "undefined"
+      ? { ids: new Set<number>(), broken: false }
+      : readWishFromUrl(window.location.search, window.location.hash)
   );
+  /**
+   * 受け取ったリストのうち**実在する家具だけ**。
+   * ★ 生のデコード結果をそのまま件数に出すと、でたらめなIDを2000件詰めたリンクで
+   *   「2000件あります」と表示しながら一覧は0件、という食い違いが作れる。
+   */
+  const shared = useMemo(() => {
+    if (!data || incoming.ids.size === 0) return new Set<number>();
+    const real = new Set(data.fixtures.map((f) => f.id));
+    return new Set([...incoming.ids].filter((id) => real.has(id)));
+  }, [data, incoming]);
   /** 共有リストのうち、自分が持っているもの＝**置いてあげられるもの**。 */
   const canOffer = useMemo(
     () => [...shared].filter((id) => owned.has(id)),
@@ -383,6 +425,12 @@ export default function MysekaiReactions() {
    *   生成側は**会話集合が完全に一致する組だけ**を出しているので、
    *   見ていない固有会話まで既読になることはない。
    */
+  /** 家具ID → 名前。連動先を名前で見せるため。 */
+  const nameById = useMemo(
+    () => new Map((data?.fixtures ?? []).map((f) => [f.id, f.name])),
+    [data]
+  );
+
   const linkMap = useMemo(() => {
     const m = new Map<string, number[]>();
     for (const l of data?.talkLinks ?? []) {
@@ -480,18 +528,9 @@ export default function MysekaiReactions() {
     // ★ 受け取ったリストを見ている間は、他の条件を全部外して**そのリストだけ**を出す。
     //   絞り込みが残っていると「渡されたのに何も出ない」が起きる。
     if (sharedView && shared.size > 0) {
-      return {
-        ...filter,
-        owned: "shared" as const,
-        charId: null,
-        kinds: [],
-        actionOnly: false,
-        reactiveOnly: false,
-        sketchableOnly: false,
-        party: "any" as const,
-        mainGenreId: null,
-        query: "",
-      };
+      // ★ 絞り込みを**全部**外してから共有リストに切り替える。
+      //   個別に列挙すると、フィルタを増やしたときに必ず外し忘れる（実際に2回やった）。
+      return { ...filter, ...NARROWING, owned: "shared" as const };
     }
     if (!data) return filter;
     const charOk = filter.charId == null || data.characters.some((c) => c.id === filter.charId);
@@ -522,7 +561,9 @@ export default function MysekaiReactions() {
     const out: string[] = [];
     if (f.charId != null) out.push(`キャラ: ${selectedChar?.name ?? "?"}`);
     if (f.kinds.length > 0) out.push(`種類: ${f.kinds.map((k) => KIND_LABEL[k]).join("・")}`);
-    if (f.owned !== "any") out.push(f.owned === "owned" ? "持っている" : "持っていない");
+    // ★ 3択前提の三項演算子に4択目・5択目を足すと、嘘の理由を表示する
+    //   （「ほしい」を選んだのに「持っていない」と出ていた）。表で持つ。
+    if (f.owned !== "any") out.push(OWNED_SUMMARY[f.owned]);
     if (f.party !== "any") out.push(f.party === "solo" ? "ひとりで" : "複数人で");
     if (f.unseenOnly) out.push("未回収の会話がある");
     if (f.sketchableOnly) out.push("模写できるものだけ");
@@ -620,6 +661,16 @@ export default function MysekaiReactions() {
       {/* ★★ 共有リンクで開かれたとき。★★
           相手が「これがほしい」と渡してきたリストを、こちらの所持と突き合わせる。
           **置いてあげられるものが分かって初めて意味がある**ので、そこを主役にする。 */}
+      {incoming.broken && (
+        <Panel title="リンクが読めません">
+          <p className="text-sm leading-relaxed text-slate-600">
+            共有リンクが付いていますが、<b>中身を読み取れませんでした</b>。
+            コピーの途中で切れているか、短縮などで壊れている可能性があります。
+            <b>送り主にもう一度リンクを送ってもらってください。</b>
+          </p>
+        </Panel>
+      )}
+
       {shared.size > 0 && (
         <Panel title="受け取ったほしいものリスト">
           <p className="text-sm leading-relaxed text-slate-600">
@@ -636,7 +687,8 @@ export default function MysekaiReactions() {
             //   「0件です」で終わらせると何をすればいいか分からないので、次の一手を出す。
             <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
               <b>まだ「持っている家具」の印が付いていません。</b>
-              下の一覧で、<b>自分が設計図を持っているものの箱アイコンを押してください</b>。
+              下の一覧で、<b>自分が設計図を持っているものの ＋ ボタンを押してください</b>
+              （右から2番目。押すと箱の印に変わります）。
               押すと<b>「置いてあげられる」</b>の印が付いて、何を置けばいいかが分かります。
               印はこの端末にだけ残り、相手には伝わりません。
             </p>
@@ -727,6 +779,17 @@ export default function MysekaiReactions() {
         </Panel>
       )}
 
+      {/* ★ 共有リストを見ている間、条件は効かない（effectiveFilter が全部上書きするため）。
+          にもかかわらず操作は通り、保存までされていた——あとで「ふつうの図鑑」に
+          戻した瞬間に、覚えのない絞り込みが発動する時限式になっていた。出さない。 */}
+      {sharedView && shared.size > 0 ? (
+        <Panel title="条件">
+          <p className="text-sm leading-relaxed text-slate-600">
+            受け取ったリストを見ている間は、絞り込みは効きません。
+            上の<b>「ふつうの図鑑を見る」</b>に切り替えると使えます。
+          </p>
+        </Panel>
+      ) : (
       <Panel title="条件">
         <div className="space-y-4">
           <div>
@@ -756,21 +819,19 @@ export default function MysekaiReactions() {
 
           <div>
             <SegmentedControl
+              compact
               options={OWNED_OPTIONS}
               value={filter.owned}
               onChange={(v) => setFilter((f) => ({ ...f, owned: v }))}
             />
             <p className="mt-2 text-xs text-slate-500">
-              {filter.owned === "owned"
-                ? "持っている家具だけ。ここから会話を回収していきます"
-                : filter.owned === "unowned"
-                  ? "持っていない家具だけ。まず入手する対象です"
-                  : "所持で絞りません。一覧の右端のボタンで印を付けられます"}
+              {OWNED_NOTE[filter.owned]}
             </p>
           </div>
 
           <div>
             <SegmentedControl
+              compact
               options={PARTY_OPTIONS}
               value={filter.party}
               onChange={(v) => setFilter((f) => ({ ...f, party: v }))}
@@ -844,6 +905,7 @@ export default function MysekaiReactions() {
               options={SORT_OPTIONS}
               value={filter.sort}
               onChange={(v) => setFilter((f) => ({ ...f, sort: v }))}
+              compact
             />
             <NeuButton
               onClick={() => setFilter((f) => ({ ...f, desc: !f.desc }))}
@@ -852,12 +914,20 @@ export default function MysekaiReactions() {
               {filter.desc ? "降順" : "昇順"}
             </NeuButton>
           </div>
+          {/* ★ 他のセグメントには説明があるのに並び順だけ無く、
+              「ゲーム内」が何の順か画面から分からなかった。 */}
+          <p className="mt-2 text-xs text-slate-500">{SORT_NOTE[filter.sort]}</p>
         </div>
       </Panel>
+      )}
 
       <Panel
         title={
-          selectedChar ? `${selectedChar.name} が反応する家具` : "リアクションのある家具"
+          sharedView && shared.size > 0
+            ? "受け取ったほしいものリスト"
+            : selectedChar
+              ? `${selectedChar.name} が反応する家具`
+              : "リアクションのある家具"
         }
       >
         {/* 好みが複数セカイぶんの定義から合成されているキャラ（実データではミク）。
@@ -964,6 +1034,10 @@ export default function MysekaiReactions() {
           highlight={effectiveFilter.charId}
           owned={owned.has(openFixture.id)}
           wished={wish.has(openFixture.id)}
+          linkedNames={(party) => {
+            const peers = linkMap.get(partyKey(openFixture.id, party)) ?? [];
+            return peers.map((id) => nameById.get(id) ?? `家具${id}`);
+          }}
           onToggleWish={toggleWish}
           collected={collected}
           onToggleOwned={toggleOwned}

@@ -70,11 +70,28 @@ export function loadProgress(): Progress {
 
 export function saveProgress(p: Progress): void {
   try {
+    /**
+     * ★ 既存の内容を読んでから上書きする。
+     *   デプロイを跨いで開きっぱなしの古いタブが保存すると、そのタブが知らない
+     *   フィールド（例: v1.16 で足した wish）を落として書き潰す。
+     *   知らないキーは触らずに残す。次にフィールドを足すときも効く。
+     */
+    let prev: Record<string, unknown> = {};
+    try {
+      const raw = localStorage.getItem(OWNED_STORAGE_KEY);
+      const o: unknown = raw ? JSON.parse(raw) : null;
+      if (o && typeof o === "object" && !Array.isArray(o)) prev = o as Record<string, unknown>;
+    } catch {
+      // 読めないなら素直に上書きする。
+    }
     // 並びを固定しておくと、書き出し・取り込みの差分が読める。
     const ids = [...p.owned].sort((a, b) => a - b);
     const seen = [...p.collected].sort();
     const wish = [...p.wish].sort((a, b) => a - b);
-    localStorage.setItem(OWNED_STORAGE_KEY, JSON.stringify({ v: VERSION, ids, seen, wish }));
+    localStorage.setItem(
+      OWNED_STORAGE_KEY,
+      JSON.stringify({ ...prev, v: VERSION, ids, seen, wish })
+    );
   } catch {
     // 保存できなくても操作は続けられる（プライベートモード等）。
   }

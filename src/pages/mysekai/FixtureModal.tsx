@@ -58,6 +58,7 @@ export function FixtureModal({
   owned,
   wished,
   collected,
+  linkedNames,
   onToggleOwned,
   onToggleWish,
   onToggleCollected,
@@ -75,6 +76,12 @@ export function FixtureModal({
   onToggleOwned: (id: number) => void;
   onToggleWish: (id: number) => void;
   onToggleCollected: (key: string) => void;
+  /**
+   * その顔ぶれの会話が**ほかの家具でも同じ中身で起きる**なら、その家具名。
+   * ★ 印が連動して別の家具にも付くので、**押す前に見えていないと怖い**。
+   *   「見てないのに見た印が付いている」と自分の記録を疑わせてはいけない。
+   */
+  linkedNames: (party: readonly number[]) => string[];
   /** 顔ぶれが多い家具を1件ずつ押すのは辛いので、まとめて切り替える。対象は呼び出し側が渡す。 */
   onToggleAll: (f: Fixture, parties: number[][], mark: boolean) => void;
   /** 選択中キャラの名前（見出しに出す）。 */
@@ -106,9 +113,16 @@ export function FixtureModal({
    *   （高さは 44px 以上。iOS のタップ目標の目安）。状態はニューモーフィズムの
    *   流儀に合わせ、済みは「へこみ＋ユニットカラー」、未は「浮き出し」で示す。
    */
-  const partyRow = (p: number[]) => {
+  /**
+   * @param dimOthers 選択キャラ以外を退かせるか。
+   * ★ 「ほかの人だけの会話」では**定義上その人が出ない**ので、全員が薄くなる。
+   *   チップは元々「生の色だと26色中25色がAA割れ」で沈めた経緯があり、
+   *   そこへ opacity を重ねると読めなくなる。対比の意味も無いので切る。
+   */
+  const partyRow = (p: number[], dimOthers = true) => {
     const key = partyKey(fixture.id, p);
     const done = collected.has(key);
+    const linked = linkedNames(p);
     return (
       <li key={key} className="mb-1.5">
         <button
@@ -132,13 +146,19 @@ export function FixtureModal({
           </span>
           <span className="flex flex-wrap items-center gap-1">
             {p.map((id) => (
-              <CharaChip key={id} c={charById(id)} dim={highlight != null && highlight !== id} />
+              <CharaChip key={id} c={charById(id)} dim={dimOthers && highlight != null && highlight !== id} />
             ))}
           </span>
           <span className={cn("ml-auto shrink-0 text-[11px]", done ? "text-white/80" : "text-slate-400")}>
             {done ? "見た" : "未"}
           </span>
         </button>
+        {/* ★ 連動することを押す前に見せる。黙って別の家具の印が変わるのが一番怖い。 */}
+        {linked.length > 0 && (
+          <p className="mt-0.5 pl-3 text-[10px] leading-snug text-slate-400">
+            同じ会話が {linked.join("・")} でも起きます（印は一緒に付きます）
+          </p>
+        )}
       </li>
     );
   };
@@ -281,7 +301,7 @@ export function FixtureModal({
               {solos.length > 0 && (
                 <>
                   <h3 className="mt-2 mb-1 text-xs font-bold text-slate-500">ひとりでいるとき</h3>
-                  <ul>{solos.map(partyRow)}</ul>
+                  <ul>{solos.map((p) => partyRow(p))}</ul>
                 </>
               )}
 
@@ -290,7 +310,7 @@ export function FixtureModal({
                   <h3 className="mt-3 mb-1 text-xs font-bold text-slate-500">
                     揃っているとき（居合わせないと起きません）
                   </h3>
-                  <ul>{groups.map(partyRow)}</ul>
+                  <ul>{groups.map((p) => partyRow(p))}</ul>
                 </>
               )}
             </>
@@ -342,7 +362,7 @@ export function FixtureModal({
                       </button>
                     )}
                   </div>
-                  <ul>{others.map(partyRow)}</ul>
+                  <ul>{others.map((p) => partyRow(p, false))}</ul>
                 </div>
               )}
             </div>
