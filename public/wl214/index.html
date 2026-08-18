@@ -387,13 +387,15 @@ function buildDays(P, R){
   return P.schedule.map((d,i) => {
     const manual = (d.actualPt != null) ? d.actualPt : d.hours * R.multi.perHour * R.multi.pt;
     const autoPlays = (d.autoPlays != null) ? d.autoPlays : (i===0 ? 0 : P.auto.playsPerDay);
-    const auto = autoPlays * R.auto.pt;
+    /* autoPt が入っている日は別の曲・別の炊き数で回した実績なので、そちらを優先する */
+    const auto = (d.autoPt != null) ? d.autoPt : autoPlays * R.auto.pt;
     const mys  = (d.mysekaiPt != null) ? d.mysekaiPt : (i===0 ? R.mysekai.opening : R.mysekai.perDay);
     const total = manual + auto + mys;
     cum += total;
     const plays = (d.actualPt != null) ? Math.round(d.actualPt / R.multi.pt) : d.hours * R.multi.perHour;
     return {...d, manual, auto, mys, total, cum, plays, autoPlays,
-            lbManual: plays * P.boost.multi, lbAuto: autoPlays * P.boost.auto};
+            lbManual: plays * P.boost.multi,
+            lbAuto: (d.autoLb != null) ? d.autoLb : autoPlays * P.boost.auto};
   });
 }
 
