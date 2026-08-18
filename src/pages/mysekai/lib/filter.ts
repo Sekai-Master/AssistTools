@@ -14,7 +14,12 @@ export type PartyFilter = "any" | "solo" | "group";
  * ★ 持っている家具は**会話をこれから回収できる対象**で、持っていない家具は
  *   まず入手しないと何も始まらない。用途が正反対なので両方向に絞れる必要がある。
  */
-export type OwnedFilter = "any" | "owned" | "unowned" | "wish";
+/**
+ * 出す家具を絞る軸。
+ * ★ `shared` だけ性質が違う。**共有リンクで渡されたリストそのもの**で、
+ *   受け取った人が図鑑を使ったことがなくても中身が見えないと意味がない。
+ */
+export type OwnedFilter = "any" | "owned" | "unowned" | "wish" | "shared";
 
 export interface FilterState {
   /** 選択中のキャラID。null は「キャラで絞らない」。 */
@@ -129,13 +134,15 @@ export function applyFilter(
   fixtures: Fixture[],
   state: FilterState,
   owned: ReadonlySet<number> = new Set(),
-  wish: ReadonlySet<number> = new Set()
+  wish: ReadonlySet<number> = new Set(),
+  shared: ReadonlySet<number> = new Set()
 ): Fixture[] {
   const q = normalizeQuery(state.query);
   const out = fixtures.filter((f) => {
     if (state.owned === "owned" && !owned.has(f.id)) return false;
     if (state.owned === "unowned" && owned.has(f.id)) return false;
     if (state.owned === "wish" && !wish.has(f.id)) return false;
+    if (state.owned === "shared" && !shared.has(f.id)) return false;
     if (state.reactiveOnly && !f.reactive) return false;
     // ★ キャラを選んでいれば「その子が使う家具」に絞れる（誰が使うかのデータがある）。
     //   選んでいなければ家具の印（isGameCharacterAction）かアクションデータの有無で見る。

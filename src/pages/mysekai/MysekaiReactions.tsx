@@ -347,6 +347,14 @@ export default function MysekaiReactions() {
     [shared, owned]
   );
   const [copied, setCopied] = useState(false);
+  /**
+   * 受け取ったリストだけを出すモード。
+   * ★ **リンクで来た人は図鑑を使ったことがないかもしれない。**
+   *   既定の絞り込み（反応ありのみ等）が効いたままだとリストの中身が見えず、
+   *   受け取っても何も分からない。リンクで開いたら既定でこのモードにする。
+   * ★ 保存済みの絞り込みは書き換えない。閉じれば元の条件に戻る。
+   */
+  const [sharedView, setSharedView] = useState(true);
   /** 詳細を開いている家具。null なら閉じている。 */
   const [openFixture, setOpenFixture] = useState<Fixture | null>(null);
 
@@ -420,6 +428,22 @@ export default function MysekaiReactions() {
    *   画面から原因が分からなくなる。存在しない選択は無かったことにする。
    */
   const effectiveFilter = useMemo(() => {
+    // ★ 受け取ったリストを見ている間は、他の条件を全部外して**そのリストだけ**を出す。
+    //   絞り込みが残っていると「渡されたのに何も出ない」が起きる。
+    if (sharedView && shared.size > 0) {
+      return {
+        ...filter,
+        owned: "shared" as const,
+        charId: null,
+        kinds: [],
+        actionOnly: false,
+        reactiveOnly: false,
+        sketchableOnly: false,
+        party: "any" as const,
+        mainGenreId: null,
+        query: "",
+      };
+    }
     if (!data) return filter;
     const charOk = filter.charId == null || data.characters.some((c) => c.id === filter.charId);
     const genreOk =
@@ -430,11 +454,11 @@ export default function MysekaiReactions() {
       charId: charOk ? filter.charId : null,
       mainGenreId: genreOk ? filter.mainGenreId : null,
     };
-  }, [data, filter]);
+  }, [data, filter, sharedView, shared]);
 
   const list = useMemo(
-    () => (data ? applyFilter(data.fixtures, effectiveFilter, owned, wish) : []),
-    [data, effectiveFilter, owned, wish]
+    () => (data ? applyFilter(data.fixtures, effectiveFilter, owned, wish, shared) : []),
+    [data, effectiveFilter, owned, wish, shared]
   );
 
   const selectedChar: MysekaiCharacter | undefined = data?.characters.find(
@@ -547,41 +571,56 @@ export default function MysekaiReactions() {
       {shared.size > 0 && (
         <Panel title="受け取ったほしいものリスト">
           <p className="text-sm leading-relaxed text-slate-600">
-            <b>{shared.size}件</b>のリストを受け取りました。そのうち
-            <b className="text-[color:var(--unit-color)]"> あなたが持っているのは {canOffer.length}件</b>です。
-            {canOffer.length > 0 ? (
-              <>
-                {" "}
-                これをマイセカイに置いておけば、相手が来て模写できます。
-                一覧では<b>「置いてあげられる」</b>の印が付いています。
-              </>
-            ) : (
-              <> 残念ながら、いま置いてあげられるものはありません。</>
-            )}
+            誰かが<b>「これがほしい」</b>と渡してきた家具が <b>{shared.size}件</b> あります。
+            {sharedView ? "下にその一覧を出しています。" : "「受け取ったリストだけ見る」で一覧を出せます。"}
+            <br />
+            マイセカイの家具は<b>設計図を持っていないと作れず</b>、持っていない人は
+            <b>誰かのマイセカイへ行って模写する</b>しかありません。
+            <b>あなたが持っているものを置いておけば、相手が来て写せます。</b>
           </p>
+
+          {owned.size === 0 ? (
+            // ★ このサイトを初めて使う人には所持の印が無い。
+            //   「0件です」で終わらせると何をすればいいか分からないので、次の一手を出す。
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
+              <b>まだ「持っている家具」の印が付いていません。</b>
+              下の一覧で、<b>自分が設計図を持っているものの箱アイコンを押してください</b>。
+              押すと<b>「置いてあげられる」</b>の印が付いて、何を置けばいいかが分かります。
+              印はこの端末にだけ残り、相手には伝わりません。
+            </p>
+          ) : (
+            <p className="mt-3 text-sm leading-relaxed text-slate-600">
+              このうち
+              <b className="text-[color:var(--unit-color)]"> あなたが持っているのは {canOffer.length}件</b>
+              {canOffer.length > 0 ? (
+                <>
+                  。<b>「置いてあげられる」</b>の印が付いています。それをマイセカイに置けば完了です。
+                </>
+              ) : (
+                <>で、いま置いてあげられるものはありません。</>
+              )}
+            </p>
+          )}
+
           <div className="mt-3 flex flex-wrap gap-2">
             <NeuButton
-              onClick={() =>
-                setFilter((f) => ({ ...f, owned: "any", reactiveOnly: false, charId: null, kinds: [] }))
-              }
+              active={sharedView}
+              onClick={() => setSharedView(true)}
               className="min-h-11 px-3 py-1.5"
             >
-              条件を外して全部見る
+              受け取ったリストだけ見る
             </NeuButton>
             <NeuButton
-              onClick={() => {
-                const u = new URL(window.location.href);
-                u.searchParams.delete("wish");
-                window.location.replace(u.toString());
-              }}
+              active={!sharedView}
+              onClick={() => setSharedView(false)}
               className="min-h-11 px-3 py-1.5"
             >
-              リストを閉じる
+              ふつうの図鑑を見る
             </NeuButton>
           </div>
           <p className="mt-3 text-xs leading-relaxed text-slate-500">
-            このリストは<b>URL にだけ入っています</b>。サイトには保存されないので、
-            リンクを閉じれば消えます。<b>あなたの所持や進み具合は相手に伝わりません。</b>
+            このリストは<b>リンクの中にだけ入っています</b>。サイトには保存されないので、
+            リンクを閉じれば消えます。<b>あなたが何を持っているかは相手に伝わりません。</b>
           </p>
         </Panel>
       )}

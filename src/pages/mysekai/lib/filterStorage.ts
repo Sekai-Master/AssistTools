@@ -22,6 +22,8 @@ const VERSION = 1;
 const KINDS: ReactionKind[] = ["talk", "like"];
 const SORTS: SortKey[] = ["talks", "name", "cost", "size"];
 const PARTIES: PartyFilter[] = ["any", "solo", "group"];
+// ★ shared は URL 由来の一時的な状態なので、保存には載せない
+//   （リンクを閉じたあとも「受け取ったリスト」で絞られたままになる）。
 const OWNEDS: OwnedFilter[] = ["any", "owned", "unowned", "wish"];
 
 const bool = (v: unknown, fallback: boolean): boolean => (typeof v === "boolean" ? v : fallback);

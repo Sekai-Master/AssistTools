@@ -7,6 +7,8 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { decodeWish, encodeWish, readWishFromUrl, wishUrl, WISH_PARAM } from "./wishlist";
+import { applyFilter, DEFAULT_FILTER } from "./filter";
+import type { Fixture } from "./types";
 
 describe("往復して元に戻る", () => {
   it("ふつうの集合", () => {
@@ -112,3 +114,73 @@ describe("URL の組み立てと読み取り", () => {
     expect(readWishFromUrl("").size).toBe(0);
   });
 });
+
+/**
+ * ★★ 受け取った人の目線 ★★
+ * **リンクを渡される相手は、この図鑑を使ったことがないかもしれない。**
+ * 所持の印がゼロの状態でも、リストの中身そのものは見えないと意味がない。
+ * （既定の絞り込みが効いたままだと「渡されたのに何も出ない」が起きる。実際に一度作り込んだ）
+ */
+describe("受け取った側で中身が見える", () => {
+  const F = (id: number, reactive: boolean): Fixture =>
+    ({
+      id,
+      name: `家具${id}`,
+      reading: `かぐ${id}`,
+      mainGenreId: 1,
+      subGenreId: 1,
+      size: [1, 1, 1],
+      site: "room",
+      layout: "floor",
+      cost: 0,
+      sketch: true,
+      action: false,
+      reactive,
+      talkCount: reactive ? 3 : 0,
+      talkChars: [],
+      talkCountBy: new Map(),
+      likeChars: [],
+      actionChars: [],
+      parties: [],
+    }) as unknown as Fixture;
+
+  const fixtures = [F(1, true), F(2, false), F(3, false), F(4, true)];
+  const sharedIds = new Set([2, 3]);
+
+  it("所持ゼロ・反応なしの家具でも、受け取ったリストは全部出る", () => {
+    const out = applyFilter(
+      fixtures,
+      { ...DEFAULT_FILTER, owned: "shared", reactiveOnly: false },
+      new Set(),      // 何も持っていない
+      new Set(),      // 自分のほしいものも無い
+      sharedIds
+    );
+    expect(out.map((f) => f.id).sort()).toEqual([2, 3]);
+  });
+
+  it("リストに無いものは出ない", () => {
+    const out = applyFilter(
+      fixtures,
+      { ...DEFAULT_FILTER, owned: "shared", reactiveOnly: false },
+      new Set(), new Set(), sharedIds
+    );
+    expect(out.some((f) => f.id === 1 || f.id === 4)).toBe(false);
+  });
+
+  it("共有が空なら1件も出ない（全件が出てしまわない）", () => {
+    const out = applyFilter(
+      fixtures,
+      { ...DEFAULT_FILTER, owned: "shared", reactiveOnly: false },
+      new Set(), new Set(), new Set()
+    );
+    expect(out).toHaveLength(0);
+  });
+
+  /** 置いてあげられるもの＝共有リスト ∩ 自分の所持。ここが機能の主役。 */
+  it("自分が持っているものが「置いてあげられる」になる", () => {
+    const mine = new Set([3, 4]);
+    const offer = [...sharedIds].filter((id) => mine.has(id));
+    expect(offer).toEqual([3]);
+  });
+});
+
