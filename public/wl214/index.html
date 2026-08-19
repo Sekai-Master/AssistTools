@@ -364,7 +364,9 @@ function calcPt(coef, eventRate, bonusPct, lb){
   const num = coef * (Math.round(bonusPct*100) + 10000);
   const step2x10 = Math.floor(num/1000);
   const step3 = Math.floor(step2x10*eventRate/1000);
-  return step3 * (LB_MULT[lb] ?? 1);
+  /* 炊き数は整数0〜10。エディタから半端な値が入ると倍率が静かに1に落ちてLBだけ嵩むので丸める */
+  const lbi = Math.max(0, Math.min(10, Math.round(Number(lb) || 0)));
+  return step3 * (LB_MULT[lbi] ?? 1);
 }
 
 function computeRates(P, songs, bonusOverride){
@@ -462,16 +464,20 @@ function buildDays(P, R, RBY){
         const b = touch(c); b.manual += n*r.multi.pt; b.plays += n; b.lbManual += n*P.boost.multi;
       });
     }
-    /* オートは周回ブロックが終わってから就寝中に回すので、日の終わり側の章で評価する */
     const rEnd = rateOf(Math.max(0, d.endH - 0.01));
     const endCh = Math.min(5, Math.max(1, Math.floor(Math.max(0, d.endH-0.01)/48)+1));
     const autoPlays = (d.autoPlays != null) ? d.autoPlays : (i===0 ? 0 : P.auto.playsPerDay);
-    const auto = (d.autoPt != null) ? d.autoPt : autoPlays * rEnd.auto.pt;
-    /* マイセカイは資材が 5:00 と 17:00 に更新されるので、回収した時刻の章のボーナスが乗る。
-       日の終わり側の章に寄せると 8/19・8/21・8/25 が隣の章に流れて単価も間違う */
+    /* オートもマイセカイも「その日の何時に消化したか」で乗る章が決まる。章の境界は 20:00 なので、
+       日の終わり側の章（endCh）に寄せると 8/19・8/21・8/25 が隣の章に流れて単価まで間違う。
+       実測: オートは 8/18・8/19 とも日中（09:00〜18:00）、マイセカイは 5:00 と 17:00 の資材更新後 */
     const evT = new Date(P.event.startJst).getTime(), evY = new Date(P.event.startJst).getFullYear();
     const hOf = hh => { const [mo,da] = String(d.label).split('/').map(Number);
       return (Date.UTC(evY, mo-1, da, hh-9) - evT)/36e5; };
+    const autoH  = hOf(P.auto.hourOfDay != null ? P.auto.hourOfDay : 13);
+    const autoCh = (autoH >= 0 && autoH <= 240)
+                     ? Math.min(5, Math.max(1, Math.floor(autoH/48)+1)) : endCh;
+    const rAuto  = RBY[autoCh] || R;
+    const auto   = (d.autoPt != null) ? d.autoPt : autoPlays * rAuto.auto.pt;
     const harvestAt = (P.mysekai.harvestsPerDay===2) ? [5,17]
       : Array.from({length:P.mysekai.harvestsPerDay||0}, (_,k)=>5 + k*(12/Math.max(1,(P.mysekai.harvestsPerDay||1)-1)));
     const harvestHs = harvestAt.map(hOf).filter(h => h >= 0 && h <= 240);
@@ -505,12 +511,12 @@ function buildDays(P, R, RBY){
       }
     }
     const lbAuto = (d.autoLb != null) ? d.autoLb : autoPlays * P.boost.auto;
-    const futureAutoLb = (d.autoLb != null || d.endH <= nowH) ? 0 : lbAuto;
+    const futureAutoLb = (d.autoLb != null || autoH <= nowH) ? 0 : lbAuto;
     const state = d.endH <= nowH ? '済' : (startH >= nowH ? '予定' : '進行中');
-    touch(endCh).auto += auto; touch(endCh).lbAuto += lbAuto;
+    touch(autoCh).auto += auto; touch(autoCh).lbAuto += lbAuto;
     for(const c in mysByCh) touch(Number(c)).mys += mysByCh[c];
     return {...d, manual, auto, mys, total, cum, plays, autoPlays, lbManual, lbAuto, lbMys,
-            nHarvest, futureManualLb, futurePlays, futureAutoLb, futureMysLb, state, byCh, endCh};
+            nHarvest, futureManualLb, futurePlays, futureAutoLb, futureMysLb, state, byCh, endCh, autoCh, autoH};
   });
 }
 
@@ -664,9 +670,12 @@ function cumChart(svg, tipEl, days, P){
   /* 50位は「100位×終値比」ではなく、実測の50位そのものにアンカーする。
      rank50Ratio は終値の比であって道中の比ではないので、掛け算だけだと実線から浮く */
   const R50v = P.border.rank50Ratio || 1;
+  /* レンジの端には比の端を使う。中央比だけを両端に掛けると比の不確実性（歴代1.176〜1.338）が
+     消えて、最悪ケースを8%ほど甘く見せてしまう */
+  const R50lo = P.border.rank50RatioLo || R50v, R50hi = P.border.rank50RatioHi || R50v;
   const proj50 = makeProj(P, LIVE, 'r50');
-  const lo50F = Math.max(P.border.lowPt*R50v, proj50.obsNow);
-  const at50 = h => ({h, m:proj50(h, C*R50v), lo:proj50(h, lo50F), hi:proj50(h, P.border.highPt*R50v)});
+  const lo50F = Math.max(P.border.lowPt*R50lo, proj50.obsNow);
+  const at50 = h => ({h, m:proj50(h, C*R50v), lo:proj50(h, lo50F), hi:proj50(h, P.border.highPt*R50hi)});
   const bd  = days.map(d=>at3(d.endH));                       /* ツールチップ用（日付に対応） */
   const bd50 = days.map(d=>at50(d.endH));
   /* 描画用は細かい格子。現在地でぴったり閉じるよう obsH を必ず含める */
@@ -903,17 +912,20 @@ function render(){
   const needMys    = DAYS.reduce((a,d)=>a+d.futureMysLb,0);
   const needLb     = needManual + needAuto + needMys;
   const R50t = P.border.rank50Ratio || 0;
+  const R50tLo = P.border.rank50RatioLo || R50t, R50tHi = P.border.rank50RatioHi || R50t;
   const mLoAll = total/P.border.highPt - 1;
-  const obs100 = LIVE ? `実測 ${fmt(LIVE.latest.r100/1e4)}万（経過${LIVE.latest.h.toFixed(1)}h）` : '';
-  const obs50  = (LIVE && LIVE.latest.r50) ? `実測 ${fmt(LIVE.latest.r50/1e4)}万（経過${LIVE.latest.h.toFixed(1)}h）` : '';
+  /* live.json は部分破損もありうるので latest の存在まで見る（truthy だけだと途中で死ぬ） */
+  const LT = (LIVE && LIVE.latest) ? LIVE.latest : null;
+  const obs100 = (LT && LT.r100) ? `実測 ${fmt(LT.r100/1e4)}万（経過${LT.h.toFixed(1)}h）` : '';
+  const obs50  = (LT && LT.r50)  ? `実測 ${fmt(LT.r50/1e4)}万（経過${LT.h.toFixed(1)}h）` : '';
   const short2 = P.boost.budgetLb - lbUsed;
   document.getElementById('tiles').innerHTML = `
     <div class="tile accent"><p class="k">着地見込み</p><p class="v num"><span id="v-total">0.00</span><small>億</small></p>
       <div class="sub"><span>周回 <b>${oku(DAYS.reduce((a,d)=>a+d.manual,0))}</b></span><span>オート <b>${oku(DAYS.reduce((a,d)=>a+d.auto,0))}</b></span><span>マイセカイ <b>${oku(DAYS.reduce((a,d)=>a+d.mys,0))}</b></span></div>
       <p class="n">周回 ${DAYS.reduce((a,d)=>a+d.hours,0)} 時間（実稼働率 ${(DAYS.reduce((a,d)=>a+d.hours,0)/240*100).toFixed(0)}%）</p></div>
     ${rankTile('総合100位 ボーダー', P.border.lowPt, P.border.highPt, obs100, `中央 ${oku(C)}億`)}
-    ${R50t ? rankTile('総合50位 ボーダー', P.border.lowPt*R50t, P.border.highPt*R50t, obs50,
-        `中央 ${oku(C*R50t)}億 ／ <b>100位が ${oku(total/R50t)}億以下なら圏内</b>`, 'rank50') : ''}
+    ${R50t ? rankTile('総合50位 ボーダー', P.border.lowPt*R50tLo, P.border.highPt*R50tHi, obs50,
+        `中央 ${oku(C*R50t)}億 ／ <b>100位が ${oku(total/R50t)}億以下なら圏内</b>（比 ${R50tLo}〜${R50tHi}）`, 'rank50') : ''}
     <div class="tile"><p class="k">ここから必要なLB</p>
       <p class="v num" style="font-size:clamp(22px,3.6vw,32px)">${fmt(needLb)}<small> LB</small></p>
       <div class="sub"><span>石換算 <b>${manC(needLb*P.boost.crystalPerLb)}</b>万</span>
@@ -1122,10 +1134,25 @@ function render(){
   /* 表の「推定ボーダー」列は chart3 の破線と同じ projector を使う。
      素のシェア曲線だけで引くと実測から4,000万ほど甘い値になり、同名で別物が2つ出てしまう */
   const projT = makeProj(P, LIVE, 'r100');
+  /* 過去の行は推定ではなく live.json の実測を出す。後方外挿は中央シェアの形を定数倍しただけで、
+     観測1点でしか実測に一致しない（8/17 で +20%、8/18 で +22% ずれ、差の符号まで反転していた） */
+  const bseries = (LIVE && Array.isArray(LIVE.border)) ? LIVE.border : [];
+  const obsBorderAt = h => {
+    if(!bseries.length || h > bseries[bseries.length-1][0]) return null;
+    if(h <= bseries[0][0]) return bseries[0][1];
+    for(let i=1;i<bseries.length;i++){
+      if(bseries[i][0] >= h){
+        const [ha,va]=bseries[i-1], [hb,vb]=bseries[i];
+        return hb===ha ? vb : va + (h-ha)/(hb-ha)*(vb-va);
+      }
+    }
+    return null;
+  };
   document.getElementById('daytable').innerHTML =
-    `<thead><tr><th style="text-align:left">日</th><th>稼働</th><th>周回</th><th>オート</th><th>マイセカイ</th><th>その日</th><th>累積</th><th>推定ボーダー</th></tr></thead><tbody>`
+    `<thead><tr><th style="text-align:left">日</th><th>稼働</th><th>周回</th><th>オート</th><th>マイセカイ</th><th>その日</th><th>累積</th><th>100位ボーダー</th></tr></thead><tbody>`
     + DAYS.map(d=>{
-        const b=projT(d.endH, P.border.centralPt);   /* グラフの破線と同じ推定を使う */
+        const ob=obsBorderAt(d.endH);               /* 過去は実測、未来はグラフの破線と同じ推定 */
+        const b=(ob != null) ? ob : projT(d.endH, P.border.centralPt);
         const diff=d.cum-b;
         return `<tr><td style="text-align:left">${d.label}(${d.dow}) <span class="ch1">${d.blocks||''}</span></td>
           <td>${d.hours?d.hours+'h':'—'}</td><td>${fmt(d.manual/1e4)}万</td><td>${fmt(d.auto/1e4)}万</td>
@@ -1145,7 +1172,7 @@ function render(){
     `<b>この推定の弱点。</b>214の指数1.206は参照の上限1.080を超える<b>外挿</b>で、彰人の指数自体も観測1回（event163）に依存する。<b>答え合わせは ch2（寧々・指数1.042）の伸び方</b>——ch1ほど伸びなければ①側、伸び続けるならキャラ人気では説明できない要因（夏休み・最終Part）が効いているので②側へ寄せる`,
     `<b>実測の反映。</b>ボーダーの実測は NAS の sekai-border-tracker が10分間隔で集めたものを <code>live.json</code> として置いている（ブラウザから sekai.best API は CORS で叩けない）。走者の実測は申告があった時点の値`,
     `<b>ボーダーは中盤で凍り、チャプター終盤に跳ねる。</b>過去実測で ch2 の伸びの55〜85%が最後の12時間に集中。ch1終から約36時間はほぼ動かないので、8/19・8/20 の稼働は相対的に一番効く`,
-    `<b>8/27 を「調整のみ」にする代償。</b>最後の12時間だけでボーダーは終値の6.9〜10.9pp（2.6億なら1,800万〜2,900万Pt）伸びる。ここに乗らないぶんを事前に積んでおく必要がある`,
+    `<b>8/27 を「調整のみ」にする代償。</b>最後の12時間だけでボーダーは終値の7.0〜11.5pp（2.4億なら1,700万〜2,800万Pt）伸びる。ここに乗らないぶんを事前に積んでおく必要がある`,
     `<b>オートの炊き数はいま ${P.boost.auto}炊き</b>（8/17〜8/18 は実績で10炊き固定、8/19 以降が可変）。${
       P.boost.auto===10
         ? `全期間の消費LBは ${fmt(lbUsed)} で、当初見込みの石30万（＝${fmt(P.boost.budgetLb)}LB）を超えるが、50位を取りに行くため超過を飲む判断（2026-08-18 夜）。5炊きに落とすと予算内に収まるかわりに着地が下がる`
@@ -1165,7 +1192,7 @@ function render(){
 
   document.getElementById('subline').innerHTML =
     `event${P.event.id}「${P.event.title}」${P.event.part} ／ 2026-08-17 20:00 〜 08-27 20:00 JST`
-    + (LIVE ? ` ／ <b>実測は ${LIVE.generatedAt.replace('T',' ').slice(0,16)} 時点</b>（観測 ${LIVE.border.length} 点）` : '')
+    + ((LIVE && LIVE.generatedAt) ? ` ／ <b>実測は ${String(LIVE.generatedAt).replace('T',' ').slice(0,16)} 時点</b>（観測 ${(LIVE.border||[]).length} 点）` : '')
     + ` ／ 前提 ${P.version}`;
   document.getElementById('foot').innerHTML =
     `計算式の出典: AssistTools <code>efficiency.ts</code> / <code>calcLivePt.ts</code> / <code>overhead.ts</code>。`
@@ -1202,7 +1229,7 @@ function renderLive(){
   const chLeft = Math.max(0, (Math.floor(elapsedH/48)+1)*48 - elapsedH);
   document.getElementById('livemeta').innerHTML =
     `いま <b>ch${cur.n} ${cur.chara}</b><br>この章はあと <b>${chLeft.toFixed(1)}</b> 時間`
-    + (LIVE ? `<br>ボーダー実測 <b>${fmt(LIVE.latest.r100/1e4)}</b> 万Pt` : '');
+    + ((LIVE && LIVE.latest) ? `<br>100位の実測 <b>${fmt(LIVE.latest.r100/1e4)}</b> 万Pt` : '');
 }
 
 /* 数字を数え上げる。派手さのためではなく、更新があったことを目で拾えるようにするため */
@@ -1229,9 +1256,13 @@ function buildEditor(){
     ['support.effective','支援者の実効値'],['support.emptySlots','空き枠(0-4)'],
     ['overheadSec.multi','周回OH(秒)'],['overheadSec.auto','オートOH(秒)'],
     ['boost.multi','周回の炊き数'],['boost.auto','オートの炊き数'],['boost.budgetLb','予算(LB)'],
-    ['auto.playsPerDay','オート回数/日'],
+    ['auto.playsPerDay','オート回数/日'],['auto.hourOfDay','オートを回す時刻(時)'],
     ['mysekai.perHarvestPt','マイセカイ1回(Pt/ch1基準)'],['mysekai.harvestsPerDay','マイセカイ回数/日'],
-    ['border.centralPt','推定ボーダー(Pt)']
+    ['mysekai.lbPerHarvest','マイセカイ1回(LB)'],
+    /* centralPt だけ動かすと帯・マージンが取り残されるので上下端も出す */
+    ['border.lowPt','ボーダー下端(Pt)'],['border.centralPt','ボーダー中央(Pt)'],['border.highPt','ボーダー上端(Pt)'],
+    ['border.rank50Ratio','50位/100位 比(中央)'],
+    ['border.rank50RatioLo','同 下端'],['border.rank50RatioHi','同 上端']
   ];
   document.getElementById('fields').innerHTML = f.map(([path,label])=>{
     const v = path.split('.').reduce((o,k)=> (o==null ? undefined : o[k]), P);
@@ -1244,9 +1275,12 @@ function buildEditor(){
 
 function applyEdits(){
   document.querySelectorAll('#fields input').forEach(inp=>{
+    /* 空欄は Number('')===0 になって単価が静かに壊れるので、空・非数はその項目を据え置く */
+    const raw = inp.value.trim();
+    if(raw === '' || !Number.isFinite(Number(raw))) return;
     const ks=inp.dataset.path.split('.'); let o=P;
     for(let i=0;i<ks.length-1;i++){ if(o[ks[i]] == null) o[ks[i]] = {}; o=o[ks[i]]; }
-    o[ks[ks.length-1]] = Number(inp.value);
+    o[ks[ks.length-1]] = Number(raw);
   });
   document.querySelectorAll('#hoursgrid input').forEach(inp=>{
     P.schedule[Number(inp.dataset.hour)].hours = Number(inp.value);
@@ -1268,8 +1302,12 @@ function applyEdits(){
   /* params.json は運用中に何度も差し替わる。live.json と同じくキャッシュを避ける */
   DEFAULTS = await fetch('./params.json?t='+Date.now()).then(r=>r.json());
   LIVE = await fetch('./live.json?t='+Date.now()).then(r=>r.ok?r.json():null).catch(()=>null);
-  const stored = localStorage.getItem(LSKEY);
-  P = stored ? JSON.parse(stored) : JSON.parse(JSON.stringify(DEFAULTS));
+  /* 保存済みパラメータが壊れていてもページごと死なせない（parse で throw すると
+     「読み込み中…」のまま何も出なくなる） */
+  let stored = null;
+  try { stored = JSON.parse(localStorage.getItem(LSKEY)); }
+  catch(e){ localStorage.removeItem(LSKEY); }
+  P = (stored && typeof stored === 'object') ? stored : JSON.parse(JSON.stringify(DEFAULTS));
   if(P.version !== DEFAULTS.version){ P = JSON.parse(JSON.stringify(DEFAULTS)); localStorage.removeItem(LSKEY); }
   const s = await loadSongs(P); SONGS = s.songs;
   buildEditor(); render();
