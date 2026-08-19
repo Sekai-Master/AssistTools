@@ -275,7 +275,7 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
 
 <section>
   <h2>ライブボーナスの予算</h2>
-  <p class="lede">周回は時間律速なので10炊きを落とせない。余剰の投入先はオートの焚き上げ。1〜5炊きは5.0倍/LB、6炊き以降の追加分は2.0倍/LBなので、<b>オートの5炊きぶんは周回の焚き上げより石効率が良い</b>。下の表は各日に周回とオートでいくら溶けるか。</p>
+  <p class="lede">走者の在庫は 8/19 23:00 ごろにライボが尽きて石に切り替わった（オートは元々石）。開始時点の予算に対する残りより、<b>いま時点からあと何個要るか</b>のほうが判断に使えるので、そちらを主に出している。周回は時間律速なので10炊きを落とせない。削るならLB効率の悪いオートの焚き上げから（10炊き6,870 vs 5炊き9,815 Pt/LB）。</p>
   <div class="chartcard">
     <div class="charthead"><span class="charttitle">消費LBと予算</span>
       <span class="segctl" id="autoboost"></span>
@@ -432,8 +432,23 @@ function buildDays(P, R, RBY){
     const mys  = (d.mysekaiPt != null) ? d.mysekaiPt : (i===0 ? rEnd.mysekai.opening : rEnd.mysekai.perDay);
     const total = manual + auto + mys;
     cum += total;
-    return {...d, manual, auto, mys, total, cum, plays, autoPlays, lbManual,
-            lbAuto: (d.autoLb != null) ? d.autoLb : autoPlays * P.boost.auto};
+    /* 現時点から先に必要なぶんを別勘定にする。走者の在庫は途中でライボ→石に切り替わっており、
+       「開始時点の予算にいくら残るか」より「ここから何個要るか」のほうが判断に使える。 */
+    const nowH = (Date.now() - new Date(P.event.startJst).getTime())/36e5;
+    let futureManualLb = 0, futurePlays = 0;
+    if(d.actualPt == null){
+      for(let c=1;c<=5;c++){
+        const a = Math.max(startH, (c-1)*48, nowH), b = Math.min(d.endH, c*48);
+        if(b<=a) continue;
+        const n = (b-a) * (RBY[c] || R).multi.perHour;
+        futurePlays += n; futureManualLb += n * P.boost.multi;
+      }
+    }
+    const lbAuto = (d.autoLb != null) ? d.autoLb : autoPlays * P.boost.auto;
+    const futureAutoLb = (d.autoLb != null || d.endH <= nowH) ? 0 : lbAuto;
+    const state = d.endH <= nowH ? '済' : (startH >= nowH ? '予定' : '進行中');
+    return {...d, manual, auto, mys, total, cum, plays, autoPlays, lbManual, lbAuto,
+            futureManualLb, futurePlays, futureAutoLb, state};
   });
 }
 
@@ -792,6 +807,9 @@ function render(){
         <span class="pill ${st}" style="margin-left:auto">${msg}</span></div>
       <p class="n">${obs}${extra?'<br>'+extra:''}</p></div>`;
   };
+  const needManual = DAYS.reduce((a,d)=>a+d.futureManualLb,0);
+  const needAuto   = DAYS.reduce((a,d)=>a+d.futureAutoLb,0);
+  const needLb     = needManual + needAuto;
   const R50t = P.border.rank50Ratio || 0;
   const mLoAll = total/P.border.highPt - 1;
   const obs100 = LIVE ? `実測 ${fmt(LIVE.latest.r100/1e4)}万（経過${LIVE.latest.h.toFixed(1)}h）` : '';
@@ -804,20 +822,20 @@ function render(){
     ${rankTile('総合100位 ボーダー', P.border.lowPt, P.border.highPt, obs100, `中央 ${oku(C)}億`)}
     ${R50t ? rankTile('総合50位 ボーダー', P.border.lowPt*R50t, P.border.highPt*R50t, obs50,
         `中央 ${oku(C*R50t)}億 ／ <b>100位が ${oku(total/R50t)}億以下なら圏内</b>`, 'rank50') : ''}
-    <div class="tile"><p class="k">ライブボーナス</p>
-      <p class="v num" style="font-size:clamp(22px,3.6vw,32px)">${fmt(lbUsed)}<small> LB</small></p>
-      <div class="sub"><span>予算 ${fmt(P.boost.budgetLb)}</span>
-        <span style="margin-left:auto"><b style="color:${short2<0?'var(--warn)':'var(--good)'}">${short2>=0?'残 ':'超過 '}${fmt(Math.abs(short2))}</b></span></div>
-      <p class="n">石換算 ${fmt(lbUsed*P.boost.crystalPerLb/1e4)}万 ／ オートは8/19以降 ${P.boost.auto}炊き
+    <div class="tile"><p class="k">ここから必要なLB</p>
+      <p class="v num" style="font-size:clamp(22px,3.6vw,32px)">${fmt(needLb)}<small> LB</small></p>
+      <div class="sub"><span>石換算 <b>${fmt(needLb*P.boost.crystalPerLb/1e4)}</b>万</span>
+        ${P.boost.remainingCrystals!=null?`<span style="margin-left:auto"><b style="color:${P.boost.remainingCrystals>=needLb*P.boost.crystalPerLb?'var(--good)':'var(--bad)'}">在庫 ${fmt(P.boost.remainingCrystals/1e4)}万</b></span>`:''}</div>
+      <p class="n">周回 ${fmt(needManual)} ／ オート ${fmt(needAuto)}（${P.boost.auto}炊き）<br>
+        消化済み ${fmt(lbUsed-needLb)} ／ 全期間 ${fmt(lbUsed)}
         ${P.mysekai.lbPerHarvest==null?'<br>⚠️ マイセカイの回復ぶんは未計上':''}</p></div>`;
-
   countUp(document.getElementById('v-total'), total/1e8);
   const short = P.boost.budgetLb - lbUsed;
   const thr = R50t ? total/R50t : 0;
   document.getElementById('verdict').innerHTML =
     (mLoAll>=0 ? `100位は<b>どちらに転んでも足りる</b>見込み。` : `100位は上振れすると届かない。`)
     + (R50t ? `50位は<b>100位ボーダーが ${oku(thr)}億以下に収まるか</b>で決まる（いまの中央推定は ${oku(C)}億）。` : '')
-    + (short<0 ? `予算は ${fmt(-short)} LB 超過。` : `予算は ${fmt(short)} LB 残る。`);
+    + `ここから <b>${fmt(needLb)} LB（石 ${fmt(needLb*P.boost.crystalPerLb/1e4)}万）</b>要る。`;
 
   /* --- rate cards --- */
   const rc = (c,name,song,big,unit,rows,formula)=>`
@@ -887,26 +905,28 @@ function render(){
   cumChart(document.getElementById('chart3'), document.getElementById('tip3'), DAYS, P);
   lbChart(document.getElementById('chart4'), document.getElementById('tip4'), DAYS, P, R);
 
-  /* --- 日別のLB消費 --- */
+  /* --- 日別のLB消費。消化済みと、ここから必要なぶんを分ける --- */
   const lbM=DAYS.reduce((a,d)=>a+d.lbManual,0), lbA=DAYS.reduce((a,d)=>a+d.lbAuto,0);
-  let run=0;
+  let runNeed=0;
   document.getElementById('lbtable').innerHTML =
-    `<thead><tr><th style="text-align:left">日</th><th>周回</th><th>周回LB</th><th>オート</th><th>オートLB</th>
-      <th>その日</th><th>累積</th><th>残予算</th></tr></thead><tbody>`
+    `<thead><tr><th style="text-align:left">日</th><th>状態</th><th>周回</th><th>周回LB</th><th>オート</th><th>オートLB</th>
+      <th>その日</th><th>ここから必要</th><th>必要の累計</th></tr></thead><tbody>`
     + DAYS.map(d=>{
-        const day=d.lbManual+d.lbAuto; run+=day;
-        const left=P.boost.budgetLb-run;
-        return `<tr><td style="text-align:left">${d.label}(${d.dow}) <span class="ch1">${d.blocks||''}</span></td>
+        const day=d.lbManual+d.lbAuto;
+        const need=d.futureManualLb+d.futureAutoLb; runNeed+=need;
+        const col=d.state==='済'?'var(--ink-3)':(d.state==='進行中'?'var(--s2)':'var(--ink)');
+        return `<tr style="color:${d.state==='済'?'var(--ink-3)':'inherit'}">
+          <td style="text-align:left">${d.label}(${d.dow}) <span class="ch1">${d.blocks||''}</span></td>
+          <td style="color:${col}">${d.state}</td>
           <td>${d.plays?Math.round(d.plays)+'周':'—'}</td><td>${d.lbManual?fmt(d.lbManual):'—'}</td>
           <td>${d.autoPlays?d.autoPlays+'回':'—'}</td><td>${d.lbAuto?fmt(d.lbAuto):'—'}</td>
-          <td><b>${fmt(day)}</b></td><td>${fmt(run)}</td>
-          <td style="color:${left<0?'var(--bad)':'var(--ink-2)'}">${fmt(left)}</td></tr>`;
+          <td>${fmt(day)}</td>
+          <td><b>${need?fmt(need):'—'}</b></td><td>${runNeed?fmt(runNeed):'—'}</td></tr>`;
       }).join('')
-    + `</tbody><tfoot><tr><td style="text-align:left">合計</td>
+    + `</tbody><tfoot><tr><td style="text-align:left">合計</td><td>—</td>
         <td>${fmt(DAYS.reduce((a,d)=>a+d.plays,0))}周</td><td>${fmt(lbM)}</td>
         <td>${fmt(DAYS.reduce((a,d)=>a+d.autoPlays,0))}回</td><td>${fmt(lbA)}</td>
-        <td>${fmt(lbM+lbA)}</td><td>${fmt(lbM+lbA)}</td>
-        <td>${fmt(P.boost.budgetLb-lbM-lbA)}</td></tr></tfoot>`;
+        <td>${fmt(lbM+lbA)}</td><td><b>${fmt(needLb)}</b></td><td>石 ${fmt(needLb*P.boost.crystalPerLb/1e4)}万</td></tr></tfoot>`;
 
   /* --- chapter table --- */
   const chs = P.event.chapters.map((c,i)=>({...c, start:i*48, end:(i+1)*48, hours:0, pt:0}));
