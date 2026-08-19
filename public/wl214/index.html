@@ -353,7 +353,10 @@ function calcPt(coef, eventRate, bonusPct, lb){
   return step3 * (LB_MULT[lb] ?? 1);
 }
 
-function computeRates(P, songs){
+function computeRates(P, songs, bonusOverride){
+  /* bonusOverride を渡すとその値で計算する。チャプターごとにサポート編成が変わり
+     イベントボーナスが動くため、章ごとの単価を出せるようにしてある。 */
+  const BONUS = (bonusOverride != null) ? bonusOverride : P.runner.bonusPct;
   const talent = P.runner.talentMan * 10000;
   const eff = P.runner.lead + (P.runner.inner - P.runner.lead) * 0.2;
   const avgCard = P.runner.inner / 5;
@@ -375,7 +378,7 @@ function computeRates(P, songs){
   const scoreM = Math.floor(rateM * talent * 4);
   const coefM = 110 + Math.floor(scoreM/17000) + 13;   /* 他4人合計は上限13に到達している前提 */
   const cycleM = mmeta.music_time + P.overheadSec.multi;
-  const ptM = calcPt(coefM, mmeta.event_rate, P.runner.bonusPct, P.boost.multi);
+  const ptM = calcPt(coefM, mmeta.event_rate, BONUS, P.boost.multi);
 
   /* ---- オート（ソロ）----
      5枚が1回ずつ＋リーダーがもう1回。内部値を5で割った平均を全枠に置く。 */
@@ -386,11 +389,11 @@ function computeRates(P, songs){
   const scoreA = Math.floor(rateA * talent * 4);
   const coefA = 100 + Math.floor(scoreA/20000);
   const cycleA = ameta.music_time + P.overheadSec.auto;
-  const ptA = calcPt(coefA, ameta.event_rate, P.runner.bonusPct, P.boost.auto);
-  const ptA10 = calcPt(coefA, ameta.event_rate, P.runner.bonusPct, 10);
+  const ptA = calcPt(coefA, ameta.event_rate, BONUS, P.boost.auto);
+  const ptA10 = calcPt(coefA, ameta.event_rate, BONUS, 10);
 
   return {
-    eff, avgCard,
+    bonus: BONUS, eff, avgCard,
     multi:{title:mmeta.title, score:scoreM, coef:coefM, cycle:cycleM,
            perHour:3600/cycleM, pt:ptM, ptPerLb:ptM/P.boost.multi,
            base:mmeta.event_rate, song:mmeta.music_time, lb:P.boost.multi},
@@ -402,19 +405,34 @@ function computeRates(P, songs){
   };
 }
 
-function buildDays(P, R){
+function buildDays(P, R, RBY){
+  /* RBY[章番号] にその章の単価。日の稼働がチャプター境界を跨ぐので、
+     時間を章に割り振ってから章ごとの単価を掛ける。 */
+  const rateOf = h => RBY[Math.min(5, Math.max(1, Math.floor(h/48)+1))] || R;
   let cum = 0;
   return P.schedule.map((d,i) => {
-    const manual = (d.actualPt != null) ? d.actualPt : d.hours * R.multi.perHour * R.multi.pt;
+    const startH = d.endH - d.hours;
+    let manual = 0, plays = 0, lbManual = 0;
+    if(d.actualPt != null){
+      manual = d.actualPt;
+      plays  = Math.round(d.actualPt / rateOf(startH).multi.pt);
+      lbManual = plays * P.boost.multi;
+    }else{
+      for(let c=1;c<=5;c++){
+        const ov = Math.max(0, Math.min(d.endH, c*48) - Math.max(startH, (c-1)*48));
+        if(ov<=0) continue;
+        const r = RBY[c] || R;
+        const n = ov * r.multi.perHour;
+        manual += n * r.multi.pt; plays += n; lbManual += n * P.boost.multi;
+      }
+    }
+    const rEnd = rateOf(Math.max(0, d.endH - 0.01));   /* オート・マイセカイは日の終わり側の章で評価 */
     const autoPlays = (d.autoPlays != null) ? d.autoPlays : (i===0 ? 0 : P.auto.playsPerDay);
-    /* autoPt が入っている日は別の曲・別の炊き数で回した実績なので、そちらを優先する */
-    const auto = (d.autoPt != null) ? d.autoPt : autoPlays * R.auto.pt;
-    const mys  = (d.mysekaiPt != null) ? d.mysekaiPt : (i===0 ? R.mysekai.opening : R.mysekai.perDay);
+    const auto = (d.autoPt != null) ? d.autoPt : autoPlays * rEnd.auto.pt;
+    const mys  = (d.mysekaiPt != null) ? d.mysekaiPt : (i===0 ? rEnd.mysekai.opening : rEnd.mysekai.perDay);
     const total = manual + auto + mys;
     cum += total;
-    const plays = (d.actualPt != null) ? Math.round(d.actualPt / R.multi.pt) : d.hours * R.multi.perHour;
-    return {...d, manual, auto, mys, total, cum, plays, autoPlays,
-            lbManual: plays * P.boost.multi,
+    return {...d, manual, auto, mys, total, cum, plays, autoPlays, lbManual,
             lbAuto: (d.autoLb != null) ? d.autoLb : autoPlays * P.boost.auto};
   });
 }
@@ -725,7 +743,7 @@ function lbChart(svg, tipEl, days, P, R){
 
 <script>
 /* ===================== 起動 ===================== */
-let DEFAULTS=null, P=null, SONGS=null, DAYS=null, R=null, LIVE=null;
+let DEFAULTS=null, P=null, SONGS=null, DAYS=null, R=null, RBY=null, LIVE=null;
 let VIEW = localStorage.getItem('wl214-borderview') || '100';   /* '100' | '50' | 'both' */
 const LSKEY='wl214-params-v1';
 
@@ -749,7 +767,13 @@ async function loadSongs(P){
 
 function render(){
   R = computeRates(P, SONGS);
-  DAYS = buildDays(P, R);
+  /* 章ごとのボーナス。未指定の章は runner.bonusPct にフォールバックする */
+  RBY = {};
+  for(let c=1;c<=5;c++){
+    const b = (P.runner.bonusByChapter || {})[c];
+    RBY[c] = (b != null) ? computeRates(P, SONGS, b) : R;
+  }
+  DAYS = buildDays(P, R, RBY);
 
   const total = DAYS[DAYS.length-1].cum;
   const C = P.border.centralPt;
