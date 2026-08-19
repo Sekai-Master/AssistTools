@@ -400,8 +400,12 @@ function computeRates(P, songs, bonusOverride){
     auto:{ title:ameta.title, score:scoreA, coef:coefA, cycle:cycleA,
            pt:ptA, pt10:ptA10, ptPerLb:ptA/P.boost.auto, hoursForDay:P.auto.playsPerDay*cycleA/3600,
            base:ameta.event_rate, song:ameta.music_time, lb:P.boost.auto},
-    mysekai:{ perDay:P.mysekai.perHarvestPt*P.mysekai.harvestsPerDay,
-              per:P.mysekai.perHarvestPt, times:P.mysekai.harvestsPerDay, opening:P.mysekai.openingPt }
+    /* マイセカイもイベントボーナスが乗るので章ごとに変わる。
+       params の値は runner.bonusPct 基準で入っているものとして、章のボーナス比で換算する。 */
+    mysekai:(()=>{ const k=(BONUS+100)/(P.runner.bonusPct+100);
+      return { perDay:P.mysekai.perHarvestPt*k*P.mysekai.harvestsPerDay,
+               per:P.mysekai.perHarvestPt*k, times:P.mysekai.harvestsPerDay,
+               opening:P.mysekai.openingPt }; })()
   };
 }
 
