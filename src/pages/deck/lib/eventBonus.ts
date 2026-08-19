@@ -43,6 +43,12 @@ export interface BonusTables {
   rarityBonuses: RarityBonusRow[];
   bonusLimits: { eventId: number; memberCountLimit: number }[];
   unitCharacters: UnitCharacter[];
+  /**
+   * ワールドリンクの「属性が何種類あるか」ボーナス。
+   * ★ **イベント個別ではなく全ワールドリンク共通**（eventId を持たない）。
+   *   総合力上限（イベントごと）とは別物なので、同じ扱いにしないこと。
+   */
+  attributeBonuses?: { n: number; rate: number }[];
 }
 
 export interface DeckCard {
@@ -77,6 +83,13 @@ export interface CardBonus {
 export interface EventBonusResult {
   /** 合計(%)。サポート編成ぶんを渡していればそれも含む。 */
   total: number;
+  /**
+   * ワールドリンクの属性ボーナス。対象外のイベントでは null。
+   *
+   * ★★ これはカード1枚ごとではなく**編成全体に一度だけ**乗る。★★
+   *   perCard に配ると内訳が嘘になるので、独立して持つ。
+   */
+  attribute: { count: number; rate: number } | null;
   /** 内訳。どこから来た数字かを画面で見せるため。 */
   perCard: CardBonus[];
   /** 対象人数の上限で切り捨てられた枚数（0 なら全員が効いている）。 */
@@ -144,7 +157,16 @@ export function eventBonus(
   deck: DeckCard[],
   eventId: number,
   tables: BonusTables,
-  opts: { leaderCardId?: number; supportBonus?: number } = {}
+  opts: {
+    leaderCardId?: number;
+    supportBonus?: number;
+    /**
+     * ワールドリンクか。true のときだけ属性ボーナスを乗せる。
+     * ★ 呼び出し側がイベントの種別を見て渡すこと。ここで eventId から
+     *   推測させない（種別の判定を2箇所に散らさない）。
+     */
+    worldBloom?: boolean;
+  } = {}
 ): EventBonusResult {
   const rows = tables.deckBonuses.filter((r) => r.eventId === eventId);
   const cardRows = tables.cardBonuses.filter((r) => r.eventId === eventId);
@@ -187,8 +209,24 @@ export function eventBonus(
   }
 
   const support = opts.supportBonus ?? 0;
+
+  /**
+   * ワールドリンクは**編成に属性が何種類あるか**でボーナスが乗る。
+   * 実データは 1〜2種類=0% / 3種類=75% / 4種類=100% / 5種類=125%。
+   * ★ 空の枠は数えない（4枚編成で3種類なら3種類）。
+   */
+  let attribute: EventBonusResult["attribute"] = null;
+  if (opts.worldBloom && tables.attributeBonuses && tables.attributeBonuses.length > 0) {
+    const count = new Set(deck.map((c) => c.attr).filter(Boolean)).size;
+    // 表に無い種類数（0枚など）は 0% として扱う。
+    const rate = tables.attributeBonuses.find((r) => r.n === count)?.rate ?? 0;
+    attribute = { count, rate };
+  }
+
   return {
-    total: counted.reduce((s, c) => s + c.total, 0) + support,
+    total:
+      counted.reduce((s, c) => s + c.total, 0) + support + (attribute?.rate ?? 0),
+    attribute,
     perCard,
     cappedOut,
     support,

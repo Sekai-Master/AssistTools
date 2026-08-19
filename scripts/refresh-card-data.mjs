@@ -79,6 +79,9 @@ const SOURCES = {
   //   日付欄を持たないが、中身は eventId と数値だけで未公開の名前を含まないので出してよい。
   eventTotalPowerLimits: "eventTotalPowerLimits.json",
   eventRarityBonusRates: "eventRarityBonusRates.json",
+  // ★ ワールドリンクの「属性の種類数」ボーナス。eventId を持たない全体設定で、
+  //   3種類=75% / 4種類=100% / 5種類=125%。日付欄は無いが数値だけなので出してよい。
+  worldBloomDifferentAttributeBonuses: "worldBloomDifferentAttributeBonuses.json",
   masterLessons: "masterLessons.json",
   characterRanks: "characterRanks.json",
   areaItemLevels: "areaItemLevels.json",
@@ -268,6 +271,7 @@ async function main() {
       cardBonuses: out.cardBonuses,
       rarityBonuses: out.rarityBonuses,
       bonusLimits: out.bonusLimits,
+      attributeBonuses: out.attributeBonuses,
     },
     /**
      * 総合力の上限だけを抜いた極小ファイル。**5行しかない。**

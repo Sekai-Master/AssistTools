@@ -104,6 +104,8 @@ function build(rawCards: unknown, rawBonuses: unknown, rawPower: unknown): CardD
         (r) => isStr(r.rarity) && isNum(r.masterRank) && isNum(r.rate)
       ),
       bonusLimits: rows(bonuses.bonusLimits, (r) => isNum(r.eventId) && isNum(r.memberCountLimit)),
+      // ★ ワールドリンクの属性ボーナス。全WL共通の表で eventId を持たない。
+      attributeBonuses: rows(bonuses.attributeBonuses, (r) => isNum(r.n) && isNum(r.rate)),
       unitCharacters: unitCharacters as BonusTables["unitCharacters"],
     },
     powerTables: {

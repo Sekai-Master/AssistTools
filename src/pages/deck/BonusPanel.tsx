@@ -115,6 +115,17 @@ export function BonusPanel({
         </Field>
       </div>
 
+      {/* ★ ワールドリンクは属性を散らすほどボーナスが増える。組み終えてから
+          気づくと組み直しになるので、足りていないことを先に知らせる。 */}
+      {result?.attribute && result.attribute.count < 5 && (
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
+          ワールドリンクは<b>編成の属性が多いほどボーナスが増えます</b>。
+          いまは <b>{result.attribute.count}種類で {result.attribute.rate}%</b>。
+          <b>5種類そろえると 125%</b>（4種類で100%・3種類で75%・2種類以下は0%）なので、
+          属性を散らすだけで大きく伸びます。
+        </p>
+      )}
+
       {/* ★ 上限は「編成を組み終えてから気づく」と手戻りが大きいので、イベントを選んだ
           時点で知らせる。比較パネルを開かない人にも届かせたい。 */}
       {powerLimit != null &&
@@ -245,7 +256,20 @@ export function BonusPanel({
                 result.total !== displayBonus(result.total) ? `正確には ${result.total}%` : "ゲーム内表示と同じ"
               }
             />
-            <Stat label="カード合計" value={`${result.total - result.support}%`} sub={`${cards.length}枚`} />
+            {/* ★ 属性ボーナスは編成全体に一度だけ乗るので、カード合計から分けて出す。
+                混ぜるとカードごとの内訳と合わなくなる。 */}
+            <Stat
+              label="カード合計"
+              value={`${result.total - result.support - (result.attribute?.rate ?? 0)}%`}
+              sub={`${cards.length}枚`}
+            />
+            {result.attribute && (
+              <Stat
+                label="属性ボーナス"
+                value={`${result.attribute.rate}%`}
+                sub={`${result.attribute.count}種類（最大5種類で125%）`}
+              />
+            )}
             <Stat label="サポート" value={`${result.support}%`} sub="手入力ぶん" />
           </div>
 

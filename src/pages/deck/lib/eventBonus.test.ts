@@ -190,3 +190,83 @@ describe("サポート編成（WL）", () => {
     expect(r.total).toBe(170);
   });
 });
+
+/**
+ * ★★ ワールドリンクの属性ボーナス ★★
+ * 編成に属性が何種類あるかで乗る。1〜2種類=0% / 3種類=75% / 4種類=100% / **5種類=125%**。
+ * ★ カード1枚ごとではなく**編成全体に一度だけ**乗る。perCard に配ると内訳が嘘になる。
+ */
+describe("ワールドリンクの属性ボーナス", () => {
+  const ATTRS: BonusTables = {
+    ...tables,
+    attributeBonuses: [
+      { n: 1, rate: 0 }, { n: 2, rate: 0 }, { n: 3, rate: 75 },
+      { n: 4, rate: 100 }, { n: 5, rate: 125 },
+    ],
+  };
+  const card = (cardId: number, attr: string): DeckCard =>
+    ({ cardId, characterId: 99, rarity: "rarity_4", attr, masterRank: 0 }) as DeckCard;
+  const deckOf = (...attrs: string[]) => attrs.map((a, i) => card(900 + i, a));
+  const run = (deck: DeckCard[], wl = true) =>
+    eventBonus(deck, EV, ATTRS, { worldBloom: wl });
+
+  it("5種類そろえば 125%", () => {
+    const r = run(deckOf("cute", "cool", "pure", "happy", "mysterious"));
+    expect(r.attribute).toEqual({ count: 5, rate: 125 });
+  });
+
+  it("種類ごとの倍率が表のとおり", () => {
+    expect(run(deckOf("cute")).attribute?.rate).toBe(0);
+    expect(run(deckOf("cute", "cool")).attribute?.rate).toBe(0);
+    expect(run(deckOf("cute", "cool", "pure")).attribute?.rate).toBe(75);
+    expect(run(deckOf("cute", "cool", "pure", "happy")).attribute?.rate).toBe(100);
+  });
+
+  it("同じ属性が重なっても種類は増えない", () => {
+    const r = run(deckOf("cute", "cute", "cute", "cool", "cool"));
+    expect(r.attribute).toEqual({ count: 2, rate: 0 });
+  });
+
+  /** ★ 合計に一度だけ足す。カードの枚数ぶん掛かってはいけない。 */
+  it("合計には一度だけ乗る", () => {
+    const deck = deckOf("cute", "cool", "pure", "happy", "mysterious");
+    const withWl = run(deck);
+    const without = run(deck, false);
+    expect(withWl.total - without.total).toBe(125);
+    // カードごとの内訳には混ぜない
+    const perCardSum = withWl.perCard.reduce((s, c) => s + c.total, 0);
+    expect(without.total).toBe(perCardSum);
+  });
+
+  it("ワールドリンク以外では乗らない", () => {
+    const r = run(deckOf("cute", "cool", "pure", "happy", "mysterious"), false);
+    expect(r.attribute).toBeNull();
+  });
+
+  it("表が無ければ乗らない（古い配信データでも壊れない）", () => {
+    const r = eventBonus(deckOf("cute", "cool", "pure"), EV, tables, { worldBloom: true });
+    expect(r.attribute).toBeNull();
+  });
+
+  it("空の枠は数えない", () => {
+    const r = run(deckOf("cute", "cool", "pure"));
+    expect(r.attribute?.count).toBe(3);
+  });
+});
+
+/** 配信データが仕様どおりか。ここが崩れると編成の推奨が丸ごと狂う。 */
+describe("配信データの属性ボーナス", () => {
+  it("1〜2種類=0 / 3=75 / 4=100 / 5=125", async () => {
+    const { readFileSync } = await import("node:fs");
+    const d = JSON.parse(readFileSync("public/CardDatas/bonuses.json", "utf8")) as {
+      attributeBonuses?: { n: number; rate: number }[];
+    };
+    expect(d.attributeBonuses).toBeDefined();
+    const m = new Map(d.attributeBonuses!.map((r) => [r.n, r.rate]));
+    expect(m.get(1)).toBe(0);
+    expect(m.get(2)).toBe(0);
+    expect(m.get(3)).toBe(75);
+    expect(m.get(4)).toBe(100);
+    expect(m.get(5)).toBe(125);
+  });
+});

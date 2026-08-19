@@ -22,6 +22,12 @@ export interface EvalContext {
   characterRanks?: Record<number, number>;
   eventId: number | undefined;
   /**
+   * 選んでいるイベントがワールドリンクか。
+   * ★ ワールドリンクは**編成の属性の種類数**でボーナスが乗る（最大5種類で125%）。
+   *   種別の判定は呼び出し側（DeckBuilder）で一度だけ行い、ここでは受け取るだけにする。
+   */
+  worldBloom?: boolean;
+  /**
    * 選んでいるイベントの「発揮可能総合力」の上限（無いイベントでは undefined）。
    *
    * ★ **総合力の計算には使わない。スコアに渡すときだけ効く。**
@@ -61,6 +67,7 @@ export function evaluateDeck(
         : eventBonus(toBonusDeck(cards, ctx.states), ctx.eventId, ctx.bonusTables, {
             leaderCardId,
             supportBonus,
+            worldBloom: ctx.worldBloom,
           }),
     power,
     /**

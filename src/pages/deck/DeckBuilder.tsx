@@ -134,6 +134,12 @@ export default function DeckBuilder() {
             characterRanks: player.characterRanks,
             // チャレンジライブにイベントボーナスは無い。ここで外すと下流が全部止まる。
             eventId: mode === "challenge" ? undefined : eventId,
+            // ★ ワールドリンクでは編成の属性の種類数にボーナスが乗る（最大5種類125%）。
+            //   チャレンジライブとカスタム条件では効かせない（実在イベントの制約から外れる）。
+            worldBloom:
+              mode !== "challenge" &&
+              eventId !== CUSTOM_EVENT_ID &&
+              data.events.find((e) => e.id === eventId)?.type === "world_bloom",
             // ★ 総合力の上限はイベント固有（ワールドリンク第3弾のみ）。チャレンジライブと
             //   カスタム条件では効かせない（どちらも実在イベントの制約から外れるため）。
             powerLimit:

@@ -227,6 +227,18 @@ export function derive(src, nowMs) {
       .filter((s) => new Set(cards.map((c) => c.skillId)).has(s.id))
       .map(slimSkill)
       .filter(Boolean),
+    /**
+     * ワールドリンクの「編成に属性が何種類あるか」ボーナス。
+     *
+     * ★★ これは**イベント個別ではなく全ワールドリンク共通**の表で、eventId を持たない。★★
+     *   総合力上限（eventTotalPowerLimits）とは別物なので、同じ扱いにしないこと。
+     *   実データは 1〜2種類=0% / 3種類=75% / 4種類=100% / **5種類=125%**。
+     *   編成の5枚に属性が何種類あるかで決まる（サポート編成ではない）。
+     */
+    attributeBonuses: (src.worldBloomDifferentAttributeBonuses ?? [])
+      .filter((r) => Number.isFinite(r?.attributeCount) && Number.isFinite(r?.bonusRate))
+      .map((r) => ({ n: r.attributeCount, rate: r.bonusRate }))
+      .sort((a, b) => a.n - b.n),
     events: events.map((e) => ({
       id: e.id,
       name: e.name,
