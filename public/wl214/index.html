@@ -358,15 +358,16 @@ const oku  = n => (n/1e8).toFixed(2);
 const manC = n => (n/1e4).toFixed(1);
 const man  = n => (n/1e4).toFixed(0);
 const pct  = n => (n*100).toFixed(1);
+/* 炊き数は整数0〜10。7.5 のような値が入ると倍率だけ丸められてLBは生値で計上され、
+   Pt効率の表示が実際より甘くなる。Pt計算・LB計上・効率・式表示のすべてでこれを通す */
+const lbNorm = x => Math.max(0, Math.min(10, Math.round(Number(x) || 0)));
 
 /** calcLivePt と同じ丸め。coef はイベントPt係数。 */
 function calcPt(coef, eventRate, bonusPct, lb){
   const num = coef * (Math.round(bonusPct*100) + 10000);
   const step2x10 = Math.floor(num/1000);
   const step3 = Math.floor(step2x10*eventRate/1000);
-  /* 炊き数は整数0〜10。エディタから半端な値が入ると倍率が静かに1に落ちてLBだけ嵩むので丸める */
-  const lbi = Math.max(0, Math.min(10, Math.round(Number(lb) || 0)));
-  return step3 * (LB_MULT[lbi] ?? 1);
+  return step3 * (LB_MULT[lbNorm(lb)] ?? 1);
 }
 
 function computeRates(P, songs, bonusOverride){
@@ -394,7 +395,8 @@ function computeRates(P, songs, bonusOverride){
   const scoreM = Math.floor(rateM * talent * 4);
   const coefM = 110 + Math.floor(scoreM/17000) + 13;   /* 他4人合計は上限13に到達している前提 */
   const cycleM = mmeta.music_time + P.overheadSec.multi;
-  const ptM = calcPt(coefM, mmeta.event_rate, BONUS, P.boost.multi);
+  const lbM_ = lbNorm(P.boost.multi), lbA_ = lbNorm(P.boost.auto);
+  const ptM = calcPt(coefM, mmeta.event_rate, BONUS, lbM_);
 
   /* ---- オート（ソロ）----
      5枚が1回ずつ＋リーダーがもう1回。内部値を5で割った平均を全枠に置く。 */
@@ -405,18 +407,19 @@ function computeRates(P, songs, bonusOverride){
   const scoreA = Math.floor(rateA * talent * 4);
   const coefA = 100 + Math.floor(scoreA/20000);
   const cycleA = ameta.music_time + P.overheadSec.auto;
-  const ptA = calcPt(coefA, ameta.event_rate, BONUS, P.boost.auto);
+  const ptA = calcPt(coefA, ameta.event_rate, BONUS, lbA_);
   const ptA10 = calcPt(coefA, ameta.event_rate, BONUS, 10);
   const ptA5  = calcPt(coefA, ameta.event_rate, BONUS, 5);
 
   return {
     bonus: BONUS, eff, avgCard,
     multi:{title:mmeta.title, score:scoreM, coef:coefM, cycle:cycleM,
-           perHour:3600/cycleM, pt:ptM, ptPerLb:ptM/P.boost.multi,
-           base:mmeta.event_rate, song:mmeta.music_time, lb:P.boost.multi},
+           perHour:3600/cycleM, pt:ptM, ptPerLb: lbM_ ? ptM/lbM_ : 0,
+           base:mmeta.event_rate, song:mmeta.music_time, lb:lbM_},
     auto:{ title:ameta.title, score:scoreA, coef:coefA, cycle:cycleA,
-           pt:ptA, pt10:ptA10, pt5:ptA5, ptPerLb:ptA/P.boost.auto, hoursForDay:P.auto.playsPerDay*cycleA/3600,
-           base:ameta.event_rate, song:ameta.music_time, lb:P.boost.auto},
+           pt:ptA, pt10:ptA10, pt5:ptA5, ptPerLb: lbA_ ? ptA/lbA_ : 0,
+           hoursForDay:P.auto.playsPerDay*cycleA/3600,
+           base:ameta.event_rate, song:ameta.music_time, lb:lbA_},
     /* マイセカイもイベントボーナスが乗るので章ごとに変わる。
        params の値は runner.bonusPct 基準で入っているものとして、章のボーナス比で換算する。 */
     mysekai:(()=>{ const k=(BONUS+100)/(P.runner.bonusPct+100);
@@ -433,6 +436,7 @@ function buildDays(P, R, RBY){
   /* 現時点から先に必要なぶんを別勘定にする。走者の在庫は途中でライボ→石に切り替わっており、
      「開始時点の予算にいくら残るか」より「ここから何個要るか」のほうが判断に使える */
   const nowH = (Date.now() - new Date(P.event.startJst).getTime())/36e5;
+  const LBM = lbNorm(P.boost.multi), LBA = lbNorm(P.boost.auto);
   let cum = 0;
   return P.schedule.map((d,i) => {
     const startH = d.endH - d.hours;
@@ -451,7 +455,7 @@ function buildDays(P, R, RBY){
       /* 実測で上書きされた日は、モデル上の章別Pt比で按分する（章別単価の差はそのまま効く） */
       manual = d.actualPt;
       plays  = Math.round(d.actualPt / rateOf(startH).multi.pt);
-      lbManual = plays * P.boost.multi;
+      lbManual = plays * LBM;
       ovs.forEach(([c],i)=>{
         const w = modSum>0 ? modeled[i]/modSum : 1/Math.max(ovs.length,1);
         const b = touch(c); b.manual += manual*w; b.plays += plays*w; b.lbManual += lbManual*w;
@@ -460,8 +464,8 @@ function buildDays(P, R, RBY){
       ovs.forEach(([c,ov],i)=>{
         const r = RBY[c] || R;
         const n = ov * r.multi.perHour;
-        manual += n * r.multi.pt; plays += n; lbManual += n * P.boost.multi;
-        const b = touch(c); b.manual += n*r.multi.pt; b.plays += n; b.lbManual += n*P.boost.multi;
+        manual += n * r.multi.pt; plays += n; lbManual += n * LBM;
+        const b = touch(c); b.manual += n*r.multi.pt; b.plays += n; b.lbManual += n*LBM;
       });
     }
     const rEnd = rateOf(Math.max(0, d.endH - 0.01));
@@ -473,12 +477,18 @@ function buildDays(P, R, RBY){
     const evT = new Date(P.event.startJst).getTime(), evY = new Date(P.event.startJst).getFullYear();
     const hOf = hh => { const [mo,da] = String(d.label).split('/').map(Number);
       return (Date.UTC(evY, mo-1, da, hh-9) - evT)/36e5; };
-    const autoH  = hOf(P.auto.hourOfDay != null ? P.auto.hourOfDay : 13);
-    const autoCh = (autoH >= 0 && autoH <= 240)
-                     ? Math.min(5, Math.max(1, Math.floor(autoH/48)+1)) : endCh;
+    const autoHour = Math.max(0, Math.min(23, Number(P.auto.hourOfDay ?? 13) || 0));
+    const autoH  = hOf(autoHour);
+    /* 実績を固定した日は章も schedule 側で固定する。hourOfDay を動かしても確定済みの
+       過去の章帰属が動いてしまうのを防ぐ */
+    const autoCh = (d.autoCh != null) ? d.autoCh
+                 : ((autoH >= 0 && autoH <= 240)
+                     ? Math.min(5, Math.max(1, Math.floor(autoH/48)+1)) : endCh);
     const rAuto  = RBY[autoCh] || R;
     const auto   = (d.autoPt != null) ? d.autoPt : autoPlays * rAuto.auto.pt;
-    const harvestAt = (P.mysekai.harvestsPerDay===2) ? [5,17]
+    /* 既定は資材更新の 5:00 と 17:00。章境界をまたいで回収した日は schedule 側で上書きする */
+    const harvestAt = Array.isArray(d.harvestHours) ? d.harvestHours
+      : (P.mysekai.harvestsPerDay===2) ? [5,17]
       : Array.from({length:P.mysekai.harvestsPerDay||0}, (_,k)=>5 + k*(12/Math.max(1,(P.mysekai.harvestsPerDay||1)-1)));
     const harvestHs = harvestAt.map(hOf).filter(h => h >= 0 && h <= 240);
     let mys = 0; const mysByCh = {};
@@ -507,12 +517,17 @@ function buildDays(P, R, RBY){
         const a = Math.max(startH, (c-1)*48, nowH), b = Math.min(d.endH, c*48);
         if(b<=a) continue;
         const n = (b-a) * (RBY[c] || R).multi.perHour;
-        futurePlays += n; futureManualLb += n * P.boost.multi;
+        futurePlays += n; futureManualLb += n * LBM;
       }
     }
-    const lbAuto = (d.autoLb != null) ? d.autoLb : autoPlays * P.boost.auto;
+    const lbAuto = (d.autoLb != null) ? d.autoLb : autoPlays * LBA;
     const futureAutoLb = (d.autoLb != null || autoH <= nowH) ? 0 : lbAuto;
-    const state = d.endH <= nowH ? '済' : (startH >= nowH ? '予定' : '進行中');
+    /* その日の「終わり」は周回ブロックの終了とオートの終了のうち遅いほう。
+       8/23 のように朝10時に周回が終わって13時にオートが回る日だと、endH だけ見ると
+       まだ 990LB 要るのに行が「済」になってグレーで隠れてしまう */
+    const dayEnd = Math.max(d.endH, (d.autoLb != null) ? -Infinity : autoH);
+    const dayStart = Math.min(startH, (d.autoLb != null) ? Infinity : autoH);
+    const state = dayEnd <= nowH ? '済' : (dayStart >= nowH ? '予定' : '進行中');
     touch(autoCh).auto += auto; touch(autoCh).lbAuto += lbAuto;
     for(const c in mysByCh) touch(Number(c)).mys += mysByCh[c];
     return {...d, manual, auto, mys, total, cum, plays, autoPlays, lbManual, lbAuto, lbMys,
@@ -676,7 +691,20 @@ function cumChart(svg, tipEl, days, P){
   const proj50 = makeProj(P, LIVE, 'r50');
   const lo50F = Math.max(P.border.lowPt*R50lo, proj50.obsNow);
   const at50 = h => ({h, m:proj50(h, C*R50v), lo:proj50(h, lo50F), hi:proj50(h, P.border.highPt*R50hi)});
-  const bd  = days.map(d=>at3(d.endH));                       /* ツールチップ用（日付に対応） */
+  /* ツールチップも過去日は実測を出す。日別テーブルだけ実測に直すと、同じ「100位」で
+     2つの数字が並ぶことになる（8/18 で 予測1.09億 vs 実測0.91億） */
+  const bser = (LIVE && Array.isArray(LIVE.border)) ? LIVE.border : [];
+  const obsAt = h => {
+    if(!bser.length || h > bser[bser.length-1][0]) return null;
+    if(h <= bser[0][0]) return bser[0][1];
+    for(let i=1;i<bser.length;i++) if(bser[i][0] >= h){
+      const [ha,va]=bser[i-1],[hb,vb]=bser[i];
+      return hb===ha ? vb : va + (h-ha)/(hb-ha)*(vb-va);
+    }
+    return null;
+  };
+  const bd  = days.map(d=>{ const o=obsAt(d.endH), a=at3(d.endH);
+                            return o!=null ? {...a, m:o, obs:true} : a; });
   const bd50 = days.map(d=>at50(d.endH));
   /* 描画用は細かい格子。現在地でぴったり閉じるよう obsH を必ず含める */
   const grid = [...new Set([...Array.from({length:41},(_,i)=>i*6), obsH, proj50.obsH, 240])]
@@ -805,7 +833,7 @@ function cumChart(svg, tipEl, days, P){
     const hit=el('rect',{x:X(p.h)-18,y:m.t,width:36,height:ih,fill:'transparent',style:'cursor:pointer'});
     hit.addEventListener('pointerenter',ev=>{
       const r=host.getBoundingClientRect();
-      const rows100 = show100 ? `<div class="r"><i>100位 予測</i><b>${oku(b.m)}億</b></div>
+      const rows100 = show100 ? `<div class="r"><i>100位 ${b.obs?'実測':'予測'}</i><b>${oku(b.m)}億</b></div>
          <div class="r"><i>　差</i><b style="color:${p.v-b.m>=0?css('--good'):css('--bad')}">${p.v-b.m>=0?'+':''}${oku(p.v-b.m)}億</b></div>` : '';
       const b50 = bd50[i] || {m:0};
       const rows50 = show50 ? `<div class="r"><i>50位 予測</i><b>${oku(b50.m)}億</b></div>
@@ -881,6 +909,12 @@ async function loadSongs(P){
 }
 
 function render(){
+  /* 下端と上端が逆転した値を入れられると帯が自己交差してマージン表示も大小が狂うので、
+     描画前に並べ替えるだけしておく（入力を拒まず、見た目の破綻だけ防ぐ） */
+  const swap = (o,lo,hi) => { if(o[lo] != null && o[hi] != null && o[lo] > o[hi]){
+    const t=o[lo]; o[lo]=o[hi]; o[hi]=t; } };
+  swap(P.border,'lowPt','highPt');
+  swap(P.border,'rank50RatioLo','rank50RatioHi');
   R = computeRates(P, SONGS);
   /* 章ごとのボーナス。未指定の章は runner.bonusPct にフォールバックする */
   RBY = {};
@@ -916,8 +950,9 @@ function render(){
   const mLoAll = total/P.border.highPt - 1;
   /* live.json は部分破損もありうるので latest の存在まで見る（truthy だけだと途中で死ぬ） */
   const LT = (LIVE && LIVE.latest) ? LIVE.latest : null;
-  const obs100 = (LT && LT.r100) ? `実測 ${fmt(LT.r100/1e4)}万（経過${LT.h.toFixed(1)}h）` : '';
-  const obs50  = (LT && LT.r50)  ? `実測 ${fmt(LT.r50/1e4)}万（経過${LT.h.toFixed(1)}h）` : '';
+  const LTh = (LT && Number.isFinite(LT.h)) ? `（経過${LT.h.toFixed(1)}h）` : '';
+  const obs100 = (LT && LT.r100) ? `実測 ${fmt(LT.r100/1e4)}万${LTh}` : '';
+  const obs50  = (LT && LT.r50)  ? `実測 ${fmt(LT.r50/1e4)}万${LTh}` : '';
   const short2 = P.boost.budgetLb - lbUsed;
   document.getElementById('tiles').innerHTML = `
     <div class="tile accent"><p class="k">着地見込み</p><p class="v num"><span id="v-total">0.00</span><small>億</small></p>
@@ -1045,9 +1080,18 @@ function render(){
     `<span><span class="dot" style="background:var(--s1)"></span>周回</span>
      <span><span class="dot" style="background:var(--s2)"></span>オート</span>
      <span><span class="dot" style="background:var(--s3)"></span>マイセカイ</span>`;
-  /* オートの炊き数トグル（8/19 以降に適用。8/17〜18 は実績で固定） */
+  /* オートの炊き数トグル。実績を固定した日（autoLb 済み）には効かないので、
+     効く最初の日をデータから出してラベルにする */
   const ab=document.getElementById('autoboost');
-  ab.innerHTML = `<b>8/19以降のオート</b>` + [5,10].map(v=>
+  const firstFree = (DAYS.find(d=>d.autoLb==null && d.autoPlays) || {}).label;
+  /* もう一方の炊き数にしたときの着地と消費。実績を固定した日は動かないので、その差だけを出す */
+  const curLb = lbNorm(P.boost.auto), altLb = curLb===10 ? 5 : 10;
+  const kAlt  = (LB_MULT[altLb]||1)/(LB_MULT[curLb]||1);
+  const autoFlex   = DAYS.reduce((a,d)=>a+(d.autoPt!=null?0:d.auto),0);
+  const autoFlexLb = DAYS.reduce((a,d)=>a+(d.autoLb!=null?0:d.lbAuto),0);
+  const altTotal   = total - autoFlex*(1-kAlt);
+  const altLbUsed  = lbUsed - autoFlexLb*(1 - (curLb?altLb/curLb:1));
+  ab.innerHTML = `<b>${firstFree ? firstFree+'以降' : ''}のオート</b>` + [5,10].map(v=>
     `<button type="button" data-v="${v}" class="${P.boost.auto===v?'on':''}">${v}炊き</button>`).join('');
   ab.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
     P.boost.auto = Number(btn.dataset.v);
@@ -1173,11 +1217,11 @@ function render(){
     `<b>実測の反映。</b>ボーダーの実測は NAS の sekai-border-tracker が10分間隔で集めたものを <code>live.json</code> として置いている（ブラウザから sekai.best API は CORS で叩けない）。走者の実測は申告があった時点の値`,
     `<b>ボーダーは中盤で凍り、チャプター終盤に跳ねる。</b>過去実測で ch2 の伸びの55〜85%が最後の12時間に集中。ch1終から約36時間はほぼ動かないので、8/19・8/20 の稼働は相対的に一番効く`,
     `<b>8/27 を「調整のみ」にする代償。</b>最後の12時間だけでボーダーは終値の7.0〜11.5pp（2.4億なら1,700万〜2,800万Pt）伸びる。ここに乗らないぶんを事前に積んでおく必要がある`,
-    `<b>オートの炊き数はいま ${P.boost.auto}炊き</b>（8/17〜8/18 は実績で10炊き固定、8/19 以降が可変）。${
-      P.boost.auto===10
-        ? `全期間の消費LBは ${fmt(lbUsed)} で、当初見込みの石30万（＝${fmt(P.boost.budgetLb)}LB）を超えるが、50位を取りに行くため超過を飲む判断（2026-08-18 夜）。5炊きに落とすと予算内に収まるかわりに着地が下がる`
-        : `予算内に収まるかわりに着地が下がる。10炊きに戻すと消費は増えるが上振れを取りに行ける`
-      }。オートは回数律速（${P.auto.playsPerDay}回/日）で時間が余っているので、LBを削るならLB効率の悪い焚き上げから（ch${selCh}で 10炊き ${fmt(RC.auto.pt10/10)}Pt/LB に対し5炊き ${fmt(RC.auto.pt5/5)}Pt/LB）。<b>日単位に可逆</b>なので、ch2終（8/21 20:00）のボーダー推定を見て残り日数だけ切り替えればよい。上のトグルで着地を比較できる`,
+    `<b>オートの炊き数はいま ${lbNorm(P.boost.auto)}炊き</b>（実績を固定した日は動かない。トグルが効くのは ${firstFree||'—'} 以降）。いまの2択はこう: <b>${lbNorm(P.boost.auto)}炊き → 着地 ${oku(total)}億・全期間 ${fmt(lbUsed)}LB</b>／${altLb}炊き → 着地 ${oku(altTotal)}億・全期間 ${fmt(altLbUsed)}LB。50位の中央推定は ${oku(C*R50t)}億なので、${
+      altTotal >= C*R50t
+        ? `<b>${altLb}炊きでも中央は上回る</b>。10炊きを続ける根拠は「中央より上に積む」ことではなく、上振れ（${oku(P.border.highPt*R50tHi)}億）側に備えることになる`
+        : `${altLb}炊きだと中央に届かない`
+      }。⚠️2026-08-18 夜に「5炊きでは50位に届かない」として超過を飲む判断をしたが、その根拠に使った数字は章別ボーナスとマイセカイLBを入れる前のもので、いまは成立していない。オートは回数律速（${P.auto.playsPerDay}回/日）で時間が余っているので、LBを削るならLB効率の悪い焚き上げから（ch${selCh}で 10炊き ${fmt(RC.auto.pt10/10)}Pt/LB に対し5炊き ${fmt(RC.auto.pt5/5)}Pt/LB）。<b>日単位に可逆</b>`,
     `<b>感度。</b>効くのは周回のオーバーヘッド。既定の${P.overheadSec.multi}秒は event214 開幕の実測値だが、瑞希ラン(2026-07)の実測平均54秒に置くと ${(3600/(R.multi.song+54)).toFixed(1)} 周/h まで落ち、着地は約 ${oku(DAYS.reduce((a,d)=>{
         if(d.actualPt!=null) return a+d.actualPt+d.auto+d.mys;
         let m=0; const sH=d.endH-d.hours;
@@ -1229,7 +1273,7 @@ function renderLive(){
   const chLeft = Math.max(0, (Math.floor(elapsedH/48)+1)*48 - elapsedH);
   document.getElementById('livemeta').innerHTML =
     `いま <b>ch${cur.n} ${cur.chara}</b><br>この章はあと <b>${chLeft.toFixed(1)}</b> 時間`
-    + ((LIVE && LIVE.latest) ? `<br>100位の実測 <b>${fmt(LIVE.latest.r100/1e4)}</b> 万Pt` : '');
+    + ((LIVE && LIVE.latest && LIVE.latest.r100) ? `<br>100位の実測 <b>${fmt(LIVE.latest.r100/1e4)}</b> 万Pt` : '');
 }
 
 /* 数字を数え上げる。派手さのためではなく、更新があったことを目で拾えるようにするため */
@@ -1283,8 +1327,13 @@ function applyEdits(){
     o[ks[ks.length-1]] = Number(raw);
   });
   document.querySelectorAll('#hoursgrid input').forEach(inp=>{
-    P.schedule[Number(inp.dataset.hour)].hours = Number(inp.value);
+    const raw = inp.value.trim();                       /* #fields と同じく空欄は据え置く */
+    if(raw === '' || !Number.isFinite(Number(raw))) return;
+    P.schedule[Number(inp.dataset.hour)].hours = Math.max(0, Number(raw));
   });
+  /* 保存する値と実際に使う値をずらさない。範囲外はここで畳んでから書き戻す */
+  if(P.auto.hourOfDay != null) P.auto.hourOfDay = Math.max(0, Math.min(23, Number(P.auto.hourOfDay)||0));
+  P.boost.multi = lbNorm(P.boost.multi); P.boost.auto = lbNorm(P.boost.auto);
   localStorage.setItem(LSKEY, JSON.stringify(P));
   render();
 }
