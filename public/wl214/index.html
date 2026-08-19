@@ -89,6 +89,10 @@ h2{font-size:13px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-
 /* ---------- rate cards ---------- */
 .rate{display:flex;flex-direction:column;gap:2px}
 .rate .head{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+.chiprow{margin:-6px 0 10px;font-size:11px;color:var(--ink-3)}
+tr.selrow{background:var(--surface-2)} tr.selrow td{font-weight:600}
+#chrates th,#chrates td,#chaptable th,#chaptable td{white-space:nowrap}
+td.up{color:var(--good)} td.down{color:var(--bad)}
 .dot{width:11px;height:11px;border-radius:3px;flex:none}
 .rate .name{font-weight:660;font-size:15px}
 .rate .song{font-size:12px;color:var(--ink-3);margin-left:auto;text-align:right}
@@ -176,7 +180,8 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
 .livebar{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
   padding:16px 20px;margin:0 0 26px;display:grid;gap:16px}
 @media(min-width:820px){.livebar{grid-template-columns:auto 1fr auto;align-items:center}}
-.clock{display:flex;gap:18px;align-items:baseline}
+.livebar>*{min-width:0}
+.clock{display:flex;gap:18px;align-items:baseline;flex-wrap:wrap}
 .clock .unit{display:flex;flex-direction:column;align-items:center;min-width:52px}
 .clock .cv{font-size:30px;font-weight:700;letter-spacing:-0.03em;line-height:1;
   font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
@@ -187,6 +192,10 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
   border:1px solid transparent;text-align:center;overflow:hidden;transition:border-color .3s ease,background .3s ease}
 .chip .cn{font-size:10px;color:var(--ink-3);letter-spacing:.08em}
 .chip .cc{font-size:12.5px;font-weight:620;margin-top:2px;white-space:nowrap}
+@media(max-width:520px){
+  .clock{gap:11px} .clock .unit{min-width:0} .clock .cv{font-size:25px} .clock .sep{display:none}
+  .chline{gap:4px} .chip{padding:7px 3px 8px} .chip .cc{font-size:11px;white-space:normal}
+}
 .chip.done{opacity:.5}
 .chip.now{border-color:var(--s1);background:color-mix(in srgb, var(--s1) 9%, var(--surface))}
 .chip.now .cc{color:var(--s1)}
@@ -237,8 +246,10 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
 
 <section>
   <h2>収入の3本柱</h2>
-  <p class="lede">単価は編成から計算している。楽曲データは SekaiMaster と同じ <code>/MusicDatas/</code> を読み、丸めは <code>calcLivePt</code> と同じ手順。編成を書き換えれば全部の数字が動く。</p>
+  <p class="lede">単価は編成から計算している。楽曲データは SekaiMaster と同じ <code>/MusicDatas/</code> を読み、丸めは <code>calcLivePt</code> と同じ手順。<b>サポート編成が章ごとに違うのでイベントボーナスも章ごとに変わり、周回・オート・マイセカイの3つとも同じ比率でスケールする。</b>下のボタンで章を切り替えられる。</p>
+  <div class="charthead"><span class="segctl" id="chview"></span><span class="legend" id="chvmeta"></span></div>
   <div class="grid g3" id="rates"></div>
+  <div class="card" style="margin-top:16px"><div class="svgwrap"><table id="chrates"></table></div></div>
 </section>
 
 <section>
@@ -417,23 +428,56 @@ function buildDays(P, R, RBY){
   return P.schedule.map((d,i) => {
     const startH = d.endH - d.hours;
     let manual = 0, plays = 0, lbManual = 0;
+    /* byCh: この日の獲得を章に割り振ったもの。日が章境界(20:00)を跨ぐので日単位では潰れる */
+    const byCh = {};
+    const touch = c => (byCh[c] = byCh[c] || {hours:0,manual:0,auto:0,mys:0,plays:0,lbManual:0,lbAuto:0});
+    const ovs = [];
+    for(let c=1;c<=5;c++){
+      const ov = Math.max(0, Math.min(d.endH, c*48) - Math.max(startH, (c-1)*48));
+      if(ov>0){ ovs.push([c,ov]); touch(c).hours += ov; }
+    }
+    const modeled = ovs.map(([c,ov]) => { const r = RBY[c] || R; return ov * r.multi.perHour * r.multi.pt; });
+    const modSum = modeled.reduce((a,b)=>a+b,0);
     if(d.actualPt != null){
+      /* 実測で上書きされた日は、モデル上の章別Pt比で按分する（章別単価の差はそのまま効く） */
       manual = d.actualPt;
       plays  = Math.round(d.actualPt / rateOf(startH).multi.pt);
       lbManual = plays * P.boost.multi;
+      ovs.forEach(([c],i)=>{
+        const w = modSum>0 ? modeled[i]/modSum : 1/Math.max(ovs.length,1);
+        const b = touch(c); b.manual += manual*w; b.plays += plays*w; b.lbManual += lbManual*w;
+      });
     }else{
-      for(let c=1;c<=5;c++){
-        const ov = Math.max(0, Math.min(d.endH, c*48) - Math.max(startH, (c-1)*48));
-        if(ov<=0) continue;
+      ovs.forEach(([c,ov],i)=>{
         const r = RBY[c] || R;
         const n = ov * r.multi.perHour;
         manual += n * r.multi.pt; plays += n; lbManual += n * P.boost.multi;
-      }
+        const b = touch(c); b.manual += n*r.multi.pt; b.plays += n; b.lbManual += n*P.boost.multi;
+      });
     }
-    const rEnd = rateOf(Math.max(0, d.endH - 0.01));   /* オート・マイセカイは日の終わり側の章で評価 */
+    /* オートは周回ブロックが終わってから就寝中に回すので、日の終わり側の章で評価する */
+    const rEnd = rateOf(Math.max(0, d.endH - 0.01));
+    const endCh = Math.min(5, Math.max(1, Math.floor(Math.max(0, d.endH-0.01)/48)+1));
     const autoPlays = (d.autoPlays != null) ? d.autoPlays : (i===0 ? 0 : P.auto.playsPerDay);
     const auto = (d.autoPt != null) ? d.autoPt : autoPlays * rEnd.auto.pt;
-    const mys  = (d.mysekaiPt != null) ? d.mysekaiPt : (i===0 ? rEnd.mysekai.opening : rEnd.mysekai.perDay);
+    /* マイセカイは資材が 5:00 と 17:00 に更新されるので、回収した時刻の章のボーナスが乗る。
+       日の終わり側の章に寄せると 8/19・8/21・8/25 が隣の章に流れて単価も間違う */
+    const evT = new Date(P.event.startJst).getTime(), evY = new Date(P.event.startJst).getFullYear();
+    const hOf = hh => { const [mo,da] = String(d.label).split('/').map(Number);
+      return (Date.UTC(evY, mo-1, da, hh-9) - evT)/36e5; };
+    const harvestAt = (P.mysekai.harvestsPerDay===2) ? [5,17]
+      : Array.from({length:P.mysekai.harvestsPerDay||0}, (_,k)=>5 + k*(12/Math.max(1,(P.mysekai.harvestsPerDay||1)-1)));
+    let mys = 0; const mysByCh = {};
+    if(d.mysekaiPt != null){ mys = d.mysekaiPt; mysByCh[endCh] = mys; }
+    else {
+      for(const hh of harvestAt){
+        const h = hOf(hh);
+        if(h < 0 || h > 240) continue;
+        const c = Math.min(5, Math.max(1, Math.floor(h/48)+1));
+        const v = (RBY[c] || R).mysekai.per;
+        mys += v; mysByCh[c] = (mysByCh[c]||0) + v;
+      }
+    }
     const total = manual + auto + mys;
     cum += total;
     /* 現時点から先に必要なぶんを別勘定にする。走者の在庫は途中でライボ→石に切り替わっており、
@@ -451,8 +495,10 @@ function buildDays(P, R, RBY){
     const lbAuto = (d.autoLb != null) ? d.autoLb : autoPlays * P.boost.auto;
     const futureAutoLb = (d.autoLb != null || d.endH <= nowH) ? 0 : lbAuto;
     const state = d.endH <= nowH ? '済' : (startH >= nowH ? '予定' : '進行中');
+    touch(endCh).auto += auto; touch(endCh).lbAuto += lbAuto;
+    for(const c in mysByCh) touch(Number(c)).mys += mysByCh[c];
     return {...d, manual, auto, mys, total, cum, plays, autoPlays, lbManual, lbAuto,
-            futureManualLb, futurePlays, futureAutoLb, state};
+            futureManualLb, futurePlays, futureAutoLb, state, byCh, endCh};
   });
 }
 
@@ -764,6 +810,9 @@ function lbChart(svg, tipEl, days, P, R){
 /* ===================== 起動 ===================== */
 let DEFAULTS=null, P=null, SONGS=null, DAYS=null, R=null, RBY=null, LIVE=null;
 let VIEW = localStorage.getItem('wl214-borderview') || '100';   /* '100' | '50' | 'both' */
+let CHV  = localStorage.getItem('wl214-chview') || 'now';       /* 'now' | '1'..'5' 単価カードの表示章 */
+const curChapter = P0 => Math.min(5, Math.max(1,
+  Math.floor(((Date.now() - new Date(P0.event.startJst).getTime())/36e5)/48) + 1));
 const LSKEY='wl214-params-v1';
 
 async function loadSongs(P){
@@ -842,36 +891,84 @@ function render(){
     + `ここから <b>${fmt(needLb)} LB（石 ${fmt(needLb*P.boost.crystalPerLb/1e4)}万）</b>要る。`;
 
   /* --- rate cards --- */
-  const rc = (c,name,song,big,unit,rows,formula)=>`
+  const rc = (c,name,song,big,unit,rows,formula,chip)=>`
     <div class="card rate">
       <div class="head"><span class="dot" style="background:var(${c})"></span>
         <span class="name">${name}</span><span class="song">${song}</span></div>
+      ${chip ? `<div class="chiprow">${chip}</div>` : ''}
       <div class="big num">${big}<small>${unit}</small></div>
       <dl class="kv">${rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
       <div class="formula">${formula}</div>
     </div>`;
+  /* 表示する章。'now' なら経過時間から現在の章を出す */
+  const nowCh = curChapter(P);
+  const selCh = CHV==='now' ? nowCh : Number(CHV);
+  const RC = RBY[selCh] || R;
+  const chName = (P.event.chapters.find(c=>c.n===selCh)||{}).chara || ('ch'+selCh);
+  const chChip = n => `<span class="song">ch${n}・${(P.event.chapters.find(c=>c.n===n)||{}).chara||''}／ボーナス ${Math.round((RBY[n]||R).bonus)}%</span>`;
+  /* 章をまたいだ振れ幅。1つの章だけ見ていると判断を誤るので併記する */
+  const spread = pick => { const v=[1,2,3,4,5].map(n=>pick(RBY[n]||R)); return [Math.min(...v), Math.max(...v)]; };
+  const sp = (lo,hi,f) => `<span class="ch1">章による幅 ${f(lo)}〜${f(hi)}</span>`;
+  const [spML,spMH] = spread(r=>r.multi.pt), [spAL,spAH] = spread(r=>r.auto.pt), [spYL,spYH] = spread(r=>r.mysekai.perDay);
+
   document.getElementById('rates').innerHTML =
-    rc('--s1','周回（協力）', R.multi.title, fmt(R.multi.pt), 'Pt / 周',
-       [['1時間あたり', R.multi.perHour.toFixed(1)+' 周 = '+(R.multi.pt*R.multi.perHour/1e6).toFixed(2)+'M/h'],
-        ['周期', R.multi.cycle.toFixed(1)+' 秒（曲'+R.multi.song+'＋OH'+P.overheadSec.multi+'）'],
-        ['自スコア', fmt(R.multi.score)],
-        ['イベントPt係数', R.multi.coef],
-        ['LB効率', fmt(R.multi.ptPerLb)+' Pt/LB']],
-       `係数 = 110 + floor(${fmt(R.multi.score)}/17000) + 13 = ${R.multi.coef}<br>Pt = floor(floor(${R.multi.coef}×${(P.runner.bonusPct/100+1).toFixed(2)}×10)/10 × ${R.multi.base}/100) × ${LB_MULT[R.multi.lb]}`)
-  + rc('--s2','オート（ソロ）', R.auto.title, fmt(R.auto.pt), 'Pt / 回',
-       [['1日 '+P.auto.playsPerDay+'回', fmt(R.auto.pt*P.auto.playsPerDay/1e4)+' 万Pt'],
-        ['所要', R.auto.hoursForDay.toFixed(1)+' 時間 / 日'],
-        ['オートscore', fmt(R.auto.score)],
-        ['イベントPt係数', R.auto.coef],
-        ['LB効率', fmt(R.auto.ptPerLb)+' Pt/LB']],
-       `係数 = 100 + floor(${fmt(R.auto.score)}/20000) = ${R.auto.coef}<br>10炊きなら ${fmt(R.auto.pt10)} Pt/回（LB効率 ${fmt(R.auto.pt10/10)}）`)
-  + rc('--s3','マイセカイ', '全回収 ×'+R.mysekai.times+'/日', fmt(R.mysekai.perDay/1e4), '万Pt / 日',
-       [['1回あたり', fmt(R.mysekai.per/1e4)+' 万Pt'],
-        ['開幕の実測', fmt(R.mysekai.opening/1e4)+' 万Pt（12分）'],
+    rc('--s1','周回（協力）', RC.multi.title, fmt(RC.multi.pt), 'Pt / 周',
+       [['1時間あたり', RC.multi.perHour.toFixed(1)+' 周 = '+(RC.multi.pt*RC.multi.perHour/1e6).toFixed(2)+'M/h'],
+        ['周期', RC.multi.cycle.toFixed(1)+' 秒（曲'+RC.multi.song+'＋OH'+P.overheadSec.multi+'）'],
+        ['自スコア', fmt(RC.multi.score)],
+        ['イベントPt係数', RC.multi.coef],
+        ['LB効率', fmt(RC.multi.ptPerLb)+' Pt/LB'],
+        ['章による幅', fmt(spML)+' 〜 '+fmt(spMH)+' Pt/周']],
+       `係数 = 110 + floor(${fmt(RC.multi.score)}/17000) + 13 = ${RC.multi.coef}<br>Pt = floor(floor(${RC.multi.coef}×${(RC.bonus/100+1).toFixed(2)}×10)/10 × ${RC.multi.base}/100) × ${LB_MULT[RC.multi.lb]}`,
+       chChip(selCh))
+  + rc('--s2','オート（ソロ）', RC.auto.title, fmt(RC.auto.pt), 'Pt / 回',
+       [['1日 '+P.auto.playsPerDay+'回', fmt(RC.auto.pt*P.auto.playsPerDay/1e4)+' 万Pt'],
+        ['所要', RC.auto.hoursForDay.toFixed(1)+' 時間 / 日'],
+        ['オートscore', fmt(RC.auto.score)],
+        ['イベントPt係数', RC.auto.coef],
+        ['LB効率', fmt(RC.auto.ptPerLb)+' Pt/LB'],
+        ['章による幅', fmt(spAL)+' 〜 '+fmt(spAH)+' Pt/回']],
+       `係数 = 100 + floor(${fmt(RC.auto.score)}/20000) = ${RC.auto.coef}<br>10炊きなら ${fmt(RC.auto.pt10)} Pt/回（LB効率 ${fmt(RC.auto.pt10/10)}）`,
+       chChip(selCh))
+  + rc('--s3','マイセカイ', '全回収 ×'+RC.mysekai.times+'/日', fmt(RC.mysekai.perDay/1e4), '万Pt / 日',
+       [['1回あたり', fmt(RC.mysekai.per/1e4)+' 万Pt'],
+        ['開幕の実測', fmt(RC.mysekai.opening/1e4)+' 万Pt（12分・ch1）'],
         ['LB消費', '<b style="color:var(--warn)">?</b> <span class="ch1">未計測</span>'],
         ['支援者', '不要'],
+        ['章による幅', fmt(spYL/1e4)+' 〜 '+fmt(spYH/1e4)+' 万Pt/日'],
         ['期間合計', oku(DAYS.reduce((a,d)=>a+d.mys,0))+' 億']],
-       `資材は 5:00 と 17:00 に更新。<br><b>全回収するにはLBを使った資材回復が要る。その消費量が未計測</b>なので、下のLBの表と予算にはマイセカイぶんが入っていない。実数が分かり次第ここに入れる。`);
+       `走者申告は85〜90万Pt/回（ch1・821%）。ここでは章のボーナス比で換算している。資材は 5:00 と 17:00 に更新。<br><b>全回収するにはLBを使った資材回復が要る。その消費量が未計測</b>なので、下のLBの表と予算にはマイセカイぶんが入っていない。`,
+       chChip(selCh));
+
+  /* --- 章切り替え --- */
+  const cv=document.getElementById('chview');
+  cv.innerHTML = `<b>単価の章</b>`
+    + `<button type="button" data-v="now" class="${CHV==='now'?'on':''}">現在(ch${nowCh})</button>`
+    + [1,2,3,4,5].map(n=>`<button type="button" data-v="${n}" class="${CHV===String(n)?'on':''}">ch${n}</button>`).join('');
+  cv.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
+    CHV=btn.dataset.v; localStorage.setItem('wl214-chview',CHV); render();
+  }));
+  document.getElementById('chvmeta').innerHTML =
+    `<span>ch${selCh}・${chName}／イベントボーナス <b>${Math.round(RC.bonus)}%</b>`
+    + `（メイン ${P.runner.bonusMain != null ? P.runner.bonusMain : '—'}% ＋ サポート ${(P.runner.supportByChapter||{})[selCh] != null ? (P.runner.supportByChapter||{})[selCh] : '—'}%）`
+    + `／ch1比 <b>${(((RC.bonus+100)/(( RBY[1]||R).bonus+100))*100-100).toFixed(1)}%</b></span>`;
+
+  /* --- 章別の単価一覧（3本柱すべてが同じ比率で動く） --- */
+  const rowsCh = [1,2,3,4,5].map(n=>{
+    const r = RBY[n]||R, k = (r.bonus+100)/((RBY[1]||R).bonus+100);
+    const ch = P.event.chapters.find(c=>c.n===n)||{};
+    return `<tr class="${n===selCh?'selrow':''}"><td>ch${n}</td><td style="text-align:left">${ch.chara||''}</td>
+      <td>${(P.runner.supportByChapter||{})[n] != null ? (P.runner.supportByChapter||{})[n]+'%' : '—'}</td>
+      <td><b>${Math.round(r.bonus)}%</b></td>
+      <td>${fmt(r.multi.pt)}</td><td>${(r.multi.pt*r.multi.perHour/1e6).toFixed(2)}M</td>
+      <td>${fmt(r.auto.pt)}</td><td>${fmt(r.auto.pt*P.auto.playsPerDay/1e4)}万</td>
+      <td>${fmt(r.mysekai.perDay/1e4)}万</td>
+      <td class="${k>=1?'up':'down'}">${k>=1?'+':''}${((k-1)*100).toFixed(1)}%</td></tr>`;
+  }).join('');
+  document.getElementById('chrates').innerHTML =
+    `<thead><tr><th>ch</th><th style="text-align:left">キャラ</th><th>サポート</th><th>ボーナス</th>
+      <th>周回 Pt/周</th><th>周回 /h</th><th>オート Pt/回</th><th>オート /日</th><th>マイセカイ /日</th><th>ch1比</th></tr></thead>`
+    + `<tbody>${rowsCh}</tbody>`;
 
   /* --- legends --- */
   document.getElementById('legend1').innerHTML =
@@ -933,21 +1030,39 @@ function render(){
         <td>${fmt(lbM+lbA)}</td><td><b>${fmt(needLb)}</b></td><td>石 ${fmt(needLb*P.boost.crystalPerLb/1e4)}万</td></tr></tfoot>`;
 
   /* --- chapter table --- */
-  const chs = P.event.chapters.map((c,i)=>({...c, start:i*48, end:(i+1)*48, hours:0, pt:0}));
+  /* buildDays が日ごとに章へ割り振った byCh を積み直す。
+     日は 20:00 の章境界を跨ぐので、日単位の合計では章の差が潰れる */
+  const chs = P.event.chapters.map((c,i)=>({...c, start:i*48, end:(i+1)*48,
+    hours:0, pt:0, auto:0, mys:0, plays:0, lb:0}));
   DAYS.forEach(d=>{
-    const startH = d.endH - d.hours;
     for(const c of chs){
-      const ov = Math.max(0, Math.min(d.endH, c.end) - Math.max(startH, c.start));
-      if(ov>0){ c.hours += ov; c.pt += (d.manual) * (ov/Math.max(d.hours,0.0001)); }
+      const b = (d.byCh||{})[c.n]; if(!b) continue;
+      c.hours += b.hours; c.pt += b.manual; c.auto += b.auto; c.mys += b.mys;
+      c.plays += b.plays; c.lb += b.lbManual + b.lbAuto;
     }
   });
+  let chCum = 0; chs.forEach(c=>{ c.total = c.pt + c.auto + c.mys; chCum += c.total; c.cum = chCum; });
+  const nowH2 = (Date.now() - new Date(P.event.startJst).getTime())/36e5;
   document.getElementById('chaptable').innerHTML =
-    `<thead><tr><th>ch</th><th style="text-align:left">キャラ</th><th>期間</th><th>稼働</th><th>周回Pt</th></tr></thead><tbody>`
-    + chs.map(c=>`<tr><td>ch${c.n}</td><td style="text-align:left">${c.chara}</td>
-        <td class="ch1">${['8/17 20:00','8/19 20:00','8/21 20:00','8/23 20:00','8/25 20:00'][c.n-1]} 〜</td>
-        <td>${c.hours.toFixed(1)}h</td><td>${oku(c.pt)}億</td></tr>`).join('')
-    + `</tbody><tfoot><tr><td colspan="3">合計</td><td>${chs.reduce((a,c)=>a+c.hours,0).toFixed(1)}h</td>
-        <td>${oku(chs.reduce((a,c)=>a+c.pt,0))}億</td></tr></tfoot>`;
+    `<thead><tr><th>ch</th><th style="text-align:left">キャラ</th><th>開始</th><th>状態</th><th>ボーナス</th>
+      <th>単価</th><th>稼働</th><th>周回</th><th>オート</th><th>マイセカイ</th><th>章計</th><th>章末累積</th></tr></thead><tbody>`
+    + chs.map(c=>{
+        const r = RBY[c.n] || R;
+        const st = nowH2 >= c.end ? '済' : (nowH2 >= c.start ? '進行中' : '予定');
+        return `<tr class="${nowH2>=c.start && nowH2<c.end ? 'selrow':''}">
+          <td>ch${c.n}</td><td style="text-align:left">${c.chara}</td>
+          <td class="ch1">${['8/17 20:00','8/19 20:00','8/21 20:00','8/23 20:00','8/25 20:00'][c.n-1]}</td>
+          <td class="ch1">${st}</td>
+          <td><b>${Math.round(r.bonus)}%</b></td>
+          <td>${fmt(r.multi.pt)}</td>
+          <td>${c.hours.toFixed(1)}h</td>
+          <td>${oku(c.pt)}億</td><td>${fmt(c.auto/1e4)}万</td><td>${fmt(c.mys/1e4)}万</td>
+          <td><b>${oku(c.total)}億</b></td><td>${oku(c.cum)}億</td></tr>`;
+      }).join('')
+    + `</tbody><tfoot><tr><td colspan="6">合計</td><td>${chs.reduce((a,c)=>a+c.hours,0).toFixed(1)}h</td>
+        <td>${oku(chs.reduce((a,c)=>a+c.pt,0))}億</td><td>${fmt(chs.reduce((a,c)=>a+c.auto,0)/1e4)}万</td>
+        <td>${fmt(chs.reduce((a,c)=>a+c.mys,0)/1e4)}万</td>
+        <td><b>${oku(chs.reduce((a,c)=>a+c.total,0))}億</b></td><td>—</td></tr></tfoot>`;
 
   /* --- day table --- */
   document.getElementById('daytable').innerHTML =
@@ -967,7 +1082,7 @@ function render(){
   document.getElementById('notes').innerHTML = [
     `<b>単価は編成から計算している。</b>実効値 ${R.eff.toFixed(0)}（先頭${P.runner.lead}＋(内部${P.runner.inner}−先頭)×0.2）、総合力${P.runner.talentMan}万、イベントボーナス${P.runner.bonusPct}%。楽曲データの取得元は ${srcLive}`,
     `<b>協力ライブの枠の置き方。</b>走者は1〜5枠のどれかに等確率で入り、残り4枠とアンコール枠は支援者（実効値${P.support.effective}）が取る前提。<code>efficiency.ts</code> は「6枠すべてに同じ実効値を置いても曲の順位は変わらない、変わるのは絶対Pt」と明記しているので、絶対Ptを出すここでは分けて置いている`,
-    `<b>検算。</b>2026-08-18 02:00 の順位136位からボーダー階層で逆算した周回ぶんは6.0時間で1,865万Pt＝時速3.11M。上の計算値は時速 ${(R.multi.pt*R.multi.perHour/1e6).toFixed(2)}M で、実測と一致する`,
+    `<b>検算。</b>2026-08-18 02:00 の順位136位からボーダー階層で逆算した周回ぶんは6.0時間で1,865万Pt＝時速3.11M。ch1（ボーナス${Math.round((RBY[1]||R).bonus)}%）の計算値は時速 ${((RBY[1]||R).multi.pt*(RBY[1]||R).multi.perHour/1e6).toFixed(2)}M で、実測と一致する`,
     `<b>ボーダーの読み方（8/18 18:00 に引き直し）。</b><b>ch1のキャラが誰かで、ch1終の到達率が決まる。</b>5〜6チャプター構成の過去イベントに限ると、ch1キャラの人気指数と ch1終シェアが単調に対応する——0.797→41.0%（207・ルカ）／0.924→44.5%（205・みのり）／0.966→47.8%（179・レン）／1.036→54.3%（211・咲希）／1.080→63.7%（202・遥）、<b>r=0.921</b>。214の彰人は<b>指数1.206</b>で歴代最重クラスなので、ch1終シェアは <b>68.9%</b> と外挿される`,
     `<b>レンジの両端はこの2つ。</b>①上のモデル（ch1終シェア68.9% × ch1内の到達率 g=0.480）→ <b>2.00億</b>。②211との素朴な相似（同じ5ch/10日、ch1キャラの指数も1.036と平均的）→ <b>2.66億</b>。207基準だと4.03億まで飛ぶが、<b>207はch1が最弱キャラでシェアが低く出たケース</b>なので、ch1が最も重い214に当てはめるのは方向が逆。4チャプター/12日のWL2イベントも構造が違うので参照から外した（混ぜると相関が r=0.26 まで崩れる）`,
     `<b>この推定の弱点。</b>214の指数1.206は参照の上限1.080を超える<b>外挿</b>で、彰人の指数自体も観測1回（event163）に依存する。<b>答え合わせは ch2（寧々・指数1.042）の伸び方</b>——ch1ほど伸びなければ①側、伸び続けるならキャラ人気では説明できない要因（夏休み・最終Part）が効いているので②側へ寄せる`,
@@ -975,9 +1090,16 @@ function render(){
     `<b>ボーダーは中盤で凍り、チャプター終盤に跳ねる。</b>過去実測で ch2 の伸びの55〜85%が最後の12時間に集中。ch1終から約36時間はほぼ動かないので、8/19・8/20 の稼働は相対的に一番効く`,
     `<b>8/27 を「調整のみ」にする代償。</b>最後の12時間だけでボーダーは終値の6.9〜10.9pp（2.6億なら1,800万〜2,900万Pt）伸びる。ここに乗らないぶんを事前に積んでおく必要がある`,
     `<b>オートの炊き数は 8/18 までが10炊き、8/19 以降が5炊き。</b>10炊きを続けると消費LBが32,823になり石30万（＝30,000LB）を超えるため、8/18 夜に落とした。オートは回数律速（99回/日）で時間が余っているので、LB効率の悪い焚き上げ（10炊き 6,870Pt/LB に対し5炊き 9,815Pt/LB）から削るのが正しい。<b>1日10炊きに戻すごとに +194万Pt / +495LB</b> で日単位に可逆なので、ch2終（8/21 20:00）でボーダー推定が2.6億を超えていたら残り日数を戻す`,
-    `<b>感度。</b>効くのは周回のオーバーヘッド。既定の${P.overheadSec.multi}秒は event214 開幕の実測値だが、瑞希ラン(2026-07)の実測平均54秒に置くと ${(3600/(R.multi.song+54)).toFixed(1)} 周/h まで落ち、着地は約 ${oku(DAYS.reduce((a,d)=>a+(d.actualPt!=null?d.actualPt:d.hours*(3600/(R.multi.song+54))*R.multi.pt)+d.auto+d.mys,0))} 億になる。<b>石よりも部屋待ちを作らないことが直接効く</b>`,
+    `<b>感度。</b>効くのは周回のオーバーヘッド。既定の${P.overheadSec.multi}秒は event214 開幕の実測値だが、瑞希ラン(2026-07)の実測平均54秒に置くと ${(3600/(R.multi.song+54)).toFixed(1)} 周/h まで落ち、着地は約 ${oku(DAYS.reduce((a,d)=>{
+        if(d.actualPt!=null) return a+d.actualPt+d.auto+d.mys;
+        let m=0; const sH=d.endH-d.hours;
+        for(let c=1;c<=5;c++){ const ov=Math.max(0,Math.min(d.endH,c*48)-Math.max(sH,(c-1)*48));
+          if(ov>0) m += ov*(3600/((RBY[c]||R).multi.song+54))*(RBY[c]||R).multi.pt; }
+        return a+m+d.auto+d.mys; },0))} 億になる。<b>石よりも部屋待ちを作らないことが直接効く</b>`,
     `<b>オートの所要時間。</b>${P.auto.playsPerDay}回で ${R.auto.hoursForDay.toFixed(1)} 時間かかる。周回の稼働時間とは重ねられないので、就寝中に回す枠`,
-    `<b>🚧 マイセカイのLB消費が未計測。</b>全回収するには資材の回復にLBが要るはずで、その量が分かっていない。<b>下のLBの表と予算にはマイセカイぶんが入っていない</b>ので、実消費はここに書いてある数字より多くなる。開幕の全回収は12分で61万Pt（実測）、以降は控えめに1回${fmt(R.mysekai.per/1e4)}万Ptで置いている`
+    `<b>🚧 マイセカイのLB消費が未計測。</b>全回収するには資材の回復にLBが要るはずで、その量が分かっていない。<b>下のLBの表と予算にはマイセカイぶんが入っていない</b>ので、実消費はここに書いてある数字より多くなる`,
+    `<b>マイセカイの章依存。</b>走者申告は全回収1回で85〜90万Pt・1日180万弱（ch1・ボーナス${Math.round((RBY[1]||R).bonus)}%）。ここでは1回${fmt(P.mysekai.perHarvestPt/1e4)}万Ptを基準に、章のボーナス比で換算している。ch1の${fmt((RBY[1]||R).mysekai.perDay/1e4)}万/日に対し、最も低いch2は${fmt((RBY[2]||R).mysekai.perDay/1e4)}万/日、最も高いch4は${fmt((RBY[4]||R).mysekai.perDay/1e4)}万/日。開幕の全回収だけは12分で61万Ptの実測値を使っている`,
+    `<b>章ごとのイベントボーナス。</b>メイン編成${P.runner.bonusMain != null ? P.runner.bonusMain : '—'}%に章のサポート編成が乗る（走者申告 2026-08-20）。${[1,2,3,4,5].map(n=>'ch'+n+' '+Math.round((RBY[n]||R).bonus)+'%').join(' / ')}。<b>周回・オート・マイセカイの3つとも同じ比率で動く</b>ので、章が変わると収入構造ごとスライドする`
   ].map(s=>`<li>${s}</li>`).join('');
 
   document.getElementById('subline').innerHTML =
