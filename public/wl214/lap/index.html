@@ -33,6 +33,7 @@
   --good:#3fa876; --warn:#d0a03c; --bad:#e66767;
 }
 *{box-sizing:border-box}
+[hidden]{display:none !important}   /* .row{display:flex} 等が UA の [hidden] に勝つのを防ぐ */
 html,body{margin:0;padding:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-text-size-adjust:100%;
   padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
@@ -66,6 +67,11 @@ h1{font-size:17px;margin:0;letter-spacing:.01em}
 .tap:active{transform:translateY(5px);box-shadow:0 1px 0 color-mix(in srgb, var(--s1) 62%, #000)}
 .tap .big{display:block;font-size:15px;font-weight:600;opacity:.85;letter-spacing:.02em;margin-top:6px}
 .tap[disabled]{background:var(--line-strong);box-shadow:none;color:var(--ink-3)}
+.tap.start{background:var(--s3);box-shadow:0 6px 0 color-mix(in srgb, var(--s3) 62%, #000)}
+.tap.start:active{box-shadow:0 1px 0 color-mix(in srgb, var(--s3) 62%, #000)}
+.lap.skip .t{color:var(--ink-3);text-decoration:line-through}
+.lap.skip{opacity:.65}
+.st .now{color:var(--s2);font-variant-numeric:tabular-nums}
 .row{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
 .act{flex:1;min-width:104px;font:inherit;font-size:13px;padding:11px 10px;border:1px solid var(--line-strong);
   border-radius:11px;background:var(--surface);color:var(--ink);cursor:pointer;touch-action:manipulation}
@@ -122,7 +128,7 @@ textarea{width:100%;min-height:150px;margin-top:11px;font-family:var(--mono);fon
 
 <div class="stats">
   <div class="st hi"><p class="k">直近ラップ</p><p class="v"><span id="v-last">—</span><small>秒</small></p>
-    <p class="n" id="n-last">タップで計測開始</p></div>
+    <p class="n" id="n-last">「計測開始」を押すと始まる</p></div>
   <div class="st"><p class="k">直近5周の平均</p><p class="v"><span id="v-r5">—</span><small>秒</small></p>
     <p class="n" id="n-r5">&nbsp;</p></div>
   <div class="st"><p class="k">全体平均</p><p class="v"><span id="v-avg">—</span><small>秒</small></p>
@@ -130,14 +136,16 @@ textarea{width:100%;min-height:150px;margin-top:11px;font-family:var(--mono);fon
   <div class="st"><p class="k">推定オーバーヘッド</p><p class="v"><span id="v-oh">—</span><small>秒</small></p>
     <p class="n" id="n-oh">平均ラップ − 曲長</p></div>
   <div class="st wide"><p class="k">この時速なら</p><p class="v"><span id="v-rate">—</span><small>周/h</small></p>
-    <p class="n" id="n-rate">&nbsp;</p></div>
+    <p class="n" id="n-rate">&nbsp;</p>
+    <p class="n" id="n-now" hidden>いまの周 <b class="now"><span id="v-now">0</span> 秒</b>　経過中</p></div>
 </div>
 
 <div class="tapzone">
-  <button class="tap" id="tap" type="button">周回した<span class="big" id="taphint">1周終わるたびに押す</span></button>
-  <div class="row">
+  <button class="tap start" id="start" type="button">計測開始<span class="big">1周目が始まった瞬間に押す</span></button>
+  <button class="tap" id="tap" type="button" hidden>周回した<span class="big" id="taphint">1周終わるたびに押す</span></button>
+  <div class="row" id="ctl" hidden>
     <button class="act" id="undo" type="button">1つ戻す</button>
-    <button class="act" id="pause" type="button">中断</button>
+    <button class="act" id="pause" type="button">直前を除外</button>
     <button class="act warn" id="reset" type="button">全消去</button>
   </div>
 </div>
@@ -204,7 +212,7 @@ function render(){
   const last = segs[segs.length-1];
 
   $('v-last').textContent = last ? fmtS(last.per) : '—';
-  $('n-last').textContent = S.marks.length===0 ? 'タップで計測開始'
+  $('n-last').textContent = S.marks.length===0 ? '「計測開始」を押すと始まる'
     : (last ? `${clock(last.at)}　通算 ${totalLaps} 周` : `1回目。次のタップからラップが出る（${clock(S.marks[0])} 開始）`);
 
   /* 直近5周ぶん。区間が複数周を含む場合も周数で数える */
@@ -253,7 +261,24 @@ function render(){
   }
   $('json').value = JSON.stringify(exportObj(), null, 1);
   $('taphint').textContent = S.marks.length ? `通算 ${totalLaps} 周` : '1周終わるたびに押す';
+
+  /* 開始前は「計測開始」だけを出す。最初のタップが開始マークなのか1周目の完了なのかが
+     曖昧だと、1周ぶんまるごとずれる */
+  const running = S.marks.length > 0;
+  $('start').hidden = running;
+  $('tap').hidden   = !running;
+  $('ctl').hidden   = !running;
+  $('n-now').hidden = !running;
+  tickNow();
 }
+
+/* いまの周が何秒経っているか。開始スイッチを付けた以上、動いていることが見えないと不安になる */
+function tickNow(){
+  if(!S.marks.length){ return; }
+  const el = $('v-now'); if(!el) return;
+  el.textContent = Math.floor((Date.now() - S.marks[S.marks.length-1])/1000);
+}
+setInterval(tickNow, 1000);
 
 function exportObj(){
   const segs = segments();
@@ -276,7 +301,7 @@ function exportObj(){
 
 /* --- 操作 --- */
 let lastTap = 0;
-$('tap').addEventListener('click', ()=>{
+function mark(){
   const now = Date.now();
   if(now - lastTap < 400) return;        /* 二度押し防止。ラップは2分級なので実害なし */
   lastTap = now;
@@ -284,7 +309,9 @@ $('tap').addEventListener('click', ()=>{
   S.marks.push(now);
   if(navigator.vibrate) navigator.vibrate(18);
   save(); render();
-});
+}
+$('tap').addEventListener('click', mark);
+$('start').addEventListener('click', ()=>{ mark(); toast('計測開始'); });
 $('undo').addEventListener('click', ()=>{
   if(!S.marks.length) return;
   S.marks.pop(); S.laps.pop();
