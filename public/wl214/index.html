@@ -1584,12 +1584,12 @@ function render(){
         ? `<b>${altLb}炊きでも中央は上回る</b>。10炊きを続ける根拠は「中央より上に積む」ことではなく、上振れ（${oku(P.border.highPt*R50tHi)}億）側に備えることになる`
         : `${altLb}炊きだと中央に届かない`
       }。⚠️2026-08-18 夜に「5炊きでは50位に届かない」として超過を飲む判断をしたが、その根拠に使った数字は章別ボーナスとマイセカイLBを入れる前のもので、いまは成立していない。オートは回数律速（${P.auto.playsPerDay}回/日）で時間が余っているので、LBを削るならLB効率の悪い焚き上げから（ch${selCh}で 10炊き ${fmt(RC.auto.pt10/10)}Pt/LB に対し5炊き ${fmt(RC.auto.pt5/5)}Pt/LB）。<b>日単位に可逆</b>`,
-    `<b>感度。</b>効くのは周回のオーバーヘッド。既定の${P.overheadSec.multi}秒は event214 開幕の実測値だが、瑞希ラン(2026-07)の実測平均54秒に置くと ${(3600/(R.multi.song+54)).toFixed(1)} 周/h まで落ち、着地は約 ${oku(DAYS.reduce((a,d)=>{
+    `<b>周回のオーバーヘッドは実測で確定した。</b>2026-08-20 の JST 18:57〜19:53、56.5分・28周の計測で 1周 平均121.08秒（SD1.65）、<b>OH = 46.28 ± 0.31秒</b>（95%区間 45.67〜46.89）。それまでの既定46秒と実質一致し、対抗仮説だった瑞希ランの54秒は −24.8σ で棄却された。<b>着地の最大の未確定要素だったここは潰れた</b>——54秒なら着地は約 ${oku(DAYS.reduce((a,d)=>{
         if(d.actualPt!=null) return a+d.actualPt+d.auto+d.mys;
         let m=0; const sH=d.endH-d.hours;
         for(let c=1;c<=5;c++){ const ov=Math.max(0,Math.min(d.endH,c*48)-Math.max(sH,(c-1)*48));
           if(ov>0) m += ov*(3600/((RBY[c]||R).multi.song+54))*(RBY[c]||R).multi.pt; }
-        return a+m+d.auto+d.mys; },0))} 億になる。<b>石よりも部屋待ちを作らないことが直接効く</b>。実測は<a href="./lap/">周回ラップ計測</a>で取る`,
+        return a+m+d.auto+d.mys; },0))} 億まで落ちるところだった。<b>残るのは部屋を止めないことだけ</b>`,
     `<b>オートの所要時間。</b>${P.auto.playsPerDay}回で ${R.auto.hoursForDay.toFixed(1)} 時間かかる。周回の稼働時間とは重ねられないので、就寝中に回す枠`,
     `<b>マイセカイのPtは実測2点から。</b>8/18 02:00→02:12 の <b>+654,940</b> と 8/19 02:11→08:59 の <b>+687,750</b>——どちらも全回収1回ぶん単独（オート未実行の窓）で、ch1のボーナス${Math.round((RBY[1]||R).bonus)}%。平均して1回${fmt(P.mysekai.perHarvestPt/1e4)}万Ptを基準に置き、章のボーナス比で換算している。ch1の${fmt((RBY[1]||R).mysekai.perDay/1e4)}万/日に対し、最も低いch2は${fmt((RBY[2]||R).mysekai.perDay/1e4)}万/日、最も高いch4は${fmt((RBY[4]||R).mysekai.perDay/1e4)}万/日。開幕の全回収だけは12分で61万Ptの実測値を使う`,
     `<b>章境界での回収タイミングは選べる。</b>資材の更新は 5:00 と 17:00 だが回収は次の更新までいつでもよいので、20:00 の章境界をまたぐぶんは<b>どちらの章のボーナスで取るか選べる</b>。1回あたり ch2 ${fmt((RBY[2]||R).mysekai.per)} / ch3 ${fmt((RBY[3]||R).mysekai.per)} / ch4 ${fmt((RBY[4]||R).mysekai.per)} / ch5 ${fmt((RBY[5]||R).mysekai.per)} Pt なので、<b>8/21 と 8/23 は 20:00 より後に、8/25 は前に</b>済ませるのが得。全部で +${fmt(((RBY[3]||R).mysekai.per-(RBY[2]||R).mysekai.per)+((RBY[4]||R).mysekai.per-(RBY[3]||R).mysekai.per)+((RBY[4]||R).mysekai.per-(RBY[5]||R).mysekai.per))} Pt（着地の0.04%）。手間はゼロに近いが効果も小さい`,
