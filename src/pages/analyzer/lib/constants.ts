@@ -79,6 +79,17 @@ export const MAX_SEARCH_BONUS_10X = 10000;
 export const TALENT_COEF_DIVISOR = 450000;
 
 /** マイセカイ単価の倍率。ワールドパス所持で5倍になる。 */
+/**
+ * 協力ライブのイベントPt係数で、他4人の合計スコア由来の項に掛かる上限。
+ *
+ * 過去に 11 → 13 → 16 と2回引き上げられている。**2026-08-21 に実機で16を確認した**:
+ * event214 の走者の実測で 自スコア 3,613,633（→ ① = 212）・1周 100,835 Pt（→ 係数 338）、
+ * 338 − 110 − 212 = 16。それまで実装は13のままだった（参照実装 xfl03/sekai-calculator も
+ * 2025-09 で更新が止まっており、13を引き継いでいた）。
+ * 上限に張り付くのは他4人合計が 544万点から（13時代は442万点）。
+ */
+export const MULTI_OTHER_SCORE_CAP = 16;
+
 export const MYSEKAI_MULTIPLIER = 100;
 export const MYSEKAI_MULTIPLIER_WORLD_PASS = 500;
 

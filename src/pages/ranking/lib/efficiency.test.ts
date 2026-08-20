@@ -177,13 +177,19 @@ describe("eventPtFor — 実測で確定した calcLivePt 系に委ねる", () =
     );
   });
 
-  it("協力の係数は 110 + floor(自/17000) + min(13, floor(他4人/340000))", () => {
+  it("協力の係数は 110 + floor(自/17000) + min(16, floor(他4人/340000))", () => {
     // 他人のスコアを省くと自分×4で置くので、他項は floor(score/85000) 相当
-    expect(multiScoreCoefficient(1_700_000)).toBe(110 + 100 + 13);
-    // 他4人が弱いと上限13に届かない
+    expect(multiScoreCoefficient(1_700_000)).toBe(110 + 100 + 16);
+    // 他4人が弱いと上限16に届かない
     expect(multiScoreCoefficient(1_700_000, 680_000)).toBe(110 + 100 + 2);
     // 上限で頭打ちになる
-    expect(multiScoreCoefficient(100_000, 99_000_000)).toBe(110 + 5 + 13);
+    expect(multiScoreCoefficient(100_000, 99_000_000)).toBe(110 + 5 + 16);
+  });
+
+  // 2026-08-21 に event214 の走者の実機実測で上限16を確認した。
+  // 自スコア 3,613,633（→ ① = 212）で1周 100,835 Pt（→ 係数 338）、338 − 110 − 212 = 16。
+  it("実機実測（2026-08-21）の係数を再現する", () => {
+    expect(multiScoreCoefficient(3_613_633, 99_000_000)).toBe(338);
   });
 
   it("小数のボーナス（0.5%刻み）を落とさない", () => {

@@ -1,4 +1,4 @@
-import { SCORE_STEP } from "./constants";
+import { MULTI_OTHER_SCORE_CAP, SCORE_STEP } from "./constants";
 
 /**
  * ライブボーナスの消費量ごとのイベントポイント倍率。
@@ -79,16 +79,18 @@ export function soloScoreCoefficient(score: number): number {
 /**
  * 協力ライブ（みんなでライブ）のスコア係数。ソロとは式そのものが違う。
  *
- *   110 + floor(自分のスコア / 17000) + min(13, floor(他4人の合計スコア / 340000))
+ *   110 + floor(自分のスコア / 17000) + min(16, floor(他4人の合計スコア / 340000))
  *
  * 他4人ぶんが式に入るのが要点で、これが「支援を厚くすると単価が上がる」の正体。
- * 上限13に張り付くのは他4人合計が442万点からなので、同格の部屋ならすぐ飽和する。
+ * 上限16に張り付くのは他4人合計が544万点からなので、同格の部屋ならすぐ飽和する（2026-08-21 に実機で確認）。
  * 他人のスコアが分からないときは参照実装（xfl03/sekai-calculator）に合わせて
  * 自分と同じ実力の4人＝自分のスコア×4 で置く。
  */
 export function multiScoreCoefficient(selfScore: number, otherScore?: number): number {
   const other = otherScore != null && otherScore > 0 ? otherScore : 4 * selfScore;
-  return 110 + Math.floor(selfScore / 17000) + Math.min(13, Math.floor(other / 340000));
+  return (
+    110 + Math.floor(selfScore / 17000) + Math.min(MULTI_OTHER_SCORE_CAP, Math.floor(other / 340000))
+  );
 }
 
 /** 協力ライブでの獲得イベントポイント。丸めは calcLivePt と共通、係数だけ協力用。 */
