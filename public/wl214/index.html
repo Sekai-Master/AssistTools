@@ -90,9 +90,17 @@ h2{font-size:13px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-
 .rate{display:flex;flex-direction:column;gap:2px}
 .rate .head{display:flex;align-items:center;gap:9px;margin-bottom:12px}
 .chiprow{margin:-6px 0 10px;font-size:11px;color:var(--ink-3)}
+.verify{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
+.verify>summary{cursor:pointer;font-size:15px;list-style:none}
+.verify>summary::-webkit-details-marker{display:none}
+.verify>summary::before{content:"▸ ";color:var(--ink-3)}
+.verify[open]>summary::before{content:"▾ "}
+.verify h3{font-size:14px;margin:26px 0 6px;letter-spacing:.02em}
+.verify h3:first-of-type{margin-top:20px}
+.verify .lede{font-size:13px;margin-bottom:12px}
 tr.selrow{background:var(--surface-2)} tr.selrow td{font-weight:600}
 #chrates th,#chrates td,#chaptable th,#chaptable td{white-space:nowrap}
-td.up{color:var(--good)} td.down{color:var(--bad)}
+.up{color:var(--good)} .down{color:var(--bad)} .warnv{color:var(--warn)}
 .dot{width:11px;height:11px;border-radius:3px;flex:none}
 .rate .name{font-weight:660;font-size:15px}
 .rate .song{font-size:12px;color:var(--ink-3);margin-left:auto;text-align:right}
@@ -300,21 +308,6 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
 </section>
 
 <section>
-  <h2>章ごとの熱量（ch1 との答え合わせ）</h2>
-  <p class="lede">各章のボーダーを<b>章の頭からの経過時間で揃えて</b>重ねたもの。ボーダー予測は「ch1のキャラ人気指数から ch1終シェアが決まる」というモデルに乗っているので、後続の章が ch1 に対してどれだけ伸びるかが、そのモデルの答え合わせになる。ここはモデルを通していない生の観測。</p>
-  <div class="chartcard">
-    <div class="charthead"><span class="charttitle">章内の経過時間で揃えたボーダー</span>
-      <span class="segctl" id="chrankview"></span>
-      <span class="segctl" id="chrmode"></span>
-      <span class="legend" id="legend5"></span></div>
-    <div class="svgwrap"><svg id="chart5" role="img" aria-label="章ごとのボーダー推移の比較"></svg></div>
-    <div class="tip" id="tip5"></div>
-  </div>
-  <div class="card" style="margin-top:16px"><div class="svgwrap"><table id="chcmp"></table></div>
-    <p class="ch1" id="chcmpnote" style="margin:10px 2px 0;font-size:12px"></p></div>
-</section>
-
-<section>
   <h2>チャプター別の配分</h2>
   <p class="lede">稼働ブロックが日付をまたぐので、チャプター境界で割り直したもの。総合だけを狙うなら本命集中は不要で、この配分で問題ない。</p>
   <div class="card"><div class="svgwrap"><table id="chaptable"></table></div></div>
@@ -340,6 +333,34 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
       </div>
       <textarea id="jsonout" hidden readonly></textarea>
     </div>
+  </details>
+</section>
+
+<section>
+  <details class="verify" id="verify">
+    <summary><b>モデルの検証</b>　<span class="ch1">この予測がどれだけ当たっているか。走者の判断には要らない</span></summary>
+
+    <h3>1. モデルと実測の乖離</h3>
+    <p class="lede">走者から申告があった時点で、モデルの累積が何を言っていたか。<b>時速</b>は前の申告からの区間平均。ここが±数%で収まっている限り、着地見込みは信用してよい。</p>
+    <div class="card"><div class="svgwrap"><table id="acctable"></table></div>
+      <p class="ch1" id="accnote" style="margin:10px 2px 0;font-size:12px"></p></div>
+
+    <h3>2. ボーダー推定がどう動いてきたか</h3>
+    <p class="lede">推定を引き直すたびの記録。レンジが締まっていくか、途中で結論が反転していないかを見る。</p>
+    <div class="card"><div class="svgwrap"><table id="histtable"></table></div></div>
+
+    <h3>3. 章ごとの熱量（ch1 との答え合わせ）</h3>
+    <p class="lede">各章のボーダーを<b>章の頭からの経過時間で揃えて</b>重ねたもの。ボーダー予測は「ch1のキャラ人気指数から ch1終シェアが決まる」というモデルに乗っているので、後続の章が ch1 に対してどれだけ伸びるかがその答え合わせになる。ここはモデルを通していない生の観測。</p>
+    <div class="chartcard">
+      <div class="charthead"><span class="charttitle">章内の経過時間で揃えたボーダー</span>
+        <span class="segctl" id="chrankview"></span>
+        <span class="segctl" id="chrmode"></span>
+        <span class="legend" id="legend5"></span></div>
+      <div class="svgwrap"><svg id="chart5" role="img" aria-label="章ごとのボーダー推移の比較"></svg></div>
+      <div class="tip" id="tip5"></div>
+    </div>
+    <div class="card" style="margin-top:16px"><div class="svgwrap"><table id="chcmp"></table></div>
+      <p class="ch1" id="chcmpnote" style="margin:10px 2px 0;font-size:12px"></p></div>
   </details>
 </section>
 
@@ -490,10 +511,15 @@ function buildDays(P, R, RBY){
        日の終わり側の章（endCh）に寄せると 8/19・8/21・8/25 が隣の章に流れて単価まで間違う。
        実測: オートは 8/18・8/19 とも日中（09:00〜18:00）、マイセカイは 5:00 と 17:00 の資材更新後 */
     const evT = new Date(P.event.startJst).getTime(), evY = new Date(P.event.startJst).getFullYear();
+    /* Date.UTC の hours 引数は ToIntegerOrInfinity でゼロ方向に切り捨てられるため、
+       Date.UTC(y,m,d,17.2) は 17 になる。小数時刻（26.2＝翌02:12 など）を潰さないよう、
+       日付の 00:00 を出してからミリ秒で足す */
     const hOf = hh => { const [mo,da] = String(d.label).split('/').map(Number);
-      return (Date.UTC(evY, mo-1, da, hh-9) - evT)/36e5; };
+      return (Date.UTC(evY, mo-1, da) + (Number(hh)-9)*36e5 - evT)/36e5; };
     const autoHour = Math.max(0, Math.min(23, Number(P.auto.hourOfDay ?? 13) || 0));
-    const autoH  = hOf(autoHour);
+    /* 実績を固定した日は実際に回した時刻を schedule 側で指定できる（開幕日など例外がある） */
+    const autoH  = (d.autoAtH != null && Number.isFinite(Number(d.autoAtH)))
+                     ? Number(d.autoAtH) : hOf(autoHour);
     /* 実績を固定した日は章も schedule 側で固定する。hourOfDay を動かしても確定済みの
        過去の章帰属が動いてしまうのを防ぐ */
     const autoCh = (d.autoCh != null) ? d.autoCh
@@ -506,17 +532,21 @@ function buildDays(P, R, RBY){
       : (P.mysekai.harvestsPerDay===2) ? [5,17]
       : Array.from({length:P.mysekai.harvestsPerDay||0}, (_,k)=>5 + k*(12/Math.max(1,(P.mysekai.harvestsPerDay||1)-1)));
     const harvestHs = harvestAt.map(hOf).filter(h => h >= 0 && h <= 240);
-    let mys = 0; const mysByCh = {};
-    for(const h of harvestHs){
+    /* 回収ごとに「時刻・章・その章の単価」を持たせる。等分割にすると章をまたぐ日
+       （8/19 の夕方回収が ch2 側）で単価が混ざる */
+    let mys = 0; const mysByCh = {}; let harvests = harvestHs.map(h=>{
       const c = Math.min(5, Math.max(1, Math.floor(h/48)+1));
       const v = (RBY[c] || R).mysekai.per;
       mys += v; mysByCh[c] = (mysByCh[c]||0) + v;
-    }
+      return {h, c, v};
+    });
     if(d.mysekaiPt != null){
       /* 実測で上書きする日は、章への割り振りだけモデル比で残して総量を実測に合わせる */
       const k = mys>0 ? d.mysekaiPt/mys : 0;
       for(const c in mysByCh) mysByCh[c] *= k;
-      if(mys===0) mysByCh[endCh] = d.mysekaiPt;
+      harvests.forEach(x=>{ x.v *= k; });
+      if(mys===0){ mysByCh[endCh] = d.mysekaiPt;
+                   harvests = [{h: Math.max(0, d.endH-0.2), c: endCh, v: d.mysekaiPt}]; }
       mys = d.mysekaiPt;
     }
     /* 全回収には資材回復のLBが要る（走者申告 2026-08-20: 1回85〜90、1日180弱） */
@@ -525,6 +555,29 @@ function buildDays(P, R, RBY){
     const lbMys = nHarvest * lbPerH;
     const futureMysLb = harvestHs.filter(h => h > nowH).length * lbPerH;
     const total = manual + auto + mys;
+    /* 1日の中の稼ぎは全然フラットではない（日中はオートだけ、19:00以降は周回で桁が変わる）。
+       日の終端どうしを直線で結ぶと途中が最大45%ずれるので、実際に稼いだ区間を持たせる。
+       spans: {a:開始h, b:終了h, pt:その区間の合計Pt}。a===b なら瞬間的な獲得 */
+    const spans = [];
+    if(manual > 0){
+      /* blocks が "8-10 / 23-26" のように割れている日は endH−hours の1本にすると
+         朝のぶんが夜に寄る。schedule 側で実区間を指定できるようにする */
+      const ms = Array.isArray(d.manualSpans) && d.manualSpans.length ? d.manualSpans : null;
+      if(ms){
+        const tot = ms.reduce((a2,[x,y])=>a2+Math.max(0,y-x),0);
+        ms.forEach(([x,y])=>{ const w=Math.max(0,y-x);
+          if(w>0) spans.push({a:x, b:y, pt:manual*w/tot, kind:'manual'}); });
+      }else if(d.endH > startH){
+        spans.push({a:startH, b:d.endH, pt:manual, kind:'manual'});
+      }
+    }
+    if(auto > 0){
+      const dur = (RBY[autoCh]||R).auto.hoursForDay * (autoPlays / Math.max(1,P.auto.playsPerDay));
+      spans.push({a:autoH, b:autoH + (isFinite(dur)?dur:0), pt:auto, kind:'auto'});
+    }
+    /* 全回収は開幕の実測で12分（0.2h）。瞬間ではなく幅を持たせないと、
+       階段が次のブレークポイントまでの数時間の斜面に化けて乖離を過小に見せる */
+    harvests.forEach(x => { if(x.v > 0) spans.push({a:x.h, b:x.h+0.2, pt:x.v, kind:'mys'}); });
     cum += total;
     let futureManualLb = 0, futurePlays = 0;
     if(d.actualPt == null){
@@ -537,18 +590,18 @@ function buildDays(P, R, RBY){
     }
     const lbAuto = (d.autoLb != null) ? d.autoLb : autoPlays * LBA;
     const futureAutoLb = (d.autoLb != null || autoH <= nowH) ? 0 : lbAuto;
-    /* その日の範囲は「周回ブロック・オート・マイセカイの回収」を全部含んだ端から端まで。
-       endH だけで見ると 8/23（朝10時に周回終了・13時にオート）が「済」になって未消化の
-       990LB が隠れ、逆に 5:00 のマイセカイだけ済んだ日が「予定」のまま累計だけ減る */
-    const spanH = [d.endH, startH]
-      .concat((d.autoLb != null) ? [] : [autoH])
-      .concat(harvestHs);
-    const dayEnd = Math.max(...spanH), dayStart = Math.min(...spanH);
+    /* その日の範囲は span そのものから出す＝「最初の稼ぎが始まってから最後の稼ぎが終わるまで」。
+       endH だけで見ると 8/23（朝10時に周回終了・13時からオート）が「済」になって未消化の
+       990LB が隠れ、5:00 のマイセカイだけ済んだ日は「予定」のまま累計だけ減る。
+       手で並べ直すと 8/17 のオート（実績固定）のように漏れる枠が出るので span を正本にする */
+    const dayEnd   = spans.length ? Math.max(...spans.map(x=>x.b)) : d.endH;
+    const dayStart = spans.length ? Math.min(...spans.map(x=>x.a)) : startH;
     const state = dayEnd <= nowH ? '済' : (dayStart >= nowH ? '予定' : '進行中');
     touch(autoCh).auto += auto; touch(autoCh).lbAuto += lbAuto;
     for(const c in mysByCh) touch(Number(c)).mys += mysByCh[c];
     return {...d, manual, auto, mys, total, cum, plays, autoPlays, lbManual, lbAuto, lbMys,
-            nHarvest, futureManualLb, futurePlays, futureAutoLb, futureMysLb, state, byCh, endCh, autoCh, autoH};
+            nHarvest, futureManualLb, futurePlays, futureAutoLb, futureMysLb, state, byCh, endCh,
+            autoCh, autoH, spans, dayEnd, dayStart};
   });
 }
 
@@ -562,6 +615,28 @@ function shareAt(curve, h){
     }
   }
   return curve[curve.length-1];
+}
+
+/* 日をまたいだ span を、時刻順の累積カーブ（[h, 累積Pt]）に畳む。
+   走者の実測と同じ時間軸で比べられるようにするのが目的 */
+function cumCurve(days){
+  /* span をイベント期間にクランプしてから畳む。b だけがフィルタで落ちて
+     途中按分のまま終わる（末端が着地見込みと食い違う）のを防ぐ */
+  const spans = days.flatMap(d=>d.spans||[])
+    .map(s=>{ const a=Math.max(0,Math.min(240,s.a)), b=Math.max(0,Math.min(240,s.b));
+              const w=s.b-s.a, keep = w>0 ? (b-a)/w : 1;
+              return {a, b, pt:s.pt*keep, kind:s.kind}; })
+    .filter(s=>s.pt>0)
+    .sort((a,b)=>a.a-b.a || a.b-b.b);
+  const brk = new Set([0, 240]);          /* 240 を必ず含める。末端が点 span でも取りこぼさない */
+  spans.forEach(s=>{ brk.add(s.a); brk.add(s.b); });
+  const hs = [...brk].filter(h=>h>=0 && h<=240).sort((a,b)=>a-b);
+  const at = h => spans.reduce((sum,s)=>{
+    if(h <= s.a) return sum;
+    if(h >= s.b) return sum + s.pt;
+    return sum + s.pt * (h - s.a) / (s.b - s.a);      /* 区間の途中は按分 */
+  }, 0);
+  return hs.map(h=>({h, v:at(h)}));
 }
 
 /* 予測を実測に接ぐ。シェア曲線だけで引くと現在ポイントから線が浮いてしまうので、
@@ -687,7 +762,20 @@ function cumChart(svg, tipEl, days, P){
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width',W); svg.setAttribute('height',H);
   svg.innerHTML='';
   const C = P.border.centralPt;
-  const pts = days.map(d=>({h:d.endH, v:d.cum, d}));
+  /* 計画線は実際に稼いだ区間から引く */
+  const plan = cumCurve(days);
+  const planAt = h => { if(!plan.length) return 0;
+    if(h <= plan[0].h) return plan[0].v;
+    for(let i=1;i<plan.length;i++) if(plan[i].h >= h){ const a=plan[i-1], b=plan[i];
+      return b.h===a.h ? b.v : a.v + (h-a.h)/(b.h-a.h)*(b.v-a.v); }
+    return plan[plan.length-1].v; };
+  /* マーカーは「その日の獲得が終わる時刻」の線上に置く。値は線から取る——
+     日はまたいで重なる（8/17 のオートが回っている最中に 8/18 の 5:00 回収が挟まる）ので、
+     日ラベルごとの合計 d.cum とは 67万ずれる。線の上に無い点を打つほうが誤解を招く */
+  const pts = days.map((d,i)=>{
+    const h = (i===days.length-1) ? 240 : Math.min(240, (d.dayEnd != null ? d.dayEnd : d.endH));
+    return {h, v: planAt(h), dayTotal: d.cum, d};
+  });
   /* 予測は実測を起点にする。
      「終値シナリオ × シェア曲線」をそのまま引くと、いま観測できている値を通らない線になり、
      帯も過去に向かって無意味に開いてしまう。現在地は確定しているので、
@@ -729,7 +817,7 @@ function cumChart(svg, tipEl, days, P){
   const bdF = grid.map(at3);
   const bd50F = grid.map(at50);
   const show50v = (VIEW==='50' || VIEW==='both') && P.border.rank50Ratio;
-  const max = Math.max(...pts.map(p=>p.v), ...bdF.map(b=>b.hi),
+  const max = Math.max(...pts.map(p=>p.v), ...plan.map(p=>p.v), ...bdF.map(b=>b.hi),
                        ...(show50v ? bd50F.map(b=>b.hi) : []))*1.08;
   const iw=W-m.l-m.r, ih=H-m.t-m.b;
   const X=h=>m.l+iw*h/240, Y=v=>m.t+ih*(1-v/max);
@@ -786,17 +874,17 @@ function cumChart(svg, tipEl, days, P){
     }
   }
   /* 走者の累積（計画） */
-  const plan = el('polyline',{points:pts.map(p=>`${X(p.h)},${Y(p.v)}`).join(' '),
+  const planLine = el('polyline',{points:plan.map(p=>`${X(p.h)},${Y(p.v)}`).join(' '),
     fill:'none', stroke:css('--s1'), 'stroke-width':2.5, 'stroke-linejoin':'round',
     'stroke-dasharray':'6 5', class:'growline'});
-  svg.appendChild(plan);
+  svg.appendChild(planLine);
   if(!REDUCED){
-    const L = plan.getTotalLength();
-    plan.setAttribute('stroke-dasharray', L);
-    plan.setAttribute('stroke-dashoffset', L);
+    const L = planLine.getTotalLength();
+    planLine.setAttribute('stroke-dasharray', L);
+    planLine.setAttribute('stroke-dashoffset', L);
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
-      plan.setAttribute('stroke-dashoffset', 0);
-      setTimeout(()=>plan.setAttribute('stroke-dasharray','6 5'), 1550);
+      planLine.setAttribute('stroke-dashoffset', 0);
+      setTimeout(()=>planLine.setAttribute('stroke-dasharray','6 5'), 1550);
     }));
   }
   /* いまここ */
@@ -856,7 +944,7 @@ function cumChart(svg, tipEl, days, P){
       const rows50 = show50 ? `<div class="r"><i>50位 予測</i><b>${oku(b50.m)}億</b></div>
          <div class="r"><i>　差</i><b style="color:${p.v-b50.m>=0?css('--good'):css('--bad')}">${p.v-b50.m>=0?'+':''}${oku(p.v-b50.m)}億</b></div>` : '';
       tipShow(tipEl,host,ev.clientX-r.left,ev.clientY-r.top,
-        `<div class="t">${p.d.label} 終了時（経過${p.h}h）</div>
+        `<div class="t">${p.d.label} の獲得が終わる時点（経過${p.h.toFixed(1)}h）</div>
          <div class="r"><i><span class="dot" style="background:${css('--s1')}"></span>累積</i><b>${oku(p.v)}億</b></div>
          <div style="margin-top:5px;padding-top:5px;border-top:1px solid var(--line)">${rows100}${rows50}</div>`);
     });
@@ -1227,6 +1315,80 @@ function render(){
     localStorage.setItem(LSKEY, JSON.stringify(P));
     buildEditor(); render();
   }));
+  /* --- モデルの検証 1: 実測との乖離と時速 --- */
+  {
+    const cur = cumCurve(DAYS);
+    const modelAt = h => { if(!cur.length) return 0;
+      if(h <= cur[0].h) return cur[0].v;
+      for(let i=1;i<cur.length;i++) if(cur[i].h >= h){ const a2=cur[i-1], b2=cur[i];
+        return b2.h===a2.h ? b2.v : a2.v + (h-a2.h)/(b2.h-a2.h)*(b2.v-a2.v); }
+      return cur[cur.length-1].v; };
+    const rs = (LIVE && LIVE.runner) ? LIVE.runner.slice().sort((a2,b2)=>a2.h-b2.h) : [];
+    let worst = 0;
+    const rows = rs.map((r,i)=>{
+      const mv = modelAt(r.h), diff = r.pt ? mv/r.pt - 1 : 0;
+      if(Math.abs(diff) > Math.abs(worst)) worst = diff;
+      const prev = rs[i-1];
+      let rate = '—', mrate = '—', rdiff = '';
+      if(prev && r.h > prev.h){
+        const dh = r.h - prev.h;
+        const ra = (r.pt - prev.pt)/dh, rm = (mv - modelAt(prev.h))/dh;
+        rate  = (ra/1e6).toFixed(2)+'M/h'; mrate = (rm/1e6).toFixed(2)+'M/h';
+        /* 休憩帯は分母が小さく比率が暴れる（0.10 vs 0.05 M/h で -53%）。
+           絶対差が小さいものはグレーにして、率だけ見て慌てないようにする */
+        /* モデルが速すぎても遅すぎても等しく「ずれ」。符号で緑赤にすると
+           「モデルが50%速い」が good に見えてしまうので、大きさだけで色をつける */
+        if(ra){ const gap = Math.abs(rm-ra), big = gap >= 0.2e6;
+          rdiff = `<span class="${big ? 'warnv' : 'ch1'}">${rm>=ra?'+':''}${((rm/ra-1)*100).toFixed(0)}%</span>`
+                + (big ? '' : ` <span class="ch1">(${((rm-ra)/1e6).toFixed(2)}M)</span>`); }
+      }
+      /* ページの他の時刻は JST 直書きなので、ここだけ閲覧者のローカルTZで出すと嘘になる */
+      const j = new Date(new Date(P.event.startJst).getTime() + r.h*36e5 + 9*36e5);
+      const lbl = `${j.getUTCMonth()+1}/${j.getUTCDate()} `
+                + `${String(j.getUTCHours()).padStart(2,'0')}:${String(j.getUTCMinutes()).padStart(2,'0')}`;
+      return `<tr><td style="text-align:left">${lbl}</td><td class="ch1">${r.h.toFixed(2)}h</td>
+        <td>${fmt(r.pt)}</td><td>${fmt(mv)}</td>
+        <td class="${Math.abs(diff)<0.02?'up':'down'}"><b>${diff>=0?'+':''}${(diff*100).toFixed(1)}%</b></td>
+        <td>${rate}</td><td>${mrate}</td><td>${rdiff}</td></tr>`;
+    }).join('');
+    document.getElementById('acctable').innerHTML = rs.length
+      ? `<thead><tr><th style="text-align:left">申告時刻</th><th>経過</th><th>実測Pt</th><th>モデルPt</th><th>差</th>
+          <th>実測 時速</th><th>モデル 時速</th><th>時速の差</th></tr></thead><tbody>${rows}</tbody>`
+      : '';
+    document.getElementById('accnote').innerHTML = rs.length
+      ? `最大の乖離は <b>${worst>=0?'+':''}${(worst*100).toFixed(1)}%</b>。`
+        + `<b>序盤の行はモデルの実力ではない。</b>8/17 の周回は順位申告からの逆算そのもの、`
+        + `8/17 のマイセカイ61万も申告、マイセカイの単価67.1万は 8/18・8/19 の申告差分から、`
+        + `周回のオーバーヘッド46秒も開幕の実測から取っている。`
+        + `<b>独立した検証になるのは 8/20 以降の申告</b>（それ以前は較正に使った値なので当たって当然）。`
+        + `<b>申告の時刻と実際の行動がずれると差が出る</b>——たとえば 5:00 のマイセカイを昼に回した日は、`
+        + `モデルが先に計上しているぶん数%高く出る。`
+        + `<b>時速の差は絶対差 0.2M/h 以上だけ色をつける</b>（休憩帯は分母が小さく率が暴れるため）。`
+        + `速い側も遅い側も等しく「ずれ」なので、符号では色を分けない。`
+      : '走者の申告が入ると比較が出る。';
+  }
+
+  /* --- モデルの検証 2: ボーダー推定の履歴 --- */
+  {
+    const hist = P.border.history || [];
+    const cells = hist.map((e,i)=>{
+      const prev = hist[i-1];
+      const move = (prev && prev.central && e.central) ? ((e.central/prev.central-1)*100) : null;
+      const rng = (e.low && e.high) ? `${oku(e.low)}〜${oku(e.high)}億` : '<span class="ch1">レンジなし</span>';
+      const w   = (e.low && e.high && e.central) ? `±${(((e.high-e.low)/2)/e.central*100).toFixed(0)}%` : '—';
+      return `<tr><td style="text-align:left" class="ch1">${String(e.atJst).replace('T',' ')}</td>
+        <td class="ch1">${e.h!=null?e.h.toFixed(1)+'h':'—'}</td>
+        <td><b>${e.central ? oku(e.central)+'億' : '—'}</b></td>
+        <td>${move!=null?`<span class="${Math.abs(move)>=10?'warnv':'ch1'}">${move>=0?'+':''}${move.toFixed(0)}%</span>`:'—'}</td>
+        <td>${rng}</td><td>${w}</td>
+        <td style="text-align:left;white-space:normal;max-width:44ch" class="ch1">${e.basis||''}</td></tr>`;
+    }).join('');
+    document.getElementById('histtable').innerHTML = hist.length
+      ? `<thead><tr><th style="text-align:left">引き直した時刻</th><th>経過</th><th>中央</th><th>前回比</th>
+          <th>レンジ</th><th>幅</th><th style="text-align:left">根拠</th></tr></thead><tbody>${cells}</tbody>`
+      : '';
+  }
+
   /* --- 章ごとの熱量 --- */
   const CHS = (LIVE && LIVE.chapters) ? LIVE.chapters : {};
   const chKeys = Object.keys(CHS).map(Number).sort((a,b)=>a-b);
