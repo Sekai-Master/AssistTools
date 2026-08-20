@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>周回ラップ計測 — event214</title>
+<meta name="description" content="プロセカのイベラン周回ペースをタップで記録する。ラップ・平均・推定オーバーヘッド・時速Ptを出してJSONで書き出す。">
+<style>
+:root{
+  color-scheme: light;
+  --bg:#f4f4f1; --surface:#fcfcfb; --surface-2:#f0f0ec; --line:#e2e1db; --line-strong:#cfcec6;
+  --ink:#0b0b0b; --ink-2:#52514e; --ink-3:#84837c;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --good:#0f7a4d; --warn:#a5680a; --bad:#c0392f;
+  --radius:14px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --bg:#121211; --surface:#1a1a19; --surface-2:#212120; --line:#2f2f2c; --line-strong:#414038;
+    --ink:#ffffff; --ink-2:#c3c2b7; --ink-3:#8d8c83;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --good:#3fa876; --warn:#d0a03c; --bad:#e66767;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#121211; --surface:#1a1a19; --surface-2:#212120; --line:#2f2f2c; --line-strong:#414038;
+  --ink:#ffffff; --ink-2:#c3c2b7; --ink-3:#8d8c83;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --good:#3fa876; --warn:#d0a03c; --bad:#e66767;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-text-size-adjust:100%;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+/* iOS Safari: 入力欄のフォーカスで画面が勝手にズームするのを止める */
+@supports (-webkit-touch-callout: none){ input,textarea,select{font-size:16px !important} }
+input[type="number"],input[type="text"]{-webkit-appearance:none;appearance:none;min-width:0}
+.wrap{max-width:560px;margin:0 auto;padding:14px 14px 32px}
+header{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+h1{font-size:17px;margin:0;letter-spacing:.01em}
+.sub{font-size:12px;color:var(--ink-3);margin:0}
+.themebtn{margin-left:auto;font:inherit;font-size:12px;padding:5px 11px;border:1px solid var(--line-strong);
+  border-radius:999px;background:var(--surface);color:var(--ink-2);cursor:pointer}
+
+/* --- 数値パネル --- */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.st{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:11px 13px}
+.st.wide{grid-column:1/-1}
+.st .k{font-size:11px;color:var(--ink-3);margin:0 0 3px;letter-spacing:.04em}
+.st .v{font-size:26px;font-weight:700;letter-spacing:-.02em;margin:0;font-variant-numeric:tabular-nums;line-height:1.1}
+.st .v small{font-size:12px;font-weight:500;color:var(--ink-3);margin-left:3px}
+.st .n{font-size:11px;color:var(--ink-3);margin:4px 0 0}
+.st.hi .v{color:var(--s1)}
+
+/* --- 大ボタン --- */
+.tapzone{margin:14px 0}
+.tap{width:100%;min-height:132px;border:0;border-radius:20px;background:var(--s1);color:#fff;
+  font:inherit;font-size:23px;font-weight:700;letter-spacing:.06em;cursor:pointer;
+  box-shadow:0 6px 0 color-mix(in srgb, var(--s1) 62%, #000);
+  transition:transform .06s ease, box-shadow .06s ease;-webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;user-select:none}
+.tap:active{transform:translateY(5px);box-shadow:0 1px 0 color-mix(in srgb, var(--s1) 62%, #000)}
+.tap .big{display:block;font-size:15px;font-weight:600;opacity:.85;letter-spacing:.02em;margin-top:6px}
+.tap[disabled]{background:var(--line-strong);box-shadow:none;color:var(--ink-3)}
+.row{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
+.act{flex:1;min-width:104px;font:inherit;font-size:13px;padding:11px 10px;border:1px solid var(--line-strong);
+  border-radius:11px;background:var(--surface);color:var(--ink);cursor:pointer;touch-action:manipulation}
+.act:active{background:var(--surface-2)}
+.act.warn{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 40%, var(--line-strong))}
+.act.go{background:var(--s3);border-color:var(--s3);color:#fff;font-weight:600}
+
+/* --- ラップ一覧 --- */
+h2{font-size:13px;margin:22px 0 8px;color:var(--ink-2);letter-spacing:.03em}
+.laps{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.lap{display:grid;grid-template-columns:38px 1fr auto auto;align-items:center;gap:9px;
+  padding:9px 11px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+.lap:first-child{border-top:0}
+.lap .i{font-size:11px;color:var(--ink-3)}
+.lap .t{font-size:15px;font-weight:600}
+.lap .t em{font-style:normal;font-size:11px;color:var(--ink-3);font-weight:400;margin-left:6px}
+.lap .m{font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.lap .cnt{display:flex;align-items:center;gap:5px}
+.lap .cnt button{width:29px;height:29px;border:1px solid var(--line-strong);border-radius:8px;
+  background:var(--surface-2);color:var(--ink);font:inherit;font-size:15px;line-height:1;cursor:pointer;
+  touch-action:manipulation;padding:0}
+.lap .cnt b{min-width:20px;text-align:center;font-size:13px}
+.lap.multi{background:color-mix(in srgb, var(--warn) 9%, var(--surface))}
+.lap.slow .t{color:var(--warn)}
+.empty{padding:22px 12px;text-align:center;color:var(--ink-3);font-size:13px}
+
+/* --- 設定・出力 --- */
+details{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:13px 15px;margin-top:14px}
+summary{cursor:pointer;font-size:13px;font-weight:600;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸ ";color:var(--ink-3)}
+details[open]>summary::before{content:"▾ "}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--ink-3)}
+label.f input{font:inherit;font-size:14px;padding:8px 9px;border:1px solid var(--line-strong);
+  border-radius:9px;background:var(--surface-2);color:var(--ink)}
+textarea{width:100%;min-height:150px;margin-top:11px;font-family:var(--mono);font-size:11px;
+  padding:10px;border:1px solid var(--line-strong);border-radius:9px;background:var(--surface-2);color:var(--ink)}
+.note{font-size:11px;color:var(--ink-3);line-height:1.7;margin:11px 0 0}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(70px);
+  background:var(--ink);color:var(--bg);font-size:13px;padding:10px 18px;border-radius:999px;
+  opacity:0;transition:transform .22s ease,opacity .22s ease;pointer-events:none;z-index:9}
+.toast.on{transform:translateX(-50%) translateY(0);opacity:1}
+@media (prefers-reduced-motion: reduce){*{transition:none !important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>周回ラップ計測</h1>
+  <p class="sub" id="sub">event214 ／ 独りんぼエンヴィー</p>
+  <button class="themebtn" id="themebtn" type="button">テーマ</button>
+</header>
+
+<div class="stats">
+  <div class="st hi"><p class="k">直近ラップ</p><p class="v"><span id="v-last">—</span><small>秒</small></p>
+    <p class="n" id="n-last">タップで計測開始</p></div>
+  <div class="st"><p class="k">直近5周の平均</p><p class="v"><span id="v-r5">—</span><small>秒</small></p>
+    <p class="n" id="n-r5">&nbsp;</p></div>
+  <div class="st"><p class="k">全体平均</p><p class="v"><span id="v-avg">—</span><small>秒</small></p>
+    <p class="n" id="n-avg">&nbsp;</p></div>
+  <div class="st"><p class="k">推定オーバーヘッド</p><p class="v"><span id="v-oh">—</span><small>秒</small></p>
+    <p class="n" id="n-oh">平均ラップ − 曲長</p></div>
+  <div class="st wide"><p class="k">この時速なら</p><p class="v"><span id="v-rate">—</span><small>周/h</small></p>
+    <p class="n" id="n-rate">&nbsp;</p></div>
+</div>
+
+<div class="tapzone">
+  <button class="tap" id="tap" type="button">周回した<span class="big" id="taphint">1周終わるたびに押す</span></button>
+  <div class="row">
+    <button class="act" id="undo" type="button">1つ戻す</button>
+    <button class="act" id="pause" type="button">中断</button>
+    <button class="act warn" id="reset" type="button">全消去</button>
+  </div>
+</div>
+
+<h2>ラップ（新しい順）</h2>
+<div class="laps" id="laps"><p class="empty">まだ記録がありません</p></div>
+<p class="note">押し忘れた区間は <b>＋</b> でその区間の周回数を増やす。区間の時間をその数で割った値がラップとして扱われる。時刻の整合は壊れない。</p>
+
+<details id="cfg">
+  <summary>設定</summary>
+  <div class="fields">
+    <label class="f">曲の長さ(秒)<input id="f-song" type="number" step="0.1" value="74.8"></label>
+    <label class="f">1周の単価(Pt)<input id="f-pt" type="number" step="1" value="96285"></label>
+  </div>
+  <p class="note">既定は独りんぼエンヴィー(74.8秒)と ch2 寧々の周回単価。章が変わったら単価を入れ替える（ch1 104,090 / ch2 96,285 / ch3 104,650 / ch4 116,095 / ch5 114,380）。</p>
+</details>
+
+<details id="out">
+  <summary>JSONで書き出す</summary>
+  <div class="row" style="margin-top:12px">
+    <button class="act go" id="copy" type="button">コピー</button>
+    <button class="act" id="dl" type="button">ファイルで保存</button>
+  </div>
+  <textarea id="json" readonly></textarea>
+</details>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const KEY = 'wl214-lap-v1';
+const $ = id => document.getElementById(id);
+
+/* 状態。marks は押した時刻(ms)の配列、laps[i] は marks[i]→marks[i+1] の区間に
+   実際に何周入っていたか。押し忘れたぶんは後から増やす。 */
+let S = { marks: [], laps: [], paused: [], song: 74.8, pt: 96285, startedAt: null };
+
+function load(){
+  try{ const v = JSON.parse(localStorage.getItem(KEY));
+       if(v && Array.isArray(v.marks)) S = Object.assign(S, v); }catch(e){}
+}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+
+const toast = (m)=>{ const t=$('toast'); t.textContent=m; t.classList.add('on');
+  clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('on'), 1500); };
+
+/* 区間の一覧。paused に入っている index の区間は計測から外す（部屋落ち・休憩） */
+function segments(){
+  const out=[];
+  for(let i=0;i<S.marks.length-1;i++){
+    const dur=(S.marks[i+1]-S.marks[i])/1000, n=S.laps[i]||1;
+    out.push({i, dur, n, per:dur/n, skip:S.paused.includes(i), at:S.marks[i+1]});
+  }
+  return out;
+}
+const fmtS = s => s>=100 ? s.toFixed(0) : s.toFixed(1);
+const clock = ms => { const d=new Date(ms);
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`; };
+
+function render(){
+  const segs = segments().filter(s=>!s.skip);
+  const totalLaps = segs.reduce((a,s)=>a+s.n,0);
+  const totalDur  = segs.reduce((a,s)=>a+s.dur,0);
+  const last = segs[segs.length-1];
+
+  $('v-last').textContent = last ? fmtS(last.per) : '—';
+  $('n-last').textContent = S.marks.length===0 ? 'タップで計測開始'
+    : (last ? `${clock(last.at)}　通算 ${totalLaps} 周` : `1回目。次のタップからラップが出る（${clock(S.marks[0])} 開始）`);
+
+  /* 直近5周ぶん。区間が複数周を含む場合も周数で数える */
+  let need=5, dur5=0, n5=0;
+  for(let k=segs.length-1;k>=0 && need>0;k--){
+    const take=Math.min(need, segs[k].n);
+    dur5 += segs[k].per*take; n5 += take; need -= take;
+  }
+  $('v-r5').textContent = n5>=2 ? fmtS(dur5/n5) : '—';
+  $('n-r5').innerHTML = n5>=2 ? `${n5} 周ぶん` : '&nbsp;';
+
+  const avg = totalLaps>0 ? totalDur/totalLaps : null;
+  $('v-avg').textContent = avg ? fmtS(avg) : '—';
+  $('n-avg').innerHTML = avg ? `${totalLaps} 周 / ${(totalDur/60).toFixed(1)} 分` : '&nbsp;';
+
+  const oh = avg!=null ? avg - S.song : null;
+  $('v-oh').textContent = oh!=null ? fmtS(oh) : '—';
+  $('n-oh').textContent = oh!=null
+    ? `曲 ${S.song} 秒を引いた値。モデルの既定は46秒`
+    : '平均ラップ − 曲長';
+
+  const per = avg!=null ? 3600/avg : null;
+  $('v-rate').textContent = per ? per.toFixed(1) : '—';
+  $('n-rate').innerHTML = per
+    ? `単価 ${S.pt.toLocaleString()} Pt なら <b>${(per*S.pt/1e6).toFixed(2)}M/h</b>`
+    : '&nbsp;';
+
+  /* 一覧 */
+  const all = segments();
+  const el = $('laps');
+  if(!all.length){ el.innerHTML = '<p class="empty">まだ記録がありません</p>'; }
+  else{
+    const med = avg || 0;
+    el.innerHTML = all.slice().reverse().map(s=>{
+      const cls = (s.n>1?' multi':'') + (med && s.per > med*1.25 ? ' slow':'') ;
+      return `<div class="lap${cls}${s.skip?' skip':''}">
+        <span class="i">#${s.i+1}</span>
+        <span class="t">${s.skip?'—':fmtS(s.per)}<em>${s.skip?'除外':'秒'}</em></span>
+        <span class="m">${clock(s.at)}</span>
+        <span class="cnt">
+          <button type="button" data-dec="${s.i}" aria-label="この区間の周回数を減らす">−</button>
+          <b>${s.n}</b>
+          <button type="button" data-inc="${s.i}" aria-label="この区間の周回数を増やす">＋</button>
+        </span></div>`;
+    }).join('');
+  }
+  $('json').value = JSON.stringify(exportObj(), null, 1);
+  $('taphint').textContent = S.marks.length ? `通算 ${totalLaps} 周` : '1周終わるたびに押す';
+}
+
+function exportObj(){
+  const segs = segments();
+  const use = segs.filter(s=>!s.skip);
+  const n = use.reduce((a,s)=>a+s.n,0), d = use.reduce((a,s)=>a+s.dur,0);
+  return {
+    event: 214, song: '独りんぼエンヴィー', songSec: S.song, ptPerRun: S.pt,
+    startedAt: S.marks.length ? new Date(S.marks[0]).toISOString() : null,
+    endedAt:   S.marks.length ? new Date(S.marks[S.marks.length-1]).toISOString() : null,
+    laps: n, measuredSec: Math.round(d*10)/10,
+    avgLapSec: n ? Math.round(d/n*10)/10 : null,
+    overheadSec: n ? Math.round((d/n - S.song)*10)/10 : null,
+    runsPerHour: n ? Math.round(3600/(d/n)*100)/100 : null,
+    ptPerHour: n ? Math.round(3600/(d/n)*S.pt) : null,
+    marks: S.marks.map(m=>new Date(m).toISOString()),
+    lapsPerSegment: S.laps.slice(0, Math.max(0,S.marks.length-1)),
+    excludedSegments: S.paused.slice()
+  };
+}
+
+/* --- 操作 --- */
+let lastTap = 0;
+$('tap').addEventListener('click', ()=>{
+  const now = Date.now();
+  if(now - lastTap < 400) return;        /* 二度押し防止。ラップは2分級なので実害なし */
+  lastTap = now;
+  if(S.marks.length) S.laps.push(1);
+  S.marks.push(now);
+  if(navigator.vibrate) navigator.vibrate(18);
+  save(); render();
+});
+$('undo').addEventListener('click', ()=>{
+  if(!S.marks.length) return;
+  S.marks.pop(); S.laps.pop();
+  S.paused = S.paused.filter(i=>i < S.marks.length-1);
+  save(); render(); toast('1つ戻した');
+});
+$('pause').addEventListener('click', ()=>{
+  const i = S.marks.length-2;
+  if(i < 0){ toast('まだ区間がありません'); return; }
+  if(S.paused.includes(i)) S.paused = S.paused.filter(x=>x!==i);
+  else S.paused.push(i);
+  save(); render(); toast(S.paused.includes(i)?'直前の区間を除外':'除外を解除');
+});
+$('reset').addEventListener('click', ()=>{
+  if(!S.marks.length) return;
+  if(!confirm('記録を全部消します。よろしいですか')) return;
+  S.marks=[]; S.laps=[]; S.paused=[]; save(); render(); toast('消去した');
+});
+$('laps').addEventListener('click', e=>{
+  const inc = e.target.dataset && e.target.dataset.inc, dec = e.target.dataset && e.target.dataset.dec;
+  if(inc != null && inc !== ''){ const i=+inc; S.laps[i]=(S.laps[i]||1)+1; save(); render(); }
+  if(dec != null && dec !== ''){ const i=+dec; S.laps[i]=Math.max(1,(S.laps[i]||1)-1); save(); render(); }
+});
+$('f-song').addEventListener('change', e=>{ S.song = Number(e.target.value)||74.8; save(); render(); });
+$('f-pt').addEventListener('change',   e=>{ S.pt   = Number(e.target.value)||0;    save(); render(); });
+$('copy').addEventListener('click', async ()=>{
+  try{ await navigator.clipboard.writeText($('json').value); toast('コピーした'); }
+  catch(e){ $('json').select(); toast('選択したので手動でコピー'); }
+});
+$('dl').addEventListener('click', ()=>{
+  const b=new Blob([$('json').value],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b);
+  a.download=`wl214-lap-${new Date().toISOString().slice(0,16).replace(/[:T]/g,'')}.json`;
+  a.click(); URL.revokeObjectURL(a.href); toast('保存した');
+});
+$('themebtn').addEventListener('click', ()=>{
+  const cur = document.documentElement.dataset.theme;
+  const next = cur==='dark' ? 'light' : cur==='light' ? '' : 'dark';
+  if(next) document.documentElement.dataset.theme = next; else delete document.documentElement.dataset.theme;
+  try{ localStorage.setItem('wl214-theme', next); }catch(e){}
+});
+/* 計測中に画面が消えると押せないので、可能なら消灯を抑止する */
+let wl = null;
+async function keepAwake(){
+  if(!('wakeLock' in navigator)) return;
+  try{ wl = await navigator.wakeLock.request('screen'); }catch(e){}
+}
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') keepAwake(); });
+window.addEventListener('beforeunload', e=>{ if(S.marks.length){ e.preventDefault(); e.returnValue=''; } });
+
+load();
+const th = (()=>{ try{ return localStorage.getItem('wl214-theme'); }catch(e){ return null; } })();
+if(th) document.documentElement.dataset.theme = th;
+$('f-song').value = S.song; $('f-pt').value = S.pt;
+render(); keepAwake();
+</script>
+</body>
+</html>
