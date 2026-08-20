@@ -433,9 +433,9 @@ function computeRates(P, songs, bonusOverride){
   for(let i=0;i<5;i++) rateM += e15 * md.skillScoreMulti[i] / 100;
   rateM += enc * md.skillScoreMulti[5] / 100;
   const scoreM = Math.floor(rateM * talent * 4);
-  /* スコアモデルからの推定係数。他4人合計は上限に到達している前提だが、
-     その上限が 13 か 16 かは未確定（spec §8）。 */
-  const coefModel = 110 + Math.floor(scoreM/17000) + 13;
+  /* スコアモデルからの推定係数。他4人合計は上限に到達している前提。
+     上限は 2026-08-21 に実機で16と確認した（走者の自スコア3,613,633・1周100,835Ptから逆算）。 */
+  const coefModel = 110 + Math.floor(scoreM/17000) + 16;
   /* 2026-08-21、走者の「1周ぶんのPt」実測4点（99,330 / 100,520AP / 100,520AP / 100,835）から
      係数を逆算して 333〜338・中央336 を得た。スコアモデルの323より10〜15高い。
      ①=floor(自スコア/17000) は章のボーナスに依存しないので、1点の実測で全章に効く。
