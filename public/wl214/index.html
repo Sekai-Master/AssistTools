@@ -796,21 +796,26 @@ function cumChart(svg, tipEl, days, P){
   const proj50 = makeProj(P, LIVE, 'r50');
   const lo50F = Math.max(P.border.lowPt*R50lo, proj50.obsNow);
   const at50 = h => ({h, m:proj50(h, C*R50v), lo:proj50(h, lo50F), hi:proj50(h, P.border.highPt*R50hi)});
-  /* ツールチップも過去日は実測を出す。日別テーブルだけ実測に直すと、同じ「100位」で
-     2つの数字が並ぶことになる（8/18 で 予測1.09億 vs 実測0.91億） */
+  /* ツールチップも過去日は実測を出す。日別テーブルだけ実測に直すと、同じ「総合100位」で
+     2つの数字が並ぶことになる（8/18 で 予測1.09億 vs 実測0.91億）。
+     50位も実測を持っている（live.json の border の5列目）ので同じ扱いにする。
+     col: 1=100位 / 4=50位。欠測（null）の点は飛ばす */
   const bser = (LIVE && Array.isArray(LIVE.border)) ? LIVE.border : [];
-  const obsAt = h => {
-    if(!bser.length || h > bser[bser.length-1][0]) return null;
-    if(h <= bser[0][0]) return bser[0][1];
-    for(let i=1;i<bser.length;i++) if(bser[i][0] >= h){
-      const [ha,va]=bser[i-1],[hb,vb]=bser[i];
+  const obsCol = (h, col) => {
+    const ser = bser.filter(b => b[col] != null);
+    if(!ser.length || h > ser[ser.length-1][0]) return null;
+    if(h <= ser[0][0]) return ser[0][0]===h ? ser[0][col] : null;
+    for(let i=1;i<ser.length;i++) if(ser[i][0] >= h){
+      const ha=ser[i-1][0], va=ser[i-1][col], hb=ser[i][0], vb=ser[i][col];
       return hb===ha ? vb : va + (h-ha)/(hb-ha)*(vb-va);
     }
     return null;
   };
-  const bd  = days.map(d=>{ const o=obsAt(d.endH), a=at3(d.endH);
+  const obsAt = h => obsCol(h, 1);
+  const bd  = days.map(d=>{ const o=obsCol(d.endH,1), a=at3(d.endH);
                             return o!=null ? {...a, m:o, obs:true} : a; });
-  const bd50 = days.map(d=>at50(d.endH));
+  const bd50 = days.map(d=>{ const o=obsCol(d.endH,4), a=at50(d.endH);
+                             return o!=null ? {...a, m:o, obs:true} : a; });
   /* 描画用は細かい格子。現在地でぴったり閉じるよう obsH を必ず含める */
   const grid = [...new Set([...Array.from({length:41},(_,i)=>i*6), obsH, proj50.obsH, 240])]
                  .filter(h=>h>=0 && h<=240).sort((a,b)=>a-b);
@@ -941,7 +946,7 @@ function cumChart(svg, tipEl, days, P){
       const rows100 = show100 ? `<div class="r"><i>総合100位 ${b.obs?'実測':'予測'}</i><b>${oku(b.m)}億</b></div>
          <div class="r"><i>　差</i><b style="color:${p.v-b.m>=0?css('--good'):css('--bad')}">${p.v-b.m>=0?'+':''}${oku(p.v-b.m)}億</b></div>` : '';
       const b50 = bd50[i] || {m:0};
-      const rows50 = show50 ? `<div class="r"><i>総合50位 予測</i><b>${oku(b50.m)}億</b></div>
+      const rows50 = show50 ? `<div class="r"><i>総合50位 ${b50.obs?'実測':'予測'}</i><b>${oku(b50.m)}億</b></div>
          <div class="r"><i>　差</i><b style="color:${p.v-b50.m>=0?css('--good'):css('--bad')}">${p.v-b50.m>=0?'+':''}${oku(p.v-b50.m)}億</b></div>` : '';
       tipShow(tipEl,host,ev.clientX-r.left,ev.clientY-r.top,
         `<div class="t">${p.d.label} の獲得が終わる時点（経過${p.h.toFixed(1)}h）</div>
