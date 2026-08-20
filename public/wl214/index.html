@@ -284,7 +284,7 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
   <h2>累積と推定ボーダー</h2>
   <p class="lede">灰色の帯が総合100位ボーダーの推定レンジ。前半で置いていかれるのは72時間組がボーダーを吊り上げているためで、設計どおり。交差する位置がこのランの勝敗ライン。</p>
   <div class="chartcard">
-    <div class="charthead"><span class="charttitle">累積Pt の推移</span>
+    <div class="charthead"><span class="charttitle">累積Pt の推移</span><span class="ch1" style="font-size:12px">ボーダーはすべて<b>総合</b>。章ボーダーは別物で10倍以上速く動く</span>
       <span class="segctl" id="borderview"></span>
       <span class="legend" id="legend3"></span></div>
     <div class="svgwrap"><svg id="chart3" role="img" aria-label="累積ポイントと推定ボーダーの推移"></svg></div>
@@ -855,7 +855,7 @@ function cumChart(svg, tipEl, days, P){
       fill:'none', stroke:css('--ink-3'), 'stroke-width': VIEW==='50'?2:1.5,
       'stroke-dasharray':'5 4', opacity: VIEW==='50'?1:.75}));
     const t=el('text',{x:X(240)-6,y:Y(C*R50v)+17,'text-anchor':'end',class:'axis'});
-    t.textContent='50位 '+oku(C*R50v)+'億'; svg.appendChild(t);
+    t.textContent='総合50位 '+oku(C*R50v)+'億'; svg.appendChild(t);
   }
   /* ボーダーの実測。予測と同じ主体なので色は変えず、実線／破線で状態を分ける */
   if(LIVE && LIVE.border && LIVE.border.length){
@@ -923,7 +923,7 @@ function cumChart(svg, tipEl, days, P){
   lt.textContent = oku(last.v)+'億'; svg.appendChild(lt);
   if(show100){
     const bl = el('text',{x:X(240)-6,y:Y(C)+18,'text-anchor':'end',class:'axis'});
-    bl.textContent='100位 '+oku(C)+'億'; svg.appendChild(bl);
+    bl.textContent='総合100位 '+oku(C)+'億'; svg.appendChild(bl);
   }
   /* x軸 */
   let lastX=-99;
@@ -938,10 +938,10 @@ function cumChart(svg, tipEl, days, P){
     const hit=el('rect',{x:X(p.h)-18,y:m.t,width:36,height:ih,fill:'transparent',style:'cursor:pointer'});
     hit.addEventListener('pointerenter',ev=>{
       const r=host.getBoundingClientRect();
-      const rows100 = show100 ? `<div class="r"><i>100位 ${b.obs?'実測':'予測'}</i><b>${oku(b.m)}億</b></div>
+      const rows100 = show100 ? `<div class="r"><i>総合100位 ${b.obs?'実測':'予測'}</i><b>${oku(b.m)}億</b></div>
          <div class="r"><i>　差</i><b style="color:${p.v-b.m>=0?css('--good'):css('--bad')}">${p.v-b.m>=0?'+':''}${oku(p.v-b.m)}億</b></div>` : '';
       const b50 = bd50[i] || {m:0};
-      const rows50 = show50 ? `<div class="r"><i>50位 予測</i><b>${oku(b50.m)}億</b></div>
+      const rows50 = show50 ? `<div class="r"><i>総合50位 予測</i><b>${oku(b50.m)}億</b></div>
          <div class="r"><i>　差</i><b style="color:${p.v-b50.m>=0?css('--good'):css('--bad')}">${p.v-b50.m>=0?'+':''}${oku(p.v-b50.m)}億</b></div>` : '';
       tipShow(tipEl,host,ev.clientX-r.left,ev.clientY-r.top,
         `<div class="t">${p.d.label} の獲得が終わる時点（経過${p.h.toFixed(1)}h）</div>
@@ -1281,14 +1281,14 @@ function render(){
   document.getElementById('legend1').innerHTML =
     [['--s1','周回'],['--s2','オート'],['--s3','マイセカイ']]
       .map(([c,l])=>`<span><span class="dot" style="background:var(${c})"></span>${l}</span>`).join('');
-  const vlabel = VIEW==='both' ? '100位・50位' : VIEW+'位';
+  const vlabel = VIEW==='both' ? '総合100位・50位' : '総合'+VIEW+'位';
   document.getElementById('legend3').innerHTML =
     `<span><span class="dot" style="background:var(--s1)"></span>走者（実線＝実測 / 破線＝計画）</span>
      <span><span class="dot" style="background:var(--s1);transform:rotate(45deg)"></span>申告のあった時点</span>
      <span><span class="dot" style="background:var(--ink-2)"></span>${vlabel}（実線＝実測 / 破線＝予測 / 帯＝レンジ）</span>`;
   /* ボーダーの表示切り替え。2本ぶんの帯を重ねると読めなくなるので、帯は選んだ順位のぶんだけ出す */
   const bv=document.getElementById('borderview');
-  bv.innerHTML = `<b>ボーダー</b>` + [['100','100位'],['50','50位'],['both','両方']].map(([v,l])=>
+  bv.innerHTML = `<b>総合ボーダー</b>` + [['100','100位'],['50','50位'],['both','両方']].map(([v,l])=>
     `<button type="button" data-v="${v}" class="${VIEW===v?'on':''}">${l}</button>`).join('');
   bv.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
     VIEW=btn.dataset.v; localStorage.setItem('wl214-borderview',VIEW); render();
@@ -1543,7 +1543,7 @@ function render(){
     return null;
   };
   document.getElementById('daytable').innerHTML =
-    `<thead><tr><th style="text-align:left">日</th><th>稼働</th><th>周回</th><th>オート</th><th>マイセカイ</th><th>その日</th><th>累積</th><th>100位ボーダー</th></tr></thead><tbody>`
+    `<thead><tr><th style="text-align:left">日</th><th>稼働</th><th>周回</th><th>オート</th><th>マイセカイ</th><th>その日</th><th>累積</th><th>総合100位ボーダー</th></tr></thead><tbody>`
     + DAYS.map(d=>{
         const ob=obsBorderAt(d.endH);               /* 過去は実測、未来はグラフの破線と同じ推定 */
         const b=(ob != null) ? ob : projT(d.endH, P.border.centralPt);
