@@ -235,6 +235,7 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
 <div class="wrap">
 
 <header class="top">
+  <a class="themebtn" href="./lap/" style="text-decoration:none;margin-left:auto">周回ラップ計測</a>
   <button class="themebtn" id="themebtn" type="button">テーマ</button>
   <p class="eyebrow">SekaiMaster / event214 analysis</p>
   <h1>ワールドリンク Part5<br>総合ラン アナライズ</h1>
@@ -1584,7 +1585,7 @@ function render(){
         let m=0; const sH=d.endH-d.hours;
         for(let c=1;c<=5;c++){ const ov=Math.max(0,Math.min(d.endH,c*48)-Math.max(sH,(c-1)*48));
           if(ov>0) m += ov*(3600/((RBY[c]||R).multi.song+54))*(RBY[c]||R).multi.pt; }
-        return a+m+d.auto+d.mys; },0))} 億になる。<b>石よりも部屋待ちを作らないことが直接効く</b>`,
+        return a+m+d.auto+d.mys; },0))} 億になる。<b>石よりも部屋待ちを作らないことが直接効く</b>。実測は<a href="./lap/">周回ラップ計測</a>で取る`,
     `<b>オートの所要時間。</b>${P.auto.playsPerDay}回で ${R.auto.hoursForDay.toFixed(1)} 時間かかる。周回の稼働時間とは重ねられないので、就寝中に回す枠`,
     `<b>マイセカイのPtは実測2点から。</b>8/18 02:00→02:12 の <b>+654,940</b> と 8/19 02:11→08:59 の <b>+687,750</b>——どちらも全回収1回ぶん単独（オート未実行の窓）で、ch1のボーナス${Math.round((RBY[1]||R).bonus)}%。平均して1回${fmt(P.mysekai.perHarvestPt/1e4)}万Ptを基準に置き、章のボーナス比で換算している。ch1の${fmt((RBY[1]||R).mysekai.perDay/1e4)}万/日に対し、最も低いch2は${fmt((RBY[2]||R).mysekai.perDay/1e4)}万/日、最も高いch4は${fmt((RBY[4]||R).mysekai.perDay/1e4)}万/日。開幕の全回収だけは12分で61万Ptの実測値を使う`,
     `<b>マイセカイのLB消費を計上した。</b>走者申告（2026-08-20）で全回収1回あたり<b>${fmt(P.mysekai.lbPerHarvest)}LB</b>、1日${fmt(P.mysekai.lbPerHarvest*P.mysekai.harvestsPerDay)}弱。天候などで多少変動する。LBを使わない純増ではなく、周回・オートと同じ石の取り合いになる。全期間で ${fmt(DAYS.reduce((a,d)=>a+d.lbMys,0))}LB＝石 ${manC(DAYS.reduce((a,d)=>a+d.lbMys,0)*P.boost.crystalPerLb)}万ぶん`,
