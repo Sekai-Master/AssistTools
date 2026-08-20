@@ -1254,7 +1254,7 @@ function render(){
         ['支援者', '不要'],
         ['章による幅', fmt(spYL/1e4)+' 〜 '+fmt(spYH/1e4)+' 万Pt/日'],
         ['期間合計', oku(DAYS.reduce((a,d)=>a+d.mys,0))+' 億']],
-       `1回あたりのPtは実測から。8/18 02:00→02:12 の +654,940 と 8/19 02:11→08:59 の +687,750（どちらも全回収1回ぶん・ch1）の平均。資材は 5:00 と 17:00 に更新。全回収に要するLBは走者申告（1回85〜90、1日180弱・天候で変動）で、下のLBの表と予算に計上済み。`,
+       `1回あたりのPtは実測から。8/18 02:00→02:12 の +654,940 と 8/19 02:11→08:59 の +687,750（どちらも全回収1回ぶん・ch1）の平均。<b>5:00 と 17:00 は資材が更新される時刻で、回収は次の更新までいつでもよい</b>（16:45と17:15に連続で取ることもできる）。全回収に要するLBは走者申告（1回85〜90、1日180弱・天候で変動）で、下のLBの表と予算に計上済み。`,
        chChip(selCh));
 
   /* --- 章切り替え --- */
@@ -1592,6 +1592,7 @@ function render(){
         return a+m+d.auto+d.mys; },0))} 億になる。<b>石よりも部屋待ちを作らないことが直接効く</b>。実測は<a href="./lap/">周回ラップ計測</a>で取る`,
     `<b>オートの所要時間。</b>${P.auto.playsPerDay}回で ${R.auto.hoursForDay.toFixed(1)} 時間かかる。周回の稼働時間とは重ねられないので、就寝中に回す枠`,
     `<b>マイセカイのPtは実測2点から。</b>8/18 02:00→02:12 の <b>+654,940</b> と 8/19 02:11→08:59 の <b>+687,750</b>——どちらも全回収1回ぶん単独（オート未実行の窓）で、ch1のボーナス${Math.round((RBY[1]||R).bonus)}%。平均して1回${fmt(P.mysekai.perHarvestPt/1e4)}万Ptを基準に置き、章のボーナス比で換算している。ch1の${fmt((RBY[1]||R).mysekai.perDay/1e4)}万/日に対し、最も低いch2は${fmt((RBY[2]||R).mysekai.perDay/1e4)}万/日、最も高いch4は${fmt((RBY[4]||R).mysekai.perDay/1e4)}万/日。開幕の全回収だけは12分で61万Ptの実測値を使う`,
+    `<b>章境界での回収タイミングは選べる。</b>資材の更新は 5:00 と 17:00 だが回収は次の更新までいつでもよいので、20:00 の章境界をまたぐぶんは<b>どちらの章のボーナスで取るか選べる</b>。1回あたり ch2 ${fmt((RBY[2]||R).mysekai.per)} / ch3 ${fmt((RBY[3]||R).mysekai.per)} / ch4 ${fmt((RBY[4]||R).mysekai.per)} / ch5 ${fmt((RBY[5]||R).mysekai.per)} Pt なので、<b>8/21 と 8/23 は 20:00 より後に、8/25 は前に</b>済ませるのが得。全部で +${fmt(((RBY[3]||R).mysekai.per-(RBY[2]||R).mysekai.per)+((RBY[4]||R).mysekai.per-(RBY[3]||R).mysekai.per)+((RBY[4]||R).mysekai.per-(RBY[5]||R).mysekai.per))} Pt（着地の0.04%）。手間はゼロに近いが効果も小さい`,
     `<b>マイセカイのLB消費を計上した。</b>走者申告（2026-08-20）で全回収1回あたり<b>${fmt(P.mysekai.lbPerHarvest)}LB</b>、1日${fmt(P.mysekai.lbPerHarvest*P.mysekai.harvestsPerDay)}弱。天候などで多少変動する。LBを使わない純増ではなく、周回・オートと同じ石の取り合いになる。全期間で ${fmt(DAYS.reduce((a,d)=>a+d.lbMys,0))}LB＝石 ${manC(DAYS.reduce((a,d)=>a+d.lbMys,0)*P.boost.crystalPerLb)}万ぶん`,
     `<b>章ごとのイベントボーナス。</b>メイン編成${P.runner.bonusMain != null ? P.runner.bonusMain : '—'}%に章のサポート編成が乗る（走者申告 2026-08-20）。${[1,2,3,4,5].map(n=>'ch'+n+' '+Math.round((RBY[n]||R).bonus)+'%').join(' / ')}。<b>周回・オート・マイセカイの3つとも同じ比率で動く</b>ので、章が変わると収入構造ごとスライドする`
   ].map(s=>`<li>${s}</li>`).join('');
