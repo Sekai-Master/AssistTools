@@ -11,7 +11,7 @@
   color-scheme: light;
   --bg:#f4f4f1; --surface:#fcfcfb; --surface-2:#f0f0ec; --line:#e2e1db; --line-strong:#cfcec6;
   --ink:#0b0b0b; --ink-2:#52514e; --ink-3:#84837c;
-  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#8250c4;
   --good:#0f7a4d; --warn:#a5680a; --bad:#c0392f;
   --grid:#e8e7e1; --band:#2a78d61a;
   --radius:14px;
@@ -23,7 +23,7 @@
     color-scheme: dark;
     --bg:#121211; --surface:#1a1a19; --surface-2:#212120; --line:#2f2f2c; --line-strong:#414038;
     --ink:#ffffff; --ink-2:#c3c2b7; --ink-3:#8d8c83;
-    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#9268d6;
     --good:#3fa876; --warn:#d0a03c; --bad:#e66767;
     --grid:#282826; --band:#3987e526;
   }
@@ -32,7 +32,7 @@
   color-scheme: dark;
   --bg:#121211; --surface:#1a1a19; --surface-2:#212120; --line:#2f2f2c; --line-strong:#414038;
   --ink:#ffffff; --ink-2:#c3c2b7; --ink-3:#8d8c83;
-  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#9268d6;
   --good:#3fa876; --warn:#d0a03c; --bad:#e66767;
   --grid:#282826; --band:#3987e526;
 }
@@ -296,7 +296,22 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
   </div>
   <div style="height:14px"></div>
   <div class="card"><div class="svgwrap"><table id="lbtable"></table></div>
-    <p class="ch1" style="margin:10px 2px 0;font-size:12px">「その日」は<b>ここから要るぶん</b>。済んだ日はグレーで実消費、進行中の日だけ <b>残り</b> / その日の総量 の順に出る。</p></div>
+    <p class="ch1" style="margin:10px 2px 0;font-size:12px">「その日」はその日に要るLBの総量（済んだ日はグレー＝実消費）。右端の<b>「ここからの累計」がいま時点から先に必要な量</b>で、進行中の日は消化済みぶんを除いてある。</p></div>
+</section>
+
+<section>
+  <h2>章ごとの熱量（ch1 との答え合わせ）</h2>
+  <p class="lede">各章のボーダーを<b>章の頭からの経過時間で揃えて</b>重ねたもの。ボーダー予測は「ch1のキャラ人気指数から ch1終シェアが決まる」というモデルに乗っているので、後続の章が ch1 に対してどれだけ伸びるかが、そのモデルの答え合わせになる。ここはモデルを通していない生の観測。</p>
+  <div class="chartcard">
+    <div class="charthead"><span class="charttitle">章内の経過時間で揃えたボーダー</span>
+      <span class="segctl" id="chrankview"></span>
+      <span class="segctl" id="chrmode"></span>
+      <span class="legend" id="legend5"></span></div>
+    <div class="svgwrap"><svg id="chart5" role="img" aria-label="章ごとのボーダー推移の比較"></svg></div>
+    <div class="tip" id="tip5"></div>
+  </div>
+  <div class="card" style="margin-top:16px"><div class="svgwrap"><table id="chcmp"></table></div>
+    <p class="ch1" id="chcmpnote" style="margin:10px 2px 0;font-size:12px"></p></div>
 </section>
 
 <section>
@@ -522,11 +537,13 @@ function buildDays(P, R, RBY){
     }
     const lbAuto = (d.autoLb != null) ? d.autoLb : autoPlays * LBA;
     const futureAutoLb = (d.autoLb != null || autoH <= nowH) ? 0 : lbAuto;
-    /* その日の「終わり」は周回ブロックの終了とオートの終了のうち遅いほう。
-       8/23 のように朝10時に周回が終わって13時にオートが回る日だと、endH だけ見ると
-       まだ 990LB 要るのに行が「済」になってグレーで隠れてしまう */
-    const dayEnd = Math.max(d.endH, (d.autoLb != null) ? -Infinity : autoH);
-    const dayStart = Math.min(startH, (d.autoLb != null) ? Infinity : autoH);
+    /* その日の範囲は「周回ブロック・オート・マイセカイの回収」を全部含んだ端から端まで。
+       endH だけで見ると 8/23（朝10時に周回終了・13時にオート）が「済」になって未消化の
+       990LB が隠れ、逆に 5:00 のマイセカイだけ済んだ日が「予定」のまま累計だけ減る */
+    const spanH = [d.endH, startH]
+      .concat((d.autoLb != null) ? [] : [autoH])
+      .concat(harvestHs);
+    const dayEnd = Math.max(...spanH), dayStart = Math.min(...spanH);
     const state = dayEnd <= nowH ? '済' : (dayStart >= nowH ? '予定' : '進行中');
     touch(autoCh).auto += auto; touch(autoCh).lbAuto += lbAuto;
     for(const c in mysByCh) touch(Number(c)).mys += mysByCh[c];
@@ -848,6 +865,116 @@ function cumChart(svg, tipEl, days, P){
   });
 }
 
+/* 章ごとのボーダーを「章頭からの経過時間」で揃えて重ねる。
+   live.json の chapters は [章内h, 50位, 100位, 200位, 500位]。欠測は null で来る */
+const CHRANK = [['50','50位',1],['100','100位',2],['200','200位',3],['500','500位',4]];
+function chSeriesAt(ser, h, idx){
+  if(!ser || !ser.length) return null;
+  if(h < ser[0][0] || h > ser[ser.length-1][0]) return null;
+  let prev = null;
+  for(const p of ser){
+    const v = p[idx];
+    if(v == null) continue;
+    if(p[0] >= h){
+      /* まだ非nullの点を1つも見ていない＝h はこの順位の観測が始まる前。
+         ここで v を返すと「未来の値」を過去に貼ることになり、ch1 の序盤で
+         50位/200位/500位 が 3% といった偽の比率を作っていた */
+      if(!prev) return p[0]===h ? v : null;
+      return prev[0]===p[0] ? v : prev[1] + (h-prev[0])/(p[0]-prev[0])*(v-prev[1]);
+    }
+    prev = [p[0], v];
+  }
+  return prev ? prev[1] : null;
+}
+
+function chapterChart(svg, tipEl, P, LIVE, idx, mode){
+  const host = svg.closest('.chartcard');
+  const chs = (LIVE && LIVE.chapters) ? LIVE.chapters : {};
+  const keys = Object.keys(chs).map(Number).sort((a,b)=>a-b);
+  const W = 820, H = 300, m = {t:16,r:18,b:36,l:64};
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width',W); svg.setAttribute('height',H);
+  svg.innerHTML='';
+  if(!keys.length){
+    const t=el('text',{x:W/2,y:H/2,'text-anchor':'middle',class:'axis'});
+    t.textContent='章ボーダーの観測がまだありません'; svg.appendChild(t); return;
+  }
+  /* 実数だと ch1 の48時間ぶんがスケールを支配して肝心の差が読めないので、
+     ch1 との比を見るモードを用意する。比のほうが「その章がどれだけ熱いか」に直接答える */
+  const isRatio = mode === 'ratio' && keys.includes(1) && keys.length > 1;
+  const ratioOf = (n,h) => { const a=chSeriesAt(chs[1],h,idx), b=chSeriesAt(chs[n],h,idx);
+                             return (a && b) ? b/a : null; };
+  let lo, hi, fmtY;
+  if(isRatio){
+    const rv = keys.filter(n=>n!==1).flatMap(n=>chs[n].map(p=>ratioOf(n,p[0])).filter(v=>v!=null));
+    lo = Math.min(0.6, ...rv) - 0.05; hi = Math.max(1.05, ...rv) + 0.05;
+    fmtY = v => (v*100).toFixed(0)+'%';
+  }else{
+    const vals = keys.flatMap(n=>chs[n].map(p=>p[idx]).filter(v=>v!=null));
+    lo = 0; hi = Math.max(...vals)*1.1;
+    fmtY = v => v ? (v/1e6).toFixed(0)+'M' : '0';
+  }
+  const iw=W-m.l-m.r, ih=H-m.t-m.b;
+  const X = h => m.l + iw*Math.min(48,Math.max(0,h))/48;
+  const Y = v => m.t + ih*(1 - (v-lo)/(hi-lo));
+  for(let k=0;k<=4;k++){
+    const v=lo+(hi-lo)*k/4;
+    svg.appendChild(el('line',{x1:m.l,x2:W-m.r,y1:Y(v),y2:Y(v),class:(k||isRatio)?'gridline':'zeroline'}));
+    const t=el('text',{x:m.l-9,y:Y(v)+4,'text-anchor':'end',class:'axis'});
+    t.textContent=fmtY(v); svg.appendChild(t);
+  }
+  if(isRatio && lo<1 && hi>1){   /* ch1 と同じ ＝ 100% の基準線 */
+    svg.appendChild(el('line',{x1:m.l,x2:W-m.r,y1:Y(1),y2:Y(1),
+      stroke:css('--ink-3'),'stroke-width':1.5,'stroke-dasharray':'5 4'}));
+    const t=el('text',{x:W-m.r-4,y:Y(1)-6,'text-anchor':'end',class:'axis'});
+    t.textContent='ch1 と同じ'; svg.appendChild(t);
+  }
+  for(let h=0;h<=48;h+=6){
+    const t=el('text',{x:X(h),y:H-14,'text-anchor':'middle',class:'axis'});
+    t.textContent=h+'h'; svg.appendChild(t);
+  }
+  const COL = ['--ink-3','--s1','--s2','--s3','--s4'];
+  keys.forEach((n,i)=>{
+    if(isRatio && n===1) return;                       /* 比モードでは ch1 は基準線そのもの */
+    const pts = chs[n].filter(p=>p[idx]!=null && (!isRatio || ratioOf(n,p[0])!=null));
+    if(pts.length<2) return;
+    const isCur = n === keys[keys.length-1];
+    const V = p => isRatio ? ratioOf(n,p[0]) : p[idx];
+    svg.appendChild(el('polyline',{points:pts.map(p=>`${X(p[0])},${Y(V(p))}`).join(' '),
+      fill:'none', stroke:css(COL[i%COL.length]||'--ink-3'),
+      'stroke-width': isCur?2.5:1.8, 'stroke-linejoin':'round',
+      opacity: isCur?1:.65, 'stroke-dasharray': isCur?'':'none'}));
+    const last = pts[pts.length-1];
+    svg.appendChild(el('circle',{cx:X(last[0]),cy:Y(V(last)),r:isCur?4.5:3,
+      fill:css(COL[i%COL.length]||'--ink-3'), stroke:css('--surface'),'stroke-width':2}));
+  });
+  /* いま何時間目か（最新の章の先端）にガイド */
+  const cur = keys[keys.length-1], curSer = chs[cur].filter(p=>p[idx]!=null);
+  if(curSer.length){
+    const hNow = curSer[curSer.length-1][0];
+    svg.appendChild(el('line',{x1:X(hNow),x2:X(hNow),y1:m.t,y2:m.t+ih,class:'nowline'}));
+    const grid = Array.from({length:97},(_,i)=>i*0.5);
+    grid.forEach(h=>{
+      const hit=el('rect',{x:X(h)-4,y:m.t,width:8,height:ih,fill:'transparent',style:'cursor:pointer'});
+      hit.addEventListener('pointerenter',ev=>{
+        const r=host.getBoundingClientRect();
+        const rows = keys.map((n,i)=>{
+          const v = chSeriesAt(chs[n], h, idx);
+          if(v==null) return '';
+          const b = chSeriesAt(chs[keys[0]], h, idx);
+          const rel = (b && n!==keys[0]) ? `<span class="ch1">（ch${keys[0]}比 ${((v/b)*100).toFixed(0)}%）</span>` : '';
+          const nm = (P.event.chapters.find(c=>c.n===n)||{}).chara||('ch'+n);
+          return `<div class="r"><i><span class="dot" style="background:${css(COL[i%COL.length])}"></span>ch${n} ${nm}</i><b>${fmt(v/1e4)}万 ${rel}</b></div>`;
+        }).join('');
+        if(!rows) return;
+        tipShow(tipEl,host,ev.clientX-r.left,ev.clientY-r.top,
+          `<div class="t">章内 ${h.toFixed(1)} 時間</div>${rows}`);
+      });
+      hit.addEventListener('pointerleave',()=>tipHide(tipEl));
+      svg.appendChild(hit);
+    });
+  }
+}
+
 function lbChart(svg, tipEl, days, P, R){
   const host=svg.closest('.chartcard');
   const lbM=days.reduce((a,d)=>a+d.lbManual,0), lbA=days.reduce((a,d)=>a+d.lbAuto,0),
@@ -885,6 +1012,8 @@ function lbChart(svg, tipEl, days, P, R){
 /* ===================== 起動 ===================== */
 let DEFAULTS=null, P=null, SONGS=null, DAYS=null, R=null, RBY=null, LIVE=null;
 let VIEW = localStorage.getItem('wl214-borderview') || '100';   /* '100' | '50' | 'both' */
+let CHRV = localStorage.getItem('wl214-chrankview') || '100';  /* 章比較で見る順位 */
+let CHRMODE = localStorage.getItem('wl214-chrmode') || 'ratio';  /* 'ratio' | 'abs' */
 let CHV  = localStorage.getItem('wl214-chview') || 'now';       /* 'now' | '1'..'5' 単価カードの表示章 */
 const curChapter = P0 => Math.min(5, Math.max(1,
   Math.floor(((Date.now() - new Date(P0.event.startJst).getTime())/36e5)/48) + 1));
@@ -1098,6 +1227,65 @@ function render(){
     localStorage.setItem(LSKEY, JSON.stringify(P));
     buildEditor(); render();
   }));
+  /* --- 章ごとの熱量 --- */
+  const CHS = (LIVE && LIVE.chapters) ? LIVE.chapters : {};
+  const chKeys = Object.keys(CHS).map(Number).sort((a,b)=>a-b);
+  const cv2 = document.getElementById('chrankview');
+  cv2.innerHTML = `<b>順位</b>` + CHRANK.map(([v,l])=>
+    `<button type="button" data-v="${v}" class="${CHRV===v?'on':''}">${l}</button>`).join('');
+  cv2.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
+    CHRV=btn.dataset.v; localStorage.setItem('wl214-chrankview',CHRV); render();
+  }));
+  const mv=document.getElementById('chrmode');
+  mv.innerHTML = `<b>表示</b>` + [['ratio','ch1比'],['abs','実数']].map(([v,l])=>
+    `<button type="button" data-v="${v}" class="${CHRMODE===v?'on':''}">${l}</button>`).join('');
+  mv.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
+    CHRMODE=btn.dataset.v; localStorage.setItem('wl214-chrmode',CHRMODE); render();
+  }));
+  const CHCOL = ['--ink-3','--s1','--s2','--s3','--s4'];
+  document.getElementById('legend5').innerHTML = chKeys.map((n,i)=>{
+    const nm=(P.event.chapters.find(c=>c.n===n)||{}).chara||'';
+    return `<span><span class="dot" style="background:var(${CHCOL[i%CHCOL.length]})"></span>ch${n} ${nm}</span>`;
+  }).join('');
+
+  /* 同経過での ch1 比。いちばん新しい章の先端に時刻を合わせて全順位を並べる */
+  const curCh2 = chKeys.length ? chKeys[chKeys.length-1] : null;
+  if(curCh2 && curCh2 > 1 && CHS[1] && CHS[1].length && CHS[curCh2].length){
+    const curSer = CHS[curCh2];
+    /* 章が閉じると tracker は数分〜十数分ぶん凍結ボードを記録し続けるので、章内 48h を
+       少し超える。ch1 の系列は 47.95h で終わっているため、素の先端で比べると全 rank が
+       範囲外になって「答え合わせの本番」である章末の比が消える */
+    const base1 = CHS[1];
+    const hNow2 = Math.min(curSer[curSer.length-1][0], base1[base1.length-1][0]);
+    const rows = CHRANK.map(([v,l,ix])=>{
+      const a = chSeriesAt(CHS[1], hNow2, ix), b = chSeriesAt(curSer, hNow2, ix);
+      if(a==null || b==null) return '';
+      const k = b/a;
+      return `<tr><td>${l}</td><td>${fmt(a)}</td><td>${fmt(b)}</td>
+        <td class="${k>=1?'up':'down'}"><b>${(k*100).toFixed(0)}%</b></td></tr>`;
+    }).join('');
+    const nm1=(P.event.chapters.find(c=>c.n===1)||{}).chara||'ch1';
+    const nmC=(P.event.chapters.find(c=>c.n===curCh2)||{}).chara||('ch'+curCh2);
+    document.getElementById('chcmp').innerHTML =
+      `<thead><tr><th>順位</th><th>ch1 ${nm1}</th><th>ch${curCh2} ${nmC}</th><th>ch1比</th></tr></thead>`
+      + `<tbody>${rows}</tbody>`;
+    const ix1 = (P.border.charaIndex||{})[1], ixC = (P.border.charaIndex||{})[curCh2];
+    const obs = chSeriesAt(CHS[1], hNow2, 2) && chSeriesAt(curSer, hNow2, 2)
+                  ? chSeriesAt(curSer, hNow2, 2)/chSeriesAt(CHS[1], hNow2, 2) : null;
+    document.getElementById('chcmpnote').innerHTML =
+      `章内 <b>${hNow2.toFixed(1)} 時間</b>の時点で揃えた比較。`
+      + ((ix1 && ixC && obs)
+          ? `キャラ人気指数の比は ${ixC}/${ix1}＝<b>${(ixC/ix1).toFixed(3)}</b>、100位ボーダーの実測比は <b>${obs.toFixed(3)}</b>で、`
+            + `${Math.abs(obs-ixC/ix1) < 0.05 ? '同水準で推移している' : '差がある'}。`
+            + `ただしボーダー予測が使っているのは「指数→<b>ch1終シェア</b>」の対応で、ここで見ている章ボーダーの比とは別の量。`
+            + `<b>矛盾しないことの確認にはなるが、モデルが当たった証明にはならない。</b>この比は章の中でも動く（h9で0.888→h12で0.848）ので、断定するなら章末の値で。`
+          : `ch${curCh2} のキャラ人気指数が未取得なので、指数との突き合わせはできていない。`)
+      + `<b>上位ほど差が小さく、下の順位ほど落ちる</b>なら、毎章走る固定層は変わらず流動層だけが抜けたということ。`;
+  }else{
+    document.getElementById('chcmp').innerHTML = '';
+    document.getElementById('chcmpnote').textContent = 'ch2 の観測が貯まると ch1 との比較が出る。';
+  }
+
   document.getElementById('totalhours').textContent = DAYS.reduce((a,d)=>a+d.hours,0);
   document.getElementById('lbeff').textContent =
     `ch${selCh}で 10炊き ${fmt(RC.auto.pt10/10)} vs 5炊き ${fmt(RC.auto.pt5/5)} Pt/LB`;
@@ -1107,6 +1295,8 @@ function render(){
   hoursChart(document.getElementById('chart2'), document.getElementById('tip2'), DAYS);
   cumChart(document.getElementById('chart3'), document.getElementById('tip3'), DAYS, P);
   lbChart(document.getElementById('chart4'), document.getElementById('tip4'), DAYS, P, R);
+  chapterChart(document.getElementById('chart5'), document.getElementById('tip5'), P, LIVE,
+               (CHRANK.find(r=>r[0]===CHRV)||CHRANK[1])[2], CHRMODE);
 
   /* --- 日別のLB消費。消化済みと、ここから必要なぶんを分ける --- */
   const lbM=DAYS.reduce((a,d)=>a+d.lbManual,0), lbA=DAYS.reduce((a,d)=>a+d.lbAuto,0);
@@ -1117,11 +1307,9 @@ function render(){
     + DAYS.map(d=>{
         const day=d.lbManual+d.lbAuto+d.lbMys;
         const need=d.futureManualLb+d.futureAutoLb+d.futureMysLb; runNeed+=need;
-        /* 済＝もう払った / 予定＝全部これから（＝日計と同値）/ 進行中＝一部だけ残っている。
-           「その日」と「ここから必要」を別列にすると予定日で必ず同じ数字が並ぶので1列に畳んだ */
-        const cell = d.state==='済' ? `<span class="ch1">${fmt(day)}</span>`
-                   : (need < day - 1 ? `<b>${fmt(need)}</b> <span class="ch1">/ ${fmt(day)}</span>`
-                                     : `<b>${fmt(day)}</b>`);
+        /* その日の総量だけ出す。済んだ日はグレー。進行中の日の「残り」は時間で目減りするだけで
+           判断が変わらないので出さない（右の累計が forward の必要量を持っている） */
+        const cell = d.state==='済' ? `<span class="ch1">${fmt(day)}</span>` : `<b>${fmt(day)}</b>`;
         const col=d.state==='済'?'var(--ink-3)':(d.state==='進行中'?'var(--s2)':'var(--ink)');
         return `<tr style="color:${d.state==='済'?'var(--ink-3)':'inherit'}">
           <td style="text-align:left">${d.label}(${d.dow}) <span class="ch1">${d.blocks||''}</span></td>
@@ -1136,8 +1324,8 @@ function render(){
         <td>${fmt(DAYS.reduce((a,d)=>a+d.plays,0))}周</td><td>${fmt(lbM)}</td>
         <td>${fmt(DAYS.reduce((a,d)=>a+d.autoPlays,0))}回</td><td>${fmt(lbA)}</td>
         <td>${fmt(DAYS.reduce((a,d)=>a+d.lbMys,0))}</td>
-        <td><b>${fmt(needLb)}</b> <span class="ch1">/ ${fmt(lbM+lbA+DAYS.reduce((a,d)=>a+d.lbMys,0))}</span></td>
-        <td>石 ${manC(needLb*P.boost.crystalPerLb)}万</td></tr></tfoot>`;
+        <td>${fmt(lbM+lbA+DAYS.reduce((a,d)=>a+d.lbMys,0))}</td>
+        <td><b>${fmt(needLb)}</b> <span class="ch1">＝石 ${manC(needLb*P.boost.crystalPerLb)}万</span></td></tr></tfoot>`;
 
   /* --- chapter table --- */
   /* buildDays が日ごとに章へ割り振った byCh を積み直す。
