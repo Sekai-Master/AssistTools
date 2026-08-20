@@ -533,6 +533,7 @@ function buildDays(P, R, RBY){
     const auto   = (d.autoPt != null) ? d.autoPt : autoPlays * rAuto.auto.pt;
     /* 既定は資材更新の 5:00 と 17:00。章境界をまたいで回収した日は schedule 側で上書きする */
     const harvestAt = Array.isArray(d.harvestHours) ? d.harvestHours
+      : Array.isArray(P.mysekai.harvestHoursDefault) ? P.mysekai.harvestHoursDefault
       : (P.mysekai.harvestsPerDay===2) ? [5,17]
       : Array.from({length:P.mysekai.harvestsPerDay||0}, (_,k)=>5 + k*(12/Math.max(1,(P.mysekai.harvestsPerDay||1)-1)));
     const harvestHs = harvestAt.map(hOf).filter(h => h >= 0 && h <= 240);
