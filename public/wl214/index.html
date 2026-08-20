@@ -537,11 +537,13 @@ function buildDays(P, R, RBY){
     }
     const lbAuto = (d.autoLb != null) ? d.autoLb : autoPlays * LBA;
     const futureAutoLb = (d.autoLb != null || autoH <= nowH) ? 0 : lbAuto;
-    /* その日の「終わり」は周回ブロックの終了とオートの終了のうち遅いほう。
-       8/23 のように朝10時に周回が終わって13時にオートが回る日だと、endH だけ見ると
-       まだ 990LB 要るのに行が「済」になってグレーで隠れてしまう */
-    const dayEnd = Math.max(d.endH, (d.autoLb != null) ? -Infinity : autoH);
-    const dayStart = Math.min(startH, (d.autoLb != null) ? Infinity : autoH);
+    /* その日の範囲は「周回ブロック・オート・マイセカイの回収」を全部含んだ端から端まで。
+       endH だけで見ると 8/23（朝10時に周回終了・13時にオート）が「済」になって未消化の
+       990LB が隠れ、逆に 5:00 のマイセカイだけ済んだ日が「予定」のまま累計だけ減る */
+    const spanH = [d.endH, startH]
+      .concat((d.autoLb != null) ? [] : [autoH])
+      .concat(harvestHs);
+    const dayEnd = Math.max(...spanH), dayStart = Math.min(...spanH);
     const state = dayEnd <= nowH ? '済' : (dayStart >= nowH ? '予定' : '進行中');
     touch(autoCh).auto += auto; touch(autoCh).lbAuto += lbAuto;
     for(const c in mysByCh) touch(Number(c)).mys += mysByCh[c];
@@ -874,7 +876,10 @@ function chSeriesAt(ser, h, idx){
     const v = p[idx];
     if(v == null) continue;
     if(p[0] >= h){
-      if(!prev) return v;
+      /* まだ非nullの点を1つも見ていない＝h はこの順位の観測が始まる前。
+         ここで v を返すと「未来の値」を過去に貼ることになり、ch1 の序盤で
+         50位/200位/500位 が 3% といった偽の比率を作っていた */
+      if(!prev) return p[0]===h ? v : null;
       return prev[0]===p[0] ? v : prev[1] + (h-prev[0])/(p[0]-prev[0])*(v-prev[1]);
     }
     prev = [p[0], v];
@@ -1244,11 +1249,14 @@ function render(){
   }).join('');
 
   /* 同経過での ch1 比。いちばん新しい章の先端に時刻を合わせて全順位を並べる */
-  const idxOf = v => (CHRANK.find(r=>r[0]===v)||CHRANK[1])[2];
   const curCh2 = chKeys.length ? chKeys[chKeys.length-1] : null;
-  if(curCh2 && curCh2 > 1 && CHS[1]){
+  if(curCh2 && curCh2 > 1 && CHS[1] && CHS[1].length && CHS[curCh2].length){
     const curSer = CHS[curCh2];
-    const hNow2 = curSer[curSer.length-1][0];
+    /* 章が閉じると tracker は数分〜十数分ぶん凍結ボードを記録し続けるので、章内 48h を
+       少し超える。ch1 の系列は 47.95h で終わっているため、素の先端で比べると全 rank が
+       範囲外になって「答え合わせの本番」である章末の比が消える */
+    const base1 = CHS[1];
+    const hNow2 = Math.min(curSer[curSer.length-1][0], base1[base1.length-1][0]);
     const rows = CHRANK.map(([v,l,ix])=>{
       const a = chSeriesAt(CHS[1], hNow2, ix), b = chSeriesAt(curSer, hNow2, ix);
       if(a==null || b==null) return '';
@@ -1267,11 +1275,11 @@ function render(){
     document.getElementById('chcmpnote').innerHTML =
       `章内 <b>${hNow2.toFixed(1)} 時間</b>の時点で揃えた比較。`
       + ((ix1 && ixC && obs)
-          ? `キャラ人気指数の比は ${ixC}/${ix1}＝<b>${(ixC/ix1).toFixed(3)}</b>、100位ボーダーの実測比は <b>${obs.toFixed(3)}</b>。`
-            + (Math.abs(obs-ixC/ix1) < 0.05
-                ? `ほぼ一致していて、ボーダー予測が乗っている指数モデルの前提が支持されている。`
-                : `ずれているので、指数以外の要因（曜日・時期・並行イベント）が効いている可能性がある。`)
-          : `ch${curCh2} のキャラ人気指数が未取得なので、指数モデルとの突き合わせはできていない。`)
+          ? `キャラ人気指数の比は ${ixC}/${ix1}＝<b>${(ixC/ix1).toFixed(3)}</b>、100位ボーダーの実測比は <b>${obs.toFixed(3)}</b>で、`
+            + `${Math.abs(obs-ixC/ix1) < 0.05 ? '同水準で推移している' : '差がある'}。`
+            + `ただしボーダー予測が使っているのは「指数→<b>ch1終シェア</b>」の対応で、ここで見ている章ボーダーの比とは別の量。`
+            + `<b>矛盾しないことの確認にはなるが、モデルが当たった証明にはならない。</b>この比は章の中でも動く（h9で0.888→h12で0.848）ので、断定するなら章末の値で。`
+          : `ch${curCh2} のキャラ人気指数が未取得なので、指数との突き合わせはできていない。`)
       + `<b>上位ほど差が小さく、下の順位ほど落ちる</b>なら、毎章走る固定層は変わらず流動層だけが抜けたということ。`;
   }else{
     document.getElementById('chcmp').innerHTML = '';
