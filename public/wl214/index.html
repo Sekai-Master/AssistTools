@@ -433,8 +433,17 @@ function computeRates(P, songs, bonusOverride){
   for(let i=0;i<5;i++) rateM += e15 * md.skillScoreMulti[i] / 100;
   rateM += enc * md.skillScoreMulti[5] / 100;
   const scoreM = Math.floor(rateM * talent * 4);
-  const coefM = 110 + Math.floor(scoreM/17000) + 13;   /* 他4人合計は上限13に到達している前提 */
-  const cycleM = mmeta.music_time + P.overheadSec.multi;
+  /* スコアモデルからの推定係数。他4人合計は上限に到達している前提だが、
+     その上限が 13 か 16 かは未確定（spec §8）。 */
+  const coefModel = 110 + Math.floor(scoreM/17000) + 13;
+  /* 2026-08-21、走者の「1周ぶんのPt」実測4点（99,330 / 100,520AP / 100,520AP / 100,835）から
+     係数を逆算して 333〜338・中央336 を得た。スコアモデルの323より10〜15高い。
+     ①=floor(自スコア/17000) は章のボーナスに依存しないので、1点の実測で全章に効く。
+     実測を入れている間 coefModel は表示用の参考値でしかない。 */
+  const coefM = P.runner.coefMeasured || coefModel;
+  /* 曲＋OH は「部屋が回り続けている間」の周期。実際は待ち・部屋の組み直しで止まるので、
+     その平均を multiStall として別に持つ（OH の実測値を汚さないため分けている）。 */
+  const cycleM = mmeta.music_time + P.overheadSec.multi + (P.overheadSec.multiStall || 0);
   const lbM_ = lbNorm(P.boost.multi), lbA_ = lbNorm(P.boost.auto);
   const ptM = calcPt(coefM, mmeta.event_rate, BONUS, lbM_);
 
@@ -453,7 +462,7 @@ function computeRates(P, songs, bonusOverride){
 
   return {
     bonus: BONUS, eff, avgCard,
-    multi:{title:mmeta.title, score:scoreM, coef:coefM, cycle:cycleM,
+    multi:{title:mmeta.title, score:scoreM, coef:coefM, coefModel:coefModel, cycle:cycleM,
            perHour:3600/cycleM, pt:ptM, ptPerLb: lbM_ ? ptM/lbM_ : 0,
            base:mmeta.event_rate, song:mmeta.music_time, lb:lbM_},
     auto:{ title:ameta.title, score:scoreA, coef:coefA, cycle:cycleA,
@@ -1227,12 +1236,15 @@ function render(){
   document.getElementById('rates').innerHTML =
     rc('--s1','周回（協力）', RC.multi.title, fmt(RC.multi.pt), 'Pt / 周',
        [['1時間あたり', RC.multi.perHour.toFixed(1)+' 周 = '+(RC.multi.pt*RC.multi.perHour/1e6).toFixed(2)+'M/h'],
-        ['周期', RC.multi.cycle.toFixed(1)+' 秒（曲'+RC.multi.song+'＋OH'+P.overheadSec.multi+'）'],
+        ['周期', RC.multi.cycle.toFixed(1)+' 秒（曲'+RC.multi.song+'＋OH'+P.overheadSec.multi
+                 +(P.overheadSec.multiStall ? '＋途切れ'+P.overheadSec.multiStall : '')+'）'],
         ['自スコア', fmt(RC.multi.score)],
         ['イベントPt係数', RC.multi.coef],
         ['LB効率', fmt(RC.multi.ptPerLb)+' Pt/LB'],
         ['章による幅', fmt(spML)+' 〜 '+fmt(spMH)+' Pt/周']],
-       `係数 = 110 + floor(${fmt(RC.multi.score)}/17000) + 13 = ${RC.multi.coef}<br>Pt = floor(floor(${RC.multi.coef}×${(RC.bonus/100+1).toFixed(2)}×10)/10 × ${RC.multi.base}/100) × ${LB_MULT[RC.multi.lb]}`,
+       (P.runner.coefMeasured
+         ? `係数 = <b>${RC.multi.coef}（実測）</b>— 走者の1周ぶんPt 4点から逆算。スコアモデルの推定は ${RC.multi.coefModel} で10〜15低かった<br>Pt = floor(floor(${RC.multi.coef}×${(RC.bonus/100+1).toFixed(2)}×10)/10 × ${RC.multi.base}/100) × ${LB_MULT[RC.multi.lb]}`
+         : `係数 = 110 + floor(${fmt(RC.multi.score)}/17000) + 13 = ${RC.multi.coef}<br>Pt = floor(floor(${RC.multi.coef}×${(RC.bonus/100+1).toFixed(2)}×10)/10 × ${RC.multi.base}/100) × ${LB_MULT[RC.multi.lb]}`),
        chChip(selCh))
   + rc('--s2','オート（ソロ）', RC.auto.title, fmt(RC.auto.pt), 'Pt / 回',
        [['1日 '+P.auto.playsPerDay+'回', fmt(RC.auto.pt*P.auto.playsPerDay/1e4)+' 万Pt'],
@@ -1589,11 +1601,11 @@ function render(){
         let m=0; const sH=d.endH-d.hours;
         for(let c=1;c<=5;c++){ const ov=Math.max(0,Math.min(d.endH,c*48)-Math.max(sH,(c-1)*48));
           if(ov>0) m += ov*(3600/((RBY[c]||R).multi.song+54))*(RBY[c]||R).multi.pt; }
-        return a+m+d.auto+d.mys; },0))} 億まで落ちるところだった。<b>残るのは部屋を止めないことだけ</b>`,
+        return a+m+d.auto+d.mys; },0))} 億まで落ちるところだった。<b>そして『部屋を止めないこと』が 2026-08-21 に数字になった</b>——走者の1周ぶんPtを6点実測して係数を逆算すると 333〜338・平均336 で、スコアモデルの推定323より4%高い。ch2 の単価 <b>100,240 Pt/周</b>に対し、同じ ch2 の時速の実測 2,840,628 Pt/h を割ると <b>${R.multi.perHour.toFixed(2)} 周/h＝1周 ${R.multi.cycle.toFixed(1)}秒</b>で、回り続けている間の121.08秒との差 <b>${P.overheadSec.multiStall}秒/周（1時間あたり約${(P.overheadSec.multiStall*R.multi.perHour/60).toFixed(1)}分＝約${(P.overheadSec.multiStall*R.multi.perHour/121.08).toFixed(1)}曲）</b>が止まっている時間。走者側の体感と一致した`,
     `<b>オートの所要時間。</b>${P.auto.playsPerDay}回で ${R.auto.hoursForDay.toFixed(1)} 時間かかる。周回の稼働時間とは重ねられないので、就寝中に回す枠`,
     `<b>マイセカイのPtは実測2点から。</b>8/18 02:00→02:12 の <b>+654,940</b> と 8/19 02:11→08:59 の <b>+687,750</b>——どちらも全回収1回ぶん単独（オート未実行の窓）で、ch1のボーナス${Math.round((RBY[1]||R).bonus)}%。平均して1回${fmt(P.mysekai.perHarvestPt/1e4)}万Ptを基準に置き、章のボーナス比で換算している。ch1の${fmt((RBY[1]||R).mysekai.perDay/1e4)}万/日に対し、最も低いch2は${fmt((RBY[2]||R).mysekai.perDay/1e4)}万/日、最も高いch4は${fmt((RBY[4]||R).mysekai.perDay/1e4)}万/日。開幕の全回収だけは12分で61万Ptの実測値を使う`,
     `<b>章境界での回収タイミングは選べる。</b>資材の更新は 5:00 と 17:00 だが回収は次の更新までいつでもよいので、20:00 の章境界をまたぐぶんは<b>どちらの章のボーナスで取るか選べる</b>。1回あたり ch2 ${fmt((RBY[2]||R).mysekai.per)} / ch3 ${fmt((RBY[3]||R).mysekai.per)} / ch4 ${fmt((RBY[4]||R).mysekai.per)} / ch5 ${fmt((RBY[5]||R).mysekai.per)} Pt なので、<b>8/21 と 8/23 は 20:00 より後に、8/25 は前に</b>済ませるのが得。全部で +${fmt(((RBY[3]||R).mysekai.per-(RBY[2]||R).mysekai.per)+((RBY[4]||R).mysekai.per-(RBY[3]||R).mysekai.per)+((RBY[4]||R).mysekai.per-(RBY[5]||R).mysekai.per))} Pt（着地の0.04%）。手間はゼロに近いが効果も小さい`,
-    `<b>マイセカイのLB消費を計上した。</b>走者申告（2026-08-20）で全回収1回あたり<b>${fmt(P.mysekai.lbPerHarvest)}LB</b>、1日${fmt(P.mysekai.lbPerHarvest*P.mysekai.harvestsPerDay)}弱。天候などで多少変動する。LBを使わない純増ではなく、周回・オートと同じ石の取り合いになる。全期間で ${fmt(DAYS.reduce((a,d)=>a+d.lbMys,0))}LB＝石 ${manC(DAYS.reduce((a,d)=>a+d.lbMys,0)*P.boost.crystalPerLb)}万ぶん`,
+    `<b>マイセカイのLB消費を計上した。</b>全回収1回あたり<b>${fmt(P.mysekai.lbPerHarvest)}LB</b>、1日${fmt(P.mysekai.lbPerHarvest*P.mysekai.harvestsPerDay)}弱。<b>1 LB = スタミナ1メモリ回復＋ブースト</b>なので、走者申告の幅「85〜90」ではなくPt実測から逆算している（7,500 Pt/メモリ で 671,000÷7,500＝89.5）。LBを使わない純増ではなく、周回・オートと同じ石の取り合いになる。全期間で ${fmt(DAYS.reduce((a,d)=>a+d.lbMys,0))}LB＝石 ${manC(DAYS.reduce((a,d)=>a+d.lbMys,0)*P.boost.crystalPerLb)}万ぶん`,
     `<b>章ごとのイベントボーナス。</b>メイン編成${P.runner.bonusMain != null ? P.runner.bonusMain : '—'}%に章のサポート編成が乗る（走者申告 2026-08-20）。${[1,2,3,4,5].map(n=>'ch'+n+' '+Math.round((RBY[n]||R).bonus)+'%').join(' / ')}。<b>周回・オート・マイセカイの3つとも同じ比率で動く</b>ので、章が変わると収入構造ごとスライドする`
   ].map(s=>`<li>${s}</li>`).join('');
 
@@ -1661,7 +1673,8 @@ function buildEditor(){
     ['runner.bonusByChapter.3','ch3 ボーナス(%)'],['runner.bonusByChapter.4','ch4 ボーナス(%)'],
     ['runner.bonusByChapter.5','ch5 ボーナス(%)'],
     ['support.effective','支援者の実効値'],['support.emptySlots','空き枠(0-4)'],
-    ['overheadSec.multi','周回OH(秒)'],['overheadSec.auto','オートOH(秒)'],
+    ['overheadSec.multi','周回OH(秒)'],['overheadSec.multiStall','周回の途切れ(秒/周)'],
+    ['overheadSec.auto','オートOH(秒)'],['runner.coefMeasured','周回の係数(実測/0で自動)'],
     ['boost.multi','周回の炊き数'],['boost.auto','オートの炊き数'],['boost.budgetLb','予算(LB)'],
     ['auto.playsPerDay','オート回数/日'],['auto.hourOfDay','オートを回す時刻(時)'],
     ['mysekai.perHarvestPt','マイセカイ1回(Pt/ch1基準)'],['mysekai.harvestsPerDay','マイセカイ回数/日'],
