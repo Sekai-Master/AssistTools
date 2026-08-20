@@ -12,6 +12,7 @@
   --ink:#0b0b0b; --ink-2:#52514e; --ink-3:#84837c;
   --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
   --good:#0f7a4d; --warn:#a5680a; --bad:#c0392f;
+  --go:#0e7c53; --nowc:#a5480a;      /* ライトでも 4.5:1 を満たす緑と橙 */
   --radius:14px;
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
   --sans:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif;
@@ -23,6 +24,7 @@
     --ink:#ffffff; --ink-2:#c3c2b7; --ink-3:#8d8c83;
     --s1:#3987e5; --s2:#d95926; --s3:#199e70;
     --good:#3fa876; --warn:#d0a03c; --bad:#e66767;
+    --go:#22a06b; --nowc:#e08a3c;
   }
 }
 :root[data-theme="dark"]{
@@ -31,6 +33,7 @@
   --ink:#ffffff; --ink-2:#c3c2b7; --ink-3:#8d8c83;
   --s1:#3987e5; --s2:#d95926; --s3:#199e70;
   --good:#3fa876; --warn:#d0a03c; --bad:#e66767;
+  --go:#22a06b; --nowc:#e08a3c;
 }
 *{box-sizing:border-box}
 [hidden]{display:none !important}   /* .row{display:flex} 等が UA の [hidden] に勝つのを防ぐ */
@@ -69,35 +72,45 @@ h1{font-size:17px;margin:0;letter-spacing:.01em}
 .tap:active{transform:translateY(5px);box-shadow:0 1px 0 color-mix(in srgb, var(--s1) 62%, #000)}
 .tap .big{display:block;font-size:15px;font-weight:600;opacity:.85;letter-spacing:.02em;margin-top:6px}
 .tap[disabled]{background:var(--line-strong);box-shadow:none;color:var(--ink-3)}
-.tap.start{background:var(--s3);box-shadow:0 6px 0 color-mix(in srgb, var(--s3) 62%, #000)}
+.tap.start{background:var(--go);box-shadow:0 6px 0 color-mix(in srgb, var(--go) 62%, #000)}
 .tap.start:active{box-shadow:0 1px 0 color-mix(in srgb, var(--s3) 62%, #000)}
 .lap.skip .t{color:var(--ink-3);text-decoration:line-through}
 .lap.skip{opacity:.65}
-.st .now{color:var(--s2);font-variant-numeric:tabular-nums}
+.st .now{color:var(--nowc);font-variant-numeric:tabular-nums}
 .row{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
 .act{flex:1;min-width:104px;font:inherit;font-size:13px;padding:11px 10px;border:1px solid var(--line-strong);
   border-radius:11px;background:var(--surface);color:var(--ink);cursor:pointer;touch-action:manipulation}
 .act:active{background:var(--surface-2)}
 .act.warn{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 40%, var(--line-strong))}
-.act.go{background:var(--s3);border-color:var(--s3);color:#fff;font-weight:600}
+.act.go{background:var(--go);border-color:var(--go);color:#fff;font-weight:600}
 
 /* --- ラップ一覧 --- */
 h2{font-size:13px;margin:22px 0 8px;color:var(--ink-2);letter-spacing:.03em}
 .laps{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
 .lap{display:grid;grid-template-columns:38px 1fr auto auto;align-items:center;gap:9px;
-  padding:9px 11px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+  padding:7px 11px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
 .lap:first-child{border-top:0}
 .lap .i{font-size:11px;color:var(--ink-3)}
 .lap .t{font-size:15px;font-weight:600}
 .lap .t em{font-style:normal;font-size:11px;color:var(--ink-3);font-weight:400;margin-left:6px}
 .lap .m{font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
 .lap .cnt{display:flex;align-items:center;gap:5px}
-.lap .cnt button{width:29px;height:29px;border:1px solid var(--line-strong);border-radius:8px;
+.lap .cnt button{width:40px;height:40px;border:1px solid var(--line-strong);border-radius:8px;
   background:var(--surface-2);color:var(--ink);font:inherit;font-size:15px;line-height:1;cursor:pointer;
   touch-action:manipulation;padding:0}
 .lap .cnt b{min-width:20px;text-align:center;font-size:13px}
 .lap.multi{background:color-mix(in srgb, var(--warn) 9%, var(--surface))}
 .lap.slow .t{color:var(--warn)}
+.lap.huge{background:color-mix(in srgb, var(--bad) 11%, var(--surface))}
+.lap.huge .t{color:var(--bad);font-weight:700}
+.fixbar{display:flex;align-items:center;gap:9px;background:color-mix(in srgb, var(--bad) 12%, var(--surface));
+  border:1px solid color-mix(in srgb, var(--bad) 42%, var(--line));border-radius:var(--radius);
+  padding:11px 13px;margin-bottom:11px;font-size:12.5px;line-height:1.55}
+.fixbar button{flex:0 0 auto;font:inherit;font-size:12px;padding:8px 12px;border-radius:9px;
+  border:1px solid var(--bad);background:var(--bad);color:#fff;cursor:pointer;font-weight:600}
+.howto{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);
+  padding:11px 13px;font-size:12px;color:var(--ink-2);line-height:1.75;margin-top:11px}
+.howto b{color:var(--ink)}
 .empty{padding:22px 12px;text-align:center;color:var(--ink-3);font-size:13px}
 
 /* --- 設定・出力 --- */
@@ -145,8 +158,10 @@ textarea{width:100%;min-height:150px;margin-top:11px;font-family:var(--mono);fon
     <p class="n" id="n-now" hidden>いまの周 <b class="now"><span id="v-now">0</span> 秒</b>　経過中</p></div>
 </div>
 
+<div id="fixbar"></div>
 <div class="tapzone">
   <button class="tap start" id="start" type="button">計測開始<span class="big">1周目が始まった瞬間に押す</span></button>
+  <button class="act" id="restore" type="button" hidden style="margin-top:9px;width:100%">消去した記録を復元する</button>
   <button class="tap" id="tap" type="button" hidden>周回した<span class="big" id="taphint">1周終わるたびに押す</span></button>
   <div class="row" id="ctl" hidden>
     <button class="act" id="undo" type="button">1つ戻す</button>
@@ -158,11 +173,16 @@ textarea{width:100%;min-height:150px;margin-top:11px;font-family:var(--mono);fon
 <h2>ラップ（新しい順）</h2>
 <div class="laps" id="laps"><p class="empty">まだ記録がありません</p></div>
 <p class="note">押し忘れた区間は <b>＋</b> でその区間の周回数を増やす。区間の時間をその数で割った値がラップとして扱われる。時刻の整合は壊れない。</p>
+<div class="howto">
+  <b>休憩・部屋落ちのとき</b>：止まる前ではなく、<b>再開した瞬間に「周回した」を押してから「直前を除外」</b>。
+  順番を逆にすると休憩まるごとが1周として混ざり、平均が数倍に化ける。<br>
+  <b>始める前</b>：前回のテスト記録が残っていたら「全消去」してから「計測開始」。
+</div>
 
 <details id="cfg">
   <summary>設定</summary>
   <div class="fields">
-    <label class="f">曲の長さ(秒)<input id="f-song" type="number" step="0.1" value="74.8"></label>
+    <label class="f">曲の長さ(秒)<input id="f-song" type="number" step="0.1" min="30" max="300" value="74.8"></label>
     <label class="f">1周の単価(Pt)<input id="f-pt" type="number" step="1" value="96285"></label>
   </div>
   <p class="note">既定は独りんぼエンヴィー(74.8秒)と ch2 寧々の周回単価。章が変わったら単価を入れ替える（ch1 104,090 / ch2 96,285 / ch3 104,650 / ch4 116,095 / ch5 114,380）。</p>
@@ -189,10 +209,30 @@ const $ = id => document.getElementById(id);
 let S = { marks: [], laps: [], paused: [], song: 74.8, pt: 96285, startedAt: null };
 
 function load(){
-  try{ const v = JSON.parse(localStorage.getItem(KEY));
-       if(v && Array.isArray(v.marks)) S = Object.assign(S, v); }catch(e){}
+  let v=null;
+  try{ v = JSON.parse(localStorage.getItem(KEY)); }catch(e){ return; }
+  if(!v || typeof v!=='object') return;
+  /* 壊れた保存データをそのまま受け入れると NaN が統計に混ざって
+     「もっともらしく間違った」数字が出る。形と型をここで弾く */
+  const marks = Array.isArray(v.marks) ? v.marks.filter(Number.isFinite) : [];
+  const laps  = Array.isArray(v.laps)  ? v.laps  : [];
+  S.marks = marks;
+  S.laps  = Array.from({length:Math.max(0,marks.length-1)},
+                       (_,i)=> Math.max(1, Math.round(Number(laps[i])||1)));
+  S.paused = (Array.isArray(v.paused)?v.paused:[])
+               .map(Number).filter(i=>Number.isInteger(i) && i>=0 && i<marks.length-1);
+  const sg=Number(v.song), pt=Number(v.pt);
+  if(Number.isFinite(sg) && sg>=30 && sg<=300) S.song = sg;
+  if(Number.isFinite(pt) && pt>=0)             S.pt   = pt;
 }
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+let saveWarned = false;
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }
+  catch(e){
+    /* 保存できていないことに気付かないまま数時間計測して全損するのが最悪 */
+    if(!saveWarned){ saveWarned = true; toast('⚠️保存できていません。リロードで消えます'); }
+  }
+}
 
 const toast = (m)=>{ const t=$('toast'); t.textContent=m; t.classList.add('on');
   clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('on'), 1500); };
@@ -210,6 +250,9 @@ const fmtS = s => s>=100 ? s.toFixed(0) : s.toFixed(1);
 const clock = ms => { const d=new Date(ms);
   return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`; };
 
+/* 曲長の3倍を超える区間は、休憩・部屋落ち・押し忘れのいずれか。
+   平均を基準にすると汚染で閾値ごと上がるので、絶対値で見る */
+const hugeCut = () => S.song * 3;
 function render(){
   const segs = segments().filter(s=>!s.skip);
   const totalLaps = segs.reduce((a,s)=>a+s.n,0);
@@ -245,6 +288,23 @@ function render(){
     ? `単価 ${S.pt.toLocaleString()} Pt なら <b>${(per*S.pt/1e6).toFixed(2)}M/h</b>`
     : '&nbsp;';
 
+  /* 異常に長い区間があれば真っ先に知らせる。夜間・片手・ながら操作で
+     数字だけ見ていても気付けないため */
+  const huge = segments().filter(s=>!s.skip && s.per > hugeCut());
+  const fb = $('fixbar');
+  if(huge.length){
+    const worst = huge.reduce((a,b)=>a.per>b.per?a:b);
+    fb.innerHTML = `<span>⚠️ <b>#${worst.i+1} が ${fmtS(worst.per)} 秒</b>。`
+      + `休憩や部屋落ちなら除外、押し忘れなら ＋ で周回数を増やす。`
+      + `${huge.length>1?`ほかに ${huge.length-1} 件。`:''}このままだと平均が壊れます</span>`
+      + `<button type="button" id="fix-skip">#${worst.i+1} を除外</button>`;
+    fb.hidden = false;
+    $('fix-skip').addEventListener('click', ()=>{
+      if(!S.paused.includes(worst.i)) S.paused.push(worst.i);
+      save(); render(); toast(`#${worst.i+1} を除外した`);
+    });
+  }else{ fb.innerHTML=''; fb.hidden = true; }
+
   /* 一覧 */
   const all = segments();
   const el = $('laps');
@@ -252,7 +312,8 @@ function render(){
   else{
     const med = avg || 0;
     el.innerHTML = all.slice().reverse().map(s=>{
-      const cls = (s.n>1?' multi':'') + (med && s.per > med*1.25 ? ' slow':'') ;
+      const cls = (s.n>1?' multi':'') + (s.per > hugeCut() ? ' huge'
+                  : (med && s.per > med*1.25 ? ' slow':'')) ;
       return `<div class="lap${cls}${s.skip?' skip':''}">
         <span class="i">#${s.i+1}</span>
         <span class="t">${s.skip?'—':fmtS(s.per)}<em>${s.skip?'除外':'秒'}</em></span>
@@ -293,7 +354,7 @@ function exportObj(){
     event: 214, song: '独りんぼエンヴィー', songSec: S.song, ptPerRun: S.pt,
     startedAt: S.marks.length ? new Date(S.marks[0]).toISOString() : null,
     endedAt:   S.marks.length ? new Date(S.marks[S.marks.length-1]).toISOString() : null,
-    laps: n, measuredSec: Math.round(d*10)/10,
+    totalLaps: n, measuredSec: Math.round(d*10)/10,
     avgLapSec: n ? Math.round(d/n*10)/10 : null,
     overheadSec: n ? Math.round((d/n - S.song)*10)/10 : null,
     runsPerHour: n ? Math.round(3600/(d/n)*100)/100 : null,
@@ -315,7 +376,7 @@ function mark(){
   if(navigator.vibrate) navigator.vibrate(18);
   save(); render();
 }
-$('tap').addEventListener('click', mark);
+$('tap').addEventListener('click', ()=>{ mark(); keepAwake(); });
 $('start').addEventListener('click', ()=>{ mark(); toast('計測開始'); });
 $('undo').addEventListener('click', ()=>{
   if(!S.marks.length) return;
@@ -332,15 +393,34 @@ $('pause').addEventListener('click', ()=>{
 });
 $('reset').addEventListener('click', ()=>{
   if(!S.marks.length) return;
-  if(!confirm('記録を全部消します。よろしいですか')) return;
-  S.marks=[]; S.laps=[]; S.paused=[]; save(); render(); toast('消去した');
+  const n = segments().filter(s=>!s.skip).reduce((a,s)=>a+s.n,0);
+  if(!confirm(`${n} 周ぶんの記録を全部消します。よろしいですか`)) return;
+  try{ localStorage.setItem(KEY+'-bak', JSON.stringify(S)); }catch(e){}
+  S.marks=[]; S.laps=[]; S.paused=[]; save(); render();
+  toast('消去した（直前の状態は復元できます）'); refreshRestore();
+});
+function refreshRestore(){
+  let bak=null; try{ bak = localStorage.getItem(KEY+'-bak'); }catch(e){}
+  $('restore').hidden = !(bak && !S.marks.length);
+}
+$('restore').addEventListener('click', ()=>{
+  let bak=null; try{ bak = JSON.parse(localStorage.getItem(KEY+'-bak')); }catch(e){}
+  if(!bak) return;
+  S.marks=bak.marks||[]; S.laps=bak.laps||[]; S.paused=bak.paused||[];
+  save(); render(); refreshRestore(); toast('復元した');
 });
 $('laps').addEventListener('click', e=>{
   const inc = e.target.dataset && e.target.dataset.inc, dec = e.target.dataset && e.target.dataset.dec;
   if(inc != null && inc !== ''){ const i=+inc; S.laps[i]=(S.laps[i]||1)+1; save(); render(); }
   if(dec != null && dec !== ''){ const i=+dec; S.laps[i]=Math.max(1,(S.laps[i]||1)-1); save(); render(); }
 });
-$('f-song').addEventListener('change', e=>{ S.song = Number(e.target.value)||74.8; save(); render(); });
+$('f-song').addEventListener('change', e=>{
+  /* OH はこの値の引き算そのものなので、桁違いのタイプミスが
+     もっともらしい値のまま通ると分析ごと狂う */
+  const v = Number(e.target.value);
+  if(!Number.isFinite(v) || v < 30 || v > 300){ toast('曲長は30〜300秒で'); e.target.value = S.song; return; }
+  S.song = v; save(); render();
+});
 $('f-pt').addEventListener('change',   e=>{ S.pt   = Number(e.target.value)||0;    save(); render(); });
 $('copy').addEventListener('click', async ()=>{
   try{ await navigator.clipboard.writeText($('json').value); toast('コピーした'); }
@@ -350,7 +430,8 @@ $('dl').addEventListener('click', ()=>{
   const b=new Blob([$('json').value],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(b);
-  a.download=`wl214-lap-${new Date().toISOString().slice(0,16).replace(/[:T]/g,'')}.json`;
+  const d0=new Date(); const p2=x=>String(x).padStart(2,'0');
+  a.download=`wl214-lap-${d0.getFullYear()}${p2(d0.getMonth()+1)}${p2(d0.getDate())}-${p2(d0.getHours())}${p2(d0.getMinutes())}.json`;
   a.click(); URL.revokeObjectURL(a.href); toast('保存した');
 });
 $('themebtn').addEventListener('click', ()=>{
@@ -360,10 +441,16 @@ $('themebtn').addEventListener('click', ()=>{
   try{ localStorage.setItem('wl214-theme', next); }catch(e){}
 });
 /* 計測中に画面が消えると押せないので、可能なら消灯を抑止する */
-let wl = null;
+let wl = null, wlWarned = false;
 async function keepAwake(){
   if(!('wakeLock' in navigator)) return;
-  try{ wl = await navigator.wakeLock.request('screen'); }catch(e){}
+  if(wl && !wl.released) return;
+  try{ wl = await navigator.wakeLock.request('screen'); wl.addEventListener('release', ()=>{ wl=null; }); }
+  catch(e){
+    /* iOS は低電力モードで reject する。深夜に自動でオンになると押し逃す */
+    wl = null;
+    if(!wlWarned){ wlWarned = true; toast('画面の自動ロックを切ってください'); }
+  }
 }
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') keepAwake(); });
 window.addEventListener('beforeunload', e=>{ if(S.marks.length){ e.preventDefault(); e.returnValue=''; } });
@@ -372,7 +459,20 @@ load();
 const th = (()=>{ try{ return localStorage.getItem('wl214-theme'); }catch(e){ return null; } })();
 if(th) document.documentElement.dataset.theme = th;
 $('f-song').value = S.song; $('f-pt').value = S.pt;
-render(); keepAwake();
+render(); keepAwake(); refreshRestore();
+/* 前回のテスト記録が残ったまま本番を始めると、最初のタップが
+   「テスト最終マーク→いま」の巨大区間を1周として記録してしまう */
+if(S.marks.length){
+  const idle = (Date.now() - S.marks[S.marks.length-1])/60000;
+  if(idle > 30){
+    setTimeout(()=>{
+      if(confirm(`前回の記録が ${Math.round(idle)} 分前で止まっています。\n消して新しく始めますか？\n（キャンセルすると続きから計測します）`)){
+        try{ localStorage.setItem(KEY+'-bak', JSON.stringify(S)); }catch(e){}
+        S.marks=[]; S.laps=[]; S.paused=[]; save(); render(); refreshRestore();
+      }
+    }, 400);
+  }
+}
 </script>
 </body>
 </html>
