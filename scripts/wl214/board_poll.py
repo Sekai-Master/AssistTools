@@ -31,7 +31,9 @@ if new:
 
 while end_t is None or datetime.datetime.now() < end_t:
     try:
-        with urllib.request.urlopen('https://api.sekai.best/event/live_latest_chapter', timeout=25) as r:
+        req = urllib.request.Request('https://api.sekai.best/event/live_latest_chapter',
+                                      headers={'User-Agent': 'sekaimaster-assist/1.0'})
+        with urllib.request.urlopen(req, timeout=25) as r:
             d = json.load(r)
         for row in d.get('data', d).get('eventRankings', []):
             if str(row.get('userName', '')).startswith(name):
