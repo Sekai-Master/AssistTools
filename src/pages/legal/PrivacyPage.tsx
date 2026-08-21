@@ -24,7 +24,7 @@ import {
  */
 export default function PrivacyPage() {
   return (
-    <ToolPage unit="mmj" title="プライバシーポリシー" icon="lock">
+    <ToolPage unit="vs" title="プライバシーポリシー" icon="lock">
       <DocMeta effective={LEGAL_EFFECTIVE_DATE} revised={LEGAL_REVISED_DATE} />
 
       <DocIntro>

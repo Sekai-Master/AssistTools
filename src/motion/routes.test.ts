@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { announceText, loadRoute, ROUTE_LOADERS, routeTitle } from "./routes";
-import { READY_TOOLS, TOOLS } from "../tools";
+import { READY_TOOLS, TOOL_CATEGORIES, TOOLS, toolsByCategory, unitOf } from "../tools";
 
 describe("ROUTE_LOADERS", () => {
   // lazyOf は loadRoute(path)! と非 null assertion を使っているので、
@@ -82,5 +82,38 @@ describe("announceText", () => {
   it("読み込み中・失敗は状態を伝える", () => {
     expect(announceText("loading", "/evc")).toBe("読み込み中");
     expect(announceText("failed", "/evc")).toContain("失敗");
+  });
+});
+
+/**
+ * ★ 色の出どころは登録簿ひとつ（tools.ts の category → TOOL_CATEGORIES.unit）。
+ *   ページ側で色を書くと、仕分けを変えたときに片方だけ古くなる。
+ */
+describe("仕分けと色", () => {
+  it("すべてのツールが実在するカテゴリに属する", () => {
+    const ids = new Set(TOOL_CATEGORIES.map((c) => c.id));
+    for (const t of TOOLS) expect(ids, `${t.id} の仕分けが無い`).toContain(t.category);
+  });
+
+  it("どのカテゴリも空ではない（見出しだけが出るのを防ぐ）", () => {
+    for (const c of TOOL_CATEGORIES) {
+      expect(TOOLS.some((t) => t.category === c.id), `${c.label} が空`).toBe(true);
+    }
+  });
+
+  it("ツールの色はカテゴリの色（ツール個別の色を持たない）", () => {
+    for (const t of TOOLS) {
+      const cat = TOOL_CATEGORIES.find((c) => c.id === t.category)!;
+      expect(unitOf(t.id)).toBe(cat.unit);
+    }
+  });
+
+  it("知らない id なら既定色（落ちない）", () => {
+    expect(unitOf("nope")).toBe("vs");
+  });
+
+  it("TOP に出る並びは登録簿の全ツールを1回ずつ含む", () => {
+    const listed = toolsByCategory().flatMap((g) => g.tools.map((t) => t.id));
+    expect(listed.slice().sort()).toEqual(TOOLS.map((t) => t.id).sort());
   });
 });

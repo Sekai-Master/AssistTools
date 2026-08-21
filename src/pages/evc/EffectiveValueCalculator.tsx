@@ -130,7 +130,7 @@ export default function EffectiveValueCalculator() {
     });
 
   return (
-    <ToolPage morphKey="tool:evc" unit="ln" title="スキル実効値計算機" icon="calculate">
+    <ToolPage morphKey="tool:evc" title="スキル実効値計算機" icon="calculate">
       {/*
         このツールが使うのは 先頭スキル値 と 内部値（5枠合計）の2つ。プロフィールは
         両方を持っているので、**読み込みも書き出しも成立する**。

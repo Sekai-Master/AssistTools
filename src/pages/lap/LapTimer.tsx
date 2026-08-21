@@ -274,7 +274,6 @@ export default function LapTimer() {
 
   return (
     <ToolPage
-      unit="vbs"
       morphKey="tool:lap"
       title="周回ラップ計測"
       icon="timer"

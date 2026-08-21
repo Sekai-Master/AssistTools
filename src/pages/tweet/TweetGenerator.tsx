@@ -129,7 +129,7 @@ export default function TweetGenerator() {
   };
 
   return (
-    <ToolPage morphKey="tool:tweet" wide unit="vs" title="ついぼジェネレーター" icon="campaign">
+    <ToolPage morphKey="tool:tweet" wide title="ついぼジェネレーター" icon="campaign">
       {/* PC は 2カラム（左=入力／右=sticky なプレビュー＋アクション）。
           lg 未満は通常フローで縦積みし、アクションは画面下の固定バーが担う。 */}
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6 lg:items-start">

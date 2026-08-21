@@ -258,7 +258,7 @@ export default function PointAnalyzer() {
   };
 
   return (
-    <ToolPage morphKey="tool:analyzer" unit="mmj" title="ポイント調整アナライザー" icon="analytics">
+    <ToolPage morphKey="tool:analyzer" title="ポイント調整アナライザー" icon="analytics">
       {/* 総合力とボーナスは他のツールとも共通なので、編成から流し込めるようにする。
           勝手に上書きはしない ── 押されたときだけ反映する。 */}
       <ProfileBar

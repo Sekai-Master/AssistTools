@@ -351,7 +351,7 @@ export default function DeckBuilder() {
   };
 
   return (
-    <ToolPage morphKey="tool:deck" unit="wxs" title="編成ビルダー" icon="style" wide>
+    <ToolPage morphKey="tool:deck" title="編成ビルダー" icon="style" wide>
       {error && (
         <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
           {error}

@@ -28,7 +28,7 @@ import {
  */
 export default function TermsPage() {
   return (
-    <ToolPage unit="n25" title="利用規約" icon="gavel">
+    <ToolPage unit="vs" title="利用規約" icon="gavel">
       <DocMeta effective={LEGAL_EFFECTIVE_DATE} revised={LEGAL_REVISED_DATE} />
 
       <DocIntro>

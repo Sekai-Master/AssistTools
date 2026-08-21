@@ -413,8 +413,10 @@ body {
     padding: 0.6em 1em;
     border-radius: 12px;
     background-color: var(--unit-color);
-    color: #fff;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.32);
+    /* 文字色は色ごとに差し替わる（src/lib/units.ts の UNIT_TITLE_INK）。
+       既定は白。明るいユニット色では白が読めないので暗い文字になる。 */
+    color: var(--unit-ink, #fff);
+    text-shadow: var(--unit-ink-shadow, 0 1px 2px rgba(0, 0, 0, 0.32));
     box-shadow: var(--shadow-neu-sm);
   }
   .unit-title::before {

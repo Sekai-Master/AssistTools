@@ -682,7 +682,7 @@ export default function EfficiencyRanking() {
   );
 
   return (
-    <ToolPage morphKey="tool:ranking" unit="ln" title="効率曲ランキング" icon="leaderboard" wide>
+    <ToolPage morphKey="tool:ranking" title="効率曲ランキング" icon="leaderboard" wide>
       {/* このツールが使う値は編成そのもの（総合力・ボーナス・内部値・焚き数）。 */}
       <ProfileBar
         apply={(p) => {

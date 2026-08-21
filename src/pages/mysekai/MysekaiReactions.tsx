@@ -598,7 +598,7 @@ export default function MysekaiReactions() {
   //     対策済み。同じ轍を踏まない）。高さを予約し、状態は sr-only で伝える。
   if (loading || error || !data) {
     return (
-      <ToolPage unit="n25" title="マイセカイ リアクション図鑑" icon="weekend" morphKey="tool:mysekai" wide>
+      <ToolPage title="マイセカイ リアクション図鑑" icon="weekend" morphKey="tool:mysekai" wide>
         <div className="min-h-[80vh]">
           <Panel>
             {error || !data ? (
@@ -622,7 +622,7 @@ export default function MysekaiReactions() {
   }
 
   return (
-    <ToolPage unit="n25" title="マイセカイ リアクション図鑑" icon="weekend" morphKey="tool:mysekai" wide>
+    <ToolPage title="マイセカイ リアクション図鑑" icon="weekend" morphKey="tool:mysekai" wide>
       <Panel title="誰の反応を見るか">
         <div className="flex flex-wrap items-center gap-3">
           <select
