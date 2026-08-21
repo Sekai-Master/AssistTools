@@ -183,6 +183,24 @@ export const STORED_ITEMS: StoredItem[] = [
     },
   },
   {
+    key: "sekaimaster:lap:v1",
+    label: "周回ラップ計測の記録",
+    note: "「周回ラップ計測」で測ったタップの時刻・曲・焚き数など",
+    summarize: (raw) => {
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return BROKEN;
+        const marks = (parsed as { marks?: unknown }).marks;
+        if (!Array.isArray(marks)) return BROKEN;
+        // マークは「区間の境目」なので、周回数は1つ少ない。
+        const laps = Math.max(0, marks.length - 1);
+        return laps === 0 ? null : `${laps} 周ぶん`;
+      } catch {
+        return BROKEN;
+      }
+    },
+  },
+  {
     key: "sekaimaster:motion:v1",
     label: "画面遷移の設定",
     note: "設定画面で選んだ段階",

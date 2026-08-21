@@ -30,6 +30,7 @@ export function App() {
               <Route path="/ranking" element={<RoutePages.ranking />} />
               <Route path="/deck" element={<RoutePages.deck />} />
               <Route path="/mysekai" element={<RoutePages.mysekai />} />
+              <Route path="/lap" element={<RoutePages.lap />} />
               <Route path="/settings" element={<SettingsPage />} />
               {/* 規約・ポリシー・更新履歴。ツールではないのでハブのカードには出さず、
                   フッターからいつでも辿れるようにしている。 */}

@@ -134,6 +134,17 @@ export const TOOLS: ToolDef[] = [
     status: "ready",
   },
   {
+    id: "lap",
+    path: "/lap",
+    name: "周回ラップ計測",
+    shortName: "ラップ",
+    description:
+      "1周終わるたびに押すだけで、実際のラップ・オーバーヘッド・周/時を測ります。休憩や部屋落ちは中断ボタンで自動的に平均から外れます。実測の時速は編成に取り込めます。",
+    icon: "timer",
+    unit: "vbs",
+    status: "ready",
+  },
+  {
     id: "efficiency",
     path: "/efficiency",
     name: "効率難易度検索",
