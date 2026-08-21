@@ -37,6 +37,8 @@ export const PAGE_LOADERS: Record<string, Loader> = {
   "/terms": () => import("../pages/legal/TermsPage"),
   "/privacy": () => import("../pages/legal/PrivacyPage"),
   "/changelog": () => import("../pages/legal/ChangelogPage"),
+  // 知見ノート。一覧と記事で同じチャンクを使う（/knowledge/:slug も同じ入口）。
+  "/knowledge": () => import("../pages/knowledge/KnowledgePage"),
 };
 
 const ALL_LOADERS: Record<string, Loader> = { ...ROUTE_LOADERS, ...PAGE_LOADERS };
@@ -108,6 +110,7 @@ export const RoutePages = {
   terms: lazyOf("/terms"),
   privacy: lazyOf("/privacy"),
   changelog: lazyOf("/changelog"),
+  knowledge: lazyOf("/knowledge"),
 };
 
 /** ツール以外のページの名前。ヘッダーには出さないが、遷移の読み上げには要る。 */
@@ -117,6 +120,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/terms": "利用規約",
   "/privacy": "プライバシーポリシー",
   "/changelog": "更新履歴",
+  "/knowledge": "知見ノート",
 };
 
 /**

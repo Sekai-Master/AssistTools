@@ -43,6 +43,9 @@ export function SiteFooter() {
           <Link to="/privacy" className={LINK}>
             プライバシーポリシー
           </Link>
+          <Link to="/knowledge" className={LINK}>
+            知見ノート
+          </Link>
           <Link to="/changelog" className={LINK}>
             更新履歴
           </Link>
