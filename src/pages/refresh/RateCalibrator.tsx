@@ -92,7 +92,9 @@ export function RateCalibrator({
                 setRefTaki(runTaki);
               }}
             >
-              → 時速{runRate === null ? "?" : Math.round(runRate).toLocaleString()}にする
+              → 時速
+              {runRate === null ? "?" : Math.round(runRate).toLocaleString()}
+              にする
             </NeuButton>
           </div>
         )}
@@ -129,7 +131,11 @@ export function RateCalibrator({
                   setRefTaki(perPlayTaki);
                 }}
               >
-                → 時速{fromPerPlay === null ? "?" : Math.round(fromPerPlay).toLocaleString()}にする
+                → 時速
+                {fromPerPlay === null
+                  ? "?"
+                  : Math.round(fromPerPlay).toLocaleString()}
+                にする
               </NeuButton>
             </div>
             {/* ペースは上の「周回ペース」欄と同じ値。別々に持つと食い違うので繋いである。 */}
@@ -142,7 +148,9 @@ export function RateCalibrator({
         {mode === "pace" && (
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-slate-500">時速 {(Number(hourlyRate) || 0).toLocaleString()} ÷ 1回</span>
+              <span className="text-slate-500">
+                時速 {(Number(hourlyRate) || 0).toLocaleString()} ÷ 1回
+              </span>
               <NeuInput
                 inputMode="numeric"
                 value={perPlay}
@@ -160,13 +168,15 @@ export function RateCalibrator({
                   setPace(String(Math.round(derivedPace)));
                 }}
               >
-                → ペース{derivedPace === null ? "?" : Math.round(derivedPace)}回/時 にする
+                → ペース{derivedPace === null ? "?" : Math.round(derivedPace)}
+                回/時 にする
               </NeuButton>
             </div>
             {/* ★ ここだけは前提の説明が要る。焚き数が揃っていないと黙って狂う。
                 いま設定されている基準焚き数を出して、突き合わせられるようにする。 */}
             <p className="text-xs text-slate-400">
-              上の時速は<span className="font-bold">焚き{refTaki}</span>での値です。1回の獲得ptも
+              上の時速は<span className="font-bold">焚き{refTaki}</span>
+              での値です。1回の獲得ptも
               <span className="font-bold">同じ焚き数で測った値</span>
               を入れてください（ペース自体は焚き数に依りません）。
             </p>

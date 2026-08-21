@@ -62,7 +62,11 @@ export function GaugeInputsPanel({
               )}
               <div className="min-w-0 flex-1">
                 <p className="truncate font-bold text-slate-700">
-                  {loading ? "読み込み中…" : selectedSong ? selectedSong.title : "未選択"}
+                  {loading
+                    ? "読み込み中…"
+                    : selectedSong
+                      ? selectedSong.title
+                      : "未選択"}
                 </p>
                 {selectedSong && (
                   <p className="text-xs text-slate-500">
@@ -127,7 +131,9 @@ export function GaugeInputsPanel({
               <span className="text-sm text-slate-500">回/時（エビ基準）</span>
             </div>
             <details className="mt-2">
-              <summary className="cursor-pointer text-xs text-slate-500">実測から較正する</summary>
+              <summary className="cursor-pointer text-xs text-slate-500">
+                実測から較正する
+              </summary>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
                 <span className="text-slate-500">エビを</span>
                 <NeuInput

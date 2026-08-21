@@ -26,19 +26,29 @@ export default function RefreshGaugeCalculator() {
 
   const len = selectedSong?.musicTime ?? 0;
   const hasLen = len > 0;
-  const plan = selectedSong && hasLen ? planSession(rc, len, gaugePct, overhead) : null;
+  const plan =
+    selectedSong && hasLen ? planSession(rc, len, gaugePct, overhead) : null;
   const perPlayPct = rc ? liveGaugePercent(rc) : 0;
   const songRate = hasLen ? playsPerHour(len, overhead) : 0;
 
   return (
-    <ToolPage morphKey="tool:refresh" title="リフレッシュゲージ計算機" icon="battery_charging_full">
+    <ToolPage
+      morphKey="tool:refresh"
+      title="リフレッシュゲージ計算機"
+      icon="battery_charging_full"
+    >
       {dataError && (
         <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
           {dataError}
         </div>
       )}
 
-      <GaugeInputsPanel inputs={inputs} musics={musics} aliases={aliases} loading={loading} />
+      <GaugeInputsPanel
+        inputs={inputs}
+        musics={musics}
+        aliases={aliases}
+        loading={loading}
+      />
 
       {plan ? (
         <>
@@ -55,7 +65,10 @@ export default function RefreshGaugeCalculator() {
             </div>
             <p className="mt-2 text-center text-sm text-slate-500">
               現在{" "}
-              <span className="font-bold" style={{ color: "var(--unit-color)" }}>
+              <span
+                className="font-bold"
+                style={{ color: "var(--unit-color)" }}
+              >
                 {gaugePct}%
               </span>
               　/　この曲は1回で +{perPlayPct.toFixed(2)}%
@@ -69,7 +82,10 @@ export default function RefreshGaugeCalculator() {
                 value={`${plan.runwayPlays}回`}
                 sub={`約 ${fmtDuration(plan.runwayMinutes)}`}
               />
-              <Stat label="この曲のペース" value={`${songRate.toFixed(0)}回/時`} />
+              <Stat
+                label="この曲のペース"
+                value={`${songRate.toFixed(0)}回/時`}
+              />
               <Stat
                 label="持続ペース"
                 value={`${plan.sustainablePerHour.toFixed(0)}回/時`}
@@ -78,11 +94,13 @@ export default function RefreshGaugeCalculator() {
             </div>
             <p className="mt-4 text-xs text-slate-500">
               100%（続行不可）に達したら、非活動30分ごとに8.33%回復。全回復まで
-              {fmtDuration(plan.fullRecoveryMinutes)}。下で休憩込みの推移も計画できます。
+              {fmtDuration(plan.fullRecoveryMinutes)}
+              。下で休憩込みの推移も計画できます。
             </p>
           </Panel>
 
           <PlanTimeline
+            toolId="refresh"
             selectedSong={selectedSong}
             overhead={overhead}
             startPercent={gaugePct}

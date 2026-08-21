@@ -1,3 +1,4 @@
+import { resolveColor } from "../../../lib/canvasColor";
 import { useRef, useState } from "react";
 import { NeuButton } from "../../../components/ui/NeuButton";
 import { drawPlanCanvas } from "../../refresh/lib/planCanvas";
@@ -61,9 +62,14 @@ export function PlanExportPanel({
       // 旧3分岐（sweepPlan固定 / targetScoreRange / multiA.plans[0]固定）は
       // effective 候補（modeAChoice）が全ケースを包含するため、選択が反映されない穴が塞がる。
       const song = step2Song
-        ? { title: step2Song.title, jacketUrl: `${jacketBase}${step2Song.jacketLink}` }
+        ? {
+            title: step2Song.title,
+            jacketUrl: `${jacketBase}${step2Song.jacketLink}`,
+          }
         : undefined;
-      return modeAChoice ? canvasStep2FromChoice(modeAChoice, live.requiredPt, song) : undefined;
+      return modeAChoice
+        ? canvasStep2FromChoice(modeAChoice, live.requiredPt, song)
+        : undefined;
     }
     const multi = live.multi;
     if (!multi || multi.status !== "OK") return undefined;
@@ -73,8 +79,17 @@ export function PlanExportPanel({
       kind: "multi",
       plan,
       songForBase: (basePoint) => {
-        const picked = resolveSong(candidatesForBase(musics, basePoint), songByBase, basePoint);
-        return picked ? { title: picked.title, jacketUrl: `${jacketBase}${picked.jacketLink}` } : undefined;
+        const picked = resolveSong(
+          candidatesForBase(musics, basePoint),
+          songByBase,
+          basePoint,
+        );
+        return picked
+          ? {
+              title: picked.title,
+              jacketUrl: `${jacketBase}${picked.jacketLink}`,
+            }
+          : undefined;
       },
     };
   };
@@ -88,7 +103,10 @@ export function PlanExportPanel({
         pt: result.finalRunPt,
         basePoint: result.finalBase,
         song: finalSong
-          ? { title: finalSong.title, jacketUrl: `${jacketBase}${finalSong.jacketLink}` }
+          ? {
+              title: finalSong.title,
+              jacketUrl: `${jacketBase}${finalSong.jacketLink}`,
+            }
           : undefined,
         plan: finalPlan ?? undefined,
         planCount: result.finalRunPlans.length,
@@ -101,7 +119,10 @@ export function PlanExportPanel({
       finishLb: lastPlay.finishLb,
       basePoint: lastPlay.finishBase,
       song: finalSong
-        ? { title: finalSong.title, jacketUrl: `${jacketBase}${finalSong.jacketLink}` }
+        ? {
+            title: finalSong.title,
+            jacketUrl: `${jacketBase}${finalSong.jacketLink}`,
+          }
         : undefined,
     };
   };
@@ -111,7 +132,9 @@ export function PlanExportPanel({
     if (!canvas) return null;
     // 画面のユニットカラーを画像のアクセントにも使う（display:none だと取得できないので
     // canvas は画面外配置のまま描画は保つ）。
-    const accent = getComputedStyle(canvas).getPropertyValue("--unit-color").trim() || "#ff9900";
+    // ★ ユニット色は light-dark() で書かれていて canvas が読めない。**必ず解決して渡す**
+    //   （渡さないと例外も出ないまま本文の黒で描かれる。src/lib/canvasColor.ts）。
+    const accent = resolveColor(canvas, "var(--unit-color)", "#ff9900");
     await drawPlanCanvas(
       canvas,
       buildAdjustPlanCanvasData({
@@ -131,7 +154,7 @@ export function PlanExportPanel({
         finalRun: buildFinalRun(),
         accent,
         lbIconUrl: LB_ICON_URL,
-      })
+      }),
     );
     return canvas;
   };
@@ -142,7 +165,9 @@ export function PlanExportPanel({
     canvas.toBlob(async (blob) => {
       if (!blob) return;
       try {
-        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        await navigator.clipboard.write([
+          new ClipboardItem({ "image/png": blob }),
+        ]);
         setNotice("画像をコピーしました。");
       } catch {
         setNotice("コピーに失敗しました（保存をお使いください）。");
@@ -165,7 +190,9 @@ export function PlanExportPanel({
   if (!result.isVerified) {
     return (
       <div className="neu-panel p-5 sm:p-6">
-        <h2 className="mb-3 text-sm font-bold text-slate-600">Step1〜3 統合プランの画像</h2>
+        <h2 className="mb-3 text-sm font-bold text-slate-600">
+          Step1〜3 統合プランの画像
+        </h2>
         <div className="rounded-xl bg-rose-50 p-6 text-center text-sm text-rose-600">
           目標に届いていないため画像は出力できません。
         </div>
@@ -175,7 +202,9 @@ export function PlanExportPanel({
 
   return (
     <div className="neu-panel p-5 sm:p-6">
-      <h2 className="mb-3 text-sm font-bold text-slate-600">Step1〜3 統合プランの画像</h2>
+      <h2 className="mb-3 text-sm font-bold text-slate-600">
+        Step1〜3 統合プランの画像
+      </h2>
       <div className="flex flex-wrap items-center gap-2">
         <NeuButton className="!py-2 !text-sm" onClick={() => void copyImage()}>
           画像をコピー

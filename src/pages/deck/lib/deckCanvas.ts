@@ -16,6 +16,8 @@
  *   大きく置く簡易版に落ちる。外部からは取らない（cardArt.ts に理由）。
  */
 
+import { resolveColor } from "../../../lib/canvasColor";
+
 export interface DeckCanvasCard {
   /** サムネイルの URL（無ければ属性色の枠だけ描く）。 */
   thumb?: string;
@@ -88,15 +90,20 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-export async function drawDeckCanvas(canvas: HTMLCanvasElement, data: DeckCanvasData): Promise<void> {
-  const urls = [...new Set(data.cards.map((c) => c.thumb).filter((u): u is string => !!u))];
+export async function drawDeckCanvas(
+  canvas: HTMLCanvasElement,
+  data: DeckCanvasData,
+): Promise<void> {
+  const urls = [
+    ...new Set(data.cards.map((c) => c.thumb).filter((u): u is string => !!u)),
+  ];
   const imgs = new Map<string, HTMLImageElement>();
   await Promise.all(
     urls.map((u) =>
       loadImage(u)
         .then((img) => imgs.set(u, img))
-        .catch(() => undefined)
-    )
+        .catch(() => undefined),
+    ),
   );
 
   const dpr = 2;
@@ -158,7 +165,10 @@ export async function drawDeckCanvas(canvas: HTMLCanvasElement, data: DeckCanvas
  * ★★ **ぼかしはクリップの中だけで行う。** ★★ クリップの外まで地の色を塗ると、
  *   背景の光がその矩形だけ消えて縦に明るさの段差が出る（＝境界が汚く見える正体）。
  */
-function drawHeroArt(ctx: CanvasRenderingContext2D, art: HTMLImageElement): void {
+function drawHeroArt(
+  ctx: CanvasRenderingContext2D,
+  art: HTMLImageElement,
+): void {
   ctx.save();
   ctx.beginPath();
   ctx.rect(0, 0, ART_W, H);
@@ -186,7 +196,7 @@ function drawHeroFallback(
   ctx: CanvasRenderingContext2D,
   leader: DeckCanvasCard | undefined,
   imgs: Map<string, HTMLImageElement>,
-  theme: string
+  theme: string,
 ): void {
   if (!leader) return;
   const size = 210;
@@ -257,7 +267,8 @@ function drawDeco(ctx: CanvasRenderingContext2D): void {
     const s = rand();
     const size = 6 + s * s * 62;
     // カードの一覧に重なる粒は少し薄くする（スキル値の数字を潰さない）。
-    const overCards = x > RIGHT_X - 20 && y > CARDS_TOP - 20 && y < CARDS_TOP + ROW_H * 5;
+    const overCards =
+      x > RIGHT_X - 20 && y > CARDS_TOP - 20 && y < CARDS_TOP + ROW_H * 5;
     ctx.globalAlpha = (0.08 + rand() * 0.2) * (overCards ? 0.6 : 1);
     ctx.fillStyle = color;
     ctx.strokeStyle = color;
@@ -346,7 +357,7 @@ function drawStats(
   ctx: CanvasRenderingContext2D,
   data: DeckCanvasData,
   theme: string,
-  hasDetails: boolean
+  hasDetails: boolean,
 ): void {
   // 内訳を載せるときは、その帯のぶん上へ詰める。
   let y = hasDetails ? 210 : 250;
@@ -377,7 +388,13 @@ function drawStats(
       const scale = Math.min(maxW / logo.width, maxH / logo.height, 1);
       const w = logo.width * scale;
       const h = logo.height * scale;
-      ctx.drawImage(logo, PAD + ctx.measureText(shown).width + 22, valueY - h / 2, w, h);
+      ctx.drawImage(
+        logo,
+        PAD + ctx.measureText(shown).width + 22,
+        valueY - h / 2,
+        w,
+        h,
+      );
     }
 
     if (s.sub) {
@@ -394,7 +411,7 @@ function drawLeader(
   ctx: CanvasRenderingContext2D,
   leader: DeckCanvasCard | undefined,
   theme: string,
-  hasDetails: boolean
+  hasDetails: boolean,
 ): void {
   if (!leader) return;
   const bottom = H - (hasDetails ? DETAIL_H + 18 : 30);
@@ -415,7 +432,7 @@ function drawCards(
   ctx: CanvasRenderingContext2D,
   data: DeckCanvasData,
   imgs: Map<string, HTMLImageElement>,
-  theme: string
+  theme: string,
 ): void {
   data.cards.forEach((c, i) => {
     const y = CARDS_TOP + i * ROW_H;
@@ -478,7 +495,7 @@ function drawMasterRank(
   cx: number,
   cy: number,
   size: number,
-  mr: number | undefined
+  mr: number | undefined,
 ): void {
   if (!mr) return;
   const r = size / 2;
@@ -511,7 +528,10 @@ function drawMasterRank(
 }
 
 /** 総合力の内訳など。**16:9 の中の下端**に敷く（画像は高くしない）。 */
-function drawDetails(ctx: CanvasRenderingContext2D, data: DeckCanvasData): void {
+function drawDetails(
+  ctx: CanvasRenderingContext2D,
+  data: DeckCanvasData,
+): void {
   const items = data.details ?? [];
   const y = H - DETAIL_H - 4;
   const x0 = PAD;
@@ -534,6 +554,9 @@ function drawDetails(ctx: CanvasRenderingContext2D, data: DeckCanvasData): void 
     ctx.fillText(truncate(ctx, d.value, cellW - 8), cx, cy + 19);
   });
 }
+
+/** 呼び出し側（SharePanel）が従来どおり deckCanvas から取れるように通す。 */
+export { resolveColor };
 
 /**
  * 色に不透明度を足す。
@@ -564,28 +587,13 @@ function withAlpha(color: string, alpha: number): string {
   return c;
 }
 
-/**
- * CSS の色（`var(--unit-color)` の中身や `light-dark()`）を、canvas が読める形へ解決する。
- * ブラウザに一度描かせて計算済みの値（rgb(...)）を読む。
- */
-export function resolveColor(source: Element | null, value: string, fallback = "#884499"): string {
-  if (typeof document === "undefined") return fallback;
-  const probe = document.createElement("span");
-  probe.style.color = value;
-  probe.style.display = "none";
-  (source?.parentElement ?? document.body).appendChild(probe);
-  const resolved = getComputedStyle(probe).color;
-  probe.remove();
-  return resolved || fallback;
-}
-
 function roundRect(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   w: number,
   h: number,
-  r: number
+  r: number,
 ): void {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -602,7 +610,7 @@ function roundedImage(
   x: number,
   y: number,
   size: number,
-  r: number
+  r: number,
 ): void {
   ctx.save();
   roundRect(ctx, x, y, size, size, r);
@@ -611,9 +619,14 @@ function roundedImage(
   ctx.restore();
 }
 
-function truncate(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
+function truncate(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxW: number,
+): string {
   if (ctx.measureText(text).width <= maxW) return text;
   let t = text;
-  while (t.length > 1 && ctx.measureText(t + "…").width > maxW) t = t.slice(0, -1);
+  while (t.length > 1 && ctx.measureText(t + "…").width > maxW)
+    t = t.slice(0, -1);
   return t + "…";
 }

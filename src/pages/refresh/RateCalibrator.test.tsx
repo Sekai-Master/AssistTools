@@ -41,8 +41,13 @@ describe("実績から", () => {
     const p = setup();
 
     // 既定は60分なので、250,000pt なら時速も 250,000。
-    await user.type(screen.getByLabelText("この時間で稼いだポイント"), "250000");
-    const btn = await screen.findByRole("button", { name: /時速250,000にする/ });
+    await user.type(
+      screen.getByLabelText("この時間で稼いだポイント"),
+      "250000",
+    );
+    const btn = await screen.findByRole("button", {
+      name: /時速250,000にする/,
+    });
     await user.click(btn);
 
     expect(p.setHourlyRate).toHaveBeenCalledWith("250000");
@@ -54,7 +59,9 @@ describe("実績から", () => {
   it("獲得ptが空のあいだはボタンを押せない", () => {
     setup();
     // jest-dom は入れていないので、素の DOM で見る（マッチャを増やさない）。
-    const btn = screen.getByRole("button", { name: /時速\?にする/ }) as HTMLButtonElement;
+    const btn = screen.getByRole("button", {
+      name: /時速\?にする/,
+    }) as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
   });
 });
@@ -66,7 +73,9 @@ describe("1回×ペース", () => {
     await user.click(screen.getByRole("radio", { name: "1回×ペース" }));
 
     await user.type(screen.getByLabelText("1回の獲得ポイント"), "18000");
-    await user.click(await screen.findByRole("button", { name: /時速504,000にする/ }));
+    await user.click(
+      await screen.findByRole("button", { name: /時速504,000にする/ }),
+    );
 
     expect(p.setHourlyRate).toHaveBeenCalledWith("504000");
   });
@@ -88,7 +97,9 @@ describe("ペースを出す", () => {
     await user.click(screen.getByRole("radio", { name: "ペースを出す" }));
 
     await user.type(screen.getByLabelText("1回の獲得ポイント"), "18000");
-    await user.click(await screen.findByRole("button", { name: /ペース28回\/時 にする/ }));
+    await user.click(
+      await screen.findByRole("button", { name: /ペース28回\/時 にする/ }),
+    );
 
     expect(p.setPace).toHaveBeenCalledWith("28");
     // ★ この方式は時速を「入力」として使う。書き換えたら循環する。

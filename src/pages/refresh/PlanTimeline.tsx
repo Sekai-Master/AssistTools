@@ -1,4 +1,11 @@
-import { type Dispatch, type SetStateAction, useMemo, useRef, useState } from "react";
+import {
+  type Dispatch,
+  type SetStateAction,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { resolveColor } from "../../lib/canvasColor";
 import { Panel } from "../../components/ui/Panel";
 import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
@@ -7,7 +14,11 @@ import { DurationInput } from "../../components/ui/DurationInput";
 import { TakiInput } from "../../components/ui/TakiInput";
 import { Stat } from "./Stat";
 import { type Segment, simulateTimeline } from "./lib/timeline";
-import { drawPlanCanvas, type PlanCanvasData } from "./lib/planCanvas";
+import {
+  watermark,
+  drawPlanCanvas,
+  type PlanCanvasData,
+} from "./lib/planCanvas";
 import { getRefreshConstant } from "./lib/refreshConstant";
 import { fmtClock, fmtDuration, parseClock } from "./lib/format";
 import { LIVE_BONUS_MULTIPLIERS } from "../analyzer/lib/calcLivePt";
@@ -24,7 +35,8 @@ const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 
 let seq = 0;
 function newId(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto)
+    return crypto.randomUUID();
   return `seg-${seq++}`;
 }
 
@@ -38,6 +50,12 @@ interface PointsConfig {
 }
 
 interface Props {
+  /**
+   * どのツールとして書き出すか（tools.ts の id）。
+   * ★ この部品は「リフレッシュゲージ計算機」と「周回プラン」の2つで共有している。
+   *   画像の透かしを既定任せにすると、**片方の画像に他方の名前が入る**。
+   */
+  toolId: "refresh" | "plan";
   /** ブロック追加に使う現在選択中の曲 */
   selectedSong: AnalyzerMusic | undefined;
   /** 周回ペース較正済みのオーバーヘッド秒 */
@@ -61,6 +79,7 @@ interface Props {
  * points 指定時はプレイに焚き数を持たせ、累積到達ポイントも並走で計算する。
  */
 export function PlanTimeline({
+  toolId,
   selectedSong,
   overhead,
   startPercent,
@@ -77,7 +96,7 @@ export function PlanTimeline({
   const startMOD = parseClock(startTime);
   const result = useMemo(
     () => simulateTimeline(segments, startPercent, overhead),
-    [segments, startPercent, overhead]
+    [segments, startPercent, overhead],
   );
 
   // points指定時: 各ブロックの獲得pt・累積到達ptを並走計算。
@@ -90,7 +109,13 @@ export function PlanTimeline({
       let gained = 0;
       if (seg.kind === "play") {
         const effMin = Math.max(0, seg.minutes - pt.wastedMinutes);
-        gained = takiRate(points.hourlyRate, points.refTaki, seg.taki ?? points.refTaki) * (effMin / 60);
+        gained =
+          takiRate(
+            points.hourlyRate,
+            points.refTaki,
+            seg.taki ?? points.refTaki,
+          ) *
+          (effMin / 60);
       }
       cum += gained;
       return { gained: Math.round(gained), cumulative: Math.round(cum) };
@@ -98,7 +123,9 @@ export function PlanTimeline({
   }, [points, result]);
 
   const finalPoints =
-    pointRows && pointRows.length ? pointRows[pointRows.length - 1].cumulative : points?.startPoints ?? 0;
+    pointRows && pointRows.length
+      ? pointRows[pointRows.length - 1].cumulative
+      : (points?.startPoints ?? 0);
   const gainedPoints = finalPoints - (points?.startPoints ?? 0);
 
   const canAddPlay = !!selectedSong && selectedSong.musicTime > 0;
@@ -113,7 +140,10 @@ export function PlanTimeline({
         songId: selectedSong.id,
         title: selectedSong.title,
         jacketLink: selectedSong.jacketLink,
-        refreshConstant: getRefreshConstant(selectedSong.basePoint, selectedSong.id),
+        refreshConstant: getRefreshConstant(
+          selectedSong.basePoint,
+          selectedSong.id,
+        ),
         songLengthSec: selectedSong.musicTime,
         minutes,
         taki: points ? points.refTaki : undefined,
@@ -123,18 +153,36 @@ export function PlanTimeline({
   const addRest = (minutes: number) =>
     setSegments((s) => [...s, { id: newId(), kind: "rest", minutes }]);
   const addMysekai = () =>
-    setSegments((s) => [...s, { id: newId(), kind: "mysekai", stamina: 30, minutes: 10 }]);
+    setSegments((s) => [
+      ...s,
+      { id: newId(), kind: "mysekai", stamina: 30, minutes: 10 },
+    ]);
   const setPlayMinutes = (id: string, minutes: number) =>
-    setSegments((s) => s.map((g) => (g.id === id && g.kind === "play" ? { ...g, minutes } : g)));
+    setSegments((s) =>
+      s.map((g) => (g.id === id && g.kind === "play" ? { ...g, minutes } : g)),
+    );
   const setPlayTaki = (id: string, taki: number) =>
-    setSegments((s) => s.map((g) => (g.id === id && g.kind === "play" ? { ...g, taki } : g)));
+    setSegments((s) =>
+      s.map((g) => (g.id === id && g.kind === "play" ? { ...g, taki } : g)),
+    );
   const setRestMinutes = (id: string, minutes: number) =>
-    setSegments((s) => s.map((g) => (g.id === id && g.kind === "rest" ? { ...g, minutes } : g)));
+    setSegments((s) =>
+      s.map((g) => (g.id === id && g.kind === "rest" ? { ...g, minutes } : g)),
+    );
   const setMysekaiStamina = (id: string, stamina: number) =>
-    setSegments((s) => s.map((g) => (g.id === id && g.kind === "mysekai" ? { ...g, stamina } : g)));
+    setSegments((s) =>
+      s.map((g) =>
+        g.id === id && g.kind === "mysekai" ? { ...g, stamina } : g,
+      ),
+    );
   const setMysekaiMinutes = (id: string, minutes: number) =>
-    setSegments((s) => s.map((g) => (g.id === id && g.kind === "mysekai" ? { ...g, minutes } : g)));
-  const remove = (id: string) => setSegments((s) => s.filter((g) => g.id !== id));
+    setSegments((s) =>
+      s.map((g) =>
+        g.id === id && g.kind === "mysekai" ? { ...g, minutes } : g,
+      ),
+    );
+  const remove = (id: string) =>
+    setSegments((s) => s.filter((g) => g.id !== id));
   const move = (id: string, dir: -1 | 1) =>
     setSegments((s) => {
       const i = s.findIndex((g) => g.id === id);
@@ -146,18 +194,22 @@ export function PlanTimeline({
     });
 
   const buildCanvasData = (): PlanCanvasData => {
-    const accent =
-      (canvasRef.current &&
-        getComputedStyle(canvasRef.current).getPropertyValue("--unit-color").trim()) ||
-      "#ff9900";
+    // ★ ユニット色は light-dark() で書かれていて canvas が読めない。**必ず解決して渡す**
+    //   （渡さないと例外も出ないまま本文の黒で描かれる。src/lib/canvasColor.ts）。
+    const accent = resolveColor(
+      canvasRef.current,
+      "var(--unit-color)",
+      "#88dd44",
+    );
     const gauge = (pct: number) => `ゲージ${pct.toFixed(1)}%`;
     return {
+      footer: watermark(toolId),
       heading: points
         ? "リフレッシュゲージ 周回プラン（全部入り）"
         : "リフレッシュゲージ 周回プラン",
       songTitle: points
         ? `到達 ${finalPoints.toLocaleString()} pt`
-        : selectedSong?.title ?? "リフレッシュゲージ",
+        : (selectedSong?.title ?? "リフレッシュゲージ"),
       meta: points
         ? [
             `時速 ${points.hourlyRate.toLocaleString()} pt/時（基準焚き${points.refTaki}）・${ratePerHour}回/時`,
@@ -179,8 +231,12 @@ export function PlanTimeline({
             (warn ? ` / 約${Math.round(pt.wastedMinutes)}分ムダ` : "");
           return {
             time,
-            label: points ? `${seg.title}　焚き${seg.taki ?? points.refTaki}　${fmtDuration(seg.minutes)}` : `${seg.title}　${fmtDuration(seg.minutes)}`,
-            sub: points ? `+${gained.toLocaleString()}pt ・ ${gauge(pt.endPercent)} ・ ${base}` : base,
+            label: points
+              ? `${seg.title}　焚き${seg.taki ?? points.refTaki}　${fmtDuration(seg.minutes)}`
+              : `${seg.title}　${fmtDuration(seg.minutes)}`,
+            sub: points
+              ? `+${gained.toLocaleString()}pt ・ ${gauge(pt.endPercent)} ・ ${base}`
+              : base,
             percent: cum ?? `${pt.endPercent.toFixed(1)}%`,
             warn,
             jacket: `${JACKET_BASE}${seg.jacketLink}`,
@@ -190,7 +246,9 @@ export function PlanTimeline({
           return {
             time,
             label: `マイセカイ採取　スタミナ${seg.stamina}`,
-            sub: points ? `${fmtDuration(seg.minutes)} ・ ${gauge(pt.endPercent)}` : fmtDuration(seg.minutes),
+            sub: points
+              ? `${fmtDuration(seg.minutes)} ・ ${gauge(pt.endPercent)}`
+              : fmtDuration(seg.minutes),
             percent: cum ?? `${pt.endPercent.toFixed(1)}%`,
             warn: false,
           };
@@ -202,7 +260,9 @@ export function PlanTimeline({
         return {
           time,
           label: `休憩　${fmtDuration(seg.minutes)}`,
-          sub: points ? [gauge(pt.endPercent), restSub].filter(Boolean).join(" ・ ") : restSub,
+          sub: points
+            ? [gauge(pt.endPercent), restSub].filter(Boolean).join(" ・ ")
+            : restSub,
           percent: cum ?? `${pt.endPercent.toFixed(1)}%`,
           warn: false,
         };
@@ -212,14 +272,29 @@ export function PlanTimeline({
             { label: "到達ポイント", value: finalPoints.toLocaleString() },
             { label: "獲得", value: `+${gainedPoints.toLocaleString()}` },
             { label: "総時間", value: fmtDuration(result.totalMinutes) },
-            { label: "終了時刻", value: fmtClock(startMOD, result.totalMinutes) },
-            { label: "終了ゲージ", value: `${result.finalPercent.toFixed(1)}%` },
+            {
+              label: "終了時刻",
+              value: fmtClock(startMOD, result.totalMinutes),
+            },
+            {
+              label: "終了ゲージ",
+              value: `${result.finalPercent.toFixed(1)}%`,
+            },
           ]
         : [
             { label: "総時間", value: fmtDuration(result.totalMinutes) },
-            { label: "終了時刻", value: fmtClock(startMOD, result.totalMinutes) },
-            { label: "終了ゲージ", value: `${result.finalPercent.toFixed(1)}%` },
-            { label: "ムダ時間", value: fmtDuration(result.totalWastedMinutes) },
+            {
+              label: "終了時刻",
+              value: fmtClock(startMOD, result.totalMinutes),
+            },
+            {
+              label: "終了ゲージ",
+              value: `${result.finalPercent.toFixed(1)}%`,
+            },
+            {
+              label: "ムダ時間",
+              value: fmtDuration(result.totalWastedMinutes),
+            },
           ],
       accent,
       rightColW: points ? 150 : undefined,
@@ -233,7 +308,9 @@ export function PlanTimeline({
     canvas.toBlob(async (blob) => {
       if (!blob) return;
       try {
-        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        await navigator.clipboard.write([
+          new ClipboardItem({ "image/png": blob }),
+        ]);
         setNotice("画像をコピーしました。");
       } catch {
         setNotice("コピーに失敗しました（保存をお使いください）。");
@@ -252,7 +329,13 @@ export function PlanTimeline({
   };
 
   return (
-    <Panel title={points ? "タイムライン（曲・休憩・マイセカイ・到達pt）" : "周回プラン（休憩込み）"}>
+    <Panel
+      title={
+        points
+          ? "タイムライン（曲・休憩・マイセカイ・到達pt）"
+          : "周回プラン（休憩込み）"
+      }
+    >
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <Field label="開始時刻" htmlFor="rg-start" className="!space-y-1">
           <NeuInput
@@ -279,7 +362,11 @@ export function PlanTimeline({
           </span>
         </p>
         <div className="flex flex-wrap gap-2">
-          <NeuButton onClick={() => addPlay(60)} disabled={!canAddPlay} className="!py-1.5">
+          <NeuButton
+            onClick={() => addPlay(60)}
+            disabled={!canAddPlay}
+            className="!py-1.5"
+          >
             ＋稼働
           </NeuButton>
           <NeuButton onClick={() => addRest(30)} className="!py-1.5">
@@ -289,7 +376,10 @@ export function PlanTimeline({
             ＋マイセカイ
           </NeuButton>
           {segments.length > 0 && (
-            <NeuButton onClick={() => setSegments([])} className="!py-1.5 !text-xs">
+            <NeuButton
+              onClick={() => setSegments([])}
+              className="!py-1.5 !text-xs"
+            >
               クリア
             </NeuButton>
           )}
@@ -308,7 +398,10 @@ export function PlanTimeline({
               const seg = pt.segment;
               const capped = pt.wastedPlays >= 1;
               return (
-                <li key={seg.id} className="neu-raised flex items-center gap-3 p-3">
+                <li
+                  key={seg.id}
+                  className="neu-raised flex items-center gap-3 p-3"
+                >
                   <div className="w-24 shrink-0 text-[11px] leading-tight text-slate-500">
                     {fmtClock(startMOD, pt.startMinute)}
                     <br />↓ {fmtClock(startMOD, pt.endMinute)}
@@ -324,9 +417,16 @@ export function PlanTimeline({
                         >
                           music_note
                         </span>
-                        <span className="max-w-36 truncate font-bold text-slate-700">{seg.title}</span>
-                        <DurationInput value={seg.minutes} onChange={(v) => setPlayMinutes(seg.id, v)} />
-                        <span className="text-xs text-slate-400">≈{Math.round(pt.plays)}回</span>
+                        <span className="max-w-36 truncate font-bold text-slate-700">
+                          {seg.title}
+                        </span>
+                        <DurationInput
+                          value={seg.minutes}
+                          onChange={(v) => setPlayMinutes(seg.id, v)}
+                        />
+                        <span className="text-xs text-slate-400">
+                          ≈{Math.round(pt.plays)}回
+                        </span>
                         {points && pointRows && (
                           <>
                             <span className="text-xs text-slate-500">焚き</span>
@@ -334,7 +434,10 @@ export function PlanTimeline({
                               value={seg.taki ?? points.refTaki}
                               onChange={(v) => setPlayTaki(seg.id, v)}
                             />
-                            <span className="text-xs font-bold" style={{ color: "var(--unit-color)" }}>
+                            <span
+                              className="text-xs font-bold"
+                              style={{ color: "var(--unit-color)" }}
+                            >
                               +{pointRows[i].gained.toLocaleString()}
                             </span>
                           </>
@@ -342,48 +445,73 @@ export function PlanTimeline({
                       </div>
                     ) : seg.kind === "mysekai" ? (
                       <div className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="material-icons text-base text-emerald-500" aria-hidden>
+                        <span
+                          className="material-icons text-base text-emerald-500"
+                          aria-hidden
+                        >
                           park
                         </span>
-                        <span className="font-bold text-slate-600">マイセカイ</span>
+                        <span className="font-bold text-slate-600">
+                          マイセカイ
+                        </span>
                         <span className="text-xs text-slate-500">スタミナ</span>
                         <input
                           inputMode="numeric"
                           value={String(seg.stamina)}
                           onChange={(e) =>
-                            setMysekaiStamina(seg.id, Math.max(0, Number(e.target.value) || 0))
+                            setMysekaiStamina(
+                              seg.id,
+                              Math.max(0, Number(e.target.value) || 0),
+                            )
                           }
                           className="w-14 rounded-lg bg-neu px-1 py-1 text-center text-slate-800 shadow-neu-inset outline-none"
                           aria-label="スタミナ"
                         />
                         <span className="text-[10px] text-slate-400">
-                          ≈{(seg.stamina / 5).toFixed(1)}メモリ（5スタミナ≒1メモリ）
+                          ≈{(seg.stamina / 5).toFixed(1)}
+                          メモリ（5スタミナ≒1メモリ）
                         </span>
-                        <DurationInput value={seg.minutes} onChange={(v) => setMysekaiMinutes(seg.id, v)} />
+                        <DurationInput
+                          value={seg.minutes}
+                          onChange={(v) => setMysekaiMinutes(seg.id, v)}
+                        />
                       </div>
                     ) : (
                       <div className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="material-icons text-base text-slate-400" aria-hidden>
+                        <span
+                          className="material-icons text-base text-slate-400"
+                          aria-hidden
+                        >
                           bedtime
                         </span>
                         <span className="font-bold text-slate-600">休憩</span>
-                        <DurationInput value={seg.minutes} onChange={(v) => setRestMinutes(seg.id, v)} />
+                        <DurationInput
+                          value={seg.minutes}
+                          onChange={(v) => setRestMinutes(seg.id, v)}
+                        />
                       </div>
                     )}
                     {capped && (
                       <p className="mt-1 text-xs text-rose-600">
-                        ⚠ うち約{Math.round(pt.wastedMinutes)}分（{Math.round(pt.wastedPlays)}回）は100%到達後でムダ
+                        ⚠ うち約{Math.round(pt.wastedMinutes)}分（
+                        {Math.round(pt.wastedPlays)}回）は100%到達後でムダ
                       </p>
                     )}
                     {seg.kind === "rest" && pt.endPercent > 0 && (
                       <p className="mt-1 text-xs text-slate-500">
-                        次の減少まであと{Math.max(0, Math.ceil(30 - pt.decayProgressMin))}分
-                        <span className="text-slate-400">（累計{Math.round(pt.decayProgressMin)}/30分・繰り越し）</span>
+                        次の減少まであと
+                        {Math.max(0, Math.ceil(30 - pt.decayProgressMin))}分
+                        <span className="text-slate-400">
+                          （累計{Math.round(pt.decayProgressMin)}
+                          /30分・繰り越し）
+                        </span>
                       </p>
                     )}
                   </div>
 
-                  <div className={`shrink-0 text-right ${points ? "w-28" : "w-20"}`}>
+                  <div
+                    className={`shrink-0 text-right ${points ? "w-28" : "w-20"}`}
+                  >
                     {points && pointRows ? (
                       <>
                         <div className="break-all font-bold leading-tight tabular-nums text-slate-700">
@@ -391,7 +519,12 @@ export function PlanTimeline({
                         </div>
                         <div
                           className="text-[10px]"
-                          style={{ color: pt.endPercent >= 100 ? "var(--color-rose-600)" : "var(--unit-color)" }}
+                          style={{
+                            color:
+                              pt.endPercent >= 100
+                                ? "var(--color-rose-600)"
+                                : "var(--unit-color)",
+                          }}
                         >
                           ゲージ{pt.endPercent.toFixed(1)}%
                         </div>
@@ -400,11 +533,18 @@ export function PlanTimeline({
                       <>
                         <div
                           className="font-bold"
-                          style={{ color: pt.endPercent >= 100 ? "var(--color-rose-600)" : "var(--unit-color)" }}
+                          style={{
+                            color:
+                              pt.endPercent >= 100
+                                ? "var(--color-rose-600)"
+                                : "var(--unit-color)",
+                          }}
                         >
                           {pt.endPercent.toFixed(1)}%
                         </div>
-                        <div className="text-[10px] text-slate-400">{pt.startPercent.toFixed(1)}%→</div>
+                        <div className="text-[10px] text-slate-400">
+                          {pt.startPercent.toFixed(1)}%→
+                        </div>
                       </>
                     )}
                   </div>
@@ -445,13 +585,22 @@ export function PlanTimeline({
           {points && (
             <div className="mt-4 grid grid-cols-2 gap-2">
               <Stat label="到達ポイント" value={finalPoints.toLocaleString()} />
-              <Stat label="獲得ポイント" value={`+${gainedPoints.toLocaleString()}`} />
+              <Stat
+                label="獲得ポイント"
+                value={`+${gainedPoints.toLocaleString()}`}
+              />
             </div>
           )}
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <Stat label="総時間" value={fmtDuration(result.totalMinutes)} />
-            <Stat label="終了時刻" value={fmtClock(startMOD, result.totalMinutes)} />
-            <Stat label="終了ゲージ" value={`${result.finalPercent.toFixed(1)}%`} />
+            <Stat
+              label="終了時刻"
+              value={fmtClock(startMOD, result.totalMinutes)}
+            />
+            <Stat
+              label="終了ゲージ"
+              value={`${result.finalPercent.toFixed(1)}%`}
+            />
             <Stat
               label="ムダ時間"
               value={fmtDuration(result.totalWastedMinutes)}
@@ -470,7 +619,11 @@ export function PlanTimeline({
           </div>
           {/* 書き出し専用。display:none だと getComputedStyle が --unit-color を返さない
               ブラウザがあるため、レンダリングは保つ画面外配置にする。 */}
-          <canvas ref={canvasRef} aria-hidden className="pointer-events-none absolute -left-[9999px] top-0 h-px w-px" />
+          <canvas
+            ref={canvasRef}
+            aria-hidden
+            className="pointer-events-none absolute -left-[9999px] top-0 h-px w-px"
+          />
         </>
       )}
     </Panel>

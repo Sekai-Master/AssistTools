@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { resolveColor } from "../../lib/canvasColor";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { Panel } from "../../components/ui/Panel";
 import { Field } from "../../components/ui/Field";
@@ -13,7 +14,11 @@ import { useAnalyzerMusics } from "../analyzer/useAnalyzerMusics";
 import { useGaugeInputs } from "../refresh/useGaugeInputs";
 import { GaugeInputsPanel } from "../refresh/GaugeInputsPanel";
 import { fmtDuration } from "../refresh/lib/format";
-import { drawPlanCanvas, type PlanCanvasData } from "../refresh/lib/planCanvas";
+import {
+  drawPlanCanvas,
+  watermark,
+  type PlanCanvasData,
+} from "../refresh/lib/planCanvas";
 import { Stat } from "../refresh/Stat";
 import {
   type WorkParams,
@@ -27,7 +32,9 @@ const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 
 let seq = 0;
 const newId = () =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `w-${seq++}`;
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `w-${seq++}`;
 
 const onlyDigits = (v: string) => v.replace(/[^0-9]/g, "");
 
@@ -40,7 +47,9 @@ export default function WorkTimeCalculator() {
   const [refTaki, setRefTaki] = useState(5);
   const [startLB, setStartLB] = useState("0");
   const [mode, setMode] = useState<"forward" | "reverse">("forward");
-  const [segments, setSegments] = useState<WorkSegment[]>([{ id: newId(), taki: 5, minutes: 60 }]);
+  const [segments, setSegments] = useState<WorkSegment[]>([
+    { id: newId(), taki: 5, minutes: 60 },
+  ]);
   const [targetPt, setTargetPt] = useState("");
   const [revTaki, setRevTaki] = useState(5);
 
@@ -52,21 +61,26 @@ export default function WorkTimeCalculator() {
       overheadSec: overhead,
       startingLB: Number(startLB) || 0,
     }),
-    [hourlyRate, refTaki, selectedSong, overhead, startLB]
+    [hourlyRate, refTaki, selectedSong, overhead, startLB],
   );
 
-  const result = useMemo(() => computeWork(segments, params), [segments, params]);
+  const result = useMemo(
+    () => computeWork(segments, params),
+    [segments, params],
+  );
   const revMinutes = useMemo(
     () => minutesForTarget(Number(targetPt) || 0, params, revTaki),
-    [targetPt, params, revTaki]
+    [targetPt, params, revTaki],
   );
 
   const setTaki = (id: string, taki: number) =>
     setSegments((s) => s.map((g) => (g.id === id ? { ...g, taki } : g)));
   const setMinutes = (id: string, minutes: number) =>
     setSegments((s) => s.map((g) => (g.id === id ? { ...g, minutes } : g)));
-  const addSeg = () => setSegments((s) => [...s, { id: newId(), taki: 5, minutes: 60 }]);
-  const remove = (id: string) => setSegments((s) => s.filter((g) => g.id !== id));
+  const addSeg = () =>
+    setSegments((s) => [...s, { id: newId(), taki: 5, minutes: 60 }]);
+  const remove = (id: string) =>
+    setSegments((s) => s.filter((g) => g.id !== id));
   const move = (id: string, dir: -1 | 1) =>
     setSegments((s) => {
       const i = s.findIndex((g) => g.id === id);
@@ -85,10 +99,13 @@ export default function WorkTimeCalculator() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const buildCanvasData = (): PlanCanvasData => {
-    const accent =
-      (canvasRef.current &&
-        getComputedStyle(canvasRef.current).getPropertyValue("--unit-color").trim()) ||
-      "#884499";
+    // ★ ユニット色は light-dark() で書かれていて canvas が読めない。**必ず解決して渡す**
+    //   （渡さないと例外も出ないまま本文の黒で描かれる。src/lib/canvasColor.ts）。
+    const accent = resolveColor(
+      canvasRef.current,
+      "var(--unit-color)",
+      "#88dd44",
+    );
     let elapsed = 0;
     let cumulative = 0;
     const rows = result.rows.map((r) => {
@@ -101,11 +118,14 @@ export default function WorkTimeCalculator() {
         sub: `+${Math.round(r.points).toLocaleString()}pt ・ ライボ${Math.round(r.lb)}`,
         percent: Math.round(cumulative).toLocaleString(),
         warn: false,
-        jacket: selectedSong ? `${JACKET_BASE}${selectedSong.jacketLink}` : undefined,
+        jacket: selectedSong
+          ? `${JACKET_BASE}${selectedSong.jacketLink}`
+          : undefined,
       };
     });
     return {
       heading: "必要稼働時間計算",
+      footer: watermark("worktime"),
       songTitle: `到達 ${result.totalPoints.toLocaleString()} pt`,
       meta: [
         `時速 ${(Number(hourlyRate) || 0).toLocaleString()} pt/時（基準焚き${refTaki}）`,
@@ -118,7 +138,10 @@ export default function WorkTimeCalculator() {
         { label: "消費ライボ", value: `${result.totalLB}` },
         {
           label: "必要な石",
-          value: result.requiredCrystals > 0 ? result.requiredCrystals.toLocaleString() : "0",
+          value:
+            result.requiredCrystals > 0
+              ? result.requiredCrystals.toLocaleString()
+              : "0",
         },
       ],
       accent,
@@ -133,7 +156,9 @@ export default function WorkTimeCalculator() {
     canvas.toBlob(async (blob) => {
       if (!blob) return;
       try {
-        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        await navigator.clipboard.write([
+          new ClipboardItem({ "image/png": blob }),
+        ]);
         setNotice("画像をコピーしました。");
       } catch {
         setNotice("コピーに失敗しました（保存をお使いください）。");
@@ -185,11 +210,18 @@ export default function WorkTimeCalculator() {
             }}
           />
           <SaveToProfile
-            collect={() => ({ hourlyRate: Number(hourlyRate) || undefined, taki: refTaki })}
+            collect={() => ({
+              hourlyRate: Number(hourlyRate) || undefined,
+              taki: refTaki,
+            })}
           />
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="点数時速" htmlFor="wt-rate" hint="この焚き数での実測 pt/時（例: 500000）">
+          <Field
+            label="点数時速"
+            htmlFor="wt-rate"
+            hint="この焚き数での実測 pt/時（例: 500000）"
+          >
             <div className="flex items-center gap-1">
               <NeuInput
                 id="wt-rate"
@@ -204,7 +236,11 @@ export default function WorkTimeCalculator() {
           <Field label="基準焚き数" hint="上の時速を出した焚き数">
             <TakiInput value={refTaki} onChange={setRefTaki} />
           </Field>
-          <Field label="所持ライボ" htmlFor="wt-lb" hint="開始時のライブボーナス数">
+          <Field
+            label="所持ライボ"
+            htmlFor="wt-lb"
+            hint="開始時のライブボーナス数"
+          >
             <NeuInput
               id="wt-lb"
               inputMode="numeric"
@@ -244,10 +280,17 @@ export default function WorkTimeCalculator() {
                   className="neu-raised flex flex-wrap items-center gap-3 p-3 text-sm"
                 >
                   <span className="text-slate-500">焚き</span>
-                  <TakiInput value={r.segment.taki} onChange={(v) => setTaki(r.segment.id, v)} />
-                  <DurationInput value={r.segment.minutes} onChange={(v) => setMinutes(r.segment.id, v)} />
+                  <TakiInput
+                    value={r.segment.taki}
+                    onChange={(v) => setTaki(r.segment.id, v)}
+                  />
+                  <DurationInput
+                    value={r.segment.minutes}
+                    onChange={(v) => setMinutes(r.segment.id, v)}
+                  />
                   <span className="text-xs text-slate-400">
-                    {Math.round(r.points).toLocaleString()}pt / ライボ{Math.round(r.lb)}
+                    {Math.round(r.points).toLocaleString()}pt / ライボ
+                    {Math.round(r.lb)}
                   </span>
                   <div className="ml-auto flex items-center gap-2">
                     <div className="flex flex-col leading-none">
@@ -289,7 +332,10 @@ export default function WorkTimeCalculator() {
 
           <Panel title="結果">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Stat label="到達ポイント" value={result.totalPoints.toLocaleString()} />
+              <Stat
+                label="到達ポイント"
+                value={result.totalPoints.toLocaleString()}
+              />
               <Stat label="総稼働" value={fmtDuration(result.totalMinutes)} />
               <Stat
                 label="消費ライボ"
@@ -299,12 +345,15 @@ export default function WorkTimeCalculator() {
               <Stat
                 label="必要な石"
                 value={result.requiredCrystals.toLocaleString()}
-                sub={result.requiredCrystals > 0 ? "クリスタル" : "所持で足りる"}
+                sub={
+                  result.requiredCrystals > 0 ? "クリスタル" : "所持で足りる"
+                }
               />
             </div>
             {longRun && (
               <p className="mt-4 text-xs text-amber-600">
-                ⚠ 稼働が長め。リフレッシュゲージが100%で止まる可能性（約16時間前後で頭打ち）。
+                ⚠
+                稼働が長め。リフレッシュゲージが100%で止まる可能性（約16時間前後で頭打ち）。
                 「リフレッシュゲージ」ツールで確認を。
               </p>
             )}
@@ -317,7 +366,9 @@ export default function WorkTimeCalculator() {
                   <NeuButton onClick={saveImage} className="!py-1.5">
                     画像を保存
                   </NeuButton>
-                  {notice && <span className="text-xs text-slate-500">{notice}</span>}
+                  {notice && (
+                    <span className="text-xs text-slate-500">{notice}</span>
+                  )}
                 </div>
                 <canvas
                   ref={canvasRef}
@@ -346,7 +397,11 @@ export default function WorkTimeCalculator() {
             </Field>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <Stat label="必要稼働時間" value={targetPt ? fmtDuration(revMinutes) : "—"} sub={`焚き${revTaki}で`} />
+            <Stat
+              label="必要稼働時間"
+              value={targetPt ? fmtDuration(revMinutes) : "—"}
+              sub={`焚き${revTaki}で`}
+            />
             <Stat label="必要ライボ" value={targetPt ? `${revLB}` : "—"} />
             <Stat
               label="この焚きの時速"
@@ -356,7 +411,8 @@ export default function WorkTimeCalculator() {
           </div>
           {targetPt && revMinutes > 16 * 60 && (
             <p className="mt-4 text-xs text-amber-600">
-              ⚠ 必要稼働が16時間超。リフレッシュゲージの100%（続行不可）を挟むので実際はさらに時間が要ります。
+              ⚠
+              必要稼働が16時間超。リフレッシュゲージの100%（続行不可）を挟むので実際はさらに時間が要ります。
             </p>
           )}
         </Panel>

@@ -13,7 +13,12 @@ import { GaugeInputsPanel } from "./GaugeInputsPanel";
 import { PlanTimeline } from "./PlanTimeline";
 import { nearestRoundTime } from "./lib/format";
 import type { Segment } from "./lib/timeline";
-import { type SavedPlan, deletePlan, listPlans, savePlan } from "./lib/planStorage";
+import {
+  type SavedPlan,
+  deletePlan,
+  listPlans,
+  savePlan,
+} from "./lib/planStorage";
 
 const onlyDigits = (v: string) => v.replace(/[^0-9]/g, "");
 
@@ -47,7 +52,7 @@ export default function PlanPage() {
       hourlyRate: Number(hourlyRate) || 0,
       refTaki,
     }),
-    [currentPt, hourlyRate, refTaki]
+    [currentPt, hourlyRate, refTaki],
   );
 
   const doSave = () => {
@@ -100,7 +105,12 @@ export default function PlanPage() {
         </div>
       )}
 
-      <GaugeInputsPanel inputs={inputs} musics={musics} aliases={aliases} loading={loading} />
+      <GaugeInputsPanel
+        inputs={inputs}
+        musics={musics}
+        aliases={aliases}
+        loading={loading}
+      />
 
       <Panel title="ポイント設定">
         {/* 時速・基準焚き数は稼働時間計算と同じ値。片方だけ編成から呼べると、
@@ -113,11 +123,18 @@ export default function PlanPage() {
             }}
           />
           <SaveToProfile
-            collect={() => ({ hourlyRate: Number(hourlyRate) || undefined, taki: refTaki })}
+            collect={() => ({
+              hourlyRate: Number(hourlyRate) || undefined,
+              taki: refTaki,
+            })}
           />
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="現在ポイント" htmlFor="pl-cur" hint="ここを起点に加算します">
+          <Field
+            label="現在ポイント"
+            htmlFor="pl-cur"
+            hint="ここを起点に加算します"
+          >
             <NeuInput
               id="pl-cur"
               inputMode="numeric"
@@ -127,7 +144,11 @@ export default function PlanPage() {
               className="max-w-44"
             />
           </Field>
-          <Field label="点数時速" htmlFor="pl-rate" hint="この焚き数での実測 pt/時">
+          <Field
+            label="点数時速"
+            htmlFor="pl-rate"
+            hint="この焚き数での実測 pt/時"
+          >
             <div className="flex items-center gap-1">
               <NeuInput
                 id="pl-rate"
@@ -168,7 +189,11 @@ export default function PlanPage() {
             className="max-w-64"
             aria-label="プラン名"
           />
-          <NeuButton onClick={doSave} className="!py-1.5" disabled={segments.length === 0}>
+          <NeuButton
+            onClick={doSave}
+            className="!py-1.5"
+            disabled={segments.length === 0}
+          >
             この内容を保存
           </NeuButton>
           {notice && <span className="text-xs text-slate-500">{notice}</span>}
@@ -186,9 +211,14 @@ export default function PlanPage() {
                 className="neu-raised flex flex-wrap items-center gap-3 p-2.5 text-sm"
               >
                 <span className="font-bold text-slate-700">{p.name}</span>
-                <span className="text-xs text-slate-400">{p.segments.length}ブロック</span>
+                <span className="text-xs text-slate-400">
+                  {p.segments.length}ブロック
+                </span>
                 <div className="ml-auto flex items-center gap-2">
-                  <NeuButton onClick={() => loadPlan(p)} className="!py-1 !text-xs">
+                  <NeuButton
+                    onClick={() => loadPlan(p)}
+                    className="!py-1 !text-xs"
+                  >
                     呼び出し
                   </NeuButton>
                   <button
@@ -207,6 +237,7 @@ export default function PlanPage() {
       </Panel>
 
       <PlanTimeline
+        toolId="plan"
         points={points}
         selectedSong={selectedSong}
         overhead={overhead}
