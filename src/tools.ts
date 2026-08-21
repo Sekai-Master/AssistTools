@@ -172,16 +172,6 @@ export const TOOLS: ToolDef[] = [
     status: "ready",
   },
   {
-    id: "efficiency",
-    path: "/efficiency",
-    name: "効率難易度検索",
-    shortName: "効率",
-    description: "楽曲ごとの最高効率難易度を検索できます。",
-    icon: "speed",
-    category: "run",
-    status: "coming_soon",
-  },
-  {
     id: "analyzer",
     path: "/analyzer",
     name: "ポイント調整アナライザー",
@@ -226,6 +216,13 @@ export const TOOLS: ToolDef[] = [
   },
 ];
 
+/**
+ * ★ 「効率難易度検索」は 2026-08-21 に取り下げた（旧サイトから "coming_soon" のまま
+ *   引き継いでいたもの）。全707曲を総当たりしたところ、**683曲は最上位の難易度が
+ *   そのまま最良**で、答えが「APPENDがあればAPPEND、無ければMASTER」にしかならない。
+ *   意味のある版を作るには 1枠補正と巻き込み（docs/knowledge/ 参照）を含んだ別の
+ *   データが要るので、いまの手持ちでは出せない。**永久に準備中のカードを置き続けない。**
+ */
 export const READY_TOOLS = TOOLS.filter((t) => t.status === "ready");
 /**
  * ヘッダーの横並びに出すツール。4つまで（ToolDef.primary のコメント参照）。
