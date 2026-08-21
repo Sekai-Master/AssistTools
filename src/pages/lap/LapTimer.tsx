@@ -5,7 +5,6 @@ import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { ActionButton } from "../../components/ui/ActionButton";
-import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { TakiInput } from "../../components/ui/TakiInput";
 import { Link } from "react-router-dom";
 import { SaveToProfile } from "../../components/ui/ProfileBar";
@@ -22,7 +21,7 @@ import {
   useWakeLock,
 } from "./useLapTimer";
 import {
-  LAP_MODE_LABEL,
+  LAP_LIVE_KIND,
   RECENT_LAPS,
   clearRecords,
   exportObj,
@@ -36,9 +35,12 @@ import {
   tap,
   toggleExclude,
   undo,
-  type LapMode,
+  toRun,
+  runToExport,
+  type LapRun,
   type LapState,
 } from "./lib/lap";
+import { addRun, loadRuns, removeRun } from "./lib/runs";
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 
@@ -50,17 +52,6 @@ const clock = (ms: number) => {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 };
 const fmtMin = (sec: number) => `${(sec / 60).toFixed(1)} 分`;
-
-/**
- * ★ ラベルは短くする。SegmentedControl は等幅なので、1つでも長いと全体が割れる。
- *   「ソロ・オート」は 390px で単語の途中で折れた（実機幅で確認 2026-08-21）。
- *   文章の中では LAP_MODE_LABEL の正式名を使う。
- */
-const MODE_OPTIONS: { value: LapMode; label: string }[] = [
-  { value: "multi", label: "協力" },
-  { value: "auto", label: "オート" },
-  { value: "challenge", label: "チャレンジ" },
-];
 
 export default function LapTimer() {
   const { musics, aliases, loading } = useAnalyzerMusics();
@@ -77,6 +68,10 @@ export default function LapTimer() {
   useLeaveGuard(running);
 
   const [songOpen, setSongOpen] = useState(false);
+  const [runs, setRuns] = useState<LapRun[]>(loadRuns);
+  const [copiedRun, setCopiedRun] = useState<string | null>(null);
+  /** 終了した直後の知らせ（保存できたか／何も残らなかったか）。 */
+  const [finished, setFinished] = useState<string | null>(null);
   const [undoClear, setUndoClear] = useState<LapState | null>(null);
   const [copied, setCopied] = useState(false);
   /** 開いた時点で古い記録が残っていたか。開始前に一度だけ確認する。 */
@@ -116,7 +111,7 @@ export default function LapTimer() {
       )
     : 0;
 
-  const modelOverhead = OVERHEAD_SEC[state.mode];
+  const modelOverhead = OVERHEAD_SEC[LAP_LIVE_KIND];
   // ★ now は1秒ごとの時計から取る（描画中に時刻を読むと、描き直すたびに値が変わる）。
   const staleMin =
     running && !paused
@@ -124,10 +119,158 @@ export default function LapTimer() {
       : 0;
   const showStale = !staleChecked && staleMin > 30;
 
+  /**
+   * 計測を終える。**1回ぶんの記録として保存してから、進行中の記録を空にする。**
+   * ★ 保存できたかどうかを必ず伝える。測り終えた記録が消えていることに
+   *   気付かないのが、この道具でいちばん痛い壊れ方。
+   */
+  const doFinish = () => {
+    const id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `run-${Date.now()}`;
+    const run = toRun(state, id, Date.now());
+    if (!run) {
+      setFinished("1周も記録がないので、保存せず終了しました。");
+      update(clearRecords);
+      return;
+    }
+    const { runs: next, saved } = addRun(run);
+    setRuns(next);
+    setFinished(
+      saved
+        ? `${run.laps} 周ぶんを記録として保存しました。`
+        : "⚠️ 記録を保存できませんでした（この端末に書き込めません）。下の書き出しからコピーしてください。",
+    );
+    update(clearRecords);
+  };
+
   const doClear = () => {
     setUndoClear(state);
     update(clearRecords);
   };
+
+  /**
+   * 測る条件（曲・焚き数・単価）。**一番上に置く。**
+   * ★ 曲が違うとオーバーヘッドが丸ごとずれるので、最初に決めるものが最初に来る。
+   *   決めたあとは畳んで、summary の1行だけ見えていれば足りる。
+   */
+  const condPanel = (
+    <details className="neu-panel px-5 py-4 sm:px-6" open={!running}>
+      <summary className="flex cursor-pointer items-center gap-2 text-sm font-bold text-slate-600">
+        {song && (
+          <img
+            src={`${JACKET_BASE}${song.jacketLink}`}
+            onError={onJacketError}
+            alt=""
+            className="h-6 w-6 shrink-0 rounded object-cover"
+          />
+        )}
+        <span className="min-w-0 flex-1 truncate">
+          {song?.title ?? state.songTitle ?? "曲が未選択"}
+          <span className="ml-1.5 font-normal text-slate-500">
+            {state.songSec > 0 && `${state.songSec}秒`}
+            {state.taki > 0 && ` / 焚き${state.taki}`}
+            {state.ptPerRun > 0 &&
+              ` / 1周 ${state.ptPerRun.toLocaleString()}Pt`}
+          </span>
+        </span>
+      </summary>
+      <div className="mt-4">
+        <Field
+          label="周回する曲"
+          hint="曲の長さを引いてオーバーヘッドを出します。"
+        >
+          <button
+            type="button"
+            onClick={() => setSongOpen(true)}
+            disabled={loading}
+            className="neu-raised neu-tactile flex w-full items-center gap-3 rounded-xl p-2.5 text-left disabled:opacity-50"
+          >
+            {song && (
+              <img
+                src={`${JACKET_BASE}${song.jacketLink}`}
+                onError={onJacketError}
+                alt=""
+                className="h-11 w-11 shrink-0 rounded-lg object-cover"
+              />
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-bold text-slate-700">
+                {song?.title ?? state.songTitle ?? "曲を選ぶ"}
+              </span>
+              <span className="block text-xs text-slate-500">
+                {state.songSec > 0 ? `${state.songSec} 秒` : "長さ不明"}
+                ・タップで変更
+              </span>
+            </span>
+            <span
+              className="material-icons shrink-0 text-slate-400"
+              aria-hidden
+            >
+              search
+            </span>
+          </button>
+        </Field>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Field
+            label="焚き数"
+            hint="時速ポイントは焚き数とセットでないと意味がありません。"
+          >
+            <TakiInput
+              value={state.taki}
+              onChange={(taki) => update((s) => ({ ...s, taki }))}
+            />
+          </Field>
+        </div>
+
+        <Field
+          className="mt-4"
+          label="1周の獲得ポイント（任意）"
+          htmlFor="lap-pt"
+          hint="リザルト画面の獲得ポイントをそのまま入れると、時速ポイントが出ます。"
+        >
+          <NeuInput
+            id="lap-pt"
+            inputMode="numeric"
+            value={state.ptPerRun ? String(state.ptPerRun) : ""}
+            placeholder="例: 96285"
+            onChange={(e) => {
+              const n = Number(e.target.value.replace(/[^0-9]/g, ""));
+              update((s) => ({ ...s, ptPerRun: Number.isFinite(n) ? n : 0 }));
+            }}
+          />
+        </Field>
+
+        {st.ptPerHour != null && state.taki > 0 && (
+          <div className="mt-4 rounded-lg bg-emerald-100 px-3 py-2.5 text-xs leading-relaxed text-emerald-800">
+            実測の時速 <b>{Math.round(st.ptPerHour).toLocaleString()} pt/時</b>
+            （焚き
+            {state.taki}）が出ました。編成に取り込むと
+            <b>必要稼働時間計算</b>と<b>周回プラン</b>がこの実測値で計算します。
+            <span className="mt-2 flex flex-wrap items-center gap-2">
+              {profile ? (
+                <SaveToProfile
+                  collect={() => ({
+                    hourlyRate: Math.round(st.ptPerHour!),
+                    taki: state.taki,
+                  })}
+                />
+              ) : (
+                <span>
+                  <Link to="/settings" className="font-bold underline">
+                    設定
+                  </Link>
+                  で編成を登録すると、ここから取り込めるようになります。
+                </span>
+              )}
+            </span>
+          </div>
+        )}
+      </div>
+    </details>
+  );
 
   return (
     <ToolPage
@@ -136,6 +279,8 @@ export default function LapTimer() {
       title="周回ラップ計測"
       icon="timer"
     >
+      {condPanel}
+
       {/* ── 使い方。記録が無いうちは開いて出す ───────────────── */}
       <details className="neu-panel px-5 py-4 sm:px-6" open={!running}>
         <summary className="cursor-pointer text-sm font-bold text-slate-600">
@@ -143,7 +288,7 @@ export default function LapTimer() {
         </summary>
         <ol className="mt-3 space-y-2 text-sm leading-relaxed text-slate-600">
           <li>
-            <b>1.</b> 下の「測る条件」で周回する曲を選ぶ（曲の長さを引いて
+            <b>1.</b> 一番上で周回する曲を選ぶ（曲の長さを引いて
             <b>オーバーヘッド</b>を出すため）。
           </li>
           <li>
@@ -263,9 +408,8 @@ export default function LapTimer() {
         )}
         {st.overhead != null && st.overhead >= 0 && (
           <p className="mt-3 text-xs leading-relaxed text-slate-500">
-            サイト全体の見積りは{LAP_MODE_LABEL[state.mode]}で{" "}
-            <b>{modelOverhead} 秒</b> を置いています。あなたの実測は{" "}
-            <b>{fmtSec(st.overhead)} 秒</b>で、
+            サイト全体の見積りは協力ライブで <b>{modelOverhead} 秒</b>{" "}
+            を置いています。あなたの実測は <b>{fmtSec(st.overhead)} 秒</b>で、
             {Math.abs(st.overhead - modelOverhead) < 3
               ? "ほぼ同じです。"
               : st.overhead < modelOverhead
@@ -357,7 +501,18 @@ export default function LapTimer() {
               <NeuButton className="!text-rose-600" onClick={doClear}>
                 全消去
               </NeuButton>
+              {/* ★ 終了は破壊操作ではない（保存してから空にする）ので確認は挟まない。 */}
+              <NeuButton onClick={doFinish}>終了して保存</NeuButton>
             </div>
+          )}
+
+          {finished && !running && (
+            <p
+              role="status"
+              className="mt-3 rounded-lg bg-emerald-100 px-3 py-2 text-xs leading-relaxed text-emerald-800"
+            >
+              {finished}
+            </p>
           )}
 
           {undoClear && !running && (
@@ -401,111 +556,6 @@ export default function LapTimer() {
       </Panel>
 
       {/* ── 曲と条件 ─────────────────────────────────── */}
-      <Panel title="測る条件">
-        <Field
-          label="周回する曲"
-          hint="曲の長さを引いてオーバーヘッドを出します。"
-        >
-          <button
-            type="button"
-            onClick={() => setSongOpen(true)}
-            disabled={loading}
-            className="neu-raised neu-tactile flex w-full items-center gap-3 rounded-xl p-2.5 text-left disabled:opacity-50"
-          >
-            {song && (
-              <img
-                src={`${JACKET_BASE}${song.jacketLink}`}
-                onError={onJacketError}
-                alt=""
-                className="h-11 w-11 shrink-0 rounded-lg object-cover"
-              />
-            )}
-            <span className="min-w-0 flex-1">
-              <span className="block truncate font-bold text-slate-700">
-                {song?.title ?? state.songTitle ?? "曲を選ぶ"}
-              </span>
-              <span className="block text-xs text-slate-500">
-                {state.songSec > 0 ? `${state.songSec} 秒` : "長さ不明"}
-                ・タップで変更
-              </span>
-            </span>
-            <span
-              className="material-icons shrink-0 text-slate-400"
-              aria-hidden
-            >
-              search
-            </span>
-          </button>
-        </Field>
-
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Field
-            label="ライブの種類"
-            hint="比べる既定のオーバーヘッドが変わります。"
-          >
-            <SegmentedControl
-              options={MODE_OPTIONS}
-              value={state.mode}
-              compact
-              onChange={(mode) => update((s) => ({ ...s, mode }))}
-            />
-          </Field>
-          <Field
-            label="焚き数"
-            hint="時速ポイントは焚き数とセットでないと意味がありません。"
-          >
-            <TakiInput
-              value={state.taki}
-              onChange={(taki) => update((s) => ({ ...s, taki }))}
-            />
-          </Field>
-        </div>
-
-        <Field
-          className="mt-4"
-          label="1周の獲得ポイント（任意）"
-          htmlFor="lap-pt"
-          hint="リザルト画面の獲得ポイントをそのまま入れると、時速ポイントが出ます。"
-        >
-          <NeuInput
-            id="lap-pt"
-            inputMode="numeric"
-            value={state.ptPerRun ? String(state.ptPerRun) : ""}
-            placeholder="例: 96285"
-            onChange={(e) => {
-              const n = Number(e.target.value.replace(/[^0-9]/g, ""));
-              update((s) => ({ ...s, ptPerRun: Number.isFinite(n) ? n : 0 }));
-            }}
-          />
-        </Field>
-
-        {st.ptPerHour != null && state.taki > 0 && (
-          <div className="mt-4 rounded-lg bg-emerald-100 px-3 py-2.5 text-xs leading-relaxed text-emerald-800">
-            実測の時速 <b>{Math.round(st.ptPerHour).toLocaleString()} pt/時</b>
-            （焚き
-            {state.taki}）が出ました。編成に取り込むと
-            <b>必要稼働時間計算</b>と<b>周回プラン</b>がこの実測値で計算します。
-            <span className="mt-2 flex flex-wrap items-center gap-2">
-              {profile ? (
-                <SaveToProfile
-                  collect={() => ({
-                    hourlyRate: Math.round(st.ptPerHour!),
-                    taki: state.taki,
-                  })}
-                />
-              ) : (
-                <span>
-                  <Link to="/settings" className="font-bold underline">
-                    設定
-                  </Link>
-                  で編成を登録すると、ここから取り込めるようになります。
-                </span>
-              )}
-            </span>
-          </div>
-        )}
-      </Panel>
-
       {/* ── ラップ一覧 ───────────────────────────────── */}
       <Panel title="ラップ（新しい順）">
         {segs.length === 0 ? (
@@ -583,9 +633,91 @@ export default function LapTimer() {
         )}
       </Panel>
 
+      {/* ── 終了して閉じた記録 ─────────────────────────── */}
+      {runs.length > 0 && (
+        <Panel title="保存した記録">
+          <ul className="divide-y divide-[color:var(--neu-lo)]">
+            {runs.map((r) => (
+              <li key={r.id} className="py-2.5">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="text-sm font-bold tabular-nums text-slate-700">
+                    {stamp(r.startedAt)} → {stamp(r.endedAt)}
+                  </span>
+                  <span className="ml-auto flex shrink-0 items-center gap-1">
+                    {/* ★ コピーと保存を1つのボタンに束ねない。押した結果が2つ起きると、
+                        どちらが起きたのか（どちらが失敗したのか）分からなくなる。 */}
+                    <NeuButton
+                      className="!px-2 !py-0.5 !text-xs"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(
+                            JSON.stringify(runToExport(r), null, 1),
+                          );
+                          setCopiedRun(r.id);
+                          setTimeout(() => setCopiedRun(null), 2000);
+                        } catch {
+                          setCopiedRun(null);
+                        }
+                      }}
+                    >
+                      コピー
+                    </NeuButton>
+                    <NeuButton
+                      className="!px-2 !py-0.5 !text-xs"
+                      onClick={() =>
+                        downloadJson(
+                          `lap-${new Date(r.startedAt).toISOString().slice(0, 16).replace(/[-:T]/g, "")}.json`,
+                          JSON.stringify(runToExport(r), null, 1),
+                        )
+                      }
+                    >
+                      保存
+                    </NeuButton>
+                    <NeuButton
+                      className="!px-2 !py-0.5 !text-xs !text-rose-600"
+                      onClick={() => setRuns(removeRun(r.id))}
+                    >
+                      削除
+                    </NeuButton>
+                  </span>
+                </div>
+                <div className="mt-0.5 text-xs text-slate-500">
+                  {copiedRun === r.id && (
+                    <span
+                      role="status"
+                      className="mr-1 font-bold text-emerald-800"
+                    >
+                      コピーしました
+                    </span>
+                  )}
+                  <b className="text-slate-600">{r.laps} 周</b>
+                  {r.avgSec != null && ` / 平均 ${r.avgSec} 秒`}
+                  {r.overheadSec != null && ` / OH ${r.overheadSec} 秒`}
+                  {r.ptPerHour != null &&
+                    ` / ${(r.ptPerHour / 1e6).toFixed(2)}M/h`}
+                  {r.songTitle && ` / ${r.songTitle}`}
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-4">
+            <NeuButton
+              onClick={() =>
+                downloadJson(
+                  "lap-records.json",
+                  JSON.stringify(runs.map(runToExport), null, 1),
+                )
+              }
+            >
+              すべてまとめて書き出す
+            </NeuButton>
+          </div>
+        </Panel>
+      )}
+
       <details className="neu-panel px-5 py-4 sm:px-6">
         <summary className="cursor-pointer text-sm font-bold text-slate-600">
-          記録を書き出す（JSON）
+          いまの計測を書き出す（JSON）
         </summary>
         <div className="mt-3 flex flex-wrap gap-2">
           <NeuButton
@@ -652,6 +784,23 @@ export default function LapTimer() {
       )}
     </ToolPage>
   );
+}
+
+function downloadJson(name: string, text: string): void {
+  const b = new Blob([text], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(b);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/** 日付つきの時刻。記録の一覧は日をまたぐので、時刻だけでは足りない。 */
+function stamp(ms: number): string {
+  const d = new Date(ms);
+  const w = ["日", "月", "火", "水", "木", "金", "土"][d.getDay()];
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getMonth() + 1}/${d.getDate()}(${w}) ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 /** 集計に入っている区間のうち、いちばん新しいものの1周あたり秒数。 */

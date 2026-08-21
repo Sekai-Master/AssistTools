@@ -18,8 +18,12 @@
  * ここでは **中断／再開** を明示のボタンにして、再開時に区間を自動で除外する。
  */
 
-/** 比べる相手（ライブの種類）。src/lib/overhead.ts の既定値と対応する。 */
-export type LapMode = "multi" | "auto" | "challenge";
+/**
+ * ★ **協力ライブ決め打ち。** イベランの周回はまず協力ライブで、
+ *   種類を選ばせても選択肢がひとつ増えるだけで誰も切り替えなかった（Nori 判断 2026-08-21）。
+ *   比べる既定値は src/lib/overhead.ts の `multi`。
+ */
+export const LAP_LIVE_KIND = "multi" as const;
 
 export interface LapState {
   /** タップした時刻(ms)。marks[0] が計測開始。 */
@@ -39,7 +43,6 @@ export interface LapState {
   ptPerRun: number;
   /** 焚き数。時速Ptは焚き数とセットでないと意味がないので一緒に持つ。 */
   taki: number;
-  mode: LapMode;
   /** 中断した時刻(ms)。null なら計測中。 */
   pausedAt: number | null;
 }
@@ -73,12 +76,6 @@ export interface LapStats {
   ptPerHour: number | null;
 }
 
-export const LAP_MODE_LABEL: Record<LapMode, string> = {
-  multi: "協力ライブ",
-  auto: "ソロ・オート",
-  challenge: "チャレンジ",
-};
-
 /** 直近平均に使う周回数。 */
 export const RECENT_LAPS = 5;
 
@@ -106,7 +103,6 @@ export function initialState(): LapState {
     songSec: DEFAULT_SONG.sec,
     ptPerRun: 0,
     taki: 0,
-    mode: "multi",
     pausedAt: null,
   };
 }
@@ -264,7 +260,6 @@ export function clearRecords(s: LapState): LapState {
 
 const isNum = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v);
-const MODES: LapMode[] = ["multi", "auto", "challenge"];
 
 /**
  * localStorage から読んだものを整える。
@@ -326,7 +321,6 @@ export function normalize(raw: unknown): LapState {
       Number.isFinite(ptPerRun) && ptPerRun >= 0 ? Math.round(ptPerRun) : 0,
     taki:
       Number.isFinite(taki) && taki >= 0 && taki <= 10 ? Math.round(taki) : 0,
-    mode: MODES.includes(v.mode as LapMode) ? (v.mode as LapMode) : base.mode,
     // 中断は最後のマークより後でなければ辻褄が合わない。
     pausedAt:
       Number.isFinite(pausedAt) &&
@@ -347,7 +341,6 @@ export function exportObj(s: LapState): Record<string, unknown> {
     song: s.songTitle || null,
     songId: s.songId,
     songSec: s.songSec,
-    mode: s.mode,
     taki: s.taki || null,
     ptPerRun: s.ptPerRun || null,
     startedAt: s.marks.length ? new Date(s.marks[0]).toISOString() : null,
@@ -364,5 +357,99 @@ export function exportObj(s: LapState): Record<string, unknown> {
     marks: s.marks.map((m) => new Date(m).toISOString()),
     lapsPerSegment: s.laps.slice(0, Math.max(0, s.marks.length - 1)),
     excludedSegments: s.excluded.slice().sort((a, b) => a - b),
+  };
+}
+
+/* ── 1回の計測を「記録」として閉じる ────────────────────────── */
+
+/**
+ * 終了して保存した1回ぶんの計測。
+ *
+ * ★ 集計値と**生のマーク列の両方**を持つ。集計値だけだと後から「押し忘れを直す」
+ *   ことができず、生データだけだと一覧に何も出せない。どちらか一方では足りない。
+ */
+export interface LapRun {
+  id: string;
+  /** 保存した時刻(ms)。一覧の並びに使う。 */
+  savedAt: number;
+  /** 計測を始めた時刻＝最初のタップ。 */
+  startedAt: number;
+  /**
+   * 計測を終えた時刻＝**最後のタップ**。
+   * ★ 「終了」を押した時刻ではない。最後の1周が終わってから終了を押すまでの間は
+   *   測っていないので、それを含めると記録の長さが実際より延びる。
+   */
+  endedAt: number;
+  songId: string | null;
+  songTitle: string;
+  songSec: number;
+  taki: number;
+  ptPerRun: number;
+  /** 集計（除外した区間は入っていない）。 */
+  laps: number;
+  measuredSec: number;
+  avgSec: number | null;
+  overheadSec: number | null;
+  runsPerHour: number | null;
+  ptPerHour: number | null;
+  /** 生の記録。 */
+  marks: number[];
+  lapsPerSegment: number[];
+  excluded: number[];
+  breaks: number[];
+}
+
+/**
+ * いまの計測を記録に変換する。**区間が1つも無ければ null**
+ *（開始しただけ・すぐ終了した、は記録として残す値が無い）。
+ */
+export function toRun(s: LapState, id: string, savedAt: number): LapRun | null {
+  if (s.marks.length < 2) return null;
+  const st = stats(s);
+  return {
+    id,
+    savedAt,
+    startedAt: s.marks[0],
+    endedAt: s.marks[s.marks.length - 1],
+    songId: s.songId,
+    songTitle: s.songTitle,
+    songSec: s.songSec,
+    taki: s.taki,
+    ptPerRun: s.ptPerRun,
+    laps: st.laps,
+    measuredSec: round1(st.sec),
+    avgSec: st.avg != null ? round1(st.avg) : null,
+    overheadSec: st.overhead != null ? round1(st.overhead) : null,
+    runsPerHour: st.runsPerHour != null ? Math.round(st.runsPerHour * 100) / 100 : null,
+    ptPerHour: st.ptPerHour != null ? Math.round(st.ptPerHour) : null,
+    marks: s.marks.slice(),
+    lapsPerSegment: s.laps.slice(0, s.marks.length - 1),
+    excluded: s.excluded.slice().sort((a, b) => a - b),
+    breaks: s.breaks.slice().sort((a, b) => a - b),
+  };
+}
+
+/** 書き出し用。時刻を人が読める形に直したもの。 */
+export function runToExport(r: LapRun): Record<string, unknown> {
+  const iso = (ms: number) => new Date(ms).toISOString();
+  return {
+    startedAt: iso(r.startedAt),
+    endedAt: iso(r.endedAt),
+    savedAt: iso(r.savedAt),
+    song: r.songTitle || null,
+    songId: r.songId,
+    songSec: r.songSec,
+    taki: r.taki || null,
+    ptPerRun: r.ptPerRun || null,
+    totalLaps: r.laps,
+    measuredSec: r.measuredSec,
+    avgLapSec: r.avgSec,
+    overheadSec: r.overheadSec,
+    runsPerHour: r.runsPerHour,
+    ptPerHour: r.ptPerHour,
+    marks: r.marks.map(iso),
+    lapsPerSegment: r.lapsPerSegment,
+    excludedSegments: r.excluded,
+    breakSegments: r.breaks,
   };
 }

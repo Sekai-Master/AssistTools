@@ -12,6 +12,8 @@ import {
   stats,
   suspects,
   tap,
+  toRun,
+  runToExport,
   toggleExclude,
   undo,
   type LapState,
@@ -251,5 +253,50 @@ describe("書き出し", () => {
     expect(o.totalLaps).toBe(0);
     expect(o.avgLapSec).toBeNull();
     expect(o.startedAt).toBeNull();
+  });
+});
+
+/**
+ * ★ 「終了」で1回ぶんを閉じる。開始・終了の時刻が記録の主役なので、
+ *   どこから取るかを固定しておく（押した時刻ではなく、測った範囲）。
+ */
+describe("記録として閉じる", () => {
+  it("開始は最初のタップ、終了は最後のタップ", () => {
+    const s = run([100, 100]);
+    const r = toRun(s, "id", T0 + 9_999_999)!;
+    expect(r.startedAt).toBe(T0);
+    expect(r.endedAt).toBe(T0 + 200_000);
+    // 保存した時刻は別に持つ（終了を押すまでの空白を測定に混ぜない）
+    expect(r.savedAt).toBe(T0 + 9_999_999);
+  });
+
+  it("集計と生の記録の両方を持つ", () => {
+    const r = toRun({ ...run([100, 100]), ptPerRun: 1000, taki: 10 }, "id", T0)!;
+    expect(r.laps).toBe(2);
+    expect(r.avgSec).toBe(100);
+    expect(r.overheadSec).toBe(25.2);
+    expect(r.ptPerHour).toBe(36_000);
+    expect(r.marks).toHaveLength(3);
+    expect(r.lapsPerSegment).toEqual([1, 1]);
+  });
+
+  it("除外した区間は集計から外れるが、記録には残る", () => {
+    let s = run([100, 900]);
+    s = toggleExclude(s, 1);
+    const r = toRun(s, "id", T0)!;
+    expect(r.laps).toBe(1);
+    expect(r.excluded).toEqual([1]);
+    expect(r.marks).toHaveLength(3);
+  });
+
+  it("1周も無ければ記録にしない", () => {
+    expect(toRun(initialState(), "id", T0)).toBeNull();
+    expect(toRun(tap(initialState(), T0), "id", T0)).toBeNull();
+  });
+
+  it("書き出しは時刻を ISO で持つ", () => {
+    const o = runToExport(toRun(run([100]), "id", T0)!);
+    expect(o.startedAt).toBe(new Date(T0).toISOString());
+    expect(o.totalLaps).toBe(1);
   });
 });

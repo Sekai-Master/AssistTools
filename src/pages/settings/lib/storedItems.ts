@@ -201,6 +201,12 @@ export const STORED_ITEMS: StoredItem[] = [
     },
   },
   {
+    key: "sekaimaster:lap:runs:v1",
+    label: "周回ラップ計測の保存した記録",
+    note: "「周回ラップ計測」で終了して保存した1回ぶんの記録（開始・終了時刻とラップ）",
+    summarize: countEntries("件"),
+  },
+  {
     key: "sekaimaster:motion:v1",
     label: "画面遷移の設定",
     note: "設定画面で選んだ段階",
