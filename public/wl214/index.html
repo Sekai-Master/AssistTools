@@ -952,6 +952,12 @@ function cumChart(svg, tipEl, days, P){
                     const t=el('text',{x:px,y:H-14,'text-anchor':'middle',class:'axis'});
                     t.textContent=d.label; svg.appendChild(t); });
   /* hover */
+  const hToJst=h=>{
+    /* JSTをUTC扱いで計算して閲覧環境のTZに依存させない（開始 8/17 20:00 JST） */
+    const t=new Date(Date.UTC(2026,7,17,20,0)+h*3600e3);
+    const mm=t.getUTCMonth()+1, dd=t.getUTCDate(), H=String(t.getUTCHours()).padStart(2,'0'), M=String(t.getUTCMinutes()).padStart(2,'0');
+    return `${mm}/${dd} ${H}:${M} JST・経過${h.toFixed(1)}h`;
+  };
   pts.forEach((p,i)=>{
     const b=bd[i];
     const hit=el('rect',{x:X(p.h)-18,y:m.t,width:36,height:ih,fill:'transparent',style:'cursor:pointer'});
@@ -963,7 +969,10 @@ function cumChart(svg, tipEl, days, P){
       const rows50 = show50 ? `<div class="r"><i>総合50位 ${b50.obs?'実測':'予測'}</i><b>${oku(b50.m)}億</b></div>
          <div class="r"><i>　差</i><b style="color:${p.v-b50.m>=0?css('--good'):css('--bad')}">${p.v-b50.m>=0?'+':''}${oku(p.v-b50.m)}億</b></div>` : '';
       tipShow(tipEl,host,ev.clientX-r.left,ev.clientY-r.top,
-        `<div class="t">${p.d.label} の獲得が終わる時点（経過${p.h.toFixed(1)}h）</div>
+        `<div class="t">${p.d.label} の獲得が終わる時点（${hToJst(p.h)}）</div>
+         ${(()=>{const nd=pts[i+1]&&pts[i+1].d; if(!nd) return '';
+             const ns=nd.manualSpans?nd.manualSpans[0][0]:(nd.endH-nd.hours);
+             return p.h>ns?`<div class="r" style="opacity:.75"><i>⚠️ ${p.d.label} 帰属の獲得は翌朝のマイセカイまで含む。この時点では ${nd.label} のブロックが進行中で、累積にはその分も乗っている</i></div>`:'';})()}
          <div class="r"><i><span class="dot" style="background:${css('--s1')}"></span>累積</i><b>${oku(p.v)}億</b></div>
          <div style="margin-top:5px;padding-top:5px;border-top:1px solid var(--line)">${rows100}${rows50}</div>`);
     });
