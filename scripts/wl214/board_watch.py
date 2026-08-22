@@ -62,11 +62,13 @@ def unit(c):
     return int(v * BASE / 100) * LBMULT
 
 
-# ⚠️許容する係数は「実測された分布」に固定する。広く取ると外れ値を飲み込んで
-#   しまい、本来「格子外」と警告すべき区間を平然と「2周」と表示する
-#   （2026-08-22 に 315-349 で取っていて +207,830 を係数320.5の2周として通した。
-#    実測分布は 330-339 で、この区間はどの周回数でも成立しない＝別の収入が混ざっている）。
-CMIN, CMAX = 330, 339
+# 許容する係数の範囲。⚠️**「正常時の実測分布」で切ってはいけない。**
+#   2026-08-22 に 330-339（正常時の分布）に絞ったところ、事故った周（体力が減って
+#   支援者の体力依存スキルの倍率まで落ち、自スコアが14%減＝係数308）を「格子外」と
+#   判定し、チャレライだの未知の収入だのと1日ぶん迷走した。正解は「1周＋事故った1周」。
+#   下限は事故を飲み込める広さにし、代わりに **係数を表示して低い周を見えるようにする**。
+CMIN, CMAX = 290, 345
+NORMAL_LO, NORMAL_HI = 330, 339   # これを外れたら「低」と印を付けるだけ
 LAT = {c: unit(c) for c in range(CMIN, CMAX + 1)}
 LO, HI = LAT[CMIN], LAT[CMAX]
 
@@ -107,7 +109,7 @@ def render():
                 ks = [k for k in range(1, 12) if LO <= d / k <= HI]
                 k = ks[0] if len(ks) == 1 else 0
                 if k:
-                    # ⚠️窓は「最初に増分が出た区間の終点」から測る。始点から測ると、
+                    # 窓は「最初に増分が出た区間の終点」から測る。始点から測ると、
                     #   先頭区間は途中から周回が始まっているぶん窓が短く出て、
                     #   レートが物理上限を超える（2026-08-22 に33.2周/hを出して発覚）。
                     if first is None:
@@ -118,7 +120,15 @@ def render():
                         last = t
                 else:
                     unresolved += 1
-                note = "{:,}".format(round(d / k)) if k else "★格子外"
+                if k:
+                    per = round(d / k)
+                    cc = min(LAT, key=lambda c: abs(LAT[c] - per))
+                    note = "{:,}".format(per)
+                    if not (NORMAL_LO <= cc <= NORMAL_HI):
+                        note += " 低%d" % cc
+                        unresolved += 1
+                else:
+                    note = "★格子外"
                 lines.append("  %-6s %-6s %12s %+10d %5s %9s"
                              % (t.strftime("%H:%M"), r["rank"] + "位", "{:,}".format(s), d,
                                 (str(k) if k else "?"), note))
@@ -137,10 +147,11 @@ def render():
     else:
         print("  まだ周回の増分が出ていません")
     if unresolved:
-        print("  ⚠️★格子外が %d 区間ある。周回だけでは説明できない増分が混ざっている"
-              % unresolved)
-        print("     （マイセカイ・オート・チャレライ、あるいは炊き数を落とした周回を疑う。"
-              "許容係数は %d-%d）" % (CMIN, CMAX))
+        print("  ⚠️通常の係数 %d-%d を外れた区間が %d 本ある。"
+              % (NORMAL_LO, NORMAL_HI, unresolved))
+        print("     「低NNN」は事故った周（体力が減ると支援者の体力依存スキルの倍率が落ちて"
+              "自スコアが下がる）。")
+        print("     「★格子外」はどの周回数でも成立しない＝マイセカイ・オート・チャレライの混入を疑う。")
     if prev:
         total = BASEPT + prev[1]
         print()
