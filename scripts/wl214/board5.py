@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 import datetime, statistics
+
+# Win の既定コンソール（cp932）でも絵文字つきの出力が落ちないようにする
+import sys as _sys
+if hasattr(_sys.stdout, "reconfigure"):
+    _sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 exec(open('board.py').read().split('T211 = ')[0])
 T = {211: datetime.datetime(2026,7,19,11,0), 214: datetime.datetime(2026,8,17,11,0)}
 
