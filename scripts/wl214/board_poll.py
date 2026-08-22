@@ -12,6 +12,11 @@
 """
 import csv, datetime, json, os, sys, time, urllib.request
 
+# Win の既定コンソール（cp932）でも絵文字つきの出力が落ちないようにする
+import sys as _sys
+if hasattr(_sys.stdout, "reconfigure"):
+    _sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 name = sys.argv[1]
 out  = sys.argv[2]
 end  = sys.argv[3] if len(sys.argv) > 3 else None

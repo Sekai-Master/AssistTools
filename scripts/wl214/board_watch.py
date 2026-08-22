@@ -20,6 +20,11 @@
 """
 import csv, datetime, io, json, os, sys, time, urllib.request
 
+# Win の既定コンソール（cp932）でも絵文字つきの出力が落ちないようにする
+import sys as _sys
+if hasattr(_sys.stdout, "reconfigure"):
+    _sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 BONUS = {1: 821, 2: 752.5, 3: 826.5, 4: 927, 5: 912}   # 章ごとのイベントボーナス
 SONG = 74.8            # 独りんぼエンヴィーの曲長
 BASE = 100             # 同 基礎点

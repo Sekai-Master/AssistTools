@@ -4,6 +4,11 @@
 誰が走っていて誰が寝ているかを一切見ていなかった。"""
 import sys, datetime, collections, statistics, json
 
+# Win の既定コンソール（cp932）でも絵文字つきの出力が落ちないようにする
+import sys as _sys
+if hasattr(_sys.stdout, "reconfigure"):
+    _sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 def load(ev, t0):
     ser = collections.defaultdict(list)      # name -> [(h, score)]
     snaps = collections.defaultdict(dict)    # h -> {rank: score}

@@ -4,6 +4,11 @@
 過去WL3（205/207/211）の「同じ経過時間でのシェア」で割り戻す。アンカーは線形補間（階段関数は禁止）。"""
 import json, sys, os, datetime
 
+# Win の既定コンソール（cp932）でも絵文字つきの出力が落ちないようにする
+import sys as _sys
+if hasattr(_sys.stdout, "reconfigure"):
+    _sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 T0 = datetime.datetime(2026, 8, 17, 20, 0)          # event214 開始 JST
 CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wl_ref_series.json")
 cache = json.load(open(CACHE))

@@ -4,6 +4,11 @@
 観測値はこのファイル経由で渡す。ランナーの実測は runner に手で足す。"""
 import json, subprocess, datetime, sys, os
 
+# Win の既定コンソール（cp932）でも絵文字つきの出力が落ちないようにする
+import sys as _sys
+if hasattr(_sys.stdout, "reconfigure"):
+    _sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 T0 = datetime.datetime(2026, 8, 17, 20, 0)
 SQL = """SELECT datetime(timestamp,'+9 hours'),
   MAX(CASE WHEN rank=100 THEN score END),

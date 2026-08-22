@@ -16,6 +16,11 @@
 """
 import json, os, sys, urllib.request
 
+# Win の既定コンソール（cp932）でも絵文字つきの出力が落ちないようにする
+import sys as _sys
+if hasattr(_sys.stdout, "reconfigure"):
+    _sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 UA = "sekaimaster-assist/1.0"
 URL = "https://api.sekai.best/event/live"
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -83,7 +88,11 @@ if elapsed is not None and elapsed > 0:
     # 板は3分刻みなので、経過が短いと増分ゼロが正常。0.5時間までは下限を課さない。
     floor_ = 0.30e6 * max(0.0, elapsed - 0.5)
     ceil_ = rate * elapsed + 1.0e6   # 周回しっぱなしでもこの程度が上限
-    if elapsed > 0.5 and delta < floor_:
+    if delta == 0:
+        # 増分ちょうど0＝起点と同一の行。9桁のスコアが別人と完全一致する確率は無視できるので、
+        # これは「別人を掴んだ」ではなく「走者が止まっている」。休止ブロック中は毎回ここに来る。
+        print("   → 増分ちょうど0。起点と同一の行なので走者本人。**停止中**（休止ブロック／未計測）")
+    elif elapsed > 0.5 and delta < floor_:
         print(f"   ⚠️ 増分が {elapsed:.1f} 時間ぶんとして少なすぎる（下限の目安 {floor_:,.0f}）。"
               f"**別人を掴んでいる疑いが濃い。**")
         BAD = True
