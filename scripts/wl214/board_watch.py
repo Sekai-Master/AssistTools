@@ -1,33 +1,118 @@
 #!/usr/bin/env python3
-import csv,datetime,os,sys,time,statistics
-F=sys.argv[1] if len(sys.argv)>1 else os.path.join(os.path.dirname(os.path.abspath(__file__)),'ch_poll.csv')
+"""board_poll.py が書いている CSV を読んで、周回を格子で分解して表示する。
+
+使い方:
+    python board_watch.py <CSV>            # 20秒ごとに更新し続ける
+    python board_watch.py <CSV> --once     # 1回だけ出して終わる
+    python board_watch.py <CSV> --ch 4     # 章を指定（既定は3）
+
+1周のPtは係数 c について Pt(c)=floor(floor(c*(bonus+100)/100*10)/10 * base/100) * 35 の
+飛び飛びの値しか取らないので、区間の増分から周回数が一意に決まることが多い。
+「増分 ÷ おおよその単価を四捨五入」より正確で、分解できない区間は ? と出して隠さない。
+
+⚠️ブロック外（周回終了後）の増分は格子に載らない。マイセカイ・オート・チャレライが
+   混ざるため。周回中の窓だけを見ること。
+"""
+import csv, datetime, io, os, sys, time
+
+BONUS = {1: 821, 2: 752.5, 3: 826.5, 4: 927, 5: 912}   # 章ごとのイベントボーナス
+SONG = 74.8            # 独りんぼエンヴィーの曲長
+BASE = 100             # 同 基礎点
+LBMULT = 35            # 10炊き
+
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+ONCE = "--once" in sys.argv
+CH = 3
+if "--ch" in sys.argv:
+    CH = int(sys.argv[sys.argv.index("--ch") + 1])
+F = args[0] if args else os.path.join(os.path.dirname(os.path.abspath(__file__)), "ch_poll.csv")
+
+
+def unit(c):
+    v = int(c * (BONUS[CH] + 100) / 100 * 10) / 10
+    return int(v * BASE / 100) * LBMULT
+
+
+LAT = {c: unit(c) for c in range(315, 350)}
+LO, HI = LAT[315], LAT[349]
+
+
+def clear():
+    os.system("cls" if os.name == "nt" else "clear")
+
+
 def render():
-    rows=list(csv.DictReader(open(F)))
-    seen={}
-    for r in rows: seen[r['upstream_ts']]=r
-    snaps=sorted(seen.values(), key=lambda r:r['upstream_ts'])
-    os.system('clear')
-    print(f'◆ 章ボード ライブ計測   {datetime.datetime.now():%H:%M:%S} 更新（板は約3分刻み）\n')
-    prev=None; laps=0; pt=0; hist=[]
+    seen = {}
+    with io.open(F, encoding="utf-8") as f:
+        for r in csv.DictReader(f):
+            seen[r["upstream_ts"]] = r
+    snaps = sorted(seen.values(), key=lambda r: r["upstream_ts"])
+    if not ONCE:
+        clear()
+    print("◆ 章ボード ライブ計測  ch%d（ボーナス %s%%）  %s 更新  板の点 %d"
+          % (CH, BONUS[CH], datetime.datetime.now().strftime("%H:%M:%S"), len(snaps)))
+    print("  板は約3分刻み。ラベルは実時刻より最大2分ほど遅れて付く\n")
+    print("  %-6s %-6s %12s %10s %5s %9s" % ("板時刻", "章内", "ch3 Pt", "増分", "周", "単価"))
+    prev = None
+    laps = tot = 0
+    first = last = None
+    unresolved = 0
+    lines = []
     for r in snaps:
-        t=datetime.datetime.fromisoformat(r['upstream_ts'][:19])+datetime.timedelta(hours=9)
-        s=int(r['score'])
-        if prev:
-            d=s-prev[1]
-            if d>0:
-                n=max(1,round(d/108000)); laps+=n; pt+=d
-                hist.append((t,r['rank'],s,d,n))
-        prev=(t,s)
-    for t,rk,s,d,n in hist[-14:]:
-        per=d/n
-        mark='  ←1周単発' if n==1 else f'  ({n}周)'
-        print(f'  {t:%H:%M}  {rk:>3}位  {s:>11,}  +{d:>8,}  {per:>9,.0f}/周{mark}')
-    if laps:
-        print(f'\n  ■ 通算 {laps}周 / 平均 {pt/laps:,.1f} Pt/周   （モデル: 係数333＝107,975）')
-    if len(hist)>=2:
-        span=(hist[-1][0]-hist[0][0]).total_seconds()/3600
-        if span>0: print(f'  ■ 直近レート {sum(h[4] for h in hist)/span:.1f} 周/h（物理上限 29.5）')
-while True:
-    try: render()
-    except Exception as e: print('…',e)
-    time.sleep(20)
+        t = datetime.datetime.fromisoformat(r["upstream_ts"][:19]) + datetime.timedelta(hours=9)
+        s = int(r["score"])
+        if prev is None:
+            lines.append("  %-6s %-6s %12s %10s %5s %9s"
+                         % (t.strftime("%H:%M"), r["rank"] + "位", "{:,}".format(s), "—", "—", "—"))
+        else:
+            d = s - prev[1]
+            if d == 0:
+                lines.append("  %-6s %-6s %12s %10s %5s %9s"
+                             % (t.strftime("%H:%M"), r["rank"] + "位", "{:,}".format(s), "0", "—", "停止"))
+            else:
+                ks = [k for k in range(1, 12) if LO <= d / k <= HI]
+                k = ks[0] if len(ks) == 1 else 0
+                if k:
+                    # ⚠️窓は「最初に増分が出た区間の終点」から測る。始点から測ると、
+                    #   先頭区間は途中から周回が始まっているぶん窓が短く出て、
+                    #   レートが物理上限を超える（2026-08-22 に33.2周/hを出して発覚）。
+                    if first is None:
+                        first = t          # この区間ぶんは通算から除く
+                    else:
+                        laps += k
+                        tot += d
+                        last = t
+                else:
+                    unresolved += 1
+                lines.append("  %-6s %-6s %12s %+10d %5s %9s"
+                             % (t.strftime("%H:%M"), r["rank"] + "位", "{:,}".format(s), d,
+                                (str(k) if k else "?"),
+                                ("{:,}".format(round(d / k)) if k else "格子外")))
+        prev = (t, s)
+    for ln in lines[-18:]:
+        print(ln)
+    print()
+    if laps and first and last and last > first:
+        mins = (last - first).total_seconds() / 60
+        cyc = mins * 60 / laps
+        print("  ■ 通算 %d周 / %s Pt / %.0f分（先頭の不完全な区間は除外）" % (laps, "{:,}".format(tot), mins))
+        print("  ■ 平均単価 %s Pt/周（モデル 係数333＝%s）"
+              % ("{:,}".format(round(tot / laps)), "{:,}".format(LAT[333])))
+        print("  ■ レート %.2f 周/h（1周 %.1f秒・OH %.1f秒）  時速 %s Pt/h"
+              % (laps / (mins / 60), cyc, cyc - SONG, "{:,}".format(round(tot / (mins / 60)))))
+    else:
+        print("  まだ周回の増分が出ていません")
+    if unresolved:
+        print("  ⚠️格子で分解できない区間が %d 本ある（マイセカイ・オート・チャレライの混入を疑う）"
+              % unresolved)
+
+
+if ONCE:
+    render()
+else:
+    while True:
+        try:
+            render()
+        except Exception as e:
+            print("…", e)
+        time.sleep(20)
