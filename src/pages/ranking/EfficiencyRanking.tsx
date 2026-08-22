@@ -1691,7 +1691,7 @@ export default function EfficiencyRanking() {
             <span className="font-bold text-slate-600">ソロと協力で別物</span>
             です。ソロ・オートは <code>100 + floor(スコア/20000)</code>、協力は{" "}
             <code>
-              110 + floor(自スコア/17000) + min(13, floor(他4人合計/340000))
+              110 + floor(自スコア/17000) + min(16, floor(他4人合計/340000))
             </code>
             。
             他4人のスコアは分からないので、ここでは自分と同格の4人（自分のスコア×4）と置いています。
