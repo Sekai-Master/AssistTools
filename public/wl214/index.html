@@ -423,8 +423,18 @@ function computeRates(P, songs, bonusOverride){
   /* ---- 周回（協力ライブ）----
      走者は1〜5枠のどれかに等確率で入る。残り4枠とアンコール枠は支援者。
      空き枠はついぼ（実効値150と仮定）で埋まる。 */
+  /* 難易度が見つからないときのフォールバック。埋め込みFALLBACKは master しか持たないので、
+     /MusicDatas/ の取得に失敗した状態で difficulty="expert" のままだと undefined を掴んで
+     ページ全体が TypeError で死ぬ。単価は runner.coefMeasured の実測固定なので、
+     ここは表示用のスコアモデルにしか効かない——落とすより代替の難易度で描くほうがよい。 */
+  const pickDif = (song, dif, id) => {
+    if (song && song[dif]) return song[dif];
+    const alt = song && ['master','expert','hard','normal','easy'].find(d => song[d]);
+    if (alt) { console.warn('[wl214] 楽曲' + id + ' に難易度 ' + dif + ' が無いので ' + alt + ' で代用します'); return song[alt]; }
+    throw new Error('[wl214] 楽曲' + id + ' の譜面データが取得できませんでした');
+  };
   const mid = P.songs.multi.musicId, mdif = P.songs.multi.difficulty;
-  const md = songs[mid][mdif], mmeta = songs[mid];
+  const mmeta = songs[mid], md = pickDif(mmeta, mdif, mid);
   const TSUIBO = 150;
   const others = Array.from({length:4}, (_,i) => i < 4-empty ? sup : TSUIBO);
   const e15 = (eff + others.reduce((a,b)=>a+b,0)) / 5;
@@ -437,7 +447,8 @@ function computeRates(P, songs, bonusOverride){
      上限は 2026-08-21 に実機で16と確認した（走者の自スコア3,613,633・1周100,835Ptから逆算）。 */
   const coefModel = 110 + Math.floor(scoreM/17000) + 16;
   /* 2026-08-21、走者の「1周ぶんのPt」実測4点（99,330 / 100,520AP / 100,520AP / 100,835）から
-     係数を逆算して 333〜338・中央336 を得た。スコアモデルの323より10〜15高い。
+     係数を逆算して 333〜338・中央336 を得た。上限を16にした後のスコアモデルは327で、実測はそれより6〜11高い
+     （上限13時代の「323より10〜15高い」から書き換え。2026-08-22）。
      ①=floor(自スコア/17000) は章のボーナスに依存しないので、1点の実測で全章に効く。
      実測を入れている間 coefModel は表示用の参考値でしかない。 */
   const coefM = P.runner.coefMeasured || coefModel;
@@ -450,7 +461,7 @@ function computeRates(P, songs, bonusOverride){
   /* ---- オート（ソロ）----
      5枚が1回ずつ＋リーダーがもう1回。内部値を5で割った平均を全枠に置く。 */
   const aid = P.songs.auto.musicId, adif = P.songs.auto.difficulty;
-  const ad = songs[aid][adif], ameta = songs[aid];
+  const ameta = songs[aid], ad = pickDif(ameta, adif, aid);
   let rateA = ad.baseScoreAuto;
   for(let i=0;i<6;i++) rateA += avgCard * ad.skillScoreAuto[i] / 100;
   const scoreA = Math.floor(rateA * talent * 4);
@@ -1252,8 +1263,8 @@ function render(){
         ['LB効率', fmt(RC.multi.ptPerLb)+' Pt/LB'],
         ['章による幅', fmt(spML)+' 〜 '+fmt(spMH)+' Pt/周']],
        (P.runner.coefMeasured
-         ? `係数 = <b>${RC.multi.coef}（実測）</b>— 走者の1周ぶんPt 4点から逆算。スコアモデルの推定は ${RC.multi.coefModel} で10〜15低かった<br>Pt = floor(floor(${RC.multi.coef}×${(RC.bonus/100+1).toFixed(2)}×10)/10 × ${RC.multi.base}/100) × ${LB_MULT[RC.multi.lb]}`
-         : `係数 = 110 + floor(${fmt(RC.multi.score)}/17000) + 13 = ${RC.multi.coef}<br>Pt = floor(floor(${RC.multi.coef}×${(RC.bonus/100+1).toFixed(2)}×10)/10 × ${RC.multi.base}/100) × ${LB_MULT[RC.multi.lb]}`),
+         ? `係数 = <b>${RC.multi.coef}（実測）</b>— 走者の1周ぶんPt 4点から逆算。スコアモデルの推定は ${RC.multi.coefModel} で${RC.multi.coef - RC.multi.coefModel}低い<br>Pt = floor(floor(${RC.multi.coef}×${(RC.bonus/100+1).toFixed(2)}×10)/10 × ${RC.multi.base}/100) × ${LB_MULT[RC.multi.lb]}`
+         : `係数 = 110 + floor(${fmt(RC.multi.score)}/17000) + 16 = ${RC.multi.coef}<br>Pt = floor(floor(${RC.multi.coef}×${(RC.bonus/100+1).toFixed(2)}×10)/10 × ${RC.multi.base}/100) × ${LB_MULT[RC.multi.lb]}`),
        chChip(selCh))
   + rc('--s2','オート（ソロ）', RC.auto.title, fmt(RC.auto.pt), 'Pt / 回',
        [['1日 '+P.auto.playsPerDay+'回', fmt(RC.auto.pt*P.auto.playsPerDay/1e4)+' 万Pt'],
