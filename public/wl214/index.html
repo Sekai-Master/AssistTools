@@ -614,7 +614,19 @@ function buildDays(P, R, RBY){
       }
     }
     const lbAuto = (d.autoLb != null) ? d.autoLb : autoPlays * LBA;
-    const futureAutoLb = (d.autoLb != null || autoH <= nowH) ? 0 : lbAuto;
+    /* オートの未消化LB。⚠️ここを「その日を丸ごと未来計上するか0か」の二択にしていると、
+       オートが1日の中で分割される日に必ず外れる。実例: 8/22 は 04:18〜07:48 に57回を
+       消化済みだが、autoH=10.5 なら 10:30 まで990LBを丸ごと未来計上して 570LB（5,700石）
+       過大、10:30 を過ぎると残り42回を0扱いして 420LB 過小になった。
+       schedule 側で autoDonePlays（その日すでに消化した回数）を入れられるようにして、
+       残回数ぶんだけを未来計上する。入っていない日は従来どおりの全か無かに落ちる。 */
+    const doneP = (d.autoDonePlays != null && Number.isFinite(Number(d.autoDonePlays)))
+                    ? Math.max(0, Math.min(autoPlays, Number(d.autoDonePlays))) : null;
+    const futureAutoLb =
+      (d.autoLb != null)      ? 0
+      : (doneP != null)       ? (autoPlays - doneP) * LBA
+      : (autoH <= nowH)       ? 0
+      :                         lbAuto;
     /* その日の範囲は span そのものから出す＝「最初の稼ぎが始まってから最後の稼ぎが終わるまで」。
        endH だけで見ると 8/23（朝10時に周回終了・13時からオート）が「済」になって未消化の
        990LB が隠れ、5:00 のマイセカイだけ済んだ日は「予定」のまま累計だけ減る。
