@@ -30,7 +30,10 @@ npm run dev            # 開発サーバー
 npm test               # テスト（vitest）
 npm run test:coverage  # カバレッジ
 npm run build          # 型チェック + 本番ビルド
+npm run preview        # ビルド結果の確認
 ```
+
+dev は http://localhost:3010 、preview は http://localhost:3011。ポートは固定（`strictPort`）で、埋まっていたら別番号へ逃げずに起動が失敗する。割り当ての正本は brain の `life/dev-ports.md`（このプロジェクトのブロックは 3010-3019）。
 
 ## データ更新
 

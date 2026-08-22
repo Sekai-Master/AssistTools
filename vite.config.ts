@@ -44,6 +44,20 @@ function cardDataGeneratedAt(): string {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  /*
+   * ポートは brain の life/dev-ports.md（割り当ての正本）で AssistTools に
+   * 3010-3019 のブロックが割り当てられている。+0 が dev、+1 が preview。
+   *
+   * ★ strictPort を外さないこと。外すと Vite は埋まっているとき黙って隣の
+   *   番号へ逃げるので、割り当て表が嘘になる。2026-08-22 に実際に事故った——
+   *   4317 で立てたプレビューが落ちたあと別プロジェクトが同じ番号を取り、
+   *   気づかず「wl214 を検証したつもりで別サイトを測っていた」。
+   *   落ちてくれたほうが「もう起動している」と分かってよい。
+   *
+   * 追加のポートが要るときは 3012-3019 から取る。ブロック外は使わない。
+   */
+  server: { port: 3010, strictPort: true },
+  preview: { port: 3011, strictPort: true },
   define: {
     __APP_VERSION__: JSON.stringify(appVersion()),
     __CARD_DATA_GENERATED_AT__: JSON.stringify(cardDataGeneratedAt()),

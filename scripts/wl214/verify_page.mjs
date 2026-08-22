@@ -2,7 +2,9 @@
 // コンソールエラー0 / 横あふれ0 / 主要数値 / フォールバック経路のクラッシュ有無 を見る。
 import { chromium } from 'playwright-core';
 
-const URL = 'http://localhost:4317/wl214/';
+// ポートは brain の life/dev-ports.md の割り当て（AssistTools = 3010-3019、+1 が preview）。
+// `npm run preview` で立ててから実行する。
+const URL = 'http://localhost:3011/wl214/';
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 
 const grabFn = () => {
@@ -61,6 +63,10 @@ async function run(label, width, blockMusicData) {
   page.on('pageerror', e => errors.push('PAGEERROR ' + e.message));
   if (blockMusicData) await page.route('**/MusicDatas/**', r => r.abort());
   await page.goto(URL, { waitUntil: 'load' });
+  const title = await page.title();
+  // ★ 対象の取り違えを防ぐ。2026-08-22 に、落ちたプレビューのポートを別プロジェクトが
+  //   取っていたのに気づかず「wl214 を検証したつもりで旅程ページを測っていた」事故があった。
+  if (!/SekaiMaster|WL3/.test(title)) throw new Error('別サイトを掴んでいる: ' + title);
   await page.evaluate(settleFn);
   const vals = await page.evaluate(grabFn);
   const of = await page.evaluate(overflowFn);
