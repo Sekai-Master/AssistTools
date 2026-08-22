@@ -80,5 +80,12 @@ export default tseslint.config(
     // ビルド時にだけ動く Node のスクリプト。ブラウザの globals は要らない。
     files: ["scripts/**/*.{js,mjs}", "*.config.{ts,js}"],
     languageOptions: { globals: globals.node },
+  },
+  {
+    // Playwright でページを検証するスクリプト。Node で動くが、
+    // page.evaluate() に渡す関数の中身は**ブラウザ側で実行される**ので
+    // document / getComputedStyle を参照する。両方の globals が要る。
+    files: ["scripts/**/verify_*.mjs"],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
   }
 );
