@@ -62,8 +62,13 @@ def unit(c):
     return int(v * BASE / 100) * LBMULT
 
 
-LAT = {c: unit(c) for c in range(315, 350)}
-LO, HI = LAT[315], LAT[349]
+# ⚠️許容する係数は「実測された分布」に固定する。広く取ると外れ値を飲み込んで
+#   しまい、本来「格子外」と警告すべき区間を平然と「2周」と表示する
+#   （2026-08-22 に 315-349 で取っていて +207,830 を係数320.5の2周として通した。
+#    実測分布は 330-339 で、この区間はどの周回数でも成立しない＝別の収入が混ざっている）。
+CMIN, CMAX = 330, 339
+LAT = {c: unit(c) for c in range(CMIN, CMAX + 1)}
+LO, HI = LAT[CMIN], LAT[CMAX]
 
 
 def clear():
@@ -113,10 +118,10 @@ def render():
                         last = t
                 else:
                     unresolved += 1
+                note = "{:,}".format(round(d / k)) if k else "★格子外"
                 lines.append("  %-6s %-6s %12s %+10d %5s %9s"
                              % (t.strftime("%H:%M"), r["rank"] + "位", "{:,}".format(s), d,
-                                (str(k) if k else "?"),
-                                ("{:,}".format(round(d / k)) if k else "格子外")))
+                                (str(k) if k else "?"), note))
         prev = (t, s)
     for ln in lines[-18:]:
         print(ln)
@@ -132,8 +137,10 @@ def render():
     else:
         print("  まだ周回の増分が出ていません")
     if unresolved:
-        print("  ⚠️格子で分解できない区間が %d 本ある（マイセカイ・オート・チャレライの混入を疑う）"
+        print("  ⚠️★格子外が %d 区間ある。周回だけでは説明できない増分が混ざっている"
               % unresolved)
+        print("     （マイセカイ・オート・チャレライ、あるいは炊き数を落とした周回を疑う。"
+              "許容係数は %d-%d）" % (CMIN, CMAX))
     if prev:
         total = BASEPT + prev[1]
         print()
