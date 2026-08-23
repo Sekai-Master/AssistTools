@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
-"""章ランキング板を高頻度ポーリングして、指定プレイヤーの (時刻, 順位, 章Pt) を CSV に落とす。
+"""ランキング板を高頻度ポーリングして、指定プレイヤーの (時刻, 順位, スコア) を CSV に落とす。
 
-使い方:  board_poll.py <名前の前方一致> <出力CSV> [終了時刻 HH:MM]
+使い方:  board_poll.py <名前の前方一致> <出力CSV> [終了時刻 HH:MM] [--overall]
 例:      board_poll.py "プレイヤー名の前方一致" ch3_poll.csv 04:06
+         board_poll.py "プレイヤー名の前方一致" ov_poll.csv 04:06 --overall
+
+⚠️**章板だけに頼ると走り出しを落とす**（2026-08-23 実測）。章板に見えているのは概ね上位100件強で、
+   走者が章内で下位にいるあいだは板から消える。実際 08/23 の朝ブロックでは 07:48〜08:11 の
+   **24分間まるごと欠測**し、開始時刻が章板から取れなかった（総合板側は連続していたので救われた）。
+   章が替わった直後は章Pt がゼロから始まるので**必ずこの穴に落ちる**。
+   → 章移動をまたぐ観測は `--overall` を併走させること。
+   総合板のスコアはイベント通算なので、**同一章の中では増分が章Ptの増分と完全に一致する**
+   （差は前章までの累計という定数）。したがって analyze_block.py の格子分解にそのまま使える。
 
 - 板の実体は約3分刻み・タイムスタンプは実時刻から約+125秒ずれて刻印される（2026-08-22 校正）
 - 名前はコマンドライン引数でのみ渡す。このリポジトリに走者名を書かないこと
@@ -17,9 +26,13 @@ import sys as _sys
 if hasattr(_sys.stdout, "reconfigure"):
     _sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-name = sys.argv[1]
-out  = sys.argv[2]
-end  = sys.argv[3] if len(sys.argv) > 3 else None
+argv = [a for a in sys.argv[1:] if a != '--overall']
+overall = '--overall' in sys.argv
+URL = ('https://api.sekai.best/event/live' if overall
+       else 'https://api.sekai.best/event/live_latest_chapter')
+name = argv[0]
+out  = argv[1]
+end  = argv[2] if len(argv) > 2 else None
 end_t = None
 if end:
     h, m = map(int, end.split(':'))
@@ -51,7 +64,7 @@ polls = hits = fails = misses = 0
 while end_t is None or datetime.datetime.now() < end_t:
     polls += 1
     try:
-        req = urllib.request.Request('https://api.sekai.best/event/live_latest_chapter',
+        req = urllib.request.Request(URL,
                                       headers={'User-Agent': 'sekaimaster-assist/1.0'})
         with urllib.request.urlopen(req, timeout=25) as r:
             d = json.load(r)
@@ -71,8 +84,11 @@ while end_t is None or datetime.datetime.now() < end_t:
             misses += 1
             log_problem('名前が板に無い（rows=%d）' % len(rows))
             if misses in (3, 10, 30):
-                print('WARN: %d 回続けて名前が板に見つからない。'
-                      '章が替わって改名した／圏外に落ちた可能性' % misses, flush=True)
+                print('WARN: %d 回続けて名前が %s板に見つからない。'
+                      '改名した／板の表示範囲から外れた可能性%s'
+                      % (misses, '総合' if overall else '章',
+                         '' if overall else '（章板は下位が見えない。--overall を併走させること）'),
+                      flush=True)
         else:
             misses = 0
         fails = 0
@@ -84,6 +100,7 @@ while end_t is None or datetime.datetime.now() < end_t:
                   '%s.err を見ること' % (fails, type(ex).__name__, out), flush=True)
     time.sleep(60)
 
-print('POLL DONE polls=%d hits=%d fails=%d' % (polls, hits, fails), flush=True)
+print('POLL DONE board=%s polls=%d hits=%d fails=%d'
+      % ('overall' if overall else 'chapter', polls, hits, fails), flush=True)
 if hits == 0:
     print('⚠️ 1件も取れていない。名前の前方一致・UA・章の指定を疑うこと', flush=True)
