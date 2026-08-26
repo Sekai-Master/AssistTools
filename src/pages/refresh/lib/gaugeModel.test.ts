@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   GAUGE_SPEC,
   decayInternal,
+  decayProgressFromNextDecay,
+  decayTicks,
   fullRecoveryMinutes,
+  internalFromPercent,
+  minutesToEmpty,
   gaugeAfterPlays,
   liveGaugeInternal,
   liveGaugePercent,
@@ -90,5 +94,32 @@ describe("toDisplayPercent — 範囲", () => {
     expect(toDisplayPercent(GAUGE_SPEC.max)).toBe(100);
     expect(toDisplayPercent(GAUGE_SPEC.max * 2)).toBe(100);
     expect(toDisplayPercent(-100)).toBe(0);
+  });
+});
+
+describe("gaugeModel — 途中参加（次の回復まで）", () => {
+  it("「次の回復まで」からタイマーの進捗を出す（30分周期）", () => {
+    expect(decayProgressFromNextDecay(30)).toBe(0); // たった今止めた
+    expect(decayProgressFromNextDecay(12)).toBe(18);
+    expect(decayProgressFromNextDecay(0)).toBe(30); // いま減る
+    // 範囲外はクランプ（ゲージ画面に31分は出ないが、手入力は何でも来る）
+    expect(decayProgressFromNextDecay(45)).toBe(0);
+    expect(decayProgressFromNextDecay(-5)).toBe(30);
+  });
+
+  it("残りの減少回数はゲージから決まる", () => {
+    expect(decayTicks(0)).toBe(0);
+    expect(decayTicks(internalFromPercent(100))).toBe(12);
+    expect(decayTicks(internalFromPercent(50))).toBe(6);
+    // 1回ぶんに満たない端数も1回は要る
+    expect(decayTicks(1)).toBe(1);
+  });
+
+  it("全回復までは「次の回復まで＋残り回数−1周期」", () => {
+    // 50% は減少6回。次の回復まで15分なら 15 + 5×30 = 165分
+    expect(minutesToEmpty(internalFromPercent(50), 15)).toBe(165);
+    // 省略時は30分フル＝従来の見立て（100%なら6時間で fullRecoveryMinutes と一致）
+    expect(minutesToEmpty(internalFromPercent(100))).toBe(fullRecoveryMinutes());
+    expect(minutesToEmpty(0, 10)).toBe(0);
   });
 });

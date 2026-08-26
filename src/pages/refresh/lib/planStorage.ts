@@ -8,6 +8,8 @@ import type { Segment } from "./timeline";
 export interface SavedPlanInputs {
   songId: string;
   gauge: string;
+  /** 「次の回復まで ○分」。2026-08-27 に追加したので、旧データには無い。 */
+  nextDecay?: string;
   rate: string;
   currentPt: string;
   hourlyRate: string;

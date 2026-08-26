@@ -5,6 +5,7 @@ import { NeuButton } from "../../components/ui/NeuButton";
 import { SongSearchModal } from "../../components/SongSearchModal";
 import { onJacketError } from "../../lib/img";
 import { isMeasured } from "./lib/refreshConstant";
+import { fmtDuration } from "./lib/format";
 import type { GaugeInputs } from "./useGaugeInputs";
 import type { AnalyzerMusic } from "../analyzer/useAnalyzerMusics";
 import type { AliasEntry } from "../bingo/useBingoMusics";
@@ -31,6 +32,11 @@ export function GaugeInputsPanel({
     rc,
     gauge,
     setGauge,
+    gaugePct,
+    nextDecay,
+    setNextDecay,
+    nextDecayMin,
+    emptyInMinutes,
     rate,
     setRate,
     calibPlays,
@@ -98,23 +104,61 @@ export function GaugeInputsPanel({
           </Field>
 
           {showGauge && (
-            <Field
-              label="現在のゲージ"
-              htmlFor="rg-gauge"
-              hint="いまの表示%（0〜100）。ここからの残りを計算します"
-            >
-              <div className="flex items-center gap-2">
-                <NeuInput
-                  id="rg-gauge"
-                  inputMode="decimal"
-                  value={gauge}
-                  onChange={(e) => setGauge(e.target.value)}
-                  placeholder="例: 13.6"
-                  className="max-w-32"
-                />
-                <span className="text-slate-500">%</span>
+            <div className="space-y-2">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="現在のゲージ"
+                  htmlFor="rg-gauge"
+                  hint="いまの表示%（0〜100）。ここからの残りを計算します"
+                >
+                  <div className="flex items-center gap-2">
+                    <NeuInput
+                      id="rg-gauge"
+                      inputMode="decimal"
+                      value={gauge}
+                      onChange={(e) => setGauge(e.target.value)}
+                      placeholder="例: 13.6"
+                      className="max-w-32"
+                    />
+                    <span className="text-slate-500">%</span>
+                  </div>
+                </Field>
+
+                {/* ★ ゲージ%だけでは「30分タイマーがどこまで進んでいるか」が分からない。
+                    イベントの途中で開くのが普通なので、空欄のままだと最大30分ずれる。 */}
+                <Field
+                  label="次の回復まで"
+                  htmlFor="rg-next-decay"
+                  hint="ゲーム内のゲージ画面に出ている残り時間。空欄なら「たった今プレイを止めた」＝30分として計算します"
+                >
+                  <div className="flex items-center gap-2">
+                    <NeuInput
+                      id="rg-next-decay"
+                      inputMode="decimal"
+                      value={nextDecay}
+                      onChange={(e) => setNextDecay(e.target.value)}
+                      placeholder="例: 12"
+                      className="max-w-32"
+                    />
+                    <span className="text-slate-500">分</span>
+                  </div>
+                </Field>
               </div>
-            </Field>
+
+              {gaugePct > 0 && (
+                <p className="text-xs text-slate-500">
+                  この状態からの全回復まで{" "}
+                  <span className="font-bold text-slate-600">
+                    {fmtDuration(emptyInMinutes)}
+                  </span>
+                  {nextDecayMin == null && (
+                    <span className="text-slate-400">
+                      （次の回復まで未入力。30分として計算）
+                    </span>
+                  )}
+                </p>
+              )}
+            </div>
           )}
 
           <Field

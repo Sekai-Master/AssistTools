@@ -11,7 +11,13 @@
  *   → 休憩の進捗(decayProgress)をブロックを跨いで繰り越す。20分休憩→プレイ→20分休憩＝計40分で1回減少。
  * - 未モデル化の微差: 5分未満の休憩（＝プレイ間5分以内）の扱い。実運用では稀なので all-count で近似。
  */
-import { GAUGE_SPEC, type GaugeSpec, liveGaugeInternal, mySekaiGaugeInternal } from "./gaugeModel";
+import {
+  DECAY_INTERVAL_MIN,
+  GAUGE_SPEC,
+  type GaugeSpec,
+  liveGaugeInternal,
+  mySekaiGaugeInternal,
+} from "./gaugeModel";
 import { playSeconds } from "./sessionPlanner";
 
 export type Segment =
@@ -57,15 +63,23 @@ export interface TimelineResult {
   totalWastedMinutes: number;
 }
 
+/**
+ * @param startDecayProgressMin プラン開始時点で減少タイマーが進んでいる分（0〜30）。
+ *   ゲーム内の「次の回復まで ○分」から `decayProgressFromNextDecay` で作る。
+ *   **既定の0は「たった今プレイを止めた」**＝従来の挙動。
+ */
 export function simulateTimeline(
   segments: readonly Segment[],
   startPercent: number,
   overheadSec: number,
+  startDecayProgressMin = 0,
   spec: GaugeSpec = GAUGE_SPEC
 ): TimelineResult {
   let internal = (Math.max(0, Math.min(100, startPercent)) / 100) * spec.max;
   let minute = 0;
-  let decayProgress = 0; // 次の減少に向けて累積した休憩分（ブロックを跨いで繰り越す）
+  // 次の減少に向けて累積した休憩分（ブロックを跨いで繰り越す）。
+  // 開始時点で進んでいるぶんを引き継ぐ（途中参加）。30ちょうどは「いま減る」なので許す。
+  let decayProgress = Math.max(0, Math.min(DECAY_INTERVAL_MIN, startDecayProgressMin));
   let totalPlays = 0;
   let totalWasted = 0;
   let totalWastedMinutes = 0;
@@ -99,8 +113,8 @@ export function simulateTimeline(
     } else {
       // 休憩: 進捗を繰り越し加算し、30分ごとに減少。
       decayProgress += Math.max(0, seg.minutes);
-      while (decayProgress >= 30) {
-        decayProgress -= 30;
+      while (decayProgress >= DECAY_INTERVAL_MIN) {
+        decayProgress -= DECAY_INTERVAL_MIN;
         internal = Math.max(0, internal - spec.decayPer30min);
       }
       minute += Math.max(0, seg.minutes);

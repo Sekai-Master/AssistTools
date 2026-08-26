@@ -67,12 +67,18 @@ export function mySekaiGaugeFromMemori(memori: number, spec: GaugeSpec = GAUGE_S
 }
 
 /**
+ * 減少が起きる間隔（分）。**この値は GAUGE_SPEC.decayPer30min と対になっている**
+ * （「30分ごとに 550,000」で1組）。片方だけ動かすと減少レートが壊れる。
+ */
+export const DECAY_INTERVAL_MIN = 30;
+
+/**
  * 非活動 restMinutes 分での内部減少量。
  * 「累計30分に到達するごと」なので30分未満の端数は減らない（30分ブロック単位）。
  */
 export function decayInternal(restMinutes: number, spec: GaugeSpec = GAUGE_SPEC): number {
   if (restMinutes <= 0) return 0;
-  return Math.floor(restMinutes / 30) * spec.decayPer30min;
+  return Math.floor(restMinutes / DECAY_INTERVAL_MIN) * spec.decayPer30min;
 }
 
 /** 100%（続行不可）到達までにその曲を叩ける回数。現在ゲージ(内部)から。 */
@@ -98,5 +104,46 @@ export function gaugeAfterPlays(
 
 /** 100%からの全回復に要する分（= 6時間）。 */
 export function fullRecoveryMinutes(spec: GaugeSpec = GAUGE_SPEC): number {
-  return Math.ceil(spec.max / spec.decayPer30min) * 30;
+  return decayTicks(spec.max, spec) * DECAY_INTERVAL_MIN;
+}
+
+/** 表示%（0〜100）→ 内部値。 */
+export function internalFromPercent(percent: number, spec: GaugeSpec = GAUGE_SPEC): number {
+  return (Math.max(0, Math.min(100, percent)) / 100) * spec.max;
+}
+
+/** いまの内部値が0になるまでに必要な減少の回数（30分ブロック）。 */
+export function decayTicks(internal: number, spec: GaugeSpec = GAUGE_SPEC): number {
+  if (internal <= 0) return 0;
+  return Math.ceil(internal / spec.decayPer30min);
+}
+
+/**
+ * ゲーム内の「次の回復まで ○分」から、減少タイマーの進捗（分）を出す。
+ *
+ * ★ ここが「イベントの途中からツールを開く」ための唯一の橋。
+ *   減少は30分に1回なので、次まで r 分なら **すでに 30 − r 分進んでいる**。
+ *   これを渡さないとタイムラインは常に「たった今プレイを止めた」（進捗0）から
+ *   始まり、途中参加では最大30分ぶん予定がずれる。
+ */
+export function decayProgressFromNextDecay(minutesToNextDecay: number): number {
+  const remaining = Math.max(0, Math.min(DECAY_INTERVAL_MIN, minutesToNextDecay));
+  return DECAY_INTERVAL_MIN - remaining;
+}
+
+/**
+ * いまのゲージが0%になるまでの分数（＝全回復まで）。
+ *
+ * 次の回復まで r 分・残り減少回数 n 回なら `r + (n − 1) × 30`。
+ * r を省略すると「たった今プレイを止めた」＝30分フルとして数える（従来の 6時間 表示と同じ）。
+ */
+export function minutesToEmpty(
+  internal: number,
+  minutesToNextDecay: number = DECAY_INTERVAL_MIN,
+  spec: GaugeSpec = GAUGE_SPEC
+): number {
+  const ticks = decayTicks(internal, spec);
+  if (ticks <= 0) return 0;
+  const remaining = Math.max(0, Math.min(DECAY_INTERVAL_MIN, minutesToNextDecay));
+  return remaining + (ticks - 1) * DECAY_INTERVAL_MIN;
 }

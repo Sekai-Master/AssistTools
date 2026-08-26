@@ -62,6 +62,11 @@ interface Props {
   overhead: number;
   /** プラン開始時点のゲージ%（上の「現在のゲージ」を引き継ぐ） */
   startPercent: number;
+  /**
+   * プラン開始時点で減少タイマーが進んでいる分（0〜30）。
+   * 上の「次の回復まで」から作る。0＝たった今プレイを止めた。
+   */
+  startDecayProgress?: number;
   /** エビ基準の周回ペース(回/時)。画像のメタ表示に使う。 */
   ratePerHour: number;
   /** 指定すると各プレイに焚き数を持たせ、累積到達ポイントも計算・表示する（全部入り） */
@@ -83,6 +88,7 @@ export function PlanTimeline({
   selectedSong,
   overhead,
   startPercent,
+  startDecayProgress = 0,
   ratePerHour,
   points,
   segments,
@@ -95,8 +101,8 @@ export function PlanTimeline({
 
   const startMOD = parseClock(startTime);
   const result = useMemo(
-    () => simulateTimeline(segments, startPercent, overhead),
-    [segments, startPercent, overhead],
+    () => simulateTimeline(segments, startPercent, overhead, startDecayProgress),
+    [segments, startPercent, overhead, startDecayProgress],
   );
 
   // points指定時: 各ブロックの獲得pt・累積到達ptを並走計算。

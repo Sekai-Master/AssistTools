@@ -19,7 +19,15 @@ import { PlanTimeline } from "./PlanTimeline";
 export default function RefreshGaugeCalculator() {
   const { musics, aliases, loading, error: dataError } = useAnalyzerMusics();
   const inputs = useGaugeInputs(musics);
-  const { selectedSong, rc, gaugePct, overhead, ratePerHour } = inputs;
+  const {
+    selectedSong,
+    rc,
+    gaugePct,
+    overhead,
+    ratePerHour,
+    nextDecayMin,
+    startDecayProgress,
+  } = inputs;
 
   const [segments, setSegments] = useState<Segment[]>([]);
   const [startTime, setStartTime] = useState(nearestRoundTime);
@@ -72,6 +80,14 @@ export default function RefreshGaugeCalculator() {
                 {gaugePct}%
               </span>
               　/　この曲は1回で +{perPlayPct.toFixed(2)}%
+              {nextDecayMin != null && (
+                <>
+                  {"　/　"}次の回復まで{" "}
+                  <span className="font-bold text-slate-600">
+                    {nextDecayMin}分
+                  </span>
+                </>
+              )}
             </p>
           </Panel>
 
@@ -104,6 +120,7 @@ export default function RefreshGaugeCalculator() {
             selectedSong={selectedSong}
             overhead={overhead}
             startPercent={gaugePct}
+            startDecayProgress={startDecayProgress}
             ratePerHour={ratePerHour}
             segments={segments}
             setSegments={setSegments}

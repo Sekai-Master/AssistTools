@@ -69,6 +69,7 @@ export default function PlanPage() {
       inputs: {
         songId: inputs.songId,
         gauge: inputs.gauge,
+        nextDecay: inputs.nextDecay,
         rate: inputs.rate,
         currentPt,
         hourlyRate,
@@ -84,6 +85,8 @@ export default function PlanPage() {
     setStartTime(plan.startTime);
     inputs.setSongId(plan.inputs.songId);
     inputs.setGauge(plan.inputs.gauge);
+    // 旧データには無いので、欠けていたら空欄（＝30分フル扱い）に戻す。
+    inputs.setNextDecay(plan.inputs.nextDecay ?? "");
     inputs.setRate(plan.inputs.rate);
     setCurrentPt(plan.inputs.currentPt);
     setHourlyRate(plan.inputs.hourlyRate);
@@ -242,6 +245,7 @@ export default function PlanPage() {
         selectedSong={selectedSong}
         overhead={overhead}
         startPercent={gaugePct}
+        startDecayProgress={inputs.startDecayProgress}
         ratePerHour={ratePerHour}
         segments={segments}
         setSegments={setSegments}
