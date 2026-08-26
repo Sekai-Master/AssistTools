@@ -18,12 +18,17 @@
 
 ⚠️Python 3.8 で動かすこと（NAS の python3 は 3.8.15）。3.9+ の記法は使わない。
 """
-import argparse, datetime, os, sqlite3, sys, time
+import argparse, datetime, json, os, sqlite3, sys, time, urllib.request
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # NAS は LANG 未設定
 
 DB = "/volume1/docker/sekai-border-tracker/data/borders.db"
+# ⚠️DB（収集コンテナ）は 9〜12分刻みだが、**板そのものは約3分刻み**で更新される。
+#   ライブで見るには粗いので、API を直に叩くのを主にして DB は起動時の遡りにだけ使う。
+#   NAS から api.sekai.best には届く（2026-08-26 実測 200 / 1.7秒）。
+API = "https://api.sekai.best/event/live"
+UA = {"User-Agent": "sekaimaster-assist/1.0"}
 T0 = datetime.datetime(2026, 8, 17, 20, 0)     # イベント開始 JST
 END = datetime.datetime(2026, 8, 27, 20, 0)
 EVENT = 214
@@ -62,6 +67,23 @@ def borders_at(ts):
     return dict((int(r), int(s)) for r, s in rows)
 
 
+def board():
+    """板を直に取る。走者の行と、上位帯のボーダーを同じスナップショットから読む。"""
+    req = urllib.request.Request(API, headers=UA)
+    d = json.load(urllib.request.urlopen(req, timeout=25))
+    rows = d.get("data", d).get("eventRankings", [])
+    if not rows:
+        return None, None, {}
+    ts = rows[0].get("timestamp", "")
+    t = datetime.datetime.strptime(ts[:19], "%Y-%m-%dT%H:%M:%S") + datetime.timedelta(hours=9)
+    by_rank = {}
+    for r in rows:
+        rk = int(r.get("rank", 0))
+        if rk in RANKS:
+            by_rank[rk] = int(r["score"])
+    return t, rows, by_rank
+
+
 def classify(d, lap, auto, mys):
     if d == 0:
         return "停止", 0
@@ -90,7 +112,7 @@ def main():
 
     print("%sevent214 ライブ（ch%d）  1周 %s / オート1回 %s%s"
           % (C["b"], a.ch, "{:,}".format(lap), "{:,}".format(auto), C["0"]))
-    print("%s走者 %s ／ %d秒ごとに DB を見る。Ctrl-C で終了%s" % (C["dim"], a.name, a.every, C["0"]))
+    print("%s走者 %s ／ %d秒ごとに板を直接見る（起動時だけ DB から遡り）。Ctrl-C で終了%s" % (C["dim"], a.name, a.every, C["0"]))
     print("%s%-5s %-6s %13s %10s %-11s %9s %s%s"
           % (C["dim"], "時刻", "順位", "総合Pt", "増分", "内容", "時速", "各順位まで", C["0"]))
 
@@ -98,12 +120,25 @@ def main():
     laps = 0
     first = None
     prev = None
+    hist = []            # (時刻, スコア) の直近履歴。移動平均の時速に使う
+    backfilled = False   # 起動直後の一度だけ DB から遡る
     try:
         while True:
             try:
-                rows = snapshots(a.name, since)
+                if backfilled:
+                    t, brows, bd = board()
+                    hit = [r for r in (brows or []) if str(r.get("userName", "")) == a.name]
+                    if not hit:
+                        hit = [r for r in (brows or []) if str(r.get("userName", "")).startswith(a.name)]
+                    rows = [(t, int(hit[0]["rank"]), int(hit[0]["score"]))] if (t and hit) else []
+                    live_borders = bd
+                else:
+                    rows = snapshots(a.name, since)   # 起動直後の遡りだけ DB から
+                    live_borders = None
+                    backfilled = True
             except Exception as e:
-                print("%sDB読み取り失敗: %s%s" % (C["r"], e, C["0"]))
+                sys.stdout.write("\033[2K\r")
+                print("%s取得に失敗（%s）。%d秒後に再試行%s" % (C["r"], e, a.every, C["0"]))
                 time.sleep(a.every)
                 continue
             for t, rk, sc in rows:
@@ -116,12 +151,16 @@ def main():
                     laps += k
                     if first is None:
                         first = (t, sc)
+                # 時速は直近30分の移動平均。累積平均だと起動直後の停止区間を
+                # いつまでも引きずって、走っているのに低い数字が出続ける
+                hist.append((t, sc))
                 rate = ""
-                if first and t > first[0]:
-                    hrs = (t - first[0]).total_seconds() / 3600.0
-                    if hrs > 0.05:
-                        rate = "%.0f万/h" % ((sc - first[1]) / hrs / 1e4)
-                b = borders_at(t)
+                win = [x for x in hist if (t - x[0]).total_seconds() <= 1800]
+                if len(win) >= 2:
+                    hrs = (t - win[0][0]).total_seconds() / 3600.0
+                    if hrs > 0.08:
+                        rate = "%.0f万/h" % ((sc - win[0][1]) / hrs / 1e4)
+                b = live_borders if live_borders else borders_at(t)
                 marg = " ".join("%d:%+.1fM" % (r, (sc - b[r]) / 1e6) for r in RANKS if r in b and r <= 40)
                 col = C["g"] if kind == "周回" else (C["y"] if kind in ("オート", "マイセカイ") else
                                                     (C["r"] if kind in ("停止", "不明") else C["0"]))
