@@ -16,7 +16,9 @@
 
   --ch N     章（既定 5）。周回/オートの単価はここで切り替わる
   --every N  板を見にいく間隔（秒・既定 20）。板は約3分刻み
-  --back N   起動時に直近 N 時間ぶんを DB から流す（既定 1.0）
+  --back N   起動時に DB から遡る時間（既定 8.0）。**画面に出る行数とは別**で、
+             ここはブロックの開始（＝15分以上周回が途切れた地点）を見つけるための窓。
+             短いとブロック開始が視界の外に出て、周回数が過小になる
   --win N    「直近ペース」を何周ぶんで測るか（既定 10）
   --rows N   画面に残すデータ行数（既定 24。見出し3行＋ステータス1行で合計28行）
   --log DIR  全行を live-YYYYMMDD.log に追記する先（既定 ~/wl214）
@@ -136,7 +138,7 @@ def main():
     ap.add_argument("name", nargs="?", default=os.environ.get("WL214_RUNNER_NAME", ""))
     ap.add_argument("--ch", type=int, default=5)
     ap.add_argument("--every", type=int, default=20)
-    ap.add_argument("--back", type=float, default=1.0)
+    ap.add_argument("--back", type=float, default=8.0)
     ap.add_argument("--win", type=int, default=10)
     ap.add_argument("--rows", type=int, default=24)   # 画面に残すデータ行数
     ap.add_argument("--log", default=os.path.expanduser("~/wl214"))  # 全行を残す先
@@ -174,6 +176,7 @@ def main():
     seen, laphist, view = set(), [], []   # view は画面に残す行（rows は取得データ。名前を分ける）
     laps, prev, first, done_backfill = 0, None, None, False
     last_lap_t = None    # 最後に周回を観測した時刻。ブロックの切れ目の判定に使う
+    block_found = False  # 15分以上の途切れを実際に観測できたか（＝開始点が確かか）
     last_bd, last_nb = {}, {}
     try:
         while True:
@@ -199,6 +202,7 @@ def main():
                     #   28.8周/h で走っているのに 23.3周/h と出る（2026-08-26 実際に出た）。
                     if last_lap_t is not None and (t - last_lap_t).total_seconds() > 900:
                         first = None
+                        block_found = True
                     last_lap_t = t
                     laps += k
                     if first is None:
@@ -266,9 +270,14 @@ def main():
                 #   ブロックを取り直したあとも前のブロックぶんを引きずり、
                 #   同じ画面の「枠全体」と別のブロックを指してしまう（2026-08-26 実際にそうなった）。
                 blk_laps = laps - first[2] if first else laps
-                extra = ("（起動以降の累計 %d）" % laps) if laps != blk_laps else ""
-                render(view, "このブロック %d 周%s%s ／ %s ／ 残り %.1fh ／ 更新 %s"
-                       % (blk_laps, sec, extra, marg, left, prev[0].strftime("%H:%M")))
+                # ⚠️遡った窓の中に「15分以上の途切れ」が無ければ、ブロックの開始は
+                #   視界の外にある。その場合の周回数は**下限**でしかないので、
+                #   確かな数字のふりをさせない（2026-08-26 Nori 指摘。既定 --back 1.0 で
+                #   20:39 に起動したら 19:42 からしか数えられず、50周を22周と出していた）。
+                head_mark = "" if block_found else "≧"
+                note = "" if block_found else "（遡り %.1fh 内にブロックの切れ目が無い＝下限）" % a.back
+                render(view, "このブロック %s%d 周%s%s ／ %s ／ 残り %.1fh ／ 更新 %s"
+                       % (head_mark, blk_laps, sec, note, marg, left, prev[0].strftime("%H:%M")))
             time.sleep(a.every)
     except KeyboardInterrupt:
         print("\n終了。周回 %d 周" % laps)
