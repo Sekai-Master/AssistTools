@@ -55,7 +55,36 @@ CHAPTERS = [
 ]
 UNITS = {1: (107310, 68810, 750), 2: (99330, 63700, 700),
          3: (107975, 69125, 750), 4: (120157, 76685, 850), 5: (118049, 75530, 850)}
-CHALLENGE = 25440          # チャレライ1回（8/27 02:06 の孤立窓。8/22 ch3 実測は 24,840）
+# チャレンジライブ（1日1回）。**イベントボーナスが乗らない別式**（2026-08-27 に確定）:
+#
+#     Pt = (100 + floor(スコア / 20000)) x 120
+#
+# 根拠は独立な2点。8/22 の実機実測（独りんぼエンヴィー EXPERT・スコア 2,146,555 →
+# 24,840 Pt・log §29）と、8/27 02:06 の孤立窓 25,440。gcd(24840,25440)=120 で、
+# 120 で割ると係数 207 / 212。**207 は 8/22 の実測スコアから独立に出る値と一致する**
+# （100 + floor(2,146,555/20000) = 207）。M=60 以下だとスコアが628万以上必要になり、
+# 74.8秒の曲では成立しないので 120 で確定。
+# ⚠️額は日によって動く（スコア次第）。固定値で引くと未分類が増えるので、
+#   **120 の倍数のうちこの帯に入るもの**を候補にする。
+# ── 物理的にありえない読み方を落とすための周期 ──────────────────
+# ⚠️初版は区間の長さを一切見ていなかった。結果、**12分の区間に「オート8回」**
+#   （＝90秒/回。天地は曲だけで182.4秒）のような解を平然と採っていた。
+#   8/23 は物理上限 38.4回のところ 72回と数えていた（破壊者指摘）。
+#   周期は params.overheadSec と楽曲データから: オート 182.4+42.6=225.0 秒 /
+#   周回（独りんぼ 74.8 + OH）は実測 122〜127 秒。安全側に下限を置く。
+# ⚠️曲は天地固定ではない。8/23 夜のオート単価 63,280 は base=119（ガランド）x 係数148 で
+#   成立し、§33 の実測レート「65回 / 2.85時間 ＝ 158秒/回」とも合う。天地(182.4秒)では不可能。
+#   下限を 200秒 に置くとこの夜が丸ごと落ちるので、**観測された最短(158秒)より下**に置く。
+AUTO_CYCLE_MIN = 120.0     # オート1回の最短（短い曲＋最低限のロード）
+LAP_CYCLE_MIN = 100.0      # 周回1周の最短（実測は122〜127秒）
+LB_MULT = 35               # ライブボーナス10炊きの倍率。**オート単価は必ずこの倍数**
+
+CHALLENGE_MULT = 120
+# ⚠️候補を帯で総当たりしてはいけない。35個の減算候補が**事実上のスラック変数**になり、
+#   「1日1回」のはずのチャレライが2回計上される日が出た（破壊者指摘）。
+#   実測は2点しかない。**その2点だけ**を候補にする。
+CHALLENGE_CANDS = [24840, 25440]   # 実測2点のみ。solve では使わず、専用のパスで当てる
+CHALLENGE = 25440          # 表示・積算の代表値（8/27 の実測）
 
 
 def chapter_at(t):
@@ -193,13 +222,18 @@ def detect_units(deltas, mys, fallback_lap, fallback_auto):
         h, _ = score(u, pool, 0.001)
         if h >= 3:
             scored.append((h, u))
+    # ⚠️**オートの単価は必ず35の倍数**（10炊きの倍率。calcLivePt.ts の step3 x multiplier）。
+    #   この無料の制約1つで、検出が拾っていた偽単価（79,724 / 79,427 など）が全部落ちる。
+    #   実測はすべて成立: 68,810 / 63,700 / 69,125 / 76,685 / 75,530 / 63,280 いずれも %35==0。
+    #   ⚠️周回には課さない。周回の単価は部屋が1時間ごとに変わる**多数周の平均**なので、
+    #     35の倍数になる理由がない（ch4 120,157 / ch5 118,049 は実測平均）。
+    scored = [(h, u) for h, u in scored if u % LB_MULT == 0]
     auto = None
     if scored:
         top = max(h for h, _ in scored)
         near = [u for h, u in scored if h >= top * 0.7]   # 0.8 だと 76,685(6件) が 8件×0.8=6.4 に届かず落ちた
         auto = min(near, key=lambda u: abs(u - fallback_auto) / float(fallback_auto))
-        auto = upscale(auto, pool, 0.001)
-        if auto > fallback_auto * 1.30:
+        if auto > fallback_auto * 1.30 or auto % LB_MULT:
             auto = None
     rest = pool
     if auto:
@@ -249,14 +283,26 @@ def load_shifts(path):
     return spans
 
 
-def in_shift(spans, t):
+def in_shift(spans, t0, t1=None):
+    """区間 [t0, t1) が支援枠に重なるか。
+
+    ⚠️**点で判定してはいけない。** 初版は増分の終了時刻だけを見ていたので、
+      01:48→02:00 の増分（枠は 01:00〜02:00）が `a <= t < b` を外れて枠外と判定され、
+      「シフト表で周回と確定できる」と docstring に書いた当の実例が、
+      出荷された report.json では「オート8回」のまま出ていた（破壊者指摘）。
+      同型の反転が6区間あった。**区間が枠に重なっていれば枠内とみなす。**
+    """
+    if t1 is None:
+        t1 = t0
     for a, b, _, _ in spans:
-        if a <= t < b:
+        if t0 < b and t1 > a:
+            return True
+        if t0 == t1 and a <= t0 < b:
             return True
     return False
 
 
-def solve(d, lap, auto, mys, allow_chal=True, shift=False):
+def solve(d, lap, auto, mys, allow_chal=True, shift=False, seconds=None):
     """増分 d を 周回 / オート / マイセカイ / チャレライ に分解する。
 
     ⚠️周回は1周の単価が卓の質で±1%揺れるので厳密な格子に乗らない。オートとマイセカイは
@@ -265,35 +311,46 @@ def solve(d, lap, auto, mys, allow_chal=True, shift=False):
       1.2%超ずれるときはマイセカイを採る。
     返り値 dict(lap=, auto=, mys=, chal=, unexplained=)
     """
-    r = {"lap": 0, "auto": 0, "mys": 0, "chal": 0, "unexplained": 0}
+    r = {"lap": 0, "auto": 0, "mys": 0, "chal": 0, "chalPt": 0, "unexplained": 0}
     if d <= 0:
         return r
-    for chal in ((0, 1) if allow_chal else (0,)):
-        d2 = d - chal * CHALLENGE
+    # ⚠️チャレライを solve の中で総当たりしてはいけない。**減算候補がスラック変数になり**、
+    #   1日1回のはずが7回計上される日が出た（破壊者指摘）。孤立した増分として別パスで当てる。
+    for chal_pt in [0]:
+        chal = 1 if chal_pt else 0
+        d2 = d - chal_pt
         if d2 < 0:
             continue
         if d2 == 0:
-            r["chal"] = chal
+            r["chal"], r["chalPt"] = chal, chal_pt
             return r
         # 純マイセカイ（刻みぴったり・周回として当てはめると単価が外れる）
         if d2 % mys == 0:
             k = int(round(d2 / float(lap)))
             dev = abs(d2 / float(k) - lap) / float(lap) if k else 1.0
             if k < 1 or dev > 0.012:
-                r["mys"], r["chal"] = d2 // mys, chal
+                r["mys"], r["chal"], r["chalPt"] = d2 // mys, chal, chal_pt
                 return r
         # 純オート / 純周回。**支援シフトが入っている時間帯は周回を先に当てる。**
         # ⚠️順序を固定すると必ずどちらかを取り違える。オートの許容は狭い(±0.4%)ので、
         #   無条件に先に当てると周回の増分まで食う（8/26 02:00 の実例は docstring 参照）。
+        # ⚠️区間の長さで上限を切る。1回ぶんは区間の外で始まっていることがあるので +1 を許す。
+        max_auto = int(seconds / AUTO_CYCLE_MIN) + 1 if seconds else 99
+        max_lap = int(seconds / LAP_CYCLE_MIN) + 1 if seconds else 99
+
         def as_auto():
             a = int(round(d2 / float(auto)))
-            if 1 <= a <= 15 and abs(d2 - a * auto) <= auto * 0.004 * a and d2 % mys != 0:
+            if 1 <= a <= min(15, max_auto) and abs(d2 - a * auto) <= auto * 0.004 * a                     and d2 % mys != 0:
                 return a
             return None
 
         def as_lap():
             k = int(round(d2 / float(lap)))
-            if 1 <= k <= 12 and abs(d2 - k * lap) <= lap * 0.030 * k:
+            # ⚠️許容幅は「1周あたりのズレ」で切る。合計に対する %（0.03 x k）にすると、
+            #   k=12 で取りうる範囲の72%が通ってしまう（破壊者指摘）。
+            #   1時間の中は部屋が固定なので周ごとのズレは**系統的**で、sqrt(k) では狭すぎる。
+            #   → 1周あたり 1.5% を上限にする（実測の単価の幅は ±1%）。
+            if 1 <= k <= min(12, max_lap) and abs(d2 - k * lap) <= lap * 0.015 * k:
                 return k
             return None
 
@@ -302,7 +359,7 @@ def solve(d, lap, auto, mys, allow_chal=True, shift=False):
         for kind, fn in (first, second):
             got = fn()
             if got:
-                r[kind], r["chal"] = got, chal
+                r[kind], r["chal"], r["chalPt"] = got, chal, chal_pt
                 return r
         # オート＋マイセカイの混在（どちらも厳密なので剰余で解ける）
         for a in range(1, 12):
@@ -310,7 +367,7 @@ def solve(d, lap, auto, mys, allow_chal=True, shift=False):
             if rest <= 0:
                 break
             if rest % mys == 0:
-                r["auto"], r["mys"], r["chal"] = a, rest // mys, chal
+                r["auto"], r["mys"], r["chal"], r["chalPt"] = a, rest // mys, chal, chal_pt
                 return r
     r["unexplained"] = d
     return r
@@ -400,6 +457,18 @@ def main():
                 mys_marked.add(idx[k][0])
         i = max(j, i + 1)
 
+    # ── チャレンジライブ。1日1回・別式なので、**実測値ぴったりの孤立増分**だけを当てる ──
+    # ⚠️帯で総当たりすると他の収入の端数を吸ってしまう。実測は 24,840（8/22 ch3）と
+    #   25,440（8/27 ch5）の2点だけ。式は (100 + floor(スコア/20000)) x 120（log §38）。
+    chal_marked = {}
+    for n, ((t0, _, s0), (t1, _, s1)) in enumerate(zip(ser, ser[1:])):
+        d = s1 - s0
+        if d not in CHALLENGE_CANDS:
+            continue
+        key = (t1 - datetime.timedelta(hours=4)).strftime("%Y-%m-%d")
+        if key not in chal_marked:            # 1日1回まで
+            chal_marked[key] = (n, d)
+
     for n, ((t0, _, s0), (t1, _, s1)) in enumerate(zip(ser, ser[1:])):
         d = s1 - s0
         if d <= 0:
@@ -411,10 +480,15 @@ def main():
             continue
         b = units_at(t1)
         lap, auto, mys = b["lapUnit"], b["autoUnit"], b["mysStep"]
-        if n in mys_marked:
-            got = {"lap": 0, "auto": 0, "mys": d // mys, "chal": 0, "unexplained": 0}
+        key0 = (t1 - datetime.timedelta(hours=4)).strftime("%Y-%m-%d")
+        if chal_marked.get(key0, (None,))[0] == n:
+            got = {"lap": 0, "auto": 0, "mys": 0, "chal": 1,
+                   "chalPt": chal_marked[key0][1], "unexplained": 0}
+        elif n in mys_marked:
+            got = {"lap": 0, "auto": 0, "mys": d // mys, "chal": 0, "chalPt": 0, "unexplained": 0}
         else:
-            got = solve(d, lap, auto, mys, shift=in_shift(spans, t1))
+            got = solve(d, lap, auto, mys, shift=in_shift(spans, t0, t1),
+                        seconds=(t1 - t0).total_seconds())
         key = (t1 - datetime.timedelta(hours=4)).strftime("%Y-%m-%d")
         e = days.setdefault(key, {"lapPt": 0, "autoPt": 0, "mysPt": 0, "chalPt": 0,
                                   "unexplainedPt": 0, "laps": 0, "autos": 0, "mysSteps": 0,
@@ -426,7 +500,7 @@ def main():
         e["lapPt"] += got["lap"] * lap
         e["autoPt"] += got["auto"] * auto
         e["mysPt"] += got["mys"] * mys
-        e["chalPt"] += got["chal"] * CHALLENGE
+        e["chalPt"] += got["chalPt"]
         e["unexplainedPt"] += got["unexplained"]
         e["unexplainedCount"] += 1 if got["unexplained"] else 0
         e["total"] += d
@@ -458,6 +532,13 @@ def main():
         print("⚠️オートがクォータ上限(99回/日)を超えている日がある＝周回をオートと読んでいる:")
         for k, n in over:
             print("   {0}  {1}回（+{2}）".format(k, n, n - 99))
+    # ⚠️チャレライも1日1回。オートに検算があってこちらに無いのは片手落ちだった（破壊者指摘）
+    ch_over = [(k, days[k]["chals"]) for k in sorted(days) if days[k]["chals"] > 1]
+    if ch_over:
+        print("")
+        print("⚠️チャレンジライブが1日1回を超えている日がある＝別の収入を誤って当てている:")
+        for k, n in ch_over:
+            print("   {0}  {1}回".format(k, n))
     share = tot["total"] or 1
     print()
     print("連続区間で説明できた割合: %.2f%%（不明 %s Pt / %d区間）" %
@@ -485,14 +566,17 @@ def main():
             continue
         b = units_at(t1)
         lap, auto, mys = b["lapUnit"], b["autoUnit"], b["mysStep"]
-        got = solve(d, lap, auto, mys, shift=in_shift(spans, t1))
+        got = solve(d, lap, auto, mys, shift=in_shift(spans, t0, t1),
+                    seconds=(t1 - t0).total_seconds())
         key = t1.strftime("%Y-%m-%dT%H")
         e = hourly.setdefault(key, {"laps": 0, "autos": 0, "mysSteps": 0, "pt": 0,
-                                    "lapPt": 0, "seconds": 0})
+                                    "lapPt": 0, "autoPt": 0, "mysPt": 0, "seconds": 0})
         e["laps"] += got["lap"]
         e["autos"] += got["auto"]
         e["mysSteps"] += got["mys"]
         e["lapPt"] += got["lap"] * lap
+        e["autoPt"] += got["auto"] * auto
+        e["mysPt"] += got["mys"] * mys
         e["pt"] += d
         e["seconds"] += (t1 - t0).total_seconds()
     for key, e in hourly.items():
