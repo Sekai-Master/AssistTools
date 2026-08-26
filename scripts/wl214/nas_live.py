@@ -261,8 +261,14 @@ def main():
                     sec = "・1周 %.0f秒" % (bh * 3600 / (laps - first[2]))
                 marg = " ".join("%d位%+.1fM" % (r, (prev[1] - last_bd[r]) / 1e6)
                                 for r in RANKS if r in last_bd and r <= 50)
-                render(view, "周回 %d 周%s ／ %s ／ 残り %.1fh ／ 更新 %s"
-                       % (laps, sec, marg, left, prev[0].strftime("%H:%M")))
+                # ⚠️出すのは**このブロックの周回数**（laps - first[2]）。
+                #   laps（起動以降の累計）をそのまま出すと、15分以上の途切れで
+                #   ブロックを取り直したあとも前のブロックぶんを引きずり、
+                #   同じ画面の「枠全体」と別のブロックを指してしまう（2026-08-26 実際にそうなった）。
+                blk_laps = laps - first[2] if first else laps
+                extra = ("（起動以降の累計 %d）" % laps) if laps != blk_laps else ""
+                render(view, "このブロック %d 周%s%s ／ %s ／ 残り %.1fh ／ 更新 %s"
+                       % (blk_laps, sec, extra, marg, left, prev[0].strftime("%H:%M")))
             time.sleep(a.every)
     except KeyboardInterrupt:
         print("\n終了。周回 %d 周" % laps)
