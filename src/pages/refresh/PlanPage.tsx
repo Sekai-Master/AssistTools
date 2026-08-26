@@ -71,7 +71,9 @@ export default function PlanPage() {
   const mySekaiUnitPt = useMemo(() => {
     const power = parseAmount(talent);
     const bonusPct = parseAmount(bonus, true);
-    if (!(power > 0) || !(bonusPct >= 0)) return 0;
+    // ★ 片方だけ入れた状態で計算すると、ボーナス0%の低い単価が黙って出る。
+    //   両方揃うまでは0（＝計上しない）にして、入力を促す方が安全。
+    if (!(power > 0) || !(bonusPct > 0)) return 0;
     return calculateUnitBasePt(power, bonusPct, hasWorldPass);
   }, [talent, bonus, hasWorldPass]);
 
@@ -115,6 +117,7 @@ export default function PlanPage() {
           skillLeader: autoConfig.skillLeader,
           skillTotal: autoConfig.skillTotal,
           ptOverride: autoConfig.ptOverride,
+          cycleOverride: autoConfig.cycleOverride,
         },
       },
     };
@@ -145,6 +148,7 @@ export default function PlanPage() {
       autoConfig.setSkillLeader(a.skillLeader);
       autoConfig.setSkillTotal(a.skillTotal);
       autoConfig.setPtOverride(a.ptOverride);
+      autoConfig.setCycleOverride(a.cycleOverride ?? "");
     }
     setPlanName(plan.name);
     setNotice(`「${plan.name}」を呼び出しました。`);

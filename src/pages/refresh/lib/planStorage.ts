@@ -15,6 +15,7 @@ export interface SavedAutoInputs {
   skillLeader: string;
   skillTotal: string;
   ptOverride: string;
+  cycleOverride?: string;
 }
 
 export interface SavedPlanInputs {

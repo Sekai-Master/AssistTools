@@ -45,6 +45,8 @@ export function useAutoConfig({
   const [skillLeader, setSkillLeader] = useState("");
   const [skillTotal, setSkillTotal] = useState("");
   const [ptOverride, setPtOverride] = useState("");
+  /** 1周期の秒の上書き。楽曲データが読めないときはここだけで計算できる。 */
+  const [cycleOverride, setCycleOverride] = useState("");
 
   const { entries, loading, error } = useRankingMusics(enabled);
 
@@ -90,17 +92,20 @@ export function useAutoConfig({
 
   const overridePt = Number(ptOverride.replace(/,/g, ""));
   const hasOverride = ptOverride.trim() !== "" && Number.isFinite(overridePt) && overridePt >= 0;
+  const overrideCycle = Number(cycleOverride);
+  const hasCycleOverride =
+    cycleOverride.trim() !== "" && Number.isFinite(overrideCycle) && overrideCycle > 0;
 
   /** 使う値。**毎レンダーで作り直すと計画の再計算が走る**ので固定する。 */
   const runtime = useMemo(
     () => ({
-      cycleSec: selected?.cycleSec ?? 0,
+      cycleSec: hasCycleOverride ? overrideCycle : (selected?.cycleSec ?? 0),
       ptPerPlay: hasOverride ? overridePt : (selected?.eventPt ?? 0),
       taki,
       dailyCap: PASS_LIMITS[course].autoPlays,
       usedToday: Math.max(0, Number(usedToday) || 0),
     }),
-    [selected, hasOverride, overridePt, taki, course, usedToday],
+    [selected, hasOverride, overridePt, hasCycleOverride, overrideCycle, taki, course, usedToday],
   );
 
   return {
@@ -119,6 +124,9 @@ export function useAutoConfig({
     ptOverride,
     setPtOverride,
     hasOverride,
+    cycleOverride,
+    setCycleOverride,
+    hasCycleOverride,
     options,
     selected,
     loading,

@@ -29,6 +29,9 @@ export function AutoPanel({ config }: { config: AutoConfig }) {
     ptOverride,
     setPtOverride,
     hasOverride,
+    cycleOverride,
+    setCycleOverride,
+    hasCycleOverride,
     options,
     selected,
     loading,
@@ -109,23 +112,45 @@ export function AutoPanel({ config }: { config: AutoConfig }) {
           )}
         </Field>
 
-        <Field
-          label="1回のPt"
-          htmlFor="pl-auto-pt"
-          hint="空欄なら上の曲から計算します。実測があれば入れてください（そちらが優先）"
-        >
-          <div className="flex items-center gap-2">
-            <NeuInput
-              id="pl-auto-pt"
-              inputMode="numeric"
-              value={ptOverride}
-              onChange={(e) => setPtOverride(e.target.value)}
-              placeholder={selected ? String(selected.eventPt) : "例: 69125"}
-              className="max-w-40"
-            />
-            <span className="text-sm text-slate-500">pt</span>
-          </div>
-        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            label="1回のPt"
+            htmlFor="pl-auto-pt"
+            hint="空欄なら上の曲から計算します。実測があれば入れてください（そちらが優先）"
+          >
+            <div className="flex items-center gap-2">
+              <NeuInput
+                id="pl-auto-pt"
+                inputMode="numeric"
+                value={ptOverride}
+                onChange={(e) => setPtOverride(e.target.value)}
+                placeholder={selected ? String(selected.eventPt) : "例: 69125"}
+                className="max-w-40"
+              />
+              <span className="text-sm text-slate-500">pt</span>
+            </div>
+          </Field>
+
+          {/* ★ 曲データが読めないときの逃げ道。周期が0だと「休憩に何回入るか」が
+              出せず、Ptだけ入れても回数0のままになる。 */}
+          <Field
+            label="1回の所要"
+            htmlFor="pl-auto-cycle"
+            hint="曲の長さ＋ロス。空欄なら上の曲から計算します"
+          >
+            <div className="flex items-center gap-2">
+              <NeuInput
+                id="pl-auto-cycle"
+                inputMode="numeric"
+                value={cycleOverride}
+                onChange={(e) => setCycleOverride(e.target.value)}
+                placeholder={selected ? String(Math.round(selected.cycleSec)) : "例: 225"}
+                className="max-w-40"
+              />
+              <span className="text-sm text-slate-500">秒</span>
+            </div>
+          </Field>
+        </div>
       </div>
 
       <details className="mt-3">
@@ -165,11 +190,23 @@ export function AutoPanel({ config }: { config: AutoConfig }) {
               {Math.round(runtime.ptPerPlay).toLocaleString()} pt
             </span>{" "}
             ・ 1周期 {Math.round(runtime.cycleSec)}秒 ・ 上限 {runtime.dailyCap}回で{" "}
-            {fmtDuration((capHours * 60))}
-            {hasOverride && <span className="text-slate-400">（Ptは手入力を使用）</span>}
+            {fmtDuration(capHours * 60)}
+            {(hasOverride || hasCycleOverride) && (
+              <span className="text-slate-400">
+                （{[hasOverride ? "Pt" : null, hasCycleOverride ? "所要" : null]
+                  .filter(Boolean)
+                  .join("・")}
+                は手入力を使用）
+              </span>
+            )}
           </>
+        ) : runtime.cycleSec <= 0 ? (
+          // 周期が無いと「休憩に何回入るか」が出せない＝回数が0のままになる。
+          <span className="text-rose-600">
+            曲を選ぶか「1回の所要」を入れてください（1回の秒数が分からないと、休憩に何回入るか出せません）。
+          </span>
         ) : (
-          "曲を選ぶか「1回のPt」を入れると、休憩ブロックにオートを積めます。"
+          "「1回のPt」を入れると、休憩ブロックにオートが積み上がります。"
         )}
       </p>
     </Panel>

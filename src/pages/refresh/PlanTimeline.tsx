@@ -792,6 +792,13 @@ export function PlanTimeline({
               />
             </div>
           )}
+          {/* ★ 時計が無いと 4:00 リセットのまたぎを判定できない。黙って
+              「問題なし」に見せると、翌日ぶんを先に食う罠を見逃す。 */}
+          {autoPlan && startMOD === null && (
+            <p className="mt-2 text-xs text-rose-600">
+              ⚠ 開始時刻が空欄なので、オート回数の 4:00 リセットまたぎは判定していません。
+            </p>
+          )}
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <Stat label="総時間" value={fmtDuration(result.totalMinutes)} />
             <Stat
