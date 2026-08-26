@@ -14,6 +14,10 @@ export interface SavedPlanInputs {
   currentPt: string;
   hourlyRate: string;
   refTaki: number;
+  /** マイセカイ単価用。2026-08-27 に追加したので旧データには無い。 */
+  talent?: string;
+  bonus?: string;
+  hasWorldPass?: boolean;
 }
 
 export interface SavedPlan {

@@ -13,7 +13,11 @@ import { NeuButton } from "../../components/ui/NeuButton";
 import { DurationInput } from "../../components/ui/DurationInput";
 import { TakiInput } from "../../components/ui/TakiInput";
 import { Stat } from "./Stat";
-import { type Segment, simulateTimeline } from "./lib/timeline";
+import { type Segment, mysekaiMemoriOf, simulateTimeline } from "./lib/timeline";
+import {
+  MYSEKAI_FULL_HARVEST_MEMORI,
+  computePlanPoints,
+} from "./lib/planPoints";
 import {
   watermark,
   drawPlanCanvas,
@@ -21,15 +25,7 @@ import {
 } from "./lib/planCanvas";
 import { getRefreshConstant } from "./lib/refreshConstant";
 import { fmtClock, fmtDuration, parseClock } from "./lib/format";
-import { LIVE_BONUS_MULTIPLIERS } from "../analyzer/lib/calcLivePt";
 import type { AnalyzerMusic } from "../analyzer/useAnalyzerMusics";
-
-/** 焚き数での点数倍率比。基準時速×この比＝その焚き数の時速。 */
-function takiRate(hourlyRate: number, refTaki: number, taki: number): number {
-  const ref = LIVE_BONUS_MULTIPLIERS[Math.max(0, Math.min(10, refTaki))] || 1;
-  const m = LIVE_BONUS_MULTIPLIERS[Math.max(0, Math.min(10, taki))] || 1;
-  return (hourlyRate * m) / ref;
-}
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 
@@ -47,6 +43,8 @@ interface PointsConfig {
   hourlyRate: number;
   /** 上の時速を出した焚き数 */
   refTaki: number;
+  /** マイセカイ1メモリあたりのPt（総合力・ボーナスから算出）。0なら計上しない。 */
+  mySekaiUnitPt: number;
 }
 
 interface Props {
@@ -105,28 +103,11 @@ export function PlanTimeline({
     [segments, startPercent, overhead, startDecayProgress],
   );
 
-  // points指定時: 各ブロックの獲得pt・累積到達ptを並走計算。
-  // ゲージ100%到達後のムダ時間(wastedMinutes)は加点されない＝ゲージと連動する。
-  const pointRows = useMemo(() => {
-    if (!points) return null;
-    let cum = points.startPoints;
-    return result.points.map((pt) => {
-      const seg = pt.segment;
-      let gained = 0;
-      if (seg.kind === "play") {
-        const effMin = Math.max(0, seg.minutes - pt.wastedMinutes);
-        gained =
-          takiRate(
-            points.hourlyRate,
-            points.refTaki,
-            seg.taki ?? points.refTaki,
-          ) *
-          (effMin / 60);
-      }
-      cum += gained;
-      return { gained: Math.round(gained), cumulative: Math.round(cum) };
-    });
-  }, [points, result]);
+  // points指定時: 各ブロックの獲得pt・累積到達ptを並走計算（計算は lib/planPoints）。
+  const pointRows = useMemo(
+    () => (points ? computePlanPoints(result, points) : null),
+    [points, result],
+  );
 
   const finalPoints =
     pointRows && pointRows.length
@@ -158,10 +139,16 @@ export function PlanTimeline({
   };
   const addRest = (minutes: number) =>
     setSegments((s) => [...s, { id: newId(), kind: "rest", minutes }]);
+  // 既定は「全回収1回」。実運用で積むのはほぼこれなので、毎回打ち直させない。
   const addMysekai = () =>
     setSegments((s) => [
       ...s,
-      { id: newId(), kind: "mysekai", stamina: 30, minutes: 10 },
+      {
+        id: newId(),
+        kind: "mysekai",
+        memori: MYSEKAI_FULL_HARVEST_MEMORI,
+        minutes: 15,
+      },
     ]);
   const setPlayMinutes = (id: string, minutes: number) =>
     setSegments((s) =>
@@ -175,10 +162,13 @@ export function PlanTimeline({
     setSegments((s) =>
       s.map((g) => (g.id === id && g.kind === "rest" ? { ...g, minutes } : g)),
     );
-  const setMysekaiStamina = (id: string, stamina: number) =>
+  const setMysekaiMemori = (id: string, memori: number) =>
     setSegments((s) =>
       s.map((g) =>
-        g.id === id && g.kind === "mysekai" ? { ...g, stamina } : g,
+        // 旧データのスタミナは残さない（両方あると次に読むときどちらが正か割れる）。
+        g.id === id && g.kind === "mysekai"
+          ? { ...g, memori, stamina: undefined }
+          : g,
       ),
     );
   const setMysekaiMinutes = (id: string, minutes: number) =>
@@ -249,11 +239,17 @@ export function PlanTimeline({
           };
         }
         if (seg.kind === "mysekai") {
+          const memori = mysekaiMemoriOf(seg);
           return {
             time,
-            label: `マイセカイ採取　スタミナ${seg.stamina}`,
+            label: `マイセカイ採取　${memori}メモリ　${fmtDuration(seg.minutes)}`,
             sub: points
-              ? `${fmtDuration(seg.minutes)} ・ ${gauge(pt.endPercent)}`
+              ? [
+                  gained > 0 ? `+${gained.toLocaleString()}pt` : null,
+                  gauge(pt.endPercent),
+                ]
+                  .filter(Boolean)
+                  .join(" ・ ")
               : fmtDuration(seg.minutes),
             percent: cum ?? `${pt.endPercent.toFixed(1)}%`,
             warn: false,
@@ -460,27 +456,47 @@ export function PlanTimeline({
                         <span className="font-bold text-slate-600">
                           マイセカイ
                         </span>
-                        <span className="text-xs text-slate-500">スタミナ</span>
+                        <span className="text-xs text-slate-500">メモリ</span>
                         <input
-                          inputMode="numeric"
-                          value={String(seg.stamina)}
+                          inputMode="decimal"
+                          value={String(mysekaiMemoriOf(seg))}
                           onChange={(e) =>
-                            setMysekaiStamina(
+                            setMysekaiMemori(
                               seg.id,
                               Math.max(0, Number(e.target.value) || 0),
                             )
                           }
-                          className="w-14 rounded-lg bg-neu px-1 py-1 text-center text-slate-800 shadow-neu-inset outline-none"
-                          aria-label="スタミナ"
+                          className="w-16 rounded-lg bg-neu px-1 py-1 text-center text-slate-800 shadow-neu-inset outline-none"
+                          aria-label="メモリ数"
                         />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setMysekaiMemori(
+                              seg.id,
+                              MYSEKAI_FULL_HARVEST_MEMORI,
+                            )
+                          }
+                          className="neu-raised neu-tactile rounded-lg px-2 py-1 text-[10px] text-slate-600"
+                        >
+                          全回収
+                        </button>
                         <span className="text-[10px] text-slate-400">
-                          ≈{(seg.stamina / 5).toFixed(1)}
-                          メモリ（5スタミナ≒1メモリ）
+                          ≈スタミナ{Math.round(mysekaiMemoriOf(seg) * 5)}
                         </span>
                         <DurationInput
                           value={seg.minutes}
                           onChange={(v) => setMysekaiMinutes(seg.id, v)}
+                          step={15}
                         />
+                        {points && pointRows && pointRows[i].gained > 0 && (
+                          <span
+                            className="text-xs font-bold"
+                            style={{ color: "var(--unit-color)" }}
+                          >
+                            +{pointRows[i].gained.toLocaleString()}
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <div className="flex flex-wrap items-center gap-2 text-sm">

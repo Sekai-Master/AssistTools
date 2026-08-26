@@ -34,8 +34,36 @@ export type Segment =
       /** 焚き数（ライブボーナス消費数 0〜10）。点数計算に使う。ゲージには影響しない。 */
       taki?: number;
     }
-  | { id: string; kind: "mysekai"; stamina: number; minutes: number }
+  | {
+      id: string;
+      kind: "mysekai";
+      /**
+       * 採取したメモリ数（木・石=1.0 / キラキラ・樽=0.5 / 草花・工具箱=0.2）。
+       * ★ ゲージも点数もメモリが基準。スタミナは表示のための換算に過ぎない。
+       */
+      memori?: number;
+      /**
+       * 旧データ互換。2026-08-27 より前の保存プランはスタミナで持っている
+       * （1メモリ = staminaPerMemori スタミナ）。読むときは mysekaiMemoriOf を通す。
+       */
+      stamina?: number;
+      minutes: number;
+    }
   | { id: string; kind: "rest"; minutes: number };
+
+/**
+ * マイセカイブロックのメモリ数。**旧データ（スタミナ保存）をここで吸収する。**
+ * 保存プランはユーザーの端末に残り続けるので、読み口を1つにしておかないと
+ * 「呼び出したら採取量が0になる」が静かに起きる。
+ */
+export function mysekaiMemoriOf(
+  seg: Extract<Segment, { kind: "mysekai" }>,
+  spec: GaugeSpec = GAUGE_SPEC
+): number {
+  if (seg.memori != null) return Math.max(0, seg.memori);
+  if (seg.stamina != null) return Math.max(0, seg.stamina) / spec.staminaPerMemori;
+  return 0;
+}
 
 export interface SegmentResult {
   segment: Segment;
@@ -107,8 +135,11 @@ export function simulateTimeline(
       totalWastedMinutes += wastedMin;
     } else if (seg.kind === "mysekai") {
       // マイセカイ採取も活動＝減少タイマー停止（progress据え置き＝繰り越し）。
-      // ゲージは 700/スタミナ（双葉は別枠だがUIでは素材換算のスタミナ入力に集約）。
-      internal = Math.min(spec.max, internal + mySekaiGaugeInternal(seg.stamina, 0, spec));
+      // ゲージは 700/スタミナ（双葉は別枠だがUIではメモリ入力に集約）。
+      internal = Math.min(
+        spec.max,
+        internal + mySekaiGaugeInternal(mysekaiMemoriOf(seg) * spec.staminaPerMemori, 0, spec)
+      );
       minute += Math.max(0, seg.minutes);
     } else {
       // 休憩: 進捗を繰り越し加算し、30分ごとに減少。

@@ -5,7 +5,10 @@ import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { TakiInput } from "../../components/ui/TakiInput";
+import { Switch } from "../../components/ui/Switch";
 import { ProfileBar, SaveToProfile } from "../../components/ui/ProfileBar";
+import { calculateUnitBasePt } from "../analyzer/lib/mySekai";
+import { parseAmount } from "../analyzer/lib/inputParsing";
 import { RateCalibrator } from "./RateCalibrator";
 import { useAnalyzerMusics } from "../analyzer/useAnalyzerMusics";
 import { useGaugeInputs } from "./useGaugeInputs";
@@ -36,6 +39,11 @@ export default function PlanPage() {
   const [currentPt, setCurrentPt] = useState("");
   const [hourlyRate, setHourlyRate] = useState("500000");
   const [refTaki, setRefTaki] = useState(5);
+  // マイセカイの単価を出すための編成。周回の点数時速（実測）とは出どころが違い、
+  // こちらは総合力とボーナスから計算で出る。
+  const [talent, setTalent] = useState("");
+  const [bonus, setBonus] = useState("");
+  const [hasWorldPass, setHasWorldPass] = useState(false);
 
   // タイムライン本体（保存対象なので親で保持）
   const [segments, setSegments] = useState<Segment[]>([]);
@@ -46,13 +54,22 @@ export default function PlanPage() {
   const [planName, setPlanName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
 
+  /** マイセカイ 1メモリあたりのPt。総合力かボーナスが未入力なら0＝計上しない。 */
+  const mySekaiUnitPt = useMemo(() => {
+    const power = parseAmount(talent);
+    const bonusPct = parseAmount(bonus, true);
+    if (!(power > 0) || !(bonusPct >= 0)) return 0;
+    return calculateUnitBasePt(power, bonusPct, hasWorldPass);
+  }, [talent, bonus, hasWorldPass]);
+
   const points = useMemo(
     () => ({
       startPoints: Number(currentPt) || 0,
       hourlyRate: Number(hourlyRate) || 0,
       refTaki,
+      mySekaiUnitPt,
     }),
-    [currentPt, hourlyRate, refTaki],
+    [currentPt, hourlyRate, refTaki, mySekaiUnitPt],
   );
 
   const doSave = () => {
@@ -74,6 +91,9 @@ export default function PlanPage() {
         currentPt,
         hourlyRate,
         refTaki,
+        talent,
+        bonus,
+        hasWorldPass,
       },
     };
     setSaved(savePlan(plan));
@@ -91,6 +111,9 @@ export default function PlanPage() {
     setCurrentPt(plan.inputs.currentPt);
     setHourlyRate(plan.inputs.hourlyRate);
     setRefTaki(plan.inputs.refTaki);
+    setTalent(plan.inputs.talent ?? "");
+    setBonus(plan.inputs.bonus ?? "");
+    setHasWorldPass(plan.inputs.hasWorldPass ?? false);
     setPlanName(plan.name);
     setNotice(`「${plan.name}」を呼び出しました。`);
   };
@@ -123,12 +146,18 @@ export default function PlanPage() {
             apply={(p) => {
               if (p.hourlyRate != null) setHourlyRate(String(p.hourlyRate));
               if (p.taki != null) setRefTaki(p.taki);
+              // マイセカイの単価はこの2つで決まる。周回だけ反映して
+              // 採取が0点のまま、という片手落ちにしない。
+              if (p.power != null) setTalent(String(p.power));
+              if (p.bonus != null) setBonus(String(p.bonus));
             }}
           />
           <SaveToProfile
             collect={() => ({
               hourlyRate: Number(hourlyRate) || undefined,
               taki: refTaki,
+              power: parseAmount(talent) || undefined,
+              bonus: parseAmount(bonus, true) || undefined,
             })}
           />
         </div>
@@ -180,6 +209,52 @@ export default function PlanPage() {
         <p className="mt-3 text-xs text-slate-500">
           「上の曲」を選んで下の「＋稼働」で枠を積むと、各枠の焚き数・獲得ptと累積到達ptが出ます。
           ゲージが100%に達すると、そのぶんは加点されません（休憩・マイセカイで回復を）。
+        </p>
+      </Panel>
+
+      <Panel title="マイセカイの単価">
+        {/* 点数時速は実測値だが、マイセカイの単価は総合力とボーナスから計算で出る。
+            入れておくと採取ブロックが点数として積み上がる（入れなければ0のまま）。 */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="総合力" htmlFor="pl-talent">
+            <NeuInput
+              id="pl-talent"
+              inputMode="numeric"
+              value={talent}
+              onChange={(e) => setTalent(e.target.value)}
+              placeholder="例: 336,000"
+            />
+          </Field>
+          <Field label="イベントボーナス (%)" htmlFor="pl-bonus">
+            <NeuInput
+              id="pl-bonus"
+              inputMode="decimal"
+              value={bonus}
+              onChange={(e) => setBonus(e.target.value)}
+              placeholder="例: 821"
+            />
+          </Field>
+          <Field label="ワールドパス">
+            <Switch
+              checked={hasWorldPass}
+              onChange={setHasWorldPass}
+              label="ワールドパス 有効"
+            />
+          </Field>
+        </div>
+        <p className="mt-3 text-xs text-slate-500">
+          {mySekaiUnitPt > 0 ? (
+            <>
+              1メモリあたり{" "}
+              <span className="font-bold" style={{ color: "var(--unit-color)" }}>
+                {mySekaiUnitPt.toLocaleString()} pt
+              </span>
+              。全回収1回（約89.5メモリ）で約{" "}
+              {Math.floor(mySekaiUnitPt * 89.5).toLocaleString()} pt です。
+            </>
+          ) : (
+            "総合力とイベントボーナスを入れると、マイセカイ採取のポイントも積み上がります（未入力のあいだは0のまま）。"
+          )}
         </p>
       </Panel>
 
