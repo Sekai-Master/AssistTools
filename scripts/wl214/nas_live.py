@@ -162,8 +162,8 @@ def main():
         out = ["\033[H\033[J"]
         out.append("%sevent214 ライブ（ch%d）  1周 %s / オート1回 %s%s"
                    % (C["b"], a.ch, "{:,}".format(lap), "{:,}".format(auto), C["0"]))
-        out.append("%s走者 %s ／ %d秒ごとに板を直接見る ／ 全行は %s に追記中%s"
-                   % (C["dim"], a.name, a.every, logpath, C["0"]))
+        # 2行目は走者と更新間隔だけ。ポーリング間隔やログの場所は見る側に関係ない
+        out.append("%s走者 %s ／ 値は3分おきに更新。%s" % (C["dim"], a.name, C["0"]))
         out.append("%s%s%s" % (C["dim"], head, C["0"]))
         for r in view[-a.rows:]:
             out.append(r["line"])
