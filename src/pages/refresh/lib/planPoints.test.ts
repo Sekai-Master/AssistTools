@@ -97,6 +97,21 @@ describe("computePlanPoints", () => {
     expect(rows[0].gained).toBe(45_000);
   });
 
+  it("休憩のオートは渡された結果ぶんだけ加点する", () => {
+    const segs: Segment[] = [
+      { id: "r1", kind: "rest", minutes: 60, auto: {} },
+      { id: "r2", kind: "rest", minutes: 60 },
+    ];
+    const rows = computePlanPoints(
+      simulateTimeline(segs, 80, OH),
+      cfg,
+      new Map([[0, 1_390_900]]),
+    );
+    expect(rows[0].gained).toBe(1_390_900);
+    // オートを付けていない休憩は0のまま
+    expect(rows[1].gained).toBe(0);
+  });
+
   it("単価が0なら採取は0のまま（黙って偽の点数を出さない）", () => {
     const segs: Segment[] = [{ id: "m", kind: "mysekai", memori: 89.5, minutes: 15 }];
     const rows = computePlanPoints(simulateTimeline(segs, 0, OH), {

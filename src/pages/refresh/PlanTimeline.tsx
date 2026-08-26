@@ -420,6 +420,11 @@ export function PlanTimeline({
           <span className="font-bold" style={{ color: "var(--unit-color)" }}>
             {startPercent}%
           </span>
+          {/* ★ 開始時刻を先送りしても、ゲージとタイマーは「いまの値」のまま使う。
+              黙って現在値を未来へ持ち込むと、待っているあいだの減少が消える。 */}
+          <span className="ml-2 text-xs text-slate-400">
+            上の「現在のゲージ」「次の回復まで」を開始時点の値として使います
+          </span>
         </p>
       </div>
 
@@ -488,16 +493,23 @@ export function PlanTimeline({
                 }
               }
               return (
+                /**
+                 * ★ 狭い画面では**中身を2行目へ折り返す**。
+                 *   時刻(96px)・数値(112px)・並べ替え・削除を1行に固定で並べると、
+                 *   390px では中身に100px も残らず、曲名や警告が1文字ずつの縦書きに潰れる
+                 *   （利用者の半分はモバイル）。order で「時刻・数値・操作」を1行目、
+                 *   中身を2行目に落とし、sm 以上では元の横並びに戻す。
+                 */
                 <li
                   key={seg.id}
-                  className="neu-raised flex items-center gap-3 p-3"
+                  className="neu-raised flex flex-wrap items-center gap-x-3 gap-y-2 p-3"
                 >
-                  <div className="w-24 shrink-0 text-[11px] leading-tight text-slate-500">
+                  <div className="order-1 w-24 shrink-0 text-[11px] leading-tight text-slate-500">
                     {fmtClock(startMOD, pt.startMinute)}
                     <br />↓ {fmtClock(startMOD, pt.endMinute)}
                   </div>
 
-                  <div className="min-w-0 flex-1">
+                  <div className="order-3 w-full min-w-0 sm:order-2 sm:w-auto sm:flex-1">
                     {seg.kind === "play" ? (
                       <div className="flex flex-wrap items-center gap-2 text-sm">
                         <span
@@ -677,7 +689,7 @@ export function PlanTimeline({
                   </div>
 
                   <div
-                    className={`shrink-0 text-right ${points ? "w-28" : "w-20"}`}
+                    className={`order-2 ml-auto shrink-0 text-right sm:order-3 sm:ml-0 ${points ? "w-28" : "w-20"}`}
                   >
                     {points && pointRows ? (
                       <>
@@ -716,7 +728,7 @@ export function PlanTimeline({
                     )}
                   </div>
 
-                  <div className="flex shrink-0 flex-col leading-none">
+                  <div className="order-2 flex shrink-0 flex-col leading-none sm:order-4">
                     <button
                       type="button"
                       aria-label="上へ"
@@ -740,7 +752,7 @@ export function PlanTimeline({
                     type="button"
                     aria-label="削除"
                     onClick={() => remove(seg.id)}
-                    className="shrink-0 text-slate-400 hover:text-slate-600"
+                    className="order-2 shrink-0 text-slate-400 hover:text-slate-600 sm:order-5"
                   >
                     ×
                   </button>

@@ -91,6 +91,18 @@ export function useAutoConfig({
   const overridePt = Number(ptOverride.replace(/,/g, ""));
   const hasOverride = ptOverride.trim() !== "" && Number.isFinite(overridePt) && overridePt >= 0;
 
+  /** 使う値。**毎レンダーで作り直すと計画の再計算が走る**ので固定する。 */
+  const runtime = useMemo(
+    () => ({
+      cycleSec: selected?.cycleSec ?? 0,
+      ptPerPlay: hasOverride ? overridePt : (selected?.eventPt ?? 0),
+      taki,
+      dailyCap: PASS_LIMITS[course].autoPlays,
+      usedToday: Math.max(0, Number(usedToday) || 0),
+    }),
+    [selected, hasOverride, overridePt, taki, course, usedToday],
+  );
+
   return {
     course,
     setCourse,
@@ -112,13 +124,7 @@ export function useAutoConfig({
     loading,
     error,
     /** 使う値。曲データが読めていなくても、単価を手入力すれば計算できる。 */
-    runtime: {
-      cycleSec: selected?.cycleSec ?? 0,
-      ptPerPlay: hasOverride ? overridePt : (selected?.eventPt ?? 0),
-      taki,
-      dailyCap: PASS_LIMITS[course].autoPlays,
-      usedToday: Math.max(0, Number(usedToday) || 0),
-    },
+    runtime,
   };
 }
 
