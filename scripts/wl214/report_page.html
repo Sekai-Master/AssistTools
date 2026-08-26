@@ -1,0 +1,435 @@
+<title>Again And Again Ambition 走行記録</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* ── トークン。色は必ずここで定義する。
+      media / [data-theme] の中だけで定義した色は「システム既定」の閲覧者に適用されない ── */
+:root{
+  --bg:#F6F5FA; --surface:#FFFFFF; --raise:#FFFFFF;
+  --ink:#181726; --ink-2:#43415A; --muted:#6C6A85;
+  --line:#E2E0EC; --line-2:#CFCCDE;
+  --accent:#C93C77; --accent-soft:#F5DCE8;
+  --good:#1F8A5B; --warn:#B4761A;
+  --grid:rgba(24,23,38,.07);
+  --shadow:0 1px 2px rgba(24,23,38,.05),0 8px 24px rgba(24,23,38,.05);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D0E18; --surface:#151625; --raise:#1B1C2E;
+    --ink:#E9E7F2; --ink-2:#B9B6CC; --muted:#8B89A3;
+    --line:#262740; --line-2:#343553;
+    --accent:#EF6FA6; --accent-soft:#3A2436;
+    --good:#4FCF95; --warn:#E0A94A;
+    --grid:rgba(233,231,242,.07);
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D0E18; --surface:#151625; --raise:#1B1C2E;
+  --ink:#E9E7F2; --ink-2:#B9B6CC; --muted:#8B89A3;
+  --line:#262740; --line-2:#343553;
+  --accent:#EF6FA6; --accent-soft:#3A2436;
+  --good:#4FCF95; --warn:#E0A94A;
+  --grid:rgba(233,231,242,.07);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"Zen Kaku Gothic New",system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+  font-size:15px; line-height:1.75; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1120px; margin:0 auto; padding:0 24px 96px}
+h1,h2,h3{font-family:"Shippori Mincho B1",serif; font-weight:800; text-wrap:balance; margin:0}
+h1{font-size:clamp(30px,5.2vw,50px); line-height:1.22; letter-spacing:.01em}
+h2{font-size:clamp(20px,2.6vw,26px); line-height:1.35}
+h3{font-size:16px; font-weight:600}
+p{margin:0}
+.num{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,monospace; font-variant-numeric:tabular-nums}
+.eyebrow{
+  font-size:11px; letter-spacing:.18em; text-transform:uppercase;
+  color:var(--muted); font-weight:700;
+}
+
+/* ── 章のスパイン。5章＝5キャラという内容そのものを構造に使う ── */
+.spine{display:flex; gap:3px; margin:0}
+.spine i{height:6px; border-radius:99px; display:block}
+.spinekey{display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:12px}
+.spinekey span{display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--ink-2)}
+.spinekey b{width:9px; height:9px; border-radius:3px; display:inline-block}
+
+header{padding:56px 0 30px}
+.lede{margin-top:18px; max-width:62ch; color:var(--ink-2); font-size:15.5px}
+
+section{margin-top:60px}
+.sechead{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:8px}
+.sechead .note{font-size:13px; color:var(--muted)}
+.secintro{max-width:66ch; color:var(--ink-2); font-size:14.5px; margin-top:10px}
+
+.cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:14px; margin-top:24px}
+.card{
+  background:var(--surface); border:1px solid var(--line); border-radius:12px;
+  padding:16px 18px 18px; box-shadow:var(--shadow);
+}
+.card .k{font-size:11.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--muted); font-weight:700}
+.card .v{font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums;
+  font-size:26px; font-weight:600; line-height:1.25; margin-top:8px; letter-spacing:-.02em}
+.card .s{font-size:12.5px; color:var(--muted); margin-top:4px}
+.card .v em{font-style:normal; font-size:14px; color:var(--muted); margin-left:3px}
+
+figure{margin:24px 0 0}
+figcaption{font-size:12.5px; color:var(--muted); margin-top:10px}
+.chart{width:100%; display:block; overflow:visible}
+.scroller{overflow-x:auto; -webkit-overflow-scrolling:touch}
+
+table{border-collapse:collapse; width:100%; font-size:13.5px; min-width:640px}
+th,td{padding:9px 12px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap}
+th{
+  font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
+  font-weight:700; border-bottom:1px solid var(--line-2); position:sticky; top:0; background:var(--bg);
+}
+td:first-child,th:first-child{text-align:left}
+tbody tr:hover{background:var(--accent-soft)}
+td.n{font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums}
+.chip{
+  display:inline-block; padding:1px 8px; border-radius:99px; font-size:11px; font-weight:700;
+  border:1px solid var(--line-2); color:var(--muted); letter-spacing:.04em;
+}
+.chip.meas{color:var(--good); border-color:currentColor}
+.chip.dec{color:var(--warn); border-color:currentColor}
+.dot{width:8px; height:8px; border-radius:2px; display:inline-block; margin-right:7px; vertical-align:-1px}
+
+.bar{display:flex; height:22px; border-radius:5px; overflow:hidden; background:var(--line)}
+.bar i{display:block; height:100%}
+.legend{display:flex; flex-wrap:wrap; gap:8px 20px; margin-top:14px; font-size:12.5px; color:var(--ink-2)}
+.legend span{display:inline-flex; align-items:center; gap:7px}
+
+.callout{
+  border-left:3px solid var(--accent); background:var(--surface); border-radius:0 10px 10px 0;
+  padding:14px 18px; margin-top:22px; font-size:14px; color:var(--ink-2); max-width:70ch;
+}
+.callout b{color:var(--ink)}
+
+.sup{display:grid; grid-template-columns:repeat(auto-fill,minmax(216px,1fr)); gap:10px; margin-top:22px}
+.supitem{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:10px 13px;
+}
+.supitem .nm{font-size:13.5px; font-weight:500; overflow:hidden; text-overflow:ellipsis}
+.supitem .mt{font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums;
+  font-size:12.5px; color:var(--muted); white-space:nowrap}
+.supitem .mt b{color:var(--accent); font-size:14px}
+
+footer{margin-top:72px; padding-top:24px; border-top:1px solid var(--line); font-size:12.5px; color:var(--muted)}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+@media (max-width:640px){
+  .wrap{padding:0 16px 72px}
+  header{padding:36px 0 22px}
+  section{margin-top:44px}
+}
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow" id="ev"></p>
+  <h1 id="title"></h1>
+  <p class="lede" id="lede"></p>
+  <div class="spine" id="spine" style="margin-top:26px"></div>
+  <div class="spinekey" id="spinekey"></div>
+</header>
+
+<section id="s-summary">
+  <div class="sechead"><h2>着地</h2><span class="note">イベント終了時点</span></div>
+  <div class="cards" id="summary"></div>
+</section>
+
+<section id="s-income">
+  <div class="sechead"><h2>Pt はどこから来たか</h2><span class="note" id="income-note"></span></div>
+  <p class="secintro">収入は <b>周回</b>（協力ライブ・支援部屋）、<b>オート</b>（ソロの放置・1日99回まで）、<b>マイセカイ</b>（1日2回の資材回収）、<b>チャレンジライブ</b>（1日1回）の4本。<b id="scopeline"></b></p>
+  <div class="bar" id="incbar"></div>
+  <div class="legend" id="inclegend"></div>
+  <div class="cards" id="inccards"></div>
+</section>
+
+<section id="s-speed">
+  <div class="sechead"><h2>速度</h2><span class="note">周回ブロックのみ・実測区間</span></div>
+  <div class="cards" id="speed"></div>
+  <div class="callout" id="speed-note"></div>
+</section>
+
+<section id="s-daily">
+  <div class="sechead"><h2>日別</h2><span class="note">区切りは 04:00（オートのクォータのリセット）</span></div>
+  <figure><div class="scroller"><table id="daily"></table></div></figure>
+</section>
+
+<section id="s-hourly">
+  <div class="sechead"><h2>時間帯ごとの周回と支援</h2><span class="note">8/22 以降・実測</span></div>
+  <p class="secintro">棒が1時間あたりの周回数、下の帯が同じ時間の支援枠。<b>枠が埋まっているほど速い</b>のが目で見える。</p>
+  <figure><svg class="chart" id="hourchart" role="img" aria-label="時間帯ごとの周回数と支援枠"></svg>
+  <figcaption id="hourcap"></figcaption></figure>
+</section>
+
+<section id="s-series">
+  <div class="sechead"><h2>推移</h2><span class="note">総合Pt と順位</span></div>
+  <figure><svg class="chart" id="ptchart" role="img" aria-label="イベントPtの推移"></svg>
+  <figcaption id="ptcap"></figcaption></figure>
+</section>
+
+<section id="s-blocks">
+  <div class="sechead"><h2>ブロック</h2><span class="note">連続して回していた区間</span></div>
+  <figure><div class="scroller"><table id="blocks"></table></div></figure>
+</section>
+
+<section id="s-sup">
+  <div class="sechead"><h2>支援</h2><span class="note" id="supnote"></span></div>
+  <p class="secintro">1コマ＝1時間。<b>アンコ</b>はアンコール枠に入った回数。</p>
+  <div class="sup" id="sup"></div>
+</section>
+
+<footer id="foot"></footer>
+</div>
+
+<script>
+const D = /*__DATA__*/null;
+const $ = s => document.querySelector(s);
+const fmt = n => (n === null || n === undefined) ? "—" : Math.round(n).toLocaleString("ja-JP");
+const oku = n => (n / 1e8).toFixed(4).replace(/0+$/, "").replace(/\.$/, "") + "億";
+const chColor = ch => (D.chapters.find(c => c.ch === ch) || {}).color || "var(--muted)";
+const T0 = new Date("2026-08-17T20:00:00");
+const hrs = t => (new Date(t) - T0) / 36e5;
+
+/* ── 見出し ── */
+$("#ev").textContent = "World Link event 214 ・ Again And Again Ambition！";
+$("#title").textContent = "10日間の走行記録";
+const fin = D.final;
+$("#lede").textContent =
+  "2026年8月17日 20:00 から 8月27日 19:59:59 まで、240時間。" +
+  "総合 " + fmt(fin.pt) + " Pt・" + (fin.rank ? fin.rank + "位" : "順位未確定") + "。" +
+  "支援に入ってくれた " + D.supporterCount + " 人、のべ " + D.manSlots + " 人コマぶんの記録です。";
+
+const spine = $("#spine"), key = $("#spinekey");
+D.chapters.forEach(c => {
+  const w = (new Date(c.to) - new Date(c.from));
+  const i = document.createElement("i");
+  i.style.background = c.color; i.style.flex = w; spine.appendChild(i);
+  const s = document.createElement("span");
+  s.innerHTML = '<b style="background:' + c.color + '"></b>第' + c.ch + '章　' + c.chara +
+    '　<span class="num" style="color:var(--muted)">+' + c.bonus + '%</span>';
+  key.appendChild(s);
+});
+
+/* ── 着地 ── */
+const mt = D.measuredTotal;
+const totalLaps = mt.laps, totalAutos = mt.autos;
+const cards = [
+  ["最終Pt", fmt(fin.pt), oku(fin.pt)],
+  ["最終順位", fin.rank ? fin.rank + "位" : "—", "総合ランキング"],
+  ["周回", fmt(totalLaps) + "<em>周</em>", "8/22 以降の実測ぶん"],
+  ["オート", fmt(totalAutos) + "<em>回</em>", "8/22 以降の実測ぶん"],
+  ["支援者", fmt(D.supporterCount) + "<em>人</em>", "のべ " + D.manSlots + " 人コマ / " + D.slotsTotal + " 時間"],
+];
+$("#summary").innerHTML = cards.map(c =>
+  '<div class="card"><div class="k">' + c[0] + '</div><div class="v">' + c[1] +
+  '</div><div class="s">' + c[2] + '</div></div>').join("");
+
+/* ── 収入 ── */
+const inc = D.income;
+const parts = [
+  ["周回", inc.lapPt, "var(--accent)"],
+  ["オート", inc.autoPt, "#7C8BE8"],
+  ["マイセカイ", inc.mysPt, "#4FBFA8"],
+  ["チャレライ", inc.chalPt, "#C9A227"],
+  ["未分類", inc.unexplainedPt, "var(--line-2)"],
+];
+const incTotal = parts.reduce((a, p) => a + (p[1] || 0), 0);
+$("#incbar").innerHTML = parts.filter(p => p[1] > 0).map(p =>
+  '<i style="background:' + p[2] + ';flex:' + p[1] + '" title="' + p[0] + '"></i>').join("");
+$("#inclegend").innerHTML = parts.filter(p => p[1] > 0).map(p =>
+  '<span><b class="dot" style="background:' + p[2] + '"></b>' + p[0] + ' <span class="num">' +
+  (100 * p[1] / incTotal).toFixed(1) + '%</span></span>').join("");
+$("#inccards").innerHTML = parts.filter(p => p[1] > 0).map(p =>
+  '<div class="card"><div class="k">' + p[0] + '</div><div class="v">' + fmt(p[1]) +
+  '</div><div class="s">' + (100 * p[1] / incTotal).toFixed(1) + '%</div></div>').join("");
+$("#income-note").textContent = "8/22 04:00 以降・" + fmt(inc.scopeTotal) + " Pt ぶん";
+const slack = incTotal - inc.scopeTotal;
+if (Math.abs(slack) > 1000) {
+  $("#inclegend").insertAdjacentHTML("beforeend",
+    '<span style="color:var(--muted)">端数 <span class="num">' +
+    (slack > 0 ? "+" : "") + fmt(slack) + '</span>（' +
+    (100 * Math.abs(slack) / inc.scopeTotal).toFixed(2) + '%）</span>');
+}
+$("#scopeline").innerHTML = "内訳を出せるのは <b>8/22 04:00 以降</b>の " + fmt(inc.scopeTotal) +
+  " Pt（全体 " + fmt(inc.eventTotal) + " Pt の " +
+  (100 * inc.scopeTotal / inc.eventTotal).toFixed(0) + "%）だけです。" +
+  "それ以前は走者が総合100位の圏内に入っておらず、板には階層をまたいだ瞬間しか記録が残っていないため、" +
+  "増分を収入ごとに割ることができません。";
+
+/* ── 速度。実測区間のみ ── */
+const lapBlocks = D.blocks.filter(b => b.laps >= 10);
+const lapSecs = lapBlocks.reduce((a, b) => a + b.hours * 3600, 0);
+const lapsIn = lapBlocks.reduce((a, b) => a + b.laps, 0);
+const lapPtIn = lapBlocks.reduce((a, b) => a + b.laps * b.lapUnit, 0);
+const perH = lapsIn / (lapSecs / 3600), unit = lapPtIn / lapsIn;
+$("#speed").innerHTML = [
+  ["周回レート", perH.toFixed(1) + "<em>周/h</em>", (3600 / perH).toFixed(0) + " 秒/周"],
+  ["1周の単価", fmt(unit), "支援部屋・独りんぼエンヴィー"],
+  ["周回の時速", fmt(perH * unit), "Pt/h"],
+  ["周回した時間", (lapSecs / 3600).toFixed(1) + "<em>h</em>", lapBlocks.length + " ブロック"],
+].map(c => '<div class="card"><div class="k">' + c[0] + '</div><div class="v">' + c[1] +
+  '</div><div class="s">' + c[2] + '</div></div>').join("");
+$("#speed-note").innerHTML =
+  "<b>この数字は 8/22 以降のみ。</b>走者が総合100位の圏内に入って初めて板に毎回載るようになったので、" +
+  "10分刻みで追えるのはそこからです。8/21 以前は走者の申告した日次の合計だけがあり、" +
+  "1周ずつの記録は残っていません。";
+
+/* ── 日別 ── */
+const dh = ["日", "章", "合計Pt", "周回Pt", "オートPt", "マイセカイ", "周回", "オート", "出所"];
+$("#daily").innerHTML =
+  "<thead><tr>" + dh.map(h => "<th>" + h + "</th>").join("") + "</tr></thead><tbody>" +
+  D.daily.map(d => {
+    const meas = d.source === "measured";
+    return "<tr><td>" + d.label + "<span style='color:var(--muted)'>(" + d.dow + ")</span></td>" +
+      "<td><span class='dot' style='background:" + chColor(d.ch) + "'></span>" + d.ch + "</td>" +
+      "<td class='n'>" + fmt(d.totalPt) + "</td>" +
+      "<td class='n'>" + fmt(d.lapPt) + "</td>" +
+      "<td class='n'>" + fmt(d.autoPt) + "</td>" +
+      "<td class='n'>" + fmt(d.mysPt) + "</td>" +
+      "<td class='n'>" + (d.laps === null ? "—" : fmt(d.laps)) + "</td>" +
+      "<td class='n'>" + (d.autos === null || d.autos === undefined ? "—" : fmt(d.autos)) + "</td>" +
+      "<td><span class='chip " + (meas ? "meas'>実測" : "dec'>申告") + "</span></td></tr>";
+  }).join("") + "</tbody>";
+
+/* ── 時間帯チャート ── */
+(function () {
+  const rows = D.hourly.filter(h => h.laps > 0);
+  if (!rows.length) return;
+  const W = Math.max(760, rows.length * 11), H = 230, pad = { l: 42, r: 8, t: 12, b: 46 };
+  const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b - 26;
+  const max = Math.max.apply(null, rows.map(r => r.laps));
+  const bw = iw / rows.length;
+  let s = '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="none"/>';
+  [0, .25, .5, .75, 1].forEach(f => {
+    const y = pad.t + ih * (1 - f);
+    s += '<line x1="' + pad.l + '" y1="' + y + '" x2="' + (W - pad.r) + '" y2="' + y +
+      '" stroke="var(--grid)" stroke-width="1"/>' +
+      '<text x="' + (pad.l - 8) + '" y="' + (y + 4) + '" text-anchor="end" font-size="10" ' +
+      'fill="var(--muted)" font-family="JetBrains Mono,monospace">' + Math.round(max * f) + '</text>';
+  });
+  rows.forEach((r, i) => {
+    const x = pad.l + i * bw, h = ih * r.laps / max;
+    const ch = D.chapters.find(c => hrs(r.t + ":00") >= hrs(c.from) && hrs(r.t + ":00") < hrs(c.to));
+    s += '<rect x="' + (x + .6) + '" y="' + (pad.t + ih - h) + '" width="' + Math.max(1.4, bw - 1.4) +
+      '" height="' + h + '" fill="' + (ch ? ch.color : "var(--muted)") + '" opacity=".92" rx="1">' +
+      '<title>' + r.t.replace("T", " ") + ":00　" + r.laps + "周（" + (r.lapsPerHour || 0) + "周/h）" +
+      (r.supportFilled ? "　支援 " + r.supportFilled + "枠" : "　支援枠なし") + '</title></rect>';
+    const fy = pad.t + ih + 10;
+    s += '<rect x="' + (x + .6) + '" y="' + fy + '" width="' + Math.max(1.4, bw - 1.4) +
+      '" height="9" rx="2" fill="var(--accent)" opacity="' +
+      (r.supportFilled ? (0.22 + 0.2 * r.supportFilled) : 0.06) + '"/>';
+  });
+  let last = "";
+  rows.forEach((r, i) => {
+    const day = r.t.slice(5, 10);
+    if (day !== last) {
+      last = day;
+      s += '<text x="' + (pad.l + i * bw) + '" y="' + (H - 12) + '" font-size="10.5" ' +
+        'fill="var(--muted)" font-family="JetBrains Mono,monospace">' + day.replace("-", "/") + '</text>';
+    }
+  });
+  const el = $("#hourchart");
+  el.setAttribute("viewBox", "0 0 " + W + " " + H);
+  el.style.minWidth = W + "px";
+  el.innerHTML = s;
+  el.parentElement.classList.add("scroller");
+  const withSup = rows.filter(r => r.supportFilled);
+  const avgWith = withSup.length ? withSup.reduce((a, r) => a + r.lapsPerHour, 0) / withSup.length : 0;
+  const without = rows.filter(r => !r.supportFilled);
+  const avgWithout = without.length ? without.reduce((a, r) => a + r.lapsPerHour, 0) / without.length : 0;
+  $("#hourcap").innerHTML = "縦棒＝その1時間の周回数（色は章）。下の帯＝支援枠の埋まり。" +
+    "支援枠がある時間の平均 <span class='num'>" + avgWith.toFixed(1) + " 周/h</span>、" +
+    "無い時間は <span class='num'>" + avgWithout.toFixed(1) + " 周/h</span>。";
+})();
+
+/* ── 推移チャート ── */
+(function () {
+  const pts = D.series.filter(p => p.pt > 0);
+  if (pts.length < 2) return;
+  const W = 1080, H = 320, pad = { l: 56, r: 52, t: 16, b: 34 };
+  const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+  const maxPt = Math.max.apply(null, pts.map(p => p.pt));
+  const maxH = 240;
+  const X = h => pad.l + iw * Math.min(1, h / maxH);
+  const Y = p => pad.t + ih * (1 - p / maxPt);
+  let s = "";
+  D.chapters.forEach(c => {
+    const x1 = X(hrs(c.from)), x2 = X(hrs(c.to));
+    s += '<rect x="' + x1 + '" y="' + pad.t + '" width="' + (x2 - x1) + '" height="' + ih +
+      '" fill="' + c.color + '" opacity=".055"/>' +
+      '<text x="' + ((x1 + x2) / 2) + '" y="' + (pad.t + 13) + '" text-anchor="middle" font-size="10.5" ' +
+      'fill="' + c.color + '" font-weight="700">' + c.chara + '</text>';
+  });
+  [0, .25, .5, .75, 1].forEach(f => {
+    const y = pad.t + ih * (1 - f);
+    s += '<line x1="' + pad.l + '" y1="' + y + '" x2="' + (W - pad.r) + '" y2="' + y +
+      '" stroke="var(--grid)"/>' +
+      '<text x="' + (pad.l - 9) + '" y="' + (y + 4) + '" text-anchor="end" font-size="10" ' +
+      'fill="var(--muted)" font-family="JetBrains Mono,monospace">' +
+      (maxPt * f / 1e8).toFixed(2) + '億</text>';
+  });
+  const dline = pts.map((p, i) => (i ? "L" : "M") + X(p.h).toFixed(1) + " " + Y(p.pt).toFixed(1)).join(" ");
+  s += '<path d="' + dline + " L" + X(pts[pts.length - 1].h).toFixed(1) + " " + (pad.t + ih) +
+    " L" + X(pts[0].h).toFixed(1) + " " + (pad.t + ih) + ' Z" fill="var(--accent)" opacity=".10"/>';
+  s += '<path d="' + dline + '" fill="none" stroke="var(--accent)" stroke-width="2" ' +
+    'stroke-linejoin="round" stroke-linecap="round"/>';
+  const lastP = pts[pts.length - 1];
+  s += '<circle cx="' + X(lastP.h) + '" cy="' + Y(lastP.pt) + '" r="4" fill="var(--accent)"/>';
+  s += '<text x="' + (X(lastP.h) + 9) + '" y="' + (Y(lastP.pt) + 4) + '" font-size="11.5" ' +
+    'fill="var(--ink)" font-family="JetBrains Mono,monospace" font-weight="600">' +
+    (lastP.pt / 1e8).toFixed(2) + '億</text>';
+  for (let h = 0; h <= 240; h += 48) {
+    s += '<text x="' + X(h) + '" y="' + (H - 12) + '" text-anchor="middle" font-size="10" ' +
+      'fill="var(--muted)" font-family="JetBrains Mono,monospace">' + h + 'h</text>';
+  }
+  const el = $("#ptchart");
+  el.setAttribute("viewBox", "0 0 " + W + " " + H);
+  el.innerHTML = s;
+  const ranks = pts.filter(p => p.rank);
+  $("#ptcap").innerHTML = "横軸はイベント開始からの経過時間。帯は章。" +
+    (ranks.length ? "順位は " + ranks[0].rank + "位 → " + ranks[ranks.length - 1].rank + "位。" : "") +
+    " 8/22 以前は板に載っていないので点が疎になっています。";
+})();
+
+/* ── ブロック ── */
+const bh = ["区間", "時間", "章", "周回", "周/h", "1周単価", "オート", "Pt"];
+$("#blocks").innerHTML =
+  "<thead><tr>" + bh.map(h => "<th>" + h + "</th>").join("") + "</tr></thead><tbody>" +
+  D.blocks.filter(b => b.pt > 0).map(b =>
+    "<tr><td class='n'>" + b.from.slice(5).replace("T", " ") + " → " + b.to.slice(11) + "</td>" +
+    "<td class='n'>" + b.hours.toFixed(1) + "h</td>" +
+    "<td><span class='dot' style='background:" + chColor(b.ch) + "'></span>" + b.ch + "</td>" +
+    "<td class='n'>" + (b.laps || "—") + "</td>" +
+    "<td class='n'>" + (b.laps ? (b.laps / b.hours).toFixed(1) : "—") + "</td>" +
+    "<td class='n'>" + (b.laps ? fmt(b.lapUnit) : "—") + "</td>" +
+    "<td class='n'>" + (b.autos || "—") + "</td>" +
+    "<td class='n'>" + fmt(b.pt) + "</td></tr>").join("") + "</tbody>";
+
+/* ── 支援 ── */
+$("#supnote").textContent = D.supporterCount + " 人・" + D.slotsTotal + " 時間・のべ " + D.manSlots + " 人コマ";
+$("#sup").innerHTML = D.supporters.map(s =>
+  '<div class="supitem"><span class="nm">' + s.name + '</span><span class="mt"><b>' + s.slots +
+  '</b>コマ' + (s.encore ? ' / アンコ' + s.encore : '') +
+  (s.effective ? ' / <span title="実効値">' + s.effective + '</span>' : '') + '</span></div>').join("");
+
+/* ── 脚注 ── */
+$("#foot").innerHTML =
+  "生成 " + D.generatedAt.replace("T", " ") + "。" +
+  "Pt と順位は sekai.best の総合ランキング板を10分間隔で記録したもの、" +
+  "支援枠はシフト表から。周回・オート・マイセカイの内訳は、増分を各収入の単価で分解して求めています。" +
+  "1周の単価は卓の質で±1%揺れるため、分解した内訳の合計は実際の増分と 0.2% ほどずれます（端数として明示）。" +
+  "8/21 以前は走者の申告した日次合計のみで、内訳はモデル値です。";
+</script>

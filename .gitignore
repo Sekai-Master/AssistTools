@@ -30,3 +30,7 @@ coverage
 # Python のバイトコード（scripts/ 配下のツールが吐く）
 __pycache__/
 *.pyc
+
+# wl214: 生成物（走者の全Pt系列。DB から再生成できる）
+scripts/wl214/report.json
+scripts/wl214/shifts.json
