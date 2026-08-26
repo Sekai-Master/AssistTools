@@ -43,6 +43,36 @@ for p in pts[:-3]:
         thin.append(p); last = p[0]
 thin += pts[-3:]
 
+# --- 終盤クローズアップ用: 上位帯（20/30/40/50/100位）を細かく取る（2026-08-26 追加）---
+# 走者が総合25位前後まで上がったので、50位・100位だけでは着地順位の判断材料にならない。
+# 直近だけでよいので h>=168（最後の3日）に絞り、ファイルを膨らませない。
+TOPSQL = """SELECT datetime(timestamp,'+9 hours'),
+  MAX(CASE WHEN rank=20 THEN score END),
+  MAX(CASE WHEN rank=30 THEN score END),
+  MAX(CASE WHEN rank=40 THEN score END),
+  MAX(CASE WHEN rank=50 THEN score END),
+  MAX(CASE WHEN rank=100 THEN score END)
+ FROM border_snapshots WHERE event_id=214 AND board_type='overall'
+ GROUP BY timestamp HAVING MAX(CASE WHEN rank=20 THEN score END) IS NOT NULL
+ ORDER BY timestamp;"""
+tout = subprocess.run(
+    ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=25", "nas",
+     f'sqlite3 -readonly -separator "|" -cmd ".timeout 20000" '
+     f'/volume1/docker/sekai-border-tracker/data/borders.db "{TOPSQL}"'],
+    capture_output=True, text=True, timeout=180)
+top, tlast = [], -99.0
+for line in tout.stdout.strip().splitlines():
+    if not line.strip():
+        continue
+    parts = (line.split("|") + [""] * 6)[:6]
+    t = datetime.datetime.fromisoformat(parts[0])
+    h = round((t - T0).total_seconds() / 3600, 3)
+    if h < 168 or h - tlast < 0.25:
+        continue
+    tlast = h
+    top.append([h] + [int(x) if x else None for x in parts[1:]])
+print(f"上位帯（20/30/40/50/100位・h>=168）{len(top)} 点")
+
 # 章ごとのボーダー（章の頭からの経過時間で並べる）。
 # ch1 と同じ経過時間で比べると「その章がどれだけ熱いか」が一目で出る。
 # chara_id: 11=東雲彰人 15=草薙寧々 25=MEIKO 19=東雲絵名 7=桃井愛莉
@@ -118,11 +148,16 @@ runner = [
 # --- 圏内（総合100位以内）に入って以降は、総合板から自動で拾う ---
 # 走者名はリポジトリに置かない。環境変数 WL214_RUNNER_NAME に前方一致で渡す。
 #   例: WL214_RUNNER_NAME="なまえ" python genlive.py
+# ⚠️**走者は章ごとに改名する**ので、名前はカンマ区切りで複数渡せる（2026-08-26 対応）。
+#   例: WL214_RUNNER_NAME="ch3の名前,ch4の名前,ch5の名前"
+#   単一名だけ渡すと、その章ぶんのグラフしか出ない（8/26 に live.json が3日ぶん欠けていた原因）。
 # 総合板の値は「ゲーム内のPtそのもの」なので、申告や順位換算より強い。
-name = os.environ.get("WL214_RUNNER_NAME", "").strip()
-if name:
+names = [n.strip() for n in os.environ.get("WL214_RUNNER_NAME", "").split(",") if n.strip()]
+name = names[0] if names else ""
+if names:
+    cond = " OR ".join(f"user_name LIKE '{n}%'" for n in names)
     q = (f"SELECT datetime(timestamp,'+9 hours'), rank, score FROM border_snapshots "
-         f"WHERE event_id=214 AND board_type='overall' AND user_name LIKE '{name}%' "
+         f"WHERE event_id=214 AND board_type='overall' AND ({cond}) "
          f"ORDER BY timestamp;")
     r = subprocess.run(
         ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=25", "nas",
@@ -145,7 +180,7 @@ if name:
         runner.append({"h": h, "pt": int(sc), "rank": int(rk),
                        "note": "総合ボードから自動取得（ゲーム内Pt・順位そのもの。申告ではない）"})
         added += 1
-    print(f"総合ボードから走者 {added} 点を追加（板の全 {len(rows)} 点から間引き）")
+    print(f"総合ボードから走者 {added} 点を追加（板の全 {len(rows)} 点から間引き・名前 {len(names)} 個）")
 else:
     print("WL214_RUNNER_NAME 未設定 → 走者の自動取得はスキップ")
 
@@ -163,6 +198,9 @@ live = {
     "border": thin,
     "chapters": chapters,
     "runner": runner,
+    "borderTop": top,
 }
-json.dump(live, open("live.json", "w"), ensure_ascii=False, separators=(",", ":"))
+# ⚠️encoding を省くと Windows では cp932 で書き出され、**ページ側の JSON パースが落ちる**
+#   （2026-08-26 に実際に踏んだ。git 上の旧版は Mac 生成だったので UTF-8 で、気づけなかった）。
+json.dump(live, open("live.json", "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
 print(f"観測点 {len(pts)} → 間引き {len(thin)} / 最新 経過{pts[-1][0]}h 100位 {pts[-1][1]:,}")

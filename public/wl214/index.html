@@ -201,9 +201,13 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
   border:1px solid transparent;text-align:center;overflow:hidden;transition:border-color .3s ease,background .3s ease}
 .chip .cn{font-size:10px;color:var(--ink-3);letter-spacing:.08em}
 .chip .cc{font-size:12.5px;font-weight:620;margin-top:2px;white-space:nowrap}
+/* 走者がその章で名乗っていたゲーム内名。総合板に載る公開情報（2026-08-26 Nori 判断） */
+.chip .cr{font-size:10.5px;color:var(--ink-3);margin-top:3px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
 @media(max-width:520px){
   .clock{gap:11px} .clock .unit{min-width:0} .clock .cv{font-size:25px} .clock .sep{display:none}
   .chline{gap:4px} .chip{padding:7px 3px 8px} .chip .cc{font-size:11px;white-space:normal}
+  .chip .cr{font-size:9.5px}
 }
 .chip.done{opacity:.5}
 .chip.now{border-color:var(--s1);background:color-mix(in srgb, var(--s1) 9%, var(--surface))}
@@ -292,6 +296,14 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
       <span class="segctl" id="borderview"></span>
       <span class="legend" id="legend3"></span></div>
     <div class="svgwrap"><svg id="chart3" role="img" aria-label="累積ポイントと推定ボーダーの推移"></svg></div>
+  </div>
+
+  <div class="chartcard">
+    <div class="charthead"><span class="charttitle">終盤クローズアップ — 上位帯のボーダーと走者</span>
+      <span class="ch1" style="font-size:12px">実線＝実測 / 破線＝終値予測。右端の縦棒は予測のレンジ</span>
+    </div>
+    <div class="svgwrap"><svg id="chart6" role="img" aria-label="終盤の上位帯ボーダーと走者の推移"></svg></div>
+    <div class="legend" id="lg6" style="margin-top:10px"></div>
     <div class="tip" id="tip3"></div>
   </div>
 </section>
@@ -393,6 +405,9 @@ const LB_MULT = {0:1,1:5,2:10,3:15,4:20,5:25,6:27,7:29,8:31,9:33,10:35};
 const FALLBACK = {"74":{"master":{"baseScore":1.13309,"feverScore":0.140221,"skillScoreMulti":[0.073695,0.064296,0.070625,0.082429,0.069849,0.128681],"baseScoreAuto":0.7735,"skillScoreAuto":[0.051586,0.044845,0.048948,0.056569,0.047483,0.057741],"playLevel":26,"noteCount":589},"title":"独りんぼエンヴィー","event_rate":100,"music_time":74.8},"186":{"master":{"baseScore":1.226808,"feverScore":0.156391,"skillScoreMulti":[0.018903,0.030565,0.045559,0.023581,0.070534,0.049961],"baseScoreAuto":0.798,"skillScoreAuto":[0.013047,0.020572,0.029834,0.015006,0.029923,0.031794],"playLevel":33,"noteCount":2021},"title":"初音天地開闢神話","event_rate":130,"music_time":182.4}};
 
 const fmt = n => Math.round(n).toLocaleString('ja-JP');
+/* HTMLエスケープ。走者名など第三者が決めた文字列を innerHTML に混ぜるときに必ず通す */
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const oku  = n => (n/1e8).toFixed(2);
 /* 石の万換算。整数に丸めると数千個ぶん（ガチャ10連相当）が消えるので必ず小数1桁 */
 const manC = n => (n/1e4).toFixed(1);
@@ -791,6 +806,117 @@ function hoursChart(svg, tipEl, days){
   if(!REDUCED) requestAnimationFrame(()=>requestAnimationFrame(()=>{
     svg.querySelectorAll('.seg').forEach(r=>{ r.setAttribute('y',r.dataset.y); r.setAttribute('height',r.dataset.h); });
   }));
+}
+
+/* 終盤クローズアップ。50位・100位だけでは走者の着地順位が判断できなくなったので
+   20/30/40 位を足した（2026-08-26）。x は h=168（最後の3日）〜240（イベント終了）。
+   実線は live.json の borderTop（実測）、破線は params.border.finalByRank への直線外挿。
+   走者の線は cumChart と同じ cumCurve を使う——二重に投影ロジックを持つと必ずずれる。 */
+function endgameChart(svg, days, P, LIVE){
+  const W=880, H=400, m={t:18,r:104,b:40,l:70};
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width',W); svg.setAttribute('height',H);
+  svg.innerHTML='';
+  const top = (LIVE && Array.isArray(LIVE.borderTop)) ? LIVE.borderTop : [];
+  const fin = (P.border && P.border.finalByRank) || {};
+  const lg = document.getElementById('lg6');
+  if(!top.length || !Object.keys(fin).length){
+    if(lg) lg.textContent = 'borderTop / finalByRank が無いので描画できない（genlive.py と refit_border.py を回すこと）';
+    return;
+  }
+  const X0 = top[0][0], X1 = 240;
+  /* 系列定義。col は borderTop の列番号 */
+  const SER = [
+    {rk:20,  col:1, c:'var(--s4)'},
+    {rk:30,  col:2, c:'var(--s1)'},
+    {rk:40,  col:3, c:'var(--s3)'},
+    {rk:50,  col:4, c:'var(--s2)'},
+    {rk:100, col:5, c:'var(--ink-3)'},
+  ].filter(x => fin[String(x.rk)]);
+  /* 走者。cumCurve は「予定を全部こなした場合」の計画線 */
+  const plan = cumCurve(days);
+  const planAt = h => { if(!plan.length) return 0;
+    if(h <= plan[0].h) return plan[0].v;
+    for(let i=1;i<plan.length;i++) if(plan[i].h >= h){ const a=plan[i-1], b=plan[i];
+      return b.h===a.h ? b.v : a.v + (h-a.h)/(b.h-a.h)*(b.v-a.v); }
+    return plan[plan.length-1].v; };
+  const rObs = ((LIVE && LIVE.runner) || []).filter(r => r.h >= X0 && r.pt != null)
+                 .map(r => [r.h, r.pt]);
+  const rNow = rObs.length ? rObs[rObs.length-1] : null;
+  /* ⚠️着地は planAt(240) をそのまま使わない。日別モデルは 8/21 以降 actualPt を入れていないぶん
+     独り歩きしていて、2026-08-26 時点で実測より 842万（2.9%）上に浮いている。
+     **確定している現在地に乗せ、残りの増分だけモデルから借りる**（cumChart がボーダーで
+     やっているのと同じ考え方）。planAt をそのまま出すと、実測の点から線が飛ぶ。 */
+  const planEnd = planAt(X1);
+  const land = rNow ? rNow[1] + Math.max(0, planEnd - planAt(rNow[0])) : planEnd;
+  const drift = rNow ? planAt(rNow[0]) - rNow[1] : 0;
+
+  let lo=Infinity, hi=-Infinity;
+  const bump = v => { if(v==null) return; lo=Math.min(lo,v); hi=Math.max(hi,v); };
+  top.forEach(r => SER.forEach(sr => bump(r[sr.col])));
+  SER.forEach(sr => { const f=fin[String(sr.rk)]; bump(f.lo); bump(f.hi); });
+  rObs.forEach(r => bump(r[1])); bump(land);
+  const pad=(hi-lo)*0.06; lo-=pad; hi+=pad;
+  const X = h => m.l + (h-X0)/(X1-X0)*(W-m.l-m.r);
+  const Y = v => m.t + (1-(v-lo)/(hi-lo))*(H-m.t-m.b);
+  const NS='http://www.w3.org/2000/svg';
+  const el=(n,a)=>{const e=document.createElementNS(NS,n); for(const k in a) e.setAttribute(k,a[k]); return e;};
+
+  /* 目盛り。y は1億単位、x は日境界（20:00 が章の切れ目でもある） */
+  for(let v=Math.ceil(lo/2e7)*2e7; v<=hi; v+=2e7){
+    svg.appendChild(el('line',{x1:m.l,x2:W-m.r,y1:Y(v),y2:Y(v),stroke:'var(--grid)'}));
+    const t=el('text',{x:m.l-8,y:Y(v)+4,'text-anchor':'end','font-size':11}); t.textContent=(v/1e8).toFixed(2)+'億'; svg.appendChild(t);
+  }
+  for(let h=Math.ceil(X0/24)*24; h<=X1; h+=24){
+    svg.appendChild(el('line',{x1:X(h),x2:X(h),y1:m.t,y2:H-m.b,stroke:'var(--grid)'}));
+    const d=new Date(new Date(P.event.startJst).getTime()+h*36e5);
+    const t=el('text',{x:X(h),y:H-m.b+16,'text-anchor':'middle','font-size':11});
+    t.textContent=`${d.getMonth()+1}/${d.getDate()} 20:00`; svg.appendChild(t);
+  }
+  /* いまの位置 */
+  const nowH=(Date.now()-new Date(P.event.startJst).getTime())/36e5;
+  if(nowH>X0 && nowH<X1){
+    svg.appendChild(el('line',{x1:X(nowH),x2:X(nowH),y1:m.t,y2:H-m.b,stroke:'var(--line-strong)','stroke-dasharray':'3 3'}));
+    const t=el('text',{x:X(nowH)+4,y:m.t+12,'font-size':10.5}); t.textContent='いま'; svg.appendChild(t);
+  }
+
+  const draw=(pts,color,width,dash)=>{
+    if(pts.length<2) return;
+    const d=pts.map((q,i)=>(i?'L':'M')+X(q[0]).toFixed(1)+' '+Y(q[1]).toFixed(1)).join(' ');
+    svg.appendChild(el('path',{d,fill:'none',stroke:color,'stroke-width':width,
+      'stroke-linejoin':'round','stroke-linecap':'round',...(dash?{'stroke-dasharray':dash}:{})}));
+  };
+  SER.forEach(sr=>{
+    const obs=top.filter(r=>r[sr.col]!=null).map(r=>[r[0],r[sr.col]]);
+    draw(obs, sr.c, 1.8);
+    const f=fin[String(sr.rk)], last=obs[obs.length-1];
+    if(last){ draw([last,[X1,f.mid]], sr.c, 1.6, '5 4');
+      svg.appendChild(el('line',{x1:X(X1),x2:X(X1),y1:Y(f.lo),y2:Y(f.hi),stroke:sr.c,'stroke-width':3,opacity:.45}));
+      const t=el('text',{x:X(X1)+8,y:Y(f.mid)+4,'font-size':11,fill:sr.c});
+      t.textContent=`${sr.rk}位 ${(f.mid/1e8).toFixed(2)}億`; svg.appendChild(t);
+    }
+  });
+  /* 走者は一番太く、一番上に */
+  draw(rObs,'var(--ink)',2.6);
+  if(rNow){ draw([rNow,[X1,land]],'var(--ink)',2.2,'6 4');
+    svg.appendChild(el('circle',{cx:X(rNow[0]),cy:Y(rNow[1]),r:3.5,fill:'var(--ink)'}));
+    const t=el('text',{x:X(X1)+8,y:Y(land)+4,'font-size':11.5,'font-weight':650,fill:'var(--ink)'});
+    t.textContent=`走者 ${(land/1e8).toFixed(2)}億`; svg.appendChild(t);
+  }
+  /* 凡例。着地がどの順位帯に落ちるかを言葉でも出す */
+  if(lg){
+    const inside = SER.filter(sr=>land >= fin[String(sr.rk)].mid).map(sr=>sr.rk);
+    const best = inside.length ? Math.min(...inside) : null;
+    lg.innerHTML = SER.map(sr=>`<span style="color:${sr.c}">■ ${sr.rk}位</span>`).join(' ')
+      + ` <span style="color:var(--ink)">■ 走者</span>`
+      + (best!==null
+          ? ` — 着地 <b>${(land/1e8).toFixed(2)}億</b> は中央シナリオで <b>${best}位以内</b>`
+          : ` — 着地 <b>${(land/1e8).toFixed(2)}億</b>`)
+      + (Math.abs(drift) > 2e6
+          ? `<br><span class="ch1">着地は「いまの実測 ${(rNow[1]/1e8).toFixed(2)}億 ＋ 残りの予定」で出している。`
+            + `日別モデルの単純な積み上げ（${(planEnd/1e8).toFixed(2)}億）は実測より`
+            + `${(Math.abs(drift)/1e4).toFixed(0)}万${drift>0?'高い':'低い'}ので使っていない</span>`
+          : '');
+  }
 }
 
 function cumChart(svg, tipEl, days, P){
@@ -1510,6 +1636,7 @@ function render(){
   stackedChart(document.getElementById('chart1'), document.getElementById('tip1'), DAYS, R);
   hoursChart(document.getElementById('chart2'), document.getElementById('tip2'), DAYS);
   cumChart(document.getElementById('chart3'), document.getElementById('tip3'), DAYS, P);
+  endgameChart(document.getElementById('chart6'), DAYS, P, LIVE);
   lbChart(document.getElementById('chart4'), document.getElementById('tip4'), DAYS, P, R);
   chapterChart(document.getElementById('chart5'), document.getElementById('tip5'), P, LIVE,
                (CHRANK.find(r=>r[0]===CHRV)||CHRANK[1])[2], CHRMODE);
@@ -1672,7 +1799,8 @@ function renderLive(){
     const st=i*48, en=(i+1)*48;
     const state = elapsedH>=en ? 'done' : (elapsedH>=st ? 'now' : '');
     const prog = Math.min(100, Math.max(0, (elapsedH-st)/48*100));
-    return `<div class="chip ${state}"><div class="cn">CH${c.n}</div><div class="cc">${c.chara}</div>
+    const rn = c.runnerName ? `<div class="cr">${esc(c.runnerName)}</div>` : '';
+    return `<div class="chip ${state}"><div class="cn">CH${c.n}</div><div class="cc">${c.chara}</div>${rn}
       <div class="fill" style="width:${state==='done'?100:(state==='now'?prog:0)}%"></div></div>`;
   }).join('');
 
