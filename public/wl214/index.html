@@ -120,6 +120,10 @@ tr.selrow{background:var(--surface-2)} tr.selrow td{font-weight:600}
 .charttitle{font-weight:650;font-size:14.5px}
 .legend{display:flex;flex-wrap:wrap;gap:12px;margin-left:auto;font-size:12px;color:var(--ink-2)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
+/* ⚠️.legend は display:flex なので、直下に文章を置くと <b> まで個別のフレックスアイテムに
+   なって単語ごとにバラバラに折り返す（2026-08-26 Nori 指摘）。文章は必ずこのクラスの
+   div に入れて、1アイテム＝1行として普通の文章として流す。 */
+.legend .lgtext{flex:0 0 100%;display:block;line-height:1.65;margin-top:2px}
 .svgwrap{overflow-x:auto;overflow-y:hidden}
 svg{display:block}
 svg text{font-family:var(--sans);fill:var(--ink-2)}
@@ -904,19 +908,21 @@ function endgameChart(svg, days, P, LIVE){
       return ins.length ? Math.min(...ins)+'位以内' : SER[SER.length-1].rk+'位より下'; };
     let msg;
     if(land==null){
-      msg = ` — <b style="color:var(--bad)">走者の実測が取れていない</b>`
-          + `<span class="ch1">（改名したなら genlive.py の名前リストに足して回し直す）</span>`;
+      msg = `<b style="color:var(--bad)">走者の実測が取れていない。</b>`
+          + `改名したなら genlive.py の名前リストに足して回し直すこと。`;
     }else{
-      msg = ` — 予定を全部こなせば <b>${(land/1e8).toFixed(2)}億</b>（中央シナリオで <b>${bandOf(land)}</b>）`
-          + ` ／ いま止まると <b>${(rNow[1]/1e8).toFixed(2)}億</b>（<b>${bandOf(rNow[1])}</b>）`;
+      msg = `予定を全部こなせば <b>${(land/1e8).toFixed(2)}億</b>（中央シナリオで <b>${bandOf(land)}</b>）。`
+          + ` いま止まると <b>${(rNow[1]/1e8).toFixed(2)}億</b>（<b>${bandOf(rNow[1])}</b>）。`;
     }
-    lg.innerHTML = SER.map(sr=>`<span style="color:${sr.c}">■ ${sr.rk}位</span>`).join(' ')
-      + ` <span style="color:var(--ink)">■ 走者</span>` + msg
+    lg.innerHTML = SER.map(sr=>`<span style="color:${sr.c}">■ ${sr.rk}位</span>`).join('')
+      + `<span style="color:var(--ink)">■ 走者</span>`
+      + `<div class="lgtext">${msg}</div>`
       + (Math.abs(drift) > 2e6
-          ? `<br><span class="ch1">着地は「いまの実測 ＋ 残りの予定」で出している。日別モデルの単純な積み上げ`
-            + `（${(planEnd/1e8).toFixed(2)}億）は実測より ${(Math.abs(drift)/1e4).toFixed(0)}万`
-            + `${drift>0?'高い':'低い'}ので使っていない。`
-            + `<b>ただし残りの増分は同じモデルから借りている</b>ので、そのぶんのバイアス（直近の実測比で+5%前後）は残る</span>`
+          ? `<div class="lgtext ch1">着地は「いまの実測 ＋ 残りの予定」で出している。`
+            + `日別モデルの単純な積み上げ（${(planEnd/1e8).toFixed(2)}億）は実測より `
+            + `${(Math.abs(drift)/1e4).toFixed(0)}万${drift>0?'高い':'低い'}ので使っていない。`
+            + `ただし<b>残りの増分は同じモデルから借りている</b>ので、`
+            + `そのぶんのバイアス（直近の実測比で +5% 前後）は残る。</div>`
           : '');
   }
   /* モバイルは svg が幅880固定でスクロールするので、初期位置を右端（いま〜予測）にする。
