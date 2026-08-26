@@ -76,13 +76,25 @@ def classify(d, lap, auto, mys):
     """
     if d == 0:
         return "停止", 0
-    for k in range(1, 13):
+    for k in range(1, 13):                       # オートは固定値なのでほぼ厳密に一致する
         if abs(d - k * auto) <= 3:
             return "オート", k
+    # 周回は k 周ぶんの合計。1周あたりに直して、実測の幅に収まる k を探す。
+    # ⚠️幅を上に広げないと、卓が良くなって単価が上がったときに「不明」に落ちる
+    #   （2026-08-26 夜、1周が 118,783→119,140→119,402 と上がり、119,840 で上限を20超えた）。
+    # ⚠️ただし広げるだけだと、マイセカイの 600,950 が「5周（1周120,190）」に化ける。
+    #   マイセカイは刻みが厳密（850の倍数）なので、**850の倍数ぴったりで、かつ周回としての
+    #   当てはまりが悪い（1周あたりが実測平均から1.2%超ずれる）ときはマイセカイを採る**。
+    best = None
     for k in range(1, 9):
         per = d / float(k)
-        if lap * 0.975 <= per <= lap * 1.015:
-            return "周回", k
+        if lap * 0.975 <= per <= lap * 1.030:
+            dev = abs(per - lap) / float(lap)
+            if best is None or dev < best[1]:
+                best = (k, dev)
+    if best is not None:
+        if not (d % mys == 0 and best[1] > 0.012):
+            return "周回", best[0]
     if d % mys == 0:
         return "マイセカイ", d // mys
     return "不明", 0
