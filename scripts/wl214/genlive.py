@@ -22,7 +22,7 @@ out = subprocess.run(
     ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=25", "nas",
      f'sqlite3 -readonly -separator "|" -cmd ".timeout 20000" '
      f'/volume1/docker/sekai-border-tracker/data/borders.db "{SQL}"'],
-    capture_output=True, text=True, timeout=180)
+    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
 if out.returncode != 0:
     sys.exit("ssh失敗: " + out.stderr[:200])
 
@@ -52,14 +52,14 @@ TOPSQL = """SELECT datetime(timestamp,'+9 hours'),
   MAX(CASE WHEN rank=40 THEN score END),
   MAX(CASE WHEN rank=50 THEN score END),
   MAX(CASE WHEN rank=100 THEN score END)
- FROM border_snapshots WHERE event_id=214 AND board_type='overall'
+ FROM border_snapshots WHERE event_id=214 AND board_type='overall' AND score<>123456789
  GROUP BY timestamp HAVING MAX(CASE WHEN rank=20 THEN score END) IS NOT NULL
  ORDER BY timestamp;"""
 tout = subprocess.run(
     ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=25", "nas",
      f'sqlite3 -readonly -separator "|" -cmd ".timeout 20000" '
      f'/volume1/docker/sekai-border-tracker/data/borders.db "{TOPSQL}"'],
-    capture_output=True, text=True, timeout=180)
+    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
 top, tlast = [], -99.0
 for line in tout.stdout.strip().splitlines():
     if not line.strip():
@@ -93,7 +93,7 @@ cout = subprocess.run(
     ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=25", "nas",
      f'sqlite3 -readonly -separator "|" -cmd ".timeout 20000" '
      f'/volume1/docker/sekai-border-tracker/data/borders.db "{CHSQL}"'],
-    capture_output=True, text=True, timeout=180)
+    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
 if cout.returncode != 0:
     sys.exit("ssh失敗(chapter): " + cout.stderr[:200])
 
@@ -155,16 +155,33 @@ runner = [
 names = [n.strip() for n in os.environ.get("WL214_RUNNER_NAME", "").split(",") if n.strip()]
 name = names[0] if names else ""
 if names:
-    cond = " OR ".join(f"user_name LIKE '{n}%'" for n in names)
-    q = (f"SELECT datetime(timestamp,'+9 hours'), rank, score FROM border_snapshots "
-         f"WHERE event_id=214 AND board_type='overall' AND ({cond}) "
-         f"ORDER BY timestamp;")
+    # ⚠️走者名を SQL に埋め込まない。名前は第三者が自由に決める文字列で、章ごとに増える。
+    #   ' が入れば SQL が壊れ、$(…) やバッククォートは **NAS 側でシェル実行**される。
+    #   %/_ も LIKE のワイルドカードとして誤解釈される。ここは全件取って Python 側で照合する。
+    #   前方一致は「別人の名前が走者名を前置に持つ」と黙って混入するので完全一致も併せて見る。
+    q = ("SELECT datetime(timestamp,'+9 hours'), rank, score, user_name FROM border_snapshots "
+         "WHERE event_id=214 AND board_type='overall' AND rank<=100 AND score<>123456789 "
+         "ORDER BY timestamp;")
     r = subprocess.run(
         ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=25", "nas",
          f'sqlite3 -readonly -separator "|" -cmd ".timeout 20000" '
          f'/volume1/docker/sekai-border-tracker/data/borders.db "{q}"'],
-        capture_output=True, text=True, timeout=180)
-    rows = [l for l in r.stdout.strip().splitlines() if l.strip()]
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
+    # ⚠️returncode が 0 でも stdout が None になりうる（上の復号事故）。必ず見る。
+    if r.returncode != 0 or r.stdout is None:
+        sys.exit(f"走者クエリに失敗（rc={r.returncode} stdout={r.stdout is not None}）: {(r.stderr or '')[:200]}")
+    allrows = [l for l in r.stdout.strip().splitlines() if l.strip()]
+    rows = []
+    for l in allrows:
+        parts = l.split("|")
+        if len(parts) < 4:
+            continue
+        nm = "|".join(parts[3:])          # 名前に | が入っていても壊さない
+        if any(nm == n or nm.startswith(n) for n in names):
+            rows.append("|".join(parts[:3]))
+    hit_names = sorted({"|".join(l.split("|")[3:]) for l in allrows
+                        if any("|".join(l.split("|")[3:]).startswith(n) for n in names)})
+    print(f"名前に一致した user_name: {hit_names}")
     have = {round(x["h"], 2) for x in runner}
     added = 0
     # グラフが潰れるので30分に1点へ間引く（最新は必ず残す）

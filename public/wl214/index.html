@@ -296,15 +296,15 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
       <span class="segctl" id="borderview"></span>
       <span class="legend" id="legend3"></span></div>
     <div class="svgwrap"><svg id="chart3" role="img" aria-label="累積ポイントと推定ボーダーの推移"></svg></div>
+    <div class="tip" id="tip3"></div>
   </div>
 
   <div class="chartcard">
     <div class="charthead"><span class="charttitle">終盤クローズアップ — 上位帯のボーダーと走者</span>
-      <span class="ch1" style="font-size:12px">実線＝実測 / 破線＝終値予測。右端の縦棒は予測のレンジ</span>
+      <span class="ch1" style="font-size:12px">実線＝実測 / 破線＝終値予測への<b>直線</b>。実際のボーダーは終盤に加速する（211では最後の6時間に残り伸びの27%が集中）ので、途中は破線より下を走る</span>
     </div>
     <div class="svgwrap"><svg id="chart6" role="img" aria-label="終盤の上位帯ボーダーと走者の推移"></svg></div>
     <div class="legend" id="lg6" style="margin-top:10px"></div>
-    <div class="tip" id="tip3"></div>
   </div>
 </section>
 
@@ -847,7 +847,11 @@ function endgameChart(svg, days, P, LIVE){
      **確定している現在地に乗せ、残りの増分だけモデルから借りる**（cumChart がボーダーで
      やっているのと同じ考え方）。planAt をそのまま出すと、実測の点から線が飛ぶ。 */
   const planEnd = planAt(X1);
-  const land = rNow ? rNow[1] + Math.max(0, planEnd - planAt(rNow[0])) : planEnd;
+  /* ⚠️走者の実測が1点も無いときに planEnd へ黙って戻さない。
+     改名して genlive の名前リストに足し忘れる／圏外に落ちる、で普通に起きる（8/26 に実際に3日欠けた）。
+     そのとき planEnd に戻ると、実測アンカーを入れた動機（モデルが+2.9%浮いている）が
+     無警告で復活する。ここは断定をやめて「取れていない」と言う。 */
+  const land = rNow ? rNow[1] + Math.max(0, planEnd - planAt(rNow[0])) : null;
   const drift = rNow ? planAt(rNow[0]) - rNow[1] : 0;
 
   let lo=Infinity, hi=-Infinity;
@@ -897,26 +901,39 @@ function endgameChart(svg, days, P, LIVE){
   });
   /* 走者は一番太く、一番上に */
   draw(rObs,'var(--ink)',2.6);
-  if(rNow){ draw([rNow,[X1,land]],'var(--ink)',2.2,'6 4');
+  if(rNow && land!=null){ draw([rNow,[X1,land]],'var(--ink)',2.2,'6 4');
     svg.appendChild(el('circle',{cx:X(rNow[0]),cy:Y(rNow[1]),r:3.5,fill:'var(--ink)'}));
     const t=el('text',{x:X(X1)+8,y:Y(land)+4,'font-size':11.5,'font-weight':650,fill:'var(--ink)'});
     t.textContent=`走者 ${(land/1e8).toFixed(2)}億`; svg.appendChild(t);
   }
   /* 凡例。着地がどの順位帯に落ちるかを言葉でも出す */
   if(lg){
-    const inside = SER.filter(sr=>land >= fin[String(sr.rk)].mid).map(sr=>sr.rk);
-    const best = inside.length ? Math.min(...inside) : null;
+    /* 「着地が何位か」は**予定を全部こなした場合**の話。走者が本当に決めたいのは
+       「最後のブロックを削れるか」なので、いま止まった場合の順位も必ず併記する。
+       片方だけ出すと、削っても大丈夫という逆向きの安心を与える。 */
+    const bandOf = v => { const ins = SER.filter(sr=>v >= fin[String(sr.rk)].mid).map(sr=>sr.rk);
+      return ins.length ? Math.min(...ins)+'位以内' : SER[SER.length-1].rk+'位より下'; };
+    let msg;
+    if(land==null){
+      msg = ` — <b style="color:var(--bad)">走者の実測が取れていない</b>`
+          + `<span class="ch1">（改名したなら genlive.py の名前リストに足して回し直す）</span>`;
+    }else{
+      msg = ` — 予定を全部こなせば <b>${(land/1e8).toFixed(2)}億</b>（中央シナリオで <b>${bandOf(land)}</b>）`
+          + ` ／ いま止まると <b>${(rNow[1]/1e8).toFixed(2)}億</b>（<b>${bandOf(rNow[1])}</b>）`;
+    }
     lg.innerHTML = SER.map(sr=>`<span style="color:${sr.c}">■ ${sr.rk}位</span>`).join(' ')
-      + ` <span style="color:var(--ink)">■ 走者</span>`
-      + (best!==null
-          ? ` — 着地 <b>${(land/1e8).toFixed(2)}億</b> は中央シナリオで <b>${best}位以内</b>`
-          : ` — 着地 <b>${(land/1e8).toFixed(2)}億</b>`)
+      + ` <span style="color:var(--ink)">■ 走者</span>` + msg
       + (Math.abs(drift) > 2e6
-          ? `<br><span class="ch1">着地は「いまの実測 ${(rNow[1]/1e8).toFixed(2)}億 ＋ 残りの予定」で出している。`
-            + `日別モデルの単純な積み上げ（${(planEnd/1e8).toFixed(2)}億）は実測より`
-            + `${(Math.abs(drift)/1e4).toFixed(0)}万${drift>0?'高い':'低い'}ので使っていない</span>`
+          ? `<br><span class="ch1">着地は「いまの実測 ＋ 残りの予定」で出している。日別モデルの単純な積み上げ`
+            + `（${(planEnd/1e8).toFixed(2)}億）は実測より ${(Math.abs(drift)/1e4).toFixed(0)}万`
+            + `${drift>0?'高い':'低い'}ので使っていない。`
+            + `<b>ただし残りの増分は同じモデルから借りている</b>ので、そのぶんのバイアス（直近の実測比で+5%前後）は残る</span>`
           : '');
   }
+  /* モバイルは svg が幅880固定でスクロールするので、初期位置を右端（いま〜予測）にする。
+     左端のままだと2日前の実線しか見えず、凡例の結論だけが根拠なしに見える */
+  const wrap = svg.closest('.svgwrap');
+  if(wrap) wrap.scrollLeft = wrap.scrollWidth;
 }
 
 function cumChart(svg, tipEl, days, P){
