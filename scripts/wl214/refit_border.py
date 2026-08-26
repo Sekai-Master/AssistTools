@@ -142,8 +142,21 @@ def main():
         #   「片側だった」という 08-25 の観察は符号ではなく**大きさ**の偏りの話で、
         #   この分岐条件では表現できていなかった。存在しない安全性を主張するコメントは害。
         lo, hi = cur[rk] * ms[0], cur[rk] * ms[-1]
+        # 終値までの「途中の形」。参照4本の同位相での消化率（値/終値）の中央を、
+        # 位相 0.80〜1.00 を 0.5% 刻みでサンプルしておく。ページはこれで破線を曲げる。
+        # ⚠️直線で結ぶと**系統的に上振れする**（2026-08-26 バックテスト: 位相0.882から
+        #   終値までの途中を当てさせると、直線は120回中80回が実際より上・平均+1.03%。
+        #   形を借りると 60/120・平均+0.01% でほぼ無バイアス。MAE も 2.38%→2.06%）。
+        #   上振れは「まだ余裕がある」と誤読させる向きなので、判断に使う図では致命的。
+        shp = []
+        for i in range(41):
+            f = 0.80 + i * 0.005
+            shp.append(round(statistics.median(
+                [at(g[f"{e}-{rk}"]["series"], f * g[f"{e}-{rk}"]["span"]) / g[f"{e}-{rk}"]["final"]
+                 for e in EVS]), 5))
         out[str(rk)] = {"lo": round(lo), "mid": round(cur[rk] * med), "hi": round(hi),
-                        "cur": cur[rk], "mult": round(med, 4)}
+                        "cur": cur[rk], "mult": round(med, 4),
+                        "shapeFrom": 0.80, "shapeStep": 0.005, "shape": shp}
         print(f"{rk:>4} {cur[rk]:>13,} {cur[rk]*med:>13,.0f} {lo:>13,.0f} {hi:>13,.0f}  "
               + " ".join(f"{e*100:+.1f}" for e in sorted(errs)))
 

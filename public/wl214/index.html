@@ -305,7 +305,7 @@ footer{border-top:1px solid var(--line);margin-top:52px;padding-top:20px;font-si
 
   <div class="chartcard">
     <div class="charthead"><span class="charttitle">終盤クローズアップ — 上位帯のボーダーと走者</span>
-      <span class="ch1" style="font-size:12px">実線＝実測 / 破線＝終値予測への<b>直線</b>。実際のボーダーは終盤に加速する（211では最後の6時間に残り伸びの27%が集中）ので、途中は破線より下を走る</span>
+      <span class="ch1" style="font-size:12px">実線＝実測 / 破線＝終値予測。破線は直線ではなく<b>過去WL3 4本の伸び方の形</b>で引いている（終盤に加速するので、直線だと途中が系統的に上振れする）</span>
     </div>
     <div class="svgwrap"><svg id="chart6" role="img" aria-label="終盤の上位帯ボーダーと走者の推移"></svg></div>
     <div class="legend" id="lg6" style="margin-top:10px"></div>
@@ -876,6 +876,26 @@ function endgameChart(svg, days, P, LIVE){
     const t=el('text',{x:X(nowH)+4,y:m.t+12,'font-size':10.5}); t.textContent='いま'; svg.appendChild(t);
   }
 
+  /* 終値までの破線を「参照イベントの形」で曲げる。
+     ⚠️直線で結ぶと**系統的に上振れする**（バックテスト: 位相0.882から終値までの途中を
+     当てさせると直線は120回中80回が実際より上・平均+1.03%。形を借りると 60/120・平均+0.01%）。
+     上振れは「まだ余裕がある」と誤読させる向きなので、稼働判断に使う図では直線を使わない。
+     形は消化率カーブをそのまま使わず、**アンカーの実測と終値予測の両方を必ず通す**ように
+     引き伸ばす（そうしないと右端が params の予測値とずれて、figure と数字が食い違う）。 */
+  const curveTo = (f, x0, y0, x1, y1) => {
+    if(!f || !Array.isArray(f.shape) || f.shape.length < 2) return null;
+    const at = ph => { const i=(ph - f.shapeFrom)/f.shapeStep;
+      if(i<=0) return f.shape[0];
+      if(i>=f.shape.length-1) return f.shape[f.shape.length-1];
+      const k=Math.floor(i), t=i-k; return f.shape[k]+(f.shape[k+1]-f.shape[k])*t; };
+    const s0=at(x0/X1), s1=at(1);
+    if(!(s1>s0)) return null;
+    const pts=[];
+    for(let h=x0; h<=x1+1e-9; h+=Math.max(0.5,(x1-x0)/48))
+      pts.push([h, y0 + (y1-y0)*(at(h/X1)-s0)/(s1-s0)]);
+    if(pts[pts.length-1][0] < x1) pts.push([x1,y1]);
+    return pts;
+  };
   const draw=(pts,color,width,dash)=>{
     if(pts.length<2) return;
     const d=pts.map((q,i)=>(i?'L':'M')+X(q[0]).toFixed(1)+' '+Y(q[1]).toFixed(1)).join(' ');
@@ -886,7 +906,7 @@ function endgameChart(svg, days, P, LIVE){
     const obs=top.filter(r=>r[sr.col]!=null).map(r=>[r[0],r[sr.col]]);
     draw(obs, sr.c, 1.8);
     const f=fin[String(sr.rk)], last=obs[obs.length-1];
-    if(last){ draw([last,[X1,f.mid]], sr.c, 1.6, '5 4');
+    if(last){ draw(curveTo(f, last[0], last[1], X1, f.mid) || [last,[X1,f.mid]], sr.c, 1.6, '5 4');
       svg.appendChild(el('line',{x1:X(X1),x2:X(X1),y1:Y(f.lo),y2:Y(f.hi),stroke:sr.c,'stroke-width':3,opacity:.45}));
       const t=el('text',{x:X(X1)+8,y:Y(f.mid)+4,'font-size':11,fill:sr.c});
       t.textContent=`${sr.rk}位 ${(f.mid/1e8).toFixed(2)}億`; svg.appendChild(t);
@@ -894,7 +914,16 @@ function endgameChart(svg, days, P, LIVE){
   });
   /* 走者は一番太く、一番上に */
   draw(rObs,'var(--ink)',2.6);
-  if(rNow && land!=null){ draw([rNow,[X1,land]],'var(--ink)',2.2,'6 4');
+  if(rNow && land!=null){
+    /* ⚠️走者の予測も直線で引かない。残りは「8/26 19:00-26:00 の周回」と「8/27 のオートだけ」で
+       構成されていて、**8/27 は18時間ほぼ平ら**。直線にするとその18時間も右肩上がりに見え、
+       「ボーダーが伸びるあいだ走者も伸びている」という誤読を生む（2026-08-26 Nori 指摘）。
+       予定（cumCurve）の形をそのまま使い、現在地に合わせて平行移動する。 */
+    const rp=[];
+    for(let h=rNow[0]; h<=X1+1e-9; h+=0.5)
+      rp.push([h, rNow[1] + Math.max(0, LE.planAt(h) - LE.planAt(rNow[0]))]);
+    if(rp[rp.length-1][0] < X1) rp.push([X1, land]);
+    draw(rp,'var(--ink)',2.2,'6 4');
     svg.appendChild(el('circle',{cx:X(rNow[0]),cy:Y(rNow[1]),r:3.5,fill:'var(--ink)'}));
     const t=el('text',{x:X(X1)+8,y:Y(land)+4,'font-size':11.5,'font-weight':650,fill:'var(--ink)'});
     t.textContent=`走者 ${(land/1e8).toFixed(2)}億`; svg.appendChild(t);
@@ -948,7 +977,7 @@ function landingEstimate(days, LIVE){
   if(!obs.length) return {value:null, planEnd, obs:null, drift:0};
   const last = obs[obs.length-1];
   return {value: last.pt + Math.max(0, planEnd - planAt(last.h)),
-          planEnd, obs:last, drift: planAt(last.h) - last.pt};
+          planEnd, obs:last, drift: planAt(last.h) - last.pt, planAt};
 }
 
 function cumChart(svg, tipEl, days, P){
