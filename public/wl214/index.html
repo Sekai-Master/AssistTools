@@ -833,12 +833,7 @@ function endgameChart(svg, days, P, LIVE){
     {rk:100, col:5, c:'var(--ink-3)'},
   ].filter(x => fin[String(x.rk)]);
   /* 走者。cumCurve は「予定を全部こなした場合」の計画線 */
-  const plan = cumCurve(days);
-  const planAt = h => { if(!plan.length) return 0;
-    if(h <= plan[0].h) return plan[0].v;
-    for(let i=1;i<plan.length;i++) if(plan[i].h >= h){ const a=plan[i-1], b=plan[i];
-      return b.h===a.h ? b.v : a.v + (h-a.h)/(b.h-a.h)*(b.v-a.v); }
-    return plan[plan.length-1].v; };
+  const LE = landingEstimate(days, LIVE);
   const rObs = ((LIVE && LIVE.runner) || []).filter(r => r.h >= X0 && r.pt != null)
                  .map(r => [r.h, r.pt]);
   const rNow = rObs.length ? rObs[rObs.length-1] : null;
@@ -846,13 +841,7 @@ function endgameChart(svg, days, P, LIVE){
      独り歩きしていて、2026-08-26 時点で実測より 842万（2.9%）上に浮いている。
      **確定している現在地に乗せ、残りの増分だけモデルから借りる**（cumChart がボーダーで
      やっているのと同じ考え方）。planAt をそのまま出すと、実測の点から線が飛ぶ。 */
-  const planEnd = planAt(X1);
-  /* ⚠️走者の実測が1点も無いときに planEnd へ黙って戻さない。
-     改名して genlive の名前リストに足し忘れる／圏外に落ちる、で普通に起きる（8/26 に実際に3日欠けた）。
-     そのとき planEnd に戻ると、実測アンカーを入れた動機（モデルが+2.9%浮いている）が
-     無警告で復活する。ここは断定をやめて「取れていない」と言う。 */
-  const land = rNow ? rNow[1] + Math.max(0, planEnd - planAt(rNow[0])) : null;
-  const drift = rNow ? planAt(rNow[0]) - rNow[1] : 0;
+  const planEnd = LE.planEnd, land = LE.value, drift = LE.drift;
 
   let lo=Infinity, hi=-Infinity;
   const bump = v => { if(v==null) return; lo=Math.min(lo,v); hi=Math.max(hi,v); };
@@ -934,6 +923,26 @@ function endgameChart(svg, days, P, LIVE){
      左端のままだと2日前の実線しか見えず、凡例の結論だけが根拠なしに見える */
   const wrap = svg.closest('.svgwrap');
   if(wrap) wrap.scrollLeft = wrap.scrollWidth;
+}
+
+/* 着地見込みの唯一の定義。**ページ内で着地が2つ出るのを防ぐ**ため、必ずここを通す。
+   日別モデルの単純な積み上げ（DAYS の末尾 cum）は、実測 actualPt を入れていない日が
+   増えるほど独り歩きする。2026-08-26 時点で実測より 826万（2.9%）上に浮いていた。
+   確定している現在地に乗せ、残りの増分だけモデルから借りる。
+   ⚠️走者の実測が1点も無いときだけ null を返す。黙ってモデル値に戻さない。 */
+function landingEstimate(days, LIVE){
+  const plan = cumCurve(days);
+  const planAt = h => { if(!plan.length) return 0;
+    if(h <= plan[0].h) return plan[0].v;
+    for(let i=1;i<plan.length;i++) if(plan[i].h >= h){ const a=plan[i-1], b=plan[i];
+      return b.h===a.h ? b.v : a.v + (h-a.h)/(b.h-a.h)*(b.v-a.v); }
+    return plan[plan.length-1].v; };
+  const obs = ((LIVE && LIVE.runner) || []).filter(r => r.pt != null).sort((a,b)=>a.h-b.h);
+  const planEnd = planAt(240);
+  if(!obs.length) return {value:null, planEnd, obs:null, drift:0};
+  const last = obs[obs.length-1];
+  return {value: last.pt + Math.max(0, planEnd - planAt(last.h)),
+          planEnd, obs:last, drift: planAt(last.h) - last.pt};
 }
 
 function cumChart(svg, tipEl, days, P){
@@ -1090,22 +1099,35 @@ function cumChart(svg, tipEl, days, P){
       svg.appendChild(el('polyline',{points:rp.map(r=>`${X(r.h)},${Y(r.pt)}`).join(' '),
         fill:'none', stroke:css('--s1'), 'stroke-width':2.5, 'stroke-linejoin':'round',
         'stroke-linecap':'round'}));
-    LIVE.runner.forEach(r=>{
+    /* ⚠️菱形は「走者から申告があった時点」だけに打つ。総合板からの自動取得まで打つと
+       30分ごとに194個並んで線が点線に見える（2026-08-26 に実際にそうなった）。
+       凡例も「申告のあった時点」と書いてあるので、自動取得を混ぜると説明と食い違う。 */
+    const decl = rp.filter(r => !String(r.note||'').includes('自動取得'));
+    decl.forEach(r=>{
       const s=6;
       svg.appendChild(el('rect',{x:X(r.h)-s/2,y:Y(r.pt)-s/2,width:s,height:s,
         transform:`rotate(45 ${X(r.h)} ${Y(r.pt)})`,fill:css('--s1'),
         stroke:css('--surface'),'stroke-width':2}));
     });
-    const lr=LIVE.runner[LIVE.runner.length-1];
-    const t=el('text',{x:X(lr.h)+10,y:Y(lr.pt)+4,class:'axis'});
+    const lr=rp[rp.length-1];
+    svg.appendChild(el('circle',{cx:X(lr.h),cy:Y(lr.pt),r:4,fill:css('--s1'),
+      stroke:css('--surface'),'stroke-width':2}));
+    /* ラベルは右端で切れるので、はみ出す位置なら左側に出す */
+    const lx = X(lr.h), flip = lx > m.l + iw*0.72;
+    const t=el('text',{x: lx + (flip ? -10 : 10), y: Y(lr.pt)+16, class:'axis',
+                       ...(flip ? {'text-anchor':'end'} : {})});
     t.textContent=`実測 ${(lr.pt/1e4).toFixed(0)}万${lr.rank?`（${lr.rank}位）`:''}`;
     svg.appendChild(t);
   }
   /* 終点ラベル */
   const last = pts[pts.length-1];
-  const lt = el('text',{x:X(last.h)-6,y:Y(last.v)-12,'text-anchor':'end',
-                        style:`fill:${css('--ink')};font-weight:700;font-size:13px`});
-  lt.textContent = oku(last.v)+'億'; svg.appendChild(lt);
+  const LE3 = landingEstimate(days, LIVE);
+  const shownEnd = (LE3.value != null) ? LE3.value : last.v;
+  /* 上端に寄ると章名の帯と重なるので、その場合は点の下に出す（2026-08-26 Nori 指摘） */
+  const lyTop = Y(shownEnd)-12, lt = el('text',
+    {x:X(last.h)-6, y: lyTop < m.t+22 ? Y(shownEnd)+20 : lyTop, 'text-anchor':'end',
+     style:`fill:${css('--ink')};font-weight:700;font-size:13px`});
+  lt.textContent = oku(shownEnd)+'億'; svg.appendChild(lt);
   if(show100){
     const bl = el('text',{x:X(240)-6,y:Y(C)+18,'text-anchor':'end',class:'axis'});
     bl.textContent='総合100位 '+oku(C)+'億'; svg.appendChild(bl);
@@ -1379,9 +1401,14 @@ function render(){
       <p class="n">周回 ${fmt(needManual)} ／ オート ${fmt(needAuto)}（${P.boost.auto}炊き）／ マイセカイ ${fmt(needMys)}<br>
         消化済み ${fmt(lbUsed-needLb)} ／ 全期間 ${fmt(lbUsed)}
         ${P.mysekai.lbPerHarvest==null?'<br>⚠️ マイセカイの回復ぶんは未計上':''}</p></div>`;
-  countUp(document.getElementById('v-total'), total/1e8);
+  /* ⚠️タイルの着地も chart3/chart6 と同じ landingEstimate を使う。
+     以前はここだけ日別モデルの積み上げ（DAYS 末尾）で、同じページに 3.32億 と 3.24億 が
+     並んでいた（2026-08-26 に Nori 指摘）。 */
+  const LE0 = landingEstimate(DAYS, LIVE);
+  const totalShown = (LE0.value != null) ? LE0.value : total;
+  countUp(document.getElementById('v-total'), totalShown/1e8);
   const short = P.boost.budgetLb - lbUsed;
-  const thr = R50t ? total/R50t : 0;
+  const thr = R50t ? totalShown/R50t : 0;
   document.getElementById('verdict').innerHTML =
     (mLoAll>=0 ? `100位は<b>どちらに転んでも足りる</b>見込み。` : `100位は上振れすると届かない。`)
     + (R50t ? `50位は<b>100位ボーダーが ${oku(thr)}億以下に収まるか</b>で決まる（いまの中央推定は ${oku(C)}億）。` : '')
