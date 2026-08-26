@@ -26,3 +26,7 @@ coverage
 *.njsproj
 *.sln
 *.sw?
+
+# Python のバイトコード（scripts/ 配下のツールが吐く）
+__pycache__/
+*.pyc
