@@ -62,8 +62,26 @@ if hasattr(sys.stdout, "reconfigure"):
 
 DB = "/volume1/docker/sekai-border-tracker/data/borders.db"
 EVENT = 214
-# ⚠️走者名はリポジトリに書かない（README の規約）。環境変数か --name で渡す。
-RUNNER = os.environ.get("WL214_RUNNER_NAME", "")
+# ⚠️走者名はリポジトリに書かない（README の規約）。
+#   優先順位: --name > 環境変数 WL214_RUNNER_NAME > scripts/wl214/.runner（gitignore 済み）
+#   ⚠️.runner を用意していないと cron から叩いたときに落ちる（2026-08-27 に踏みかけた）。
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _default_runner():
+    v = os.environ.get("WL214_RUNNER_NAME")
+    if v:
+        return v
+    f = os.path.join(HERE, ".runner")
+    if os.path.exists(f):
+        with io.open(f, encoding="utf-8") as fh:
+            names = [x.strip() for x in fh if x.strip()]
+        if names:
+            return names[-1]      # 最後の行＝いまの章の名義
+    return ""
+
+
+RUNNER = _default_runner()
 
 # 章ごとの実測値。nas_live.py の UNITS と同じ値を保つこと。
 UNITS = {3: (107975, 69125, 750), 4: (120157, 76685, 850), 5: (118049, 75530, 850)}
@@ -72,7 +90,6 @@ AUTO_SONG = "初音天地開闢神話"
 OH_DEFAULT = 33.0           # ソロオートの曲外時間（src/lib/overhead.ts の OVERHEAD_SEC.auto）
 BONUS = {3: 826.5, 4: 927.0, 5: 912.5}   # 章ごとのイベントボーナス%（実測に合わせた端数込み）
 LB_MULT = 35                # ライブボーナス10炊きの倍率（LIVE_BONUS_MULTIPLIERS[10]）
-HERE = os.path.dirname(os.path.abspath(__file__))
 MUSIC_DIR = os.path.join(HERE, "..", "..", "public", "MusicDatas")
 
 
