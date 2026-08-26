@@ -228,14 +228,27 @@ def main():
         A("  %s%s%s    %s%d位%s    %s%s%s"
           % (C["b"], a.name, C["0"], C["b"], rk, C["0"], C["b"], "{:,}".format(sc), C["0"]))
         A("")
-        A("  %s%s%s  1周 %s%.0f秒%s    %s%.1f周/h%s    時速 %s%.0f万%s"
+        # 単価は「その窓で稼いだPt ÷ その窓の周回数」。**モデル値ではなく実測**なので、
+        # 卓の質がそのまま出る（支援の実効値が落ちるとここが下がる）。
+        mine_w = [x for x in mine if (t - x[0]).total_seconds() <= a.pace * 60]
+        laps_w = 0
+        for (t0, s0), (t1, s1) in zip(mine_w, mine_w[1:]):
+            kk, nn = classify(s1 - s0, lap, auto, mys)
+            if kk == "周回":
+                laps_w += nn
+        gain_w = (mine_w[-1][1] - mine_w[0][1]) if len(mine_w) >= 2 else 0
+        unit_w = (gain_w / laps_w) if laps_w else 0
+        unit_b = (bgain / blk) if blk else 0
+        A("  %s%s%s  1周 %s%.0f秒%s   %s%.1f周/h%s   時速 %s%.0f万%s   単価 %s%s%s"
           % (C["dim"], pad("直近%d分のペース" % a.pace, 16), C["0"], C["g"], per, C["0"],
-             C["g"], now_lph, C["0"], C["g"], now_pph / 1e4, C["0"]))
+             C["g"], now_lph, C["0"], C["g"], now_pph / 1e4, C["0"],
+             C["g"], "{:,.0f}".format(unit_w) if unit_w else "—", C["0"]))
         A("  %s%s%s  %s〜   経過 %s   %s%s%d周%s   +%s"
           % (C["dim"], pad("このブロック", 16), C["0"],
              first[0].strftime("%H:%M") if first else "—", hm(bmin),
              "" if s["block_found"] else "≧", C["b"], blk, C["0"], "{:,}".format(bgain))
-          + "   %s平均 %.1f周/h%s" % (C["dim"], avg_lph, C["0"]))
+          + "   %s平均 %.1f周/h・単価 %s%s" % (C["dim"], avg_lph,
+                                              "{:,.0f}".format(unit_b) if unit_b else "—", C["0"]))
         A("  %s%s%s  あと %s   直近ペースで %s+%s%s   →   %s%s%s"
           % (C["dim"], pad("%s まで" % a.until, 16), C["0"], hm(left),
              C["c"], "{:,.0f}".format(now_pph * left / 60.0), C["0"],
