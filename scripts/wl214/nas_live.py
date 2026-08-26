@@ -22,7 +22,7 @@
 ⚠️Python 3.8 で動かすこと（NAS の python3 は 3.8.15）。3.9+ の記法は使わない。
 ⚠️LANG が未設定なので stdout を明示的に UTF-8 にする。
 """
-import argparse, datetime, json, os, sqlite3, sys, time, urllib.request
+import argparse, datetime, json, os, sqlite3, sys, time, unicodedata, urllib.request
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -40,6 +40,22 @@ RANKS = (20, 30, 40, 50, 100)
 C = {"dim": "\033[2m", "b": "\033[1m", "g": "\033[32m", "y": "\033[33m",
      "r": "\033[31m", "c": "\033[36m", "0": "\033[0m"}
 CLR = "\033[2K\r"
+
+
+def dw(s):
+    """端末での表示幅。⚠️日本語は1文字で2桁ぶん取るので、%-5s のような
+    文字数ベースの桁揃えは必ずズレる（2026-08-26 Nori 指摘）。"""
+    n = 0
+    for c in str(s):
+        n += 2 if unicodedata.east_asian_width(c) in ("W", "F") else 1
+    return n
+
+
+def pad(s, width, right=False):
+    """表示幅で桁を揃える。足りなければ空白、あふれたらそのまま出す。"""
+    s = str(s)
+    sp = " " * max(0, width - dw(s))
+    return sp + s if right else s + sp
 
 
 def jst(ts):
@@ -127,9 +143,11 @@ def main():
           % (C["b"], a.ch, "{:,}".format(lap), "{:,}".format(auto), C["0"]))
     print("%s走者 %s ／ %d秒ごとに板を直接見る（起動時だけ DB から遡り）。Ctrl-C で終了%s"
           % (C["dim"], a.name, a.every, C["0"]))
-    print("%s%-5s %-5s %13s %10s %-10s %9s %9s %9s %9s%s"
-          % (C["dim"], "時刻", "順位", "総合Pt", "増分", "内容",
-             "直近%d周" % a.win, "枠全体", "↑上", "↓下", C["0"]))
+    head = (pad("時刻", 5) + " " + pad("順位", 6) + " " + pad("総合Pt", 13, True) + " "
+            + pad("増分", 10, True) + " " + pad("内容", 13) + " "
+            + pad("直近%d周" % a.win, 10, True) + " " + pad("枠全体", 10, True) + " "
+            + pad("上との差", 10, True) + " " + pad("下との差", 10, True))
+    print("%s%s%s" % (C["dim"], head, C["0"]))
 
     seen, laphist = set(), []
     laps, prev, first, done_backfill = 0, None, None, False
@@ -175,12 +193,16 @@ def main():
                 dn = "%+.2fM" % ((sc - last_nb["down"]) / 1e6) if last_nb.get("down") else "—"
                 col = C["g"] if kind == "周回" else (C["y"] if kind in ("オート", "マイセカイ")
                                                      else (C["r"] if kind in ("停止", "不明") else C["0"]))
+                body = ("%s%d" % (kind, k)) if k else kind
                 sys.stdout.write(CLR)
-                print("%-5s %s%-5s%s %13s %10s %s%-10s%s %9s %9s %s%9s %9s%s"
-                      % (t.strftime("%H:%M"), C["b"], "%d位" % rk, C["0"],
-                         "{:,}".format(sc), ("+%s" % "{:,}".format(d)) if d else "—",
-                         col, ("%s%d" % (kind, k)) if k else kind, C["0"],
-                         s10, sall, C["c"], up, dn, C["0"]))
+                print("%s %s%s%s %s %s %s%s%s %s %s %s%s %s%s"
+                      % (pad(t.strftime("%H:%M"), 5),
+                         C["b"], pad("%d位" % rk, 6), C["0"],
+                         pad("{:,}".format(sc), 13, True),
+                         pad(("+%s" % "{:,}".format(d)) if d else "—", 10, True),
+                         col, pad(body, 13), C["0"],
+                         pad(s10, 10, True), pad(sall, 10, True),
+                         C["c"], pad(up, 10, True), pad(dn, 10, True), C["0"]))
                 sys.stdout.flush()
                 prev = (t, sc)  # ⚠️first の起点に使うので、更新はこの行より後にしない
             if prev:
