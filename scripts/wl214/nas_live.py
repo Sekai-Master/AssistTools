@@ -18,6 +18,11 @@
   --every N  板を見にいく間隔（秒・既定 20）。板は約3分刻み
   --back N   起動時に直近 N 時間ぶんを DB から流す（既定 1.0）
   --win N    「直近ペース」を何周ぶんで測るか（既定 10）
+  --rows N   画面に残すデータ行数（既定 24。見出し3行＋ステータス1行で合計28行）
+  --log DIR  全行を live-YYYYMMDD.log に追記する先（既定 ~/wl214）
+
+画面は毎回描き直す（固定高）。**スクロールバックには残らないが、
+行そのものは必ずログファイルに追記している**ので、まとめ表示で潰れた情報も後から読める。
 
 ⚠️Python 3.8 で動かすこと（NAS の python3 は 3.8.15）。3.9+ の記法は使わない。
 ⚠️LANG が未設定なので stdout を明示的に UTF-8 にする。
@@ -133,6 +138,8 @@ def main():
     ap.add_argument("--every", type=int, default=20)
     ap.add_argument("--back", type=float, default=1.0)
     ap.add_argument("--win", type=int, default=10)
+    ap.add_argument("--rows", type=int, default=24)   # 画面に残すデータ行数
+    ap.add_argument("--log", default=os.path.expanduser("~/wl214"))  # 全行を残す先
     a = ap.parse_args()
     if not a.name:
         sys.exit('走者名を渡すこと: python3 nas_live.py "名前"')
@@ -143,14 +150,30 @@ def main():
           % (C["b"], a.ch, "{:,}".format(lap), "{:,}".format(auto), C["0"]))
     print("%s走者 %s ／ %d秒ごとに板を直接見る（起動時だけ DB から遡り）。Ctrl-C で終了%s"
           % (C["dim"], a.name, a.every, C["0"]))
-    head = (pad("時刻", 5) + " " + pad("順位", 6) + " " + pad("総合Pt", 13, True) + " "
+    head = (pad("時刻", 11) + " " + pad("順位", 6) + " " + pad("総合Pt", 13, True) + " "
             + pad("増分", 10, True) + " " + pad("内容", 13) + " "
             + pad("直近%d周" % a.win, 10, True) + " " + pad("枠全体", 10, True) + " "
             + pad("上との差", 10, True) + " " + pad("下との差", 10, True))
-    print("%s%s%s" % (C["dim"], head, C["0"]))
+    logpath = os.path.join(a.log, "live-%s.log" % datetime.datetime.now().strftime("%Y%m%d"))
 
-    seen, laphist = set(), []
+    def render(view, status):
+        """画面を毎回まるごと描き直す。**固定高に収めるにはこれがいちばん確実**
+        （カーソル移動で部分更新すると、端末が折り返した瞬間に崩れる）。"""
+        out = ["\033[H\033[J"]
+        out.append("%sevent214 ライブ（ch%d）  1周 %s / オート1回 %s%s"
+                   % (C["b"], a.ch, "{:,}".format(lap), "{:,}".format(auto), C["0"]))
+        out.append("%s走者 %s ／ %d秒ごとに板を直接見る ／ 全行は %s に追記中%s"
+                   % (C["dim"], a.name, a.every, logpath, C["0"]))
+        out.append("%s%s%s" % (C["dim"], head, C["0"]))
+        for r in view[-a.rows:]:
+            out.append(r["line"])
+        out.append("%s%s%s" % (C["dim"], status, C["0"]))
+        sys.stdout.write("\n".join(out))
+        sys.stdout.flush()
+
+    seen, laphist, view = set(), [], []   # view は画面に残す行（rows は取得データ。名前を分ける）
     laps, prev, first, done_backfill = 0, None, None, False
+    last_lap_t = None    # 最後に周回を観測した時刻。ブロックの切れ目の判定に使う
     last_bd, last_nb = {}, {}
     try:
         while True:
@@ -170,6 +193,13 @@ def main():
                 d = sc - prev[1] if prev else 0
                 kind, k = classify(d, lap, auto, mys) if prev else ("—", 0)
                 if kind == "周回":
+                    # ⚠️「枠全体」はいま走っているブロックのペース。**15分以上周回が
+                    #   途切れたら、そこでブロックが切れたとみなして起点を取り直す。**
+                    #   取り直さないと、起動時に長い停止を跨いだだけで分母が膨らみ、
+                    #   28.8周/h で走っているのに 23.3周/h と出る（2026-08-26 実際に出た）。
+                    if last_lap_t is not None and (t - last_lap_t).total_seconds() > 900:
+                        first = None
+                    last_lap_t = t
                     laps += k
                     if first is None:
                         # ⚠️起点は「最初に周回を数えた時刻」ではなく**その1つ前の観測時刻**。
@@ -193,17 +223,35 @@ def main():
                 dn = "%+.2fM" % ((sc - last_nb["down"]) / 1e6) if last_nb.get("down") else "—"
                 col = C["g"] if kind == "周回" else (C["y"] if kind in ("オート", "マイセカイ")
                                                      else (C["r"] if kind in ("停止", "不明") else C["0"]))
-                body = ("%s%d" % (kind, k)) if k else kind
-                sys.stdout.write(CLR)
-                print("%s %s%s%s %s %s %s%s%s %s %s %s%s %s%s"
-                      % (pad(t.strftime("%H:%M"), 5),
-                         C["b"], pad("%d位" % rk, 6), C["0"],
-                         pad("{:,}".format(sc), 13, True),
-                         pad(("+%s" % "{:,}".format(d)) if d else "—", 10, True),
-                         col, pad(body, 13), C["0"],
-                         pad(s10, 10, True), pad(sall, 10, True),
-                         C["c"], pad(up, 10, True), pad(dn, 10, True), C["0"]))
-                sys.stdout.flush()
+                # 全行はログに残す（画面のまとめ表示で潰れても後から読める）
+                try:
+                    with open(logpath, "a", encoding="utf-8") as lf:
+                        lf.write("%s\t%d\t%d\t%d\t%s%s\n"
+                                 % (t.strftime("%Y-%m-%d %H:%M"), rk, sc, d, kind, k or ""))
+                except Exception:
+                    pass
+                # 停止とオートは連続すると同じ行が延々並ぶ（8/27 は停止だけで約360行）。
+                # **消さずに1行へ畳む**——時間帯・累計回数・累計Ptは保つ。
+                if view and view[-1]["kind"] == kind and kind in ("停止", "オート"):
+                    g = view[-1]
+                    g["t1"], g["k"], g["d"], g["sc"], g["rk"] = t, g["k"] + k, g["d"] + d, sc, rk
+                else:
+                    view.append({"kind": kind, "k": k, "t0": prev[0] if prev else t, "t1": t,
+                                 "d": d, "sc": sc, "rk": rk})
+                g = view[-1]
+                span = "%s〜%s" % (g["t0"].strftime("%H:%M"), g["t1"].strftime("%H:%M"))                     if g["kind"] in ("停止", "オート") and g["t1"] > g["t0"] else g["t1"].strftime("%H:%M")
+                mins = (g["t1"] - g["t0"]).total_seconds() / 60.0
+                body = ("%s%d" % (g["kind"], g["k"])) if g["k"] else g["kind"]
+                if g["kind"] in ("停止", "オート") and mins >= 6:
+                    body += "・%d分" % mins
+                g["line"] = ("%s %s%s%s %s %s %s%s%s %s %s %s%s %s%s"
+                             % (pad(span, 11),
+                                C["b"], pad("%d位" % g["rk"], 6), C["0"],
+                                pad("{:,}".format(g["sc"]), 13, True),
+                                pad(("+%s" % "{:,}".format(g["d"])) if g["d"] else "—", 10, True),
+                                col, pad(body, 13), C["0"],
+                                pad(s10, 10, True), pad(sall, 10, True),
+                                C["c"], pad(up, 10, True), pad(dn, 10, True), C["0"]))
                 prev = (t, sc)  # ⚠️first の起点に使うので、更新はこの行より後にしない
             if prev:
                 left = (END - datetime.datetime.now()).total_seconds() / 3600.0
@@ -213,10 +261,8 @@ def main():
                     sec = "・1周 %.0f秒" % (bh * 3600 / (laps - first[2]))
                 marg = " ".join("%d位%+.1fM" % (r, (prev[1] - last_bd[r]) / 1e6)
                                 for r in RANKS if r in last_bd and r <= 50)
-                sys.stdout.write("%s%s周回 %d 周%s ／ %s ／ 残り %.1fh ／ 更新 %s%s"
-                                 % (CLR, C["dim"], laps, sec, marg, left,
-                                    prev[0].strftime("%H:%M"), C["0"]))
-                sys.stdout.flush()
+                render(view, "周回 %d 周%s ／ %s ／ 残り %.1fh ／ 更新 %s"
+                       % (laps, sec, marg, left, prev[0].strftime("%H:%M")))
             time.sleep(a.every)
     except KeyboardInterrupt:
         print("\n終了。周回 %d 周" % laps)
