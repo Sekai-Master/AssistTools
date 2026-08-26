@@ -316,6 +316,17 @@ export function PlanTimeline({
             ? `次の減少まで${Math.max(0, Math.ceil(30 - pt.decayProgressMin))}分`
             : undefined;
         const autoRow = autoPlan?.byIndex.get(i);
+        /**
+         * ★ 画像では赤くするだけでは**理由が伝わらない**（受け取った人は
+         *   何が足りないのか分からない）。削られた理由を1語で添える。
+         */
+        const autoNote = autoRow
+          ? autoRow.droppedByCap > 0
+            ? `上限で${autoRow.droppedByCap}回ぶん回せず`
+            : autoRow.droppedByTime > 0
+              ? `休憩に入らない${autoRow.droppedByTime}回を除外`
+              : null
+          : null;
         return {
           time,
           label:
@@ -325,8 +336,11 @@ export function PlanTimeline({
           sub: points
             ? [
                 gained > 0 ? `+${gained.toLocaleString()}pt` : null,
+                autoNote,
                 gauge(pt.endPercent),
-                restSub,
+                // 幅は1行ぶんしかない。削られた理由がある行では、
+                // 「次の減少まで」より理由を優先して残す。
+                autoNote ? null : restSub,
               ]
                 .filter(Boolean)
                 .join(" ・ ")
