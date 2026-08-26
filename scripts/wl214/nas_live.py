@@ -104,15 +104,25 @@ def board(name):
 
 
 def classify(d, lap, auto, mys):
+    """増分を 周回 / オート / マイセカイ / 停止 に分ける。
+
+    ⚠️2026-08-26 の誤判定: マイセカイの 600,950 を「周回5」と出した。
+       判定を「合計に対して3%以内」で見ていたため、3%＝18,028 の幅に
+       5周ぶん（590,245）が入ってしまい、マイセカイの判定まで到達しなかった。
+       **合計に対する許容ではなく、1周あたりの単価が実測の幅に収まるか**で見る。
+       600,950 を5周とすると1周 120,190 で、ch5 の実測（117,005〜118,790）の外なので落ちる。
+       幅は下側だけ広く取る（事故った周は単価が落ちるが、上振れはしない）。
+    """
     if d == 0:
         return "停止", 0
-    for k in range(1, 13):
+    for k in range(1, 13):                       # オートは固定値なのでほぼ厳密に一致する
         if abs(d - k * auto) <= 3:
             return "オート", k
     for k in range(1, 9):
-        if abs(d - k * lap) / float(max(d, 1)) < 0.03:
+        u = d / float(k)
+        if lap * 0.975 <= u <= lap * 1.015:
             return "周回", k
-    if d % mys == 0:
+    if d % mys == 0:                             # マイセカイは刻みが厳密
         return "マイセカイ", d // mys
     return "不明", 0
 
@@ -176,7 +186,8 @@ def main():
     seen, laphist, view = set(), [], []   # view は画面に残す行（rows は取得データ。名前を分ける）
     laps, prev, first, done_backfill = 0, None, None, False
     last_lap_t = None    # 最後に周回を観測した時刻。ブロックの切れ目の判定に使う
-    block_found = False  # 15分以上の途切れを実際に観測できたか（＝開始点が確かか）
+    block_found = False  # ブロックの開始点が窓の中に見えているか
+    prev_kind = None     # 直前の行の種別。開始点の検出に使う
     last_bd, last_nb = {}, {}
     try:
         while True:
@@ -202,6 +213,14 @@ def main():
                     #   28.8周/h で走っているのに 23.3周/h と出る（2026-08-26 実際に出た）。
                     if last_lap_t is not None and (t - last_lap_t).total_seconds() > 900:
                         first = None
+                        block_found = True
+                    # ⚠️「周回でない行のあとに周回が来た」なら、そこがブロックの開始で、
+                    #   窓の中に開始点が見えている。周回どうしの15分ギャップだけを条件に
+                    #   すると、直前が停止／マイセカイのときに見つけられず、確かなのに
+                    #   ≧（下限）を付けてしまう（2026-08-26、18:33 をマイセカイに直した副作用）。
+                    # ⚠️"—" は起点の1行目（まだ分類できない行）で、切れ目ではない。
+                    #   ここを除かないと、窓の中に開始点が無くても見えたことにしてしまう。
+                    if first is None and prev_kind not in (None, "—", "周回"):
                         block_found = True
                     last_lap_t = t
                     laps += k
@@ -234,16 +253,19 @@ def main():
                                  % (t.strftime("%Y-%m-%d %H:%M"), rk, sc, d, kind, k or ""))
                 except Exception:
                     pass
-                # 停止とオートは連続すると同じ行が延々並ぶ（8/27 は停止だけで約360行）。
+                # 停止・オート・マイセカイは連続すると同じ行が延々並ぶ（8/27 は停止だけで約360行）。
                 # **消さずに1行へ畳む**——時間帯・累計回数・累計Ptは保つ。
-                if view and view[-1]["kind"] == kind and kind in ("停止", "オート"):
+                # ⚠️マイセカイは1回の回収が複数区間に分割着弾する（18:33 の 600,950 と
+                #   18:45 の 185,300 は合わせて 786,250＝925×850 の1回ぶん）。
+                #   別々に出すと「2回やった」ように見えるので必ずまとめる。
+                if view and view[-1]["kind"] == kind and kind in ("停止", "オート", "マイセカイ"):
                     g = view[-1]
                     g["t1"], g["k"], g["d"], g["sc"], g["rk"] = t, g["k"] + k, g["d"] + d, sc, rk
                 else:
                     view.append({"kind": kind, "k": k, "t0": prev[0] if prev else t, "t1": t,
                                  "d": d, "sc": sc, "rk": rk})
                 g = view[-1]
-                span = "%s〜%s" % (g["t0"].strftime("%H:%M"), g["t1"].strftime("%H:%M"))                     if g["kind"] in ("停止", "オート") and g["t1"] > g["t0"] else g["t1"].strftime("%H:%M")
+                span = "%s〜%s" % (g["t0"].strftime("%H:%M"), g["t1"].strftime("%H:%M"))                     if g["kind"] in ("停止", "オート", "マイセカイ") and g["t1"] > g["t0"]                     else g["t1"].strftime("%H:%M")
                 mins = (g["t1"] - g["t0"]).total_seconds() / 60.0
                 body = ("%s%d" % (g["kind"], g["k"])) if g["k"] else g["kind"]
                 if g["kind"] in ("停止", "オート") and mins >= 6:
@@ -256,7 +278,7 @@ def main():
                                 col, pad(body, 13), C["0"],
                                 pad(s10, 10, True), pad(sall, 10, True),
                                 C["c"], pad(up, 10, True), pad(dn, 10, True), C["0"]))
-                prev = (t, sc)  # ⚠️first の起点に使うので、更新はこの行より後にしない
+                prev, prev_kind = (t, sc), kind  # ⚠️first の起点に使うので更新はここ
             if prev:
                 left = (END - datetime.datetime.now()).total_seconds() / 3600.0
                 sec = ""
