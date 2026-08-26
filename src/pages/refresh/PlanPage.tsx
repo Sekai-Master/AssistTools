@@ -14,6 +14,8 @@ import { useAnalyzerMusics } from "../analyzer/useAnalyzerMusics";
 import { useGaugeInputs } from "./useGaugeInputs";
 import { GaugeInputsPanel } from "./GaugeInputsPanel";
 import { PlanTimeline } from "./PlanTimeline";
+import { AutoPanel } from "./AutoPanel";
+import { useAutoConfig } from "./useAutoConfig";
 import { nearestRoundTime } from "./lib/format";
 import type { Segment } from "./lib/timeline";
 import {
@@ -53,6 +55,17 @@ export default function PlanPage() {
   const [saved, setSaved] = useState<SavedPlan[]>(() => listPlans());
   const [planName, setPlanName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+
+  /** 休憩にオートを積んでいるときだけ、難易度別データ（428KB）を読む。 */
+  const usesAuto = useMemo(
+    () => segments.some((g) => g.kind === "rest" && g.auto),
+    [segments],
+  );
+  const autoConfig = useAutoConfig({
+    enabled: usesAuto,
+    power: parseAmount(talent),
+    bonus: parseAmount(bonus, true),
+  });
 
   /** マイセカイ 1メモリあたりのPt。総合力かボーナスが未入力なら0＝計上しない。 */
   const mySekaiUnitPt = useMemo(() => {
@@ -94,6 +107,15 @@ export default function PlanPage() {
         talent,
         bonus,
         hasWorldPass,
+        auto: {
+          course: autoConfig.course,
+          usedToday: autoConfig.usedToday,
+          taki: autoConfig.taki,
+          songKey: autoConfig.songKey,
+          skillLeader: autoConfig.skillLeader,
+          skillTotal: autoConfig.skillTotal,
+          ptOverride: autoConfig.ptOverride,
+        },
       },
     };
     setSaved(savePlan(plan));
@@ -114,6 +136,16 @@ export default function PlanPage() {
     setTalent(plan.inputs.talent ?? "");
     setBonus(plan.inputs.bonus ?? "");
     setHasWorldPass(plan.inputs.hasWorldPass ?? false);
+    const a = plan.inputs.auto;
+    if (a) {
+      autoConfig.setCourse(a.course);
+      autoConfig.setUsedToday(a.usedToday);
+      autoConfig.setTaki(a.taki);
+      autoConfig.setSongKey(a.songKey);
+      autoConfig.setSkillLeader(a.skillLeader);
+      autoConfig.setSkillTotal(a.skillTotal);
+      autoConfig.setPtOverride(a.ptOverride);
+    }
     setPlanName(plan.name);
     setNotice(`「${plan.name}」を呼び出しました。`);
   };
@@ -258,6 +290,8 @@ export default function PlanPage() {
         </p>
       </Panel>
 
+      <AutoPanel config={autoConfig} />
+
       <Panel title="プランの保存・呼び出し">
         <div className="flex flex-wrap items-center gap-2">
           <NeuInput
@@ -322,6 +356,7 @@ export default function PlanPage() {
         startPercent={gaugePct}
         startDecayProgress={inputs.startDecayProgress}
         ratePerHour={ratePerHour}
+        auto={autoConfig.runtime}
         segments={segments}
         setSegments={setSegments}
         startTime={startTime}

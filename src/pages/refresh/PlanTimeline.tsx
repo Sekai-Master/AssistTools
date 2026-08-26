@@ -12,12 +12,14 @@ import { NeuInput } from "../../components/ui/NeuInput";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { DurationInput } from "../../components/ui/DurationInput";
 import { TakiInput } from "../../components/ui/TakiInput";
+import { Switch } from "../../components/ui/Switch";
 import { Stat } from "./Stat";
 import { type Segment, mysekaiMemoriOf, simulateTimeline } from "./lib/timeline";
 import {
   MYSEKAI_FULL_HARVEST_MEMORI,
   computePlanPoints,
 } from "./lib/planPoints";
+import { type AutoBlock, planAuto } from "./lib/autoPlan";
 import {
   watermark,
   drawPlanCanvas,
@@ -47,6 +49,15 @@ interface PointsConfig {
   mySekaiUnitPt: number;
 }
 
+/** 休憩中オートの前提。設定そのものは AutoPanel が持ち、ここは結果を計算するだけ。 */
+export interface AutoRuntimeInput {
+  cycleSec: number;
+  ptPerPlay: number;
+  taki: number;
+  dailyCap: number;
+  usedToday: number;
+}
+
 interface Props {
   /**
    * どのツールとして書き出すか（tools.ts の id）。
@@ -69,6 +80,8 @@ interface Props {
   ratePerHour: number;
   /** 指定すると各プレイに焚き数を持たせ、累積到達ポイントも計算・表示する（全部入り） */
   points?: PointsConfig;
+  /** 指定すると休憩ブロックに「オートを回す」を出せる（周回プランのみ） */
+  auto?: AutoRuntimeInput;
   /** タイムライン本体（親が保持＝保存/呼び出し対象）。 */
   segments: Segment[];
   setSegments: Dispatch<SetStateAction<Segment[]>>;
@@ -89,6 +102,7 @@ export function PlanTimeline({
   startDecayProgress = 0,
   ratePerHour,
   points,
+  auto,
   segments,
   setSegments,
   startTime,
@@ -103,10 +117,36 @@ export function PlanTimeline({
     [segments, startPercent, overhead, startDecayProgress],
   );
 
+  /**
+   * 休憩に積んだオート。**ゲージには効かない**ので timeline とは別に計算する
+   * （オートはゲージが増えない種別＝休憩の価値を損なわない）。
+   */
+  const autoPlan = useMemo(() => {
+    if (!auto || !points) return null;
+    const blocks: AutoBlock[] = [];
+    result.points.forEach((pt, i) => {
+      const seg = pt.segment;
+      if (seg.kind !== "rest" || !seg.auto) return;
+      blocks.push({
+        index: i,
+        startMinute: pt.startMinute,
+        restMinutes: seg.minutes,
+        requested: seg.auto.plays ?? null,
+      });
+    });
+    if (blocks.length === 0) return null;
+    return planAuto(blocks, { ...auto, startMinuteOfDay: startMOD });
+  }, [auto, points, result, startMOD]);
+
+  const autoPointsByIndex = useMemo(() => {
+    if (!autoPlan) return undefined;
+    return new Map([...autoPlan.byIndex].map(([i, b]) => [i, b.points]));
+  }, [autoPlan]);
+
   // points指定時: 各ブロックの獲得pt・累積到達ptを並走計算（計算は lib/planPoints）。
   const pointRows = useMemo(
-    () => (points ? computePlanPoints(result, points) : null),
-    [points, result],
+    () => (points ? computePlanPoints(result, points, autoPointsByIndex) : null),
+    [points, result, autoPointsByIndex],
   );
 
   const finalPoints =
@@ -157,6 +197,22 @@ export function PlanTimeline({
   const setPlayTaki = (id: string, taki: number) =>
     setSegments((s) =>
       s.map((g) => (g.id === id && g.kind === "play" ? { ...g, taki } : g)),
+    );
+  const setRestAuto = (id: string, on: boolean) =>
+    setSegments((s) =>
+      s.map((g) =>
+        g.id === id && g.kind === "rest"
+          ? { ...g, auto: on ? (g.auto ?? {}) : undefined }
+          : g,
+      ),
+    );
+  const setRestAutoPlays = (id: string, plays: number | undefined) =>
+    setSegments((s) =>
+      s.map((g) =>
+        g.id === id && g.kind === "rest" && g.auto
+          ? { ...g, auto: { ...g.auto, plays } }
+          : g,
+      ),
     );
   const setRestMinutes = (id: string, minutes: number) =>
     setSegments((s) =>
@@ -259,14 +315,25 @@ export function PlanTimeline({
           pt.endPercent > 0
             ? `次の減少まで${Math.max(0, Math.ceil(30 - pt.decayProgressMin))}分`
             : undefined;
+        const autoRow = autoPlan?.byIndex.get(i);
         return {
           time,
-          label: `休憩　${fmtDuration(seg.minutes)}`,
+          label:
+            autoRow && autoRow.plays > 0
+              ? `休憩＋オート${autoRow.plays}回　${fmtDuration(seg.minutes)}`
+              : `休憩　${fmtDuration(seg.minutes)}`,
           sub: points
-            ? [gauge(pt.endPercent), restSub].filter(Boolean).join(" ・ ")
+            ? [
+                gained > 0 ? `+${gained.toLocaleString()}pt` : null,
+                gauge(pt.endPercent),
+                restSub,
+              ]
+                .filter(Boolean)
+                .join(" ・ ")
             : restSub,
           percent: cum ?? `${pt.endPercent.toFixed(1)}%`,
-          warn: false,
+          // 回数上限や休憩の尺で削られた休憩は、画像でも目立たせる。
+          warn: !!autoRow && (autoRow.droppedByCap > 0 || autoRow.droppedByTime > 0),
         };
       }),
       summary: points
@@ -392,6 +459,7 @@ export function PlanTimeline({
         <p className="mt-4 text-sm text-slate-500">
           「＋稼働」「＋休憩」「＋マイセカイ」でシフトを積むと、各時点の時刻とゲージが出ます。
           稼働は初期値1時間（各ブロックで調整可）。曲は上の「曲」で選んでから追加してください。
+          {points && auto ? "休憩には「オート」を付けられます（オートはゲージを増やさないので、休んだままポイントだけ稼げます）。" : ""}
         </p>
       ) : (
         <>
@@ -399,6 +467,26 @@ export function PlanTimeline({
             {result.points.map((pt, i) => {
               const seg = pt.segment;
               const capped = pt.wastedPlays >= 1;
+              const autoRow = autoPlan?.byIndex.get(i);
+              // 弾いた理由は「次に効く手」がそれぞれ違うので、まとめず1行ずつ出す。
+              const autoWarnings: string[] = [];
+              if (autoRow) {
+                if (autoRow.droppedByTime > 0) {
+                  autoWarnings.push(
+                    `この休憩に入るオートは${autoRow.plays + autoRow.droppedByCap}回まで。${autoRow.droppedByTime}回ぶんは時間が足りません（休憩を延ばすか、短い曲に）`,
+                  );
+                }
+                if (autoRow.droppedByCap > 0) {
+                  autoWarnings.push(
+                    `1日の回数上限で${autoRow.droppedByCap}回は回せません（上限${auto?.dailyCap ?? 0}回・毎日4:00リセット。石でもライボでも増えません）`,
+                  );
+                }
+                if (autoRow.playsOnNextDay > 0) {
+                  autoWarnings.push(
+                    `4:00をまたぐので、うち${autoRow.playsOnNextDay}回は翌日ぶんの回数を先に食います（前日の残りは消えます）`,
+                  );
+                }
+              }
               return (
                 <li
                   key={seg.id}
@@ -511,6 +599,58 @@ export function PlanTimeline({
                           value={seg.minutes}
                           onChange={(v) => setRestMinutes(seg.id, v)}
                         />
+                        {points && auto && (
+                          <>
+                            {/* オートはゲージを増やさないので、休憩の価値を落とさずに点だけ稼げる。 */}
+                            <Switch
+                              checked={!!seg.auto}
+                              onChange={(on) => setRestAuto(seg.id, on)}
+                              label="オート"
+                              className="text-xs"
+                            />
+                            {seg.auto && (
+                              <>
+                                <input
+                                  inputMode="numeric"
+                                  value={
+                                    seg.auto.plays == null
+                                      ? ""
+                                      : String(seg.auto.plays)
+                                  }
+                                  onChange={(e) => {
+                                    const v = e.target.value.replace(
+                                      /[^0-9]/g,
+                                      "",
+                                    );
+                                    setRestAutoPlays(
+                                      seg.id,
+                                      v === "" ? undefined : Number(v),
+                                    );
+                                  }}
+                                  placeholder="回るだけ"
+                                  className="w-20 rounded-lg bg-neu px-1 py-1 text-center text-xs text-slate-800 shadow-neu-inset outline-none"
+                                  aria-label="オートの回数"
+                                />
+                                <span className="text-xs text-slate-400">
+                                  回
+                                </span>
+                                {autoRow && (
+                                  <span className="text-xs text-slate-500">
+                                    → {autoRow.plays}回
+                                  </span>
+                                )}
+                                {autoRow && autoRow.points > 0 && (
+                                  <span
+                                    className="text-xs font-bold"
+                                    style={{ color: "var(--unit-color)" }}
+                                  >
+                                    +{autoRow.points.toLocaleString()}
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </>
+                        )}
                       </div>
                     )}
                     {capped && (
@@ -529,6 +669,11 @@ export function PlanTimeline({
                         </span>
                       </p>
                     )}
+                    {autoWarnings.map((w) => (
+                      <p key={w} className="mt-1 text-xs text-rose-600">
+                        ⚠ {w}
+                      </p>
+                    ))}
                   </div>
 
                   <div
@@ -610,6 +755,28 @@ export function PlanTimeline({
               <Stat
                 label="獲得ポイント"
                 value={`+${gainedPoints.toLocaleString()}`}
+              />
+            </div>
+          )}
+          {autoPlan && (
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <Stat
+                label="オート回数"
+                value={`${autoPlan.totalPlays}回`}
+                sub={autoPlan.byDay
+                  .map((d) => `${d.plays}/${d.cap}`)
+                  .join(" ・ ")}
+              />
+              <Stat
+                label="オートのpt"
+                value={`+${autoPlan.totalPoints.toLocaleString()}`}
+              />
+              {/* ★ ライボは**表示だけ**。手動ブロックの消費を数えていないので、
+                  ここで「足りる/足りない」を判定すると全体としては嘘になる。 */}
+              <Stat
+                label="オートで焚くライボ"
+                value={`${autoPlan.totalLb}`}
+                sub="手動ぶんは含みません"
               />
             </div>
           )}

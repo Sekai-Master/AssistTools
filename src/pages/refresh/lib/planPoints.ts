@@ -64,13 +64,19 @@ export interface PlanPointRow {
   cumulative: number;
 }
 
-/** 各ブロックの獲得ptと累積を出す。行数と順番は result.points と1対1。 */
+/**
+ * 各ブロックの獲得ptと累積を出す。行数と順番は result.points と1対1。
+ *
+ * @param autoPointsByIndex 休憩ブロックで回したオートのPt（lib/autoPlan の結果）。
+ *   オートは回数上限や休憩の尺で削られるので、**ここでは計算せず結果だけ受け取る**。
+ */
 export function computePlanPoints(
   result: TimelineResult,
-  cfg: PlanPointsConfig
+  cfg: PlanPointsConfig,
+  autoPointsByIndex?: ReadonlyMap<number, number>
 ): PlanPointRow[] {
   let cum = cfg.startPoints;
-  return result.points.map((pt) => {
+  return result.points.map((pt, i) => {
     const seg = pt.segment;
     let gained = 0;
     if (seg.kind === "play") {
@@ -80,6 +86,8 @@ export function computePlanPoints(
         takiRate(cfg.hourlyRate, cfg.refTaki, seg.taki ?? cfg.refTaki) * (effMin / 60);
     } else if (seg.kind === "mysekai") {
       gained = mySekaiPoints(mysekaiMemoriOf(seg), cfg.mySekaiUnitPt);
+    } else if (seg.kind === "rest") {
+      gained = autoPointsByIndex?.get(i) ?? 0;
     }
     cum += gained;
     return { gained: Math.round(gained), cumulative: Math.round(cum) };

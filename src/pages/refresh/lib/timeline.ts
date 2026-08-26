@@ -49,7 +49,19 @@ export type Segment =
       stamina?: number;
       minutes: number;
     }
-  | { id: string; kind: "rest"; minutes: number };
+  | {
+      id: string;
+      kind: "rest";
+      minutes: number;
+      /**
+       * この休憩でオートライブを回す。
+       *
+       * ★ **オートはゲージを増やさない種別**（公式文言。100%でもイベントPは入る）なので、
+       *   ここに置いてもゲージの減少＝休憩としての価値は一切損なわれない。
+       *   計算の中身は lib/autoPlan.ts。`plays` 未指定は「休憩の尺いっぱいまで」。
+       */
+      auto?: { plays?: number };
+    };
 
 /**
  * マイセカイブロックのメモリ数。**旧データ（スタミナ保存）をここで吸収する。**

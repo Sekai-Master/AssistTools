@@ -4,6 +4,18 @@
  * ストレージ不可（プライベートモード等）や壊れたJSONは黙って空扱いにフォールバック。
  */
 import type { Segment } from "./timeline";
+import type { PassCourse } from "../../ranking/lib/lbRun";
+
+/** 休憩中オートの設定（プラン全体で1つ）。2026-08-27 追加。 */
+export interface SavedAutoInputs {
+  course: PassCourse;
+  usedToday: string;
+  taki: number;
+  songKey: string;
+  skillLeader: string;
+  skillTotal: string;
+  ptOverride: string;
+}
 
 export interface SavedPlanInputs {
   songId: string;
@@ -18,6 +30,7 @@ export interface SavedPlanInputs {
   talent?: string;
   bonus?: string;
   hasWorldPass?: boolean;
+  auto?: SavedAutoInputs;
 }
 
 export interface SavedPlan {
