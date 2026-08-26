@@ -33,7 +33,9 @@ T0 = datetime.datetime(2026, 8, 17, 20, 0)     # イベント開始 JST
 END = datetime.datetime(2026, 8, 27, 20, 0)
 EVENT = 214
 # 章ごとの1回ぶんのPt（実測）。⚠️章が変わったら実測で更新する
-UNITS = {3: (107975, 69125, 750), 4: (120157, 76685, 850), 5: (118440, 75530, 850)}
+# 1周ぶんの Pt は卓の質で 1% ほど揺れるので、ここは**実測の平均**を置く（分類は3%の許容で拾う）。
+# ⚠️最頻値（レンジ上端）を置くとヘッダの表示が実測より高く見えて「上振れ」と誤読される。
+UNITS = {3: (107975, 69125, 750), 4: (120157, 76685, 850), 5: (118049, 75530, 850)}
 RANKS = (20, 30, 40, 50, 100)
 C = {"dim": "\033[2m", "b": "\033[1m", "g": "\033[32m", "y": "\033[33m",
      "r": "\033[31m", "c": "\033[36m", "0": "\033[0m"}
@@ -113,8 +115,8 @@ def main():
     print("%sevent214 ライブ（ch%d）  1周 %s / オート1回 %s%s"
           % (C["b"], a.ch, "{:,}".format(lap), "{:,}".format(auto), C["0"]))
     print("%s走者 %s ／ %d秒ごとに板を直接見る（起動時だけ DB から遡り）。Ctrl-C で終了%s" % (C["dim"], a.name, a.every, C["0"]))
-    print("%s%-5s %-6s %13s %10s %-11s %9s %s%s"
-          % (C["dim"], "時刻", "順位", "総合Pt", "増分", "内容", "時速", "各順位まで", C["0"]))
+    print("%s%-5s %-6s %13s %10s %-11s %17s %s%s"
+          % (C["dim"], "時刻", "順位", "総合Pt", "増分", "内容", "周/h・時速", "各順位まで", C["0"]))
 
     seen = set()
     laps = 0
@@ -153,19 +155,22 @@ def main():
                         first = (t, sc)
                 # 時速は直近30分の移動平均。累積平均だと起動直後の停止区間を
                 # いつまでも引きずって、走っているのに低い数字が出続ける
-                hist.append((t, sc))
+                hist.append((t, sc, laps))
                 rate = ""
                 win = [x for x in hist if (t - x[0]).total_seconds() <= 1800]
                 if len(win) >= 2:
                     hrs = (t - win[0][0]).total_seconds() / 3600.0
                     if hrs > 0.08:
-                        rate = "%.0f万/h" % ((sc - win[0][1]) / hrs / 1e4)
+                        # 周/h は「周回で増えた周数 ÷ 経過」。オートや停止の時間も分母に入るので、
+                        # 途切れればそのぶん下がる＝実効ペースがそのまま出る
+                        rate = "%.1f周/h %.0f万/h" % ((laps - win[0][2]) / hrs,
+                                                      (sc - win[0][1]) / hrs / 1e4)
                 b = live_borders if live_borders else borders_at(t)
                 marg = " ".join("%d:%+.1fM" % (r, (sc - b[r]) / 1e6) for r in RANKS if r in b and r <= 40)
                 col = C["g"] if kind == "周回" else (C["y"] if kind in ("オート", "マイセカイ") else
                                                     (C["r"] if kind in ("停止", "不明") else C["0"]))
                 sys.stdout.write("\033[2K\r")   # ステータス行の残骸を消してから
-                print("%-5s %s%-6s%s %13s %10s %s%-11s%s %9s %s%s%s"
+                print("%-5s %s%-6s%s %13s %10s %s%-11s%s %17s %s%s%s"
                       % (t.strftime("%H:%M"), C["b"], "%d位" % rk, C["0"],
                          "{:,}".format(sc), ("+%s" % "{:,}".format(d)) if d else "—",
                          col, ("%s%d" % (kind, k)) if k else kind, C["0"],
