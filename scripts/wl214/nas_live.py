@@ -27,6 +27,7 @@
                  ブロックの開始（＝15分以上周回が途切れた地点）と各人の時速を掴む窓
   --until HH:MM  ブロック終了時刻（既定 26:00＝翌02:00）。ここまでの予想を出す
   --rows N       下段に出す直近の行数（既定 6）
+  --pace N       「いまのペース」を測る窓（分・既定 60）。短くすると卓の変化に敏感になる
   --log DIR      全行を live-YYYYMMDD.log に追記する先（既定 ~/wl214）
 
 ⚠️Python 3.8 で動かすこと（NAS の python3 は 3.8.15）。3.9+ の記法は使わない。
@@ -61,7 +62,9 @@ def pad(s, width, right=False):
 
 
 def hm(mins):
-    return "%d:%02d" % (int(mins // 60), int(mins % 60))
+    """3:32 だと時分か分秒か分からないので h/m を付ける（2026-08-26 Nori 指摘）。"""
+    h, m = int(mins // 60), int(mins % 60)
+    return ("%dh%02dm" % (h, m)) if h else ("%dm" % m)
 
 
 def classify(d, lap, auto, mys):
@@ -126,6 +129,7 @@ def main():
     ap.add_argument("--back", type=float, default=8.0)
     ap.add_argument("--until", default="26:00")
     ap.add_argument("--rows", type=int, default=6)
+    ap.add_argument("--pace", type=int, default=60)   # 「いまのペース」を測る窓（分）
     ap.add_argument("--log", default=os.path.expanduser("~/wl214"))
     a = ap.parse_args()
     if not a.name:
@@ -201,7 +205,7 @@ def main():
         #   途中の停止を引きずるので、いま走っている速さより低く出る（2026-08-26 実測で
         #   平均309万/h に対し直近350万/h。3.6時間ぶんで147万の差＝予想順位が1つ動く）。
         mine = hist.get(a.name, [])
-        now_pph = rate_of(mine, t, 1.0) or avg_pph
+        now_pph = rate_of(mine, t, a.pace / 60.0) or avg_pph
         now_lph = now_pph / lap if lap else 0
         per = (3600.0 / now_lph) if now_lph > 0 else 0
         left = max(0.0, (until - t).total_seconds() / 60.0)
@@ -224,16 +228,16 @@ def main():
         A("  %s%s%s    %s%d位%s    %s%s%s"
           % (C["b"], a.name, C["0"], C["b"], rk, C["0"], C["b"], "{:,}".format(sc), C["0"]))
         A("")
-        A("  %s%s%s  1周 %s%.0f秒%s    %s%.1f周/h%s    時速 %s%.0f万%s   %s(直近1時間)%s"
-          % (C["dim"], pad("いまのペース", 14), C["0"], C["g"], per, C["0"],
-             C["g"], now_lph, C["0"], C["g"], now_pph / 1e4, C["0"], C["dim"], C["0"]))
+        A("  %s%s%s  1周 %s%.0f秒%s    %s%.1f周/h%s    時速 %s%.0f万%s"
+          % (C["dim"], pad("直近%d分のペース" % a.pace, 16), C["0"], C["g"], per, C["0"],
+             C["g"], now_lph, C["0"], C["g"], now_pph / 1e4, C["0"]))
         A("  %s%s%s  %s〜   経過 %s   %s%s%d周%s   +%s"
-          % (C["dim"], pad("このブロック", 14), C["0"],
+          % (C["dim"], pad("このブロック", 16), C["0"],
              first[0].strftime("%H:%M") if first else "—", hm(bmin),
              "" if s["block_found"] else "≧", C["b"], blk, C["0"], "{:,}".format(bgain))
           + "   %s平均 %.1f周/h%s" % (C["dim"], avg_lph, C["0"]))
-        A("  %s%s%s  あと %s   このペースで %s+%s%s   →   %s%s%s"
-          % (C["dim"], pad("%s まで" % a.until, 14), C["0"], hm(left),
+        A("  %s%s%s  あと %s   直近ペースで %s+%s%s   →   %s%s%s"
+          % (C["dim"], pad("%s まで" % a.until, 16), C["0"], hm(left),
              C["c"], "{:,.0f}".format(now_pph * left / 60.0), C["0"],
              C["b"] + C["c"], "{:,.0f}".format(pred), C["0"]))
         A("")
@@ -256,12 +260,12 @@ def main():
                 det.append("下から %+.1fM" % ((pred - proj[pos + 1][0]) / 1e6))
             A("")
             A("  %s%s%s  %s%d位%s   %s%s%s"
-              % (C["dim"], pad("%s の予想順位" % a.until, 14), C["0"],
+              % (C["dim"], pad("%s の予想順位" % a.until, 16), C["0"],
                  C["b"] + C["c"], pos + 1, C["0"], C["dim"], " / ".join(det), C["0"]))
         marg = "   ".join("%d位 %+.1fM" % (r, (sc - last_bd[r]) / 1e6)
                           for r in RANKS if r in last_bd and r <= 50)
         if marg:
-            A("  %s%s%s  %s" % (C["dim"], pad("ボーダーとの差", 14), C["0"], marg))
+            A("  %s%s%s  %s" % (C["dim"], pad("ボーダーとの差", 16), C["0"], marg))
         A("")
         A("  %s直近%s" % (C["dim"], C["0"]))
         for g in view[-a.rows:]:
