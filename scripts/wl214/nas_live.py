@@ -67,6 +67,29 @@ def hm(mins):
     return ("%dh%02dm" % (h, m)) if h else ("%dm" % m)
 
 
+# その場で観測したオートの単価。曲を替えると章定数から外れるので、
+# 「35の倍数・章定数の0.85〜1.15倍・3回以上出た値」を格子に足す。
+AUTO_SEEN = []
+
+
+def learn_auto(deltas, auto):
+    """直近の増分から、章定数と別のオート単価が出ていれば覚える。"""
+    import collections
+    cnt = collections.Counter()
+    for d in deltas:
+        if d <= 0 or d % 35:
+            continue
+        for k in range(1, 6):
+            if d % k:
+                continue
+            u = d // k
+            if auto * 0.85 <= u <= auto * 1.15 and u % 35 == 0:
+                cnt[u] += 1
+    for u, n in cnt.items():
+        if n >= 3 and u not in AUTO_SEEN and abs(u - auto) > auto * 0.003:
+            AUTO_SEEN.append(u)
+
+
 def classify(d, lap, auto, mys):
     """増分を 周回 / オート / マイセカイ / 停止 に分ける。
 
@@ -84,9 +107,14 @@ def classify(d, lap, auto, mys):
     #   ⚠️幅を持たせたぶん、マイセカイの少量回収（89刻み＝75,650）が1回ぶんに化けうる。
     #     実オートは850の倍数にならない（75,530%850=730 / 75,600%850=800）ので、
     #     850ぴったりの値はオートに採らない。
-    for k in range(1, 13):
-        if abs(d - k * auto) <= auto * 0.003 * k and d % mys != 0:
-            return "オート", k
+    #   ⚠️**曲を替えると単価が大きく動く。** 8/27 13:00 に走者が天地(75,600)から
+    #     0.0000034 APPEND(74,585)へ替えた瞬間、比例幅（±0.3%＝227）の外に出て
+    #     全区間が「不明」に落ちた。→ 章定数だけでなく、**その場で観測した単価**も
+    #     格子として持つ（AUTO_SEEN）。オートは 35 の倍数なのでそこで絞れる。
+    for u in [auto] + [x for x in AUTO_SEEN if x != auto]:
+        for k in range(1, 13):
+            if abs(d - k * u) <= u * 0.003 * k and d % mys != 0:
+                return "オート", k
     # 周回は k 周ぶんの合計。1周あたりに直して、実測の幅に収まる k を探す。
     # ⚠️幅を上に広げないと、卓が良くなって単価が上がったときに「不明」に落ちる
     #   （2026-08-26 夜、1周が 118,783→119,140→119,402 と上がり、119,840 で上限を20超えた）。
@@ -177,10 +205,16 @@ def main():
     except Exception as e:
         print("遡りに失敗（%s）。ライブだけで続ける" % e)
 
+    recent = []          # 直近の増分。曲替えでオートの単価が変わったのを学ぶ用
+
     def feed(t, sc):
         """走者の1点を取り込み、分類・周回数・ブロック起点を更新する。"""
         s = state
         d = sc - s["prev"][1] if s["prev"] else 0
+        if d > 0:
+            recent.append(d)
+            del recent[:-60]
+            learn_auto(recent, auto)
         kind, k = classify(d, lap, auto, mys) if s["prev"] else ("—", 0)
         if kind == "周回":
             if s["last_lap_t"] is not None and (t - s["last_lap_t"]).total_seconds() > 900:
