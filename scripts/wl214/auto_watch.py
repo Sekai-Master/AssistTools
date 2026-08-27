@@ -189,27 +189,37 @@ AUTO_TOL = 0.003        # オート1回ぶんの許容幅（比例）
 LB_MULT = 35            # ライブボーナス10炊きの倍率。オート1回 = step3 x 35
 
 
-def solve_mixed_boost(d, auto):
-    """炊き数が混ざった区間を拾う。返り値 (最低プレイ数, 単位数) / 該当しなければ None。
+# ライブボーナスの炊き数ごとの倍率（LIVE_BONUS_MULTIPLIERS。calcLivePt.ts より）
+BOOST_MULTS = (1, 5, 10, 15, 20, 25, 27, 29, 31, 33, 35)
 
-    なぜ要るか（2026-08-27 発覚）:
-      オート1回のPtは `step3 x 炊き数の倍率` で、10炊きなら x35。**走者は時々
-      炊き数を落とす**。09:39 の +162,000 は step3(2160) の **75倍** で、
-      75 = 35 + 35 + 5 ＝「10炊き2回 ＋ 1炊き1回」。前日 09:36 の 161,850 も
-      2158 x 75 で同じ形（log §37 で「端数10,790が説明できない」と書いた謎の正体）。
-      10炊きの格子だけで数えると、この区間のプレイを取りこぼす。
-    ⚠️最低プレイ数しか分からない（75単位は「35+35+5」とも「25+25+25」とも読める）。
-      どちらも3回なので回数は決まるが、一般には ceil(単位数/35) が下限。
+
+def solve_mixed_boost(d, auto):
+    """炊き数が混ざった区間を「10炊きa回 ＋ 低い炊き数b回」に分解する。
+
+    返り値 (プレイ数, 単位数, 内訳の説明) / 該当しなければ None。
+
+    どうやって分かったか（2026-08-27）:
+      DB は9〜12分刻みなので、この区間は +162,000 の1行にしか見えない。
+      板（3分刻み）で開くと中身は **09:30 +10,800 ／ 09:36 +75,600 ／ 09:39 +75,600** だった。
+      10,800 = 1回ぶんの素点 2,160 の **5倍** ＝ **1炊き1回**。
+      前日の 161,850 も 2,158 x 75 で同じ形（log §36 で「端数10,790が説明できない」と
+      書いたものの正体）。**朝イチの1回だけ1炊きで回している**（2日連続）。
+
+    ⚠️プレイ数は「10炊きの回数 ＋ 端数が炊き数の倍率表に載れば1回」で決まる。
+      端数が倍率表に無ければ分解できないので None を返す（勝手に丸めない）。
     """
     step3 = auto // LB_MULT
     if step3 <= 0 or d % step3:
         return None
     units = d // step3
-    if units % LB_MULT == 0:        # 素直な10炊きだけなら通常の判定に任せる
+    if units <= 0 or units > LB_MULT * 15:
         return None
-    if not (1 <= units <= LB_MULT * 12):
-        return None
-    return -(-units // LB_MULT), units
+    full, rest = divmod(units, LB_MULT)
+    if rest == 0:
+        return None                      # 素直な10炊きだけ。通常の判定に任せる
+    if rest not in BOOST_MULTS:
+        return None                      # 端数が炊き数として説明できない
+    return full + 1, units, "10炊き{0}回 ＋ {1}炊き1回".format(full, BOOST_MULTS.index(rest))
 
 
 def detect_unit(deltas, mys, default):
@@ -406,12 +416,13 @@ def main():
         if got is None:
             mixed = solve_mixed_boost(d, auto)
             if mixed:
-                # ⚠️**回数には足さない。** Pt としてはオート3回ぶんだが、8/26 で足すと
-                #   94回になり走者申告の91回（＋今夜の残り8回＝99でクォータ上限に一致）が
-                #   壊れる。ゲーム内のカウントに乗っていない何かなので、別枠で申告する。
+                # 板（3分刻み）で中身を確認できたので**回数に足す**（2026-08-27）。
+                n_auto += mixed[0]
+                last_auto = t1
+                events.append((t1, "オート", mixed[0]))
                 n_mixed += 1
                 mixed_pt += d
-                mixed_rows.append((t1, d, mixed[0], mixed[1]))
+                mixed_rows.append((t1, d, mixed[0], mixed[2]))
                 continue
             unknown.append((t1, d))
             continue
@@ -492,10 +503,9 @@ def main():
           .format(n_auto, a.quota, remain, n_lap, n_mys, n_chal))
     print("オート単価 {0:,}{1}".format(auto, "（実測から検出）" if auto != UNITS[a.ch][1] else ""))
     if n_mixed:
-        print("⚠️炊き数が混ざった区間 {0} 件 / {1:,} Pt（回数には数えていない）:".format(n_mixed, mixed_pt))
-        for t, d, plays, units in mixed_rows:
-            print("   {0} +{1:,}　= 1回ぶん({2:,})の {3} 倍 ＝ Pt としてはオート{4}回相当"
-                  .format(t.strftime("%m-%d %H:%M"), d, auto // LB_MULT, units, plays))
+        print("炊き数が混ざった区間 {0} 件 / {1:,} Pt（回数に含めている）:".format(n_mixed, mixed_pt))
+        for t, d, plays, desc in mixed_rows:
+            print("   {0} +{1:,}　{2}（計{3}回）".format(t.strftime("%m-%d %H:%M"), d, desc, plays))
     if last_auto:
         print("最後のオート {0}（{1:.0f}分前）  状態: {2}"
               .format(last_auto.strftime("%H:%M"), since_last, "稼働中" if running else "⚠️止まっている"))
