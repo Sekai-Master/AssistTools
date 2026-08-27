@@ -229,7 +229,7 @@ def solve_mixed_boost(d, auto):
     return full + 1, units, "10炊き{0}回 ＋ {1}炊き1回".format(full, BOOST_MULTS.index(rest))
 
 
-def detect_unit(deltas, mys, default):
+def detect_unit(deltas, mys, default, lap=None):
     """観測された増分からオート1回ぶんの単価を推定する。
 
     なぜ推定するか（2026-08-27）:
@@ -243,9 +243,20 @@ def detect_unit(deltas, mys, default):
     """
     # ⚠️**オートの単価は必ず35の倍数**（ライブボーナス10炊きの倍率）。
     #   この制約が無いと、周回の増分から作られた候補（2周ぶん÷3 など）が混ざる。
+    def is_lapish(d):
+        """周回 k 周ぶんに見える増分。候補作りから外す。
+
+        ⚠️外さないと、夜の周回ブロックが窓に入っている日に周回の増分から
+          偽のオート単価が作られる（8/26 で 78,960 が出た。2周ぶん 236,098 の 1/3）。
+        """
+        if not lap:
+            return False
+        k = int(round(d / float(lap)))
+        return 1 <= k <= 12 and abs(d - k * lap) <= lap * 0.03 * k
+
     cand = set()
     for d in deltas:
-        if d <= 0 or d % mys == 0:
+        if d <= 0 or d % mys == 0 or is_lapish(d):
             continue
         for k in range(1, 13):
             u = d / float(k)
@@ -259,7 +270,7 @@ def detect_unit(deltas, mys, default):
     for u in sorted(cand):
         hits, err = 0, 0
         for d in deltas:
-            if d <= 0 or d % mys == 0:
+            if d <= 0 or d % mys == 0 or is_lapish(d):
                 continue
             k = int(round(d / float(u)))
             if 1 <= k <= 12 and abs(d - k * u) <= u * AUTO_TOL * k:
@@ -267,6 +278,19 @@ def detect_unit(deltas, mys, default):
                 err += abs(d - k * u)
         if hits > best[0] or (hits == best[0] and hits and err < best[1]):
             best = (hits, err, u)
+    # ⚠️ヒット数が最良でも残差が同じ候補が複数出る。**章定数に最も近いもの**を採る
+    #   （report.py と同じ事前分布の使い方）。
+    top = best[0]
+    if top:
+        tie = [u for h, e, u in
+               [(sum(1 for d in deltas
+                     if d > 0 and d % mys != 0 and not is_lapish(d)
+                     and 1 <= int(round(d / float(v))) <= 12
+                     and abs(d - int(round(d / float(v))) * v) <= v * AUTO_TOL * int(round(d / float(v)))),
+                 0, v) for v in sorted(cand)]
+               if h == top]
+        if tie:
+            return min(tie, key=lambda u: abs(u - default)), top
     return best[2], best[0]
 
 
@@ -384,16 +408,39 @@ def main():
     if len(rows) < 2:
         sys.exit("スナップショットが足りない（{0}件）".format(len(rows)))
 
-    # オートの単価はその日の観測から取り直す（8/27 に 75,530 -> 75,600 へ動いた）
-    deltas = [s1 - s0 for (t0, s0), (t1, s1) in zip(rows, rows[1:])]
-    if a.song == AUTO_SONG:
-        # ⚠️`d < lap*0.9` で絞ってはいけない。10分刻みの板では1回ずつの増分はほとんど出ず、
-        #   複数回まとまった増分（226,800 = 3回ぶん など）が主。絞ると候補が空になり、
-        #   単価が 75,530 → 75,600 に上がっても旧値のままになる（2026-08-27 10:30 に発覚）。
-        #   周回の混入は「35の倍数」制約が防ぐ。
-        det, hits = detect_unit(deltas, mys, auto)
-        if hits >= 3 and abs(det - auto) <= auto * 0.05:
-            auto = det
+    # ── オートの単価は**区切りごと**に検出する ──────────────────
+    # ⚠️1日ぶんをまとめて1つの単価に決めてはいけない。**曲が変わると単価が変わる**。
+    #   8/27 は午前が天地（75,600）、13:00 から走者がメモリア（74,725）へ切り替えた。
+    #   まとめて検出すると片方に寄り、もう片方の回数を取りこぼす（模擬データで確認）。
+    #   25分以上の停止で区切り、その区間の増分だけから単価を出す（report.py と同じ考え方）。
+    segs, cur_seg, last_move = [], [], None
+    for i, ((t0, s0), (t1, s1)) in enumerate(zip(rows, rows[1:])):
+        if last_move and (t1 - last_move).total_seconds() / 60.0 > 25 and cur_seg:
+            segs.append(cur_seg)
+            cur_seg = []
+        if s1 > s0:
+            last_move = t1
+            cur_seg.append(i)
+        elif not cur_seg:
+            last_move = t1
+    if cur_seg:
+        segs.append(cur_seg)
+
+    seg_unit = {}
+    units_used = []
+    for seg in segs:
+        ds = [rows[i + 1][1] - rows[i][1] for i in seg]
+        u = auto
+        if a.song == AUTO_SONG:
+            # ⚠️サンプルの少ない区切りで偽の単価を拾う（8/26 で 78,960 が出た）。
+            #   ヒット3本以上を必須にし、章定数から10%以上離れた値は採らない。
+            det, hits = detect_unit(ds, mys, auto, lap)
+            if hits >= 3 and abs(det - auto) <= auto * 0.10:
+                u = det
+        for i in seg:
+            seg_unit[i] = u
+        if u not in units_used:
+            units_used.append(u)
 
     n_auto = n_lap = n_mys = n_chal = n_mixed = 0
     mixed_pt = 0
@@ -401,10 +448,11 @@ def main():
     unknown = []
     last_auto = None
     events = []
-    for (t0, s0), (t1, s1) in zip(rows, rows[1:]):
+    for _i, ((t0, s0), (t1, s1)) in enumerate(zip(rows, rows[1:])):
         d = s1 - s0
         if d == 0:
             continue
+        auto = seg_unit.get(_i, auto)
         # 周回が混ざる区間（夕方）は先に周回として拾う。オート専用の時間帯では出ない。
         # ⚠️周回は1周の単価が±1%揺れるので格子で解けない。混在区間は「不明」に落ちる。
         #   この道具の担当は日中のオート窓で、夕方の分解は block_watch.py の仕事。
@@ -508,7 +556,8 @@ def main():
           .format(now.strftime("%m/%d %H:%M"), a.ch, a.since, a.song))
     print("消化 {0} / {1} 回（残り {2} 回）  周回 {3} 周  マイセカイ {4} 刻み  チャレライ {5} 回"
           .format(n_auto, a.quota, remain, n_lap, n_mys, n_chal))
-    print("オート単価 {0:,}{1}".format(auto, "（実測から検出）" if auto != UNITS[a.ch][1] else ""))
+    print("オート単価 {0}（区切りごとに実測から検出）".format(
+        " / ".join("{0:,}".format(u) for u in units_used) if units_used else "{0:,}".format(auto)))
     if n_mixed:
         print("炊き数が混ざった区間 {0} 件 / {1:,} Pt（回数に含めている）:".format(n_mixed, mixed_pt))
         for t, d, plays, desc in mixed_rows:
