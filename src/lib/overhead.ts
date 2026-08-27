@@ -26,7 +26,7 @@ export const OVERHEAD_SEC = {
    *   増分がオート1回の整数倍だけになる区間（3.500時間・56回）を取り、累積回数に
    *   一定周期を当てはめた。最良解は周期225.25秒＝OH 42.8秒。
    *   **誤差は狭くない**（許容 38.8〜46.6秒。99回の所要にして 6.08〜6.30時間）ので、
-   *   点推定を細い精度で語らないこと。根拠は wl214/params.json の overheadSec._autoNote。
+   *   点推定を細い精度で語らないこと。根拠は Sekai-Master-Private の public/wl214/params.json の overheadSec._autoNote。
    */
   auto: 42.6,
   /** チャレンジライブ。ソロなのでオートと同じ扱い。 */
