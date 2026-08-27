@@ -264,7 +264,19 @@ def detect_units(deltas, mys, fallback_lap, fallback_auto):
         h, _ = score(u, rest, 0.015)
         if h >= 3 and (best is None or h > best or (h == best and u > lap)):
             best, lap = h, u
-    return (lap or fallback_lap), (auto or fallback_auto)
+    # ⚠️**オートの単価は1ブロックに1つとは限らない。** 走者は曲を替える。
+    #   8/27 は日中に 天地(75,600) → 0.0000034(74,585) → 独りんぼ(62,405) と3回替えた。
+    #   単価を1つしか持たないと、替えた後（前）の増分がまるごと「不明」に落ちる:
+    #     12:51〜13:03 +223,755 は 74,585×3 ちょうどなのにブロック単価が天地で不明
+    #     16:51〜17:03 +151,200 は 75,600×2 ちょうどなのにブロック単価が 0.0000034 で不明
+    #   → 主単価に加えて、**35の倍数で2回以上出た候補**を副単価として持つ（板の AUTO_SEEN と同じ作法）。
+    autos = [auto] if auto else []
+    for h, u in sorted(scored, reverse=True):
+        if u not in autos and h >= 2 and len(autos) < 4:
+            autos.append(u)
+    if not autos:
+        autos = [fallback_auto]
+    return (lap or fallback_lap), (auto or fallback_auto), autos
 
 
 def load_shifts(path):
@@ -319,7 +331,8 @@ def in_shift(spans, t0, t1=None):
 AUTO_QUOTA = 99            # オートライブの1日あたり上限（04:00 リセット）
 
 
-def solve(d, lap, auto, mys, allow_chal=True, shift=False, seconds=None, auto_left=None):
+def solve(d, lap, auto, mys, allow_chal=True, shift=False, seconds=None, auto_left=None,
+          autos=None):
     """増分 d を 周回 / オート / マイセカイ / チャレライ に分解する。
 
     ⚠️周回は1周の単価が卓の質で±1%揺れるので厳密な格子に乗らない。オートとマイセカイは
@@ -361,7 +374,17 @@ def solve(d, lap, auto, mys, allow_chal=True, shift=False, seconds=None, auto_le
             max_auto = min(max_auto, max(0, auto_left))
         max_lap = int(seconds / LAP_CYCLE_MIN) + 1 if seconds else 99
 
+        units = [u for u in (autos or [auto]) if u]
+
         def as_auto():
+            # ⚠️主単価だけでなく副単価（曲替え）も試す
+            for u in units:
+                a = int(round(d2 / float(u)))
+                if 1 <= a <= min(15, max_auto) and abs(d2 - a * u) <= u * 0.004 * a                         and d2 % mys != 0:
+                    return a
+            return None
+
+        def _unused_as_auto():
             a = int(round(d2 / float(auto)))
             if 1 <= a <= min(15, max_auto) and abs(d2 - a * auto) <= auto * 0.004 * a                     and d2 % mys != 0:
                 return a
@@ -384,14 +407,44 @@ def solve(d, lap, auto, mys, allow_chal=True, shift=False, seconds=None, auto_le
             if got:
                 r[kind], r["chal"], r["chalPt"] = got, chal, chal_pt
                 return r
-        # オート＋マイセカイの混在（どちらも厳密なので剰余で解ける）
-        for a in range(1, 12):
-            rest = d2 - a * auto
-            if rest <= 0:
-                break
-            if rest % mys == 0:
-                r["auto"], r["mys"], r["chal"], r["chalPt"] = a, rest // mys, chal, chal_pt
-                return r
+        # ── 混在（DBが9〜12分刻みなので、1区間に2種類が入る）──────────
+        # ⚠️**マイセカイを混在の自由変数にしてはいけない。** オート・マイセカイ・周回の
+        #   3つを同時に動かすと、周回に許容幅がある以上ほぼ何でも当たる。実際それをやったら
+        #   説明率が 96.7%→99.97% に上がった一方、8/27（板ログで全額確定している日）で
+        #   マイセカイが +161,300、オートが −11回 ずれた。**説明率が上がった＝正しい、ではない。**
+        #   マイセカイの回収は上流の専用パス（連続する850の倍数を1回の回収にまとめる）が
+        #   すでに捕まえているので、ここでは動かさない。
+        # ⚠️オートは厳密、周回だけが揺れる。だから「オートを整数で置いて残りが周回か」で回す。
+        #   オートぶんは誤差ゼロを要求する（過去に 161,850 を2オートに吸わせて260Pt誤差を出した）。
+        best_mix = None
+        for u in units:
+            for a in range(1, min(13, max_auto) + 1):
+                rest = d2 - a * u
+                if rest <= 0:
+                    break
+                k = int(round(rest / float(lap)))
+                if k < 1 or k > min(12, max_lap):
+                    continue
+                if a * AUTO_CYCLE_MIN + k * LAP_CYCLE_MIN > (seconds or 1e9):
+                    continue
+                dev = abs(rest - k * lap) / float(lap) / k
+                if dev <= 0.015:
+                    cand = (a, k, dev)
+                    if best_mix is None or (a + k, dev) < (best_mix[0] + best_mix[1], best_mix[2]):
+                        best_mix = cand
+        if best_mix:
+            a, k, _ = best_mix
+            r["auto"], r["lap"], r["chal"], r["chalPt"] = a, k, chal, chal_pt
+            return r
+        # オート＋マイセカイの混在（どちらも厳密なので剰余で解ける。周回は混ぜない）
+        for u in units:
+            for a in range(1, 12):
+                rest = d2 - a * u
+                if rest <= 0:
+                    break
+                if rest % mys == 0 and a * AUTO_CYCLE_MIN <= (seconds or 1e9):
+                    r["auto"], r["mys"], r["chal"], r["chalPt"] = a, rest // mys, chal, chal_pt
+                    return r
     r["unexplained"] = d
     return r
 
@@ -423,6 +476,7 @@ def main():
     #   瞬間しか記録が無く、8/19 05:03 → 8/21 16:12 のような「増分 5,923万」が出る。
     #   これを格子に掛けると当然説明できず、初版は説明率が 61% まで落ちた。
     days, gaps, blocks = {}, [], []
+    unexplained_list = []
     runs = split_blocks(ser)
     # ブロックごとに単価を検出し、時刻 -> 単価 の引き当て表にする。
     # ⚠️ブロック内の増分だけを回すと、**ブロック境界の増分（12分間隔＝正常な巡回）が
@@ -432,12 +486,33 @@ def main():
         ch = chapter_at(run[0][0])
         f_lap, f_auto, mys = UNITS[ch]
         deltas = [b[2] - a[2] for a, b in zip(run, run[1:]) if b[2] > a[2]]
-        lap, auto = detect_units(deltas, mys, f_lap, f_auto)
+        lap, auto, autos = detect_units(deltas, mys, f_lap, f_auto)
         blocks.append({"from": run[0][0], "to": run[-1][0], "ch": ch,
-                       "lapUnit": lap, "autoUnit": auto, "mysStep": mys,
+                       "lapUnit": lap, "autoUnit": auto, "autoUnits": autos, "mysStep": mys,
                        "pt": run[-1][2] - run[0][2],
                        "hours": round((run[-1][0] - run[0][0]).total_seconds() / 3600.0, 2),
                        "laps": 0, "autos": 0, "mysSteps": 0, "chals": 0, "unexplainedPt": 0})
+
+    # ── オート単価を「その日」で共有する ──────────────────────────
+    # ⚠️**短いブロックは標本が足りず章定数に落ちる。** 8/27 の 12:51〜13:27（36分）は
+    #   実際 74,585 で回していたのに 75,530（ch5 定数）と検出し、74,585×3=223,755 が
+    #   まるごと「不明」になった。曲は替わっても**編成は日内で変わらない**ので、
+    #   その日のどこかで検出した単価は同じ日の他のブロックでも正当な候補になる。
+    #   誤爆しにくいのは、オートが ①35の倍数 ②誤差ゼロ を要求されるため。
+    day_units = {}
+    for b in blocks:
+        k = (b["from"] - datetime.timedelta(hours=4)).strftime("%Y-%m-%d")
+        day_units.setdefault(k, [])
+        for u in b.get("autoUnits") or []:
+            if u not in day_units[k]:
+                day_units[k].append(u)
+    for b in blocks:
+        k = (b["from"] - datetime.timedelta(hours=4)).strftime("%Y-%m-%d")
+        merged = list(b.get("autoUnits") or [])
+        for u in day_units.get(k, []):
+            if u not in merged:
+                merged.append(u)
+        b["autoUnits"] = merged
 
     def units_at(t):
         """その時刻を含む（か直近の）ブロックの単価。境界の増分もこれで拾える。"""
@@ -512,7 +587,8 @@ def main():
         else:
             got = solve(d, lap, auto, mys, shift=in_shift(spans, t0, t1),
                         seconds=(t1 - t0).total_seconds(),
-                        auto_left=AUTO_QUOTA - days.get(key0, {}).get("autos", 0))
+                        auto_left=AUTO_QUOTA - days.get(key0, {}).get("autos", 0),
+                        autos=b.get("autoUnits"))
         key = (t1 - datetime.timedelta(hours=4)).strftime("%Y-%m-%d")
         e = days.setdefault(key, {"lapPt": 0, "autoPt": 0, "mysPt": 0, "chalPt": 0,
                                   "unexplainedPt": 0, "laps": 0, "autos": 0, "mysSteps": 0,
@@ -527,6 +603,16 @@ def main():
         e["chalPt"] += got["chalPt"]
         e["unexplainedPt"] += got["unexplained"]
         e["unexplainedCount"] += 1 if got["unexplained"] else 0
+        # ⚠️未分類は**合計だけ持っても直せない**。どの増分が落ちたかを残す。
+        #   「1.8%」は割合だと小さく見えるが 580万Pt＝周回49周ぶんで、
+        #   走者に見せる内訳としては無視できない（2026-08-27 Nori 指摘）。
+        if got["unexplained"]:
+            unexplained_list.append({
+                "from": t0.strftime("%Y-%m-%dT%H:%M"), "to": t1.strftime("%Y-%m-%dT%H:%M"),
+                "minutes": round(dt, 1), "pt": d,
+                "lapUnit": lap, "autoUnit": auto, "mysStep": mys,
+                "perLap": round(d / float(lap), 3), "perAuto": round(d / float(auto), 3),
+                "mysMod": d % mys})
         e["total"] += d
         b["unexplainedPt"] += got["unexplained"]
 
@@ -565,6 +651,19 @@ def main():
             print("   {0}  {1}回".format(k, n))
     share = tot["total"] or 1
     print()
+    # 未分類の内訳を大きい順に出す（何を取りこぼしているかを見るため）
+    unexplained_list.sort(key=lambda x: -x["pt"])
+    if unexplained_list:
+        print()
+        print("=== 未分類の増分（大きい順・上位15）===")
+        print("%-30s %6s %12s %8s %8s %8s" % ("区間", "分", "Pt", "÷周回", "÷オート", "%刻み"))
+        for x in unexplained_list[:15]:
+            print("%s〜%s %6.1f %12s %8.3f %8.3f %8d"
+                  % (x["from"][5:], x["to"][11:], x["minutes"], "{0:,}".format(x["pt"]),
+                     x["perLap"], x["perAuto"], x["mysMod"]))
+        print("  合計 %s Pt / %d件" % ("{0:,}".format(sum(x["pt"] for x in unexplained_list)),
+                                       len(unexplained_list)))
+        print()
     print("連続区間で説明できた割合: %.2f%%（不明 %s Pt / %d区間）" %
           (100.0 * (share - tot["unexplainedPt"]) / share,
            "{0:,}".format(tot["unexplainedPt"]), sum(days[k]["unexplainedCount"] for k in days)))
@@ -594,7 +693,8 @@ def main():
         dkey = (t1 - datetime.timedelta(hours=4)).strftime("%Y-%m-%d")
         got = solve(d, lap, auto, mys, shift=in_shift(spans, t0, t1),
                     seconds=(t1 - t0).total_seconds(),
-                    auto_left=AUTO_QUOTA - auto_used.get(dkey, 0))
+                    auto_left=AUTO_QUOTA - auto_used.get(dkey, 0),
+                    autos=b.get("autoUnits"))
         auto_used[dkey] = auto_used.get(dkey, 0) + got["auto"]
         key = t1.strftime("%Y-%m-%dT%H")
         e = hourly.setdefault(key, {"laps": 0, "autos": 0, "mysSteps": 0, "pt": 0,
@@ -638,7 +738,7 @@ def main():
         "measuredDaily": days,
         "hourly": hourly,
         "blocks": blocks,
-        "gaps": gaps,
+        "gaps": gaps, "unexplainedList": unexplained_list,
         "measuredTotal": tot,
         "declaredDaily": [{"label": s.get("label"), "actualPt": s.get("actualPt"),
                            "autoPt": s.get("autoPt"), "autoPlays": s.get("autoPlays"),
