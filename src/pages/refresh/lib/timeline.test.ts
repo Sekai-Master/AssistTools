@@ -86,3 +86,27 @@ describe("simulateTimeline（時間指定）", () => {
     expect(r.finalPercent).toBeCloseTo(12, 9);
   });
 });
+
+describe("simulateTimeline — 途中参加（開始時のタイマー進捗）", () => {
+  it("進捗20分から10分休むと減少が1回起きる", () => {
+    const withProgress = simulateTimeline([play(120), rest(10)], 0, OH, 20);
+    const afterPlay = withProgress.points[0].endPercent;
+    expect(afterPlay - withProgress.points[1].endPercent).toBeCloseTo(
+      (550000 / 6600000) * 100,
+      3,
+    );
+  });
+
+  it("既定（進捗0）では同じ10分休憩で減らない＝従来の挙動", () => {
+    const plain = simulateTimeline([play(120), rest(10)], 0, OH);
+    expect(plain.points[1].endPercent).toBeCloseTo(plain.points[0].endPercent, 9);
+  });
+
+  it("プレイを挟んでも進捗は繰り越す（タイマーは止まるだけ）", () => {
+    const r = simulateTimeline([rest(10), play(30), rest(5)], 20, OH, 15);
+    // 15分進んだ状態 + 10分 + 5分 = 30分ちょうどで1回減る
+    expect(r.points[2].decayProgressMin).toBeCloseTo(0, 9);
+    expect(r.points[0].endPercent).toBeCloseTo(r.points[0].startPercent, 9);
+    expect(r.points[2].endPercent).toBeLessThan(r.points[2].startPercent);
+  });
+});

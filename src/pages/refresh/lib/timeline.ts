@@ -11,7 +11,13 @@
  *   → 休憩の進捗(decayProgress)をブロックを跨いで繰り越す。20分休憩→プレイ→20分休憩＝計40分で1回減少。
  * - 未モデル化の微差: 5分未満の休憩（＝プレイ間5分以内）の扱い。実運用では稀なので all-count で近似。
  */
-import { GAUGE_SPEC, type GaugeSpec, liveGaugeInternal, mySekaiGaugeInternal } from "./gaugeModel";
+import {
+  DECAY_INTERVAL_MIN,
+  GAUGE_SPEC,
+  type GaugeSpec,
+  liveGaugeInternal,
+  mySekaiGaugeInternal,
+} from "./gaugeModel";
 import { playSeconds } from "./sessionPlanner";
 
 export type Segment =
@@ -28,8 +34,48 @@ export type Segment =
       /** 焚き数（ライブボーナス消費数 0〜10）。点数計算に使う。ゲージには影響しない。 */
       taki?: number;
     }
-  | { id: string; kind: "mysekai"; stamina: number; minutes: number }
-  | { id: string; kind: "rest"; minutes: number };
+  | {
+      id: string;
+      kind: "mysekai";
+      /**
+       * 採取したメモリ数（木・石=1.0 / キラキラ・樽=0.5 / 草花・工具箱=0.2）。
+       * ★ ゲージも点数もメモリが基準。スタミナは表示のための換算に過ぎない。
+       */
+      memori?: number;
+      /**
+       * 旧データ互換。2026-08-27 より前の保存プランはスタミナで持っている
+       * （1メモリ = staminaPerMemori スタミナ）。読むときは mysekaiMemoriOf を通す。
+       */
+      stamina?: number;
+      minutes: number;
+    }
+  | {
+      id: string;
+      kind: "rest";
+      minutes: number;
+      /**
+       * この休憩でオートライブを回す。
+       *
+       * ★ **オートはゲージを増やさない種別**（公式文言。100%でもイベントPは入る）なので、
+       *   ここに置いてもゲージの減少＝休憩としての価値は一切損なわれない。
+       *   計算の中身は lib/autoPlan.ts。`plays` 未指定は「休憩の尺いっぱいまで」。
+       */
+      auto?: { plays?: number };
+    };
+
+/**
+ * マイセカイブロックのメモリ数。**旧データ（スタミナ保存）をここで吸収する。**
+ * 保存プランはユーザーの端末に残り続けるので、読み口を1つにしておかないと
+ * 「呼び出したら採取量が0になる」が静かに起きる。
+ */
+export function mysekaiMemoriOf(
+  seg: Extract<Segment, { kind: "mysekai" }>,
+  spec: GaugeSpec = GAUGE_SPEC
+): number {
+  if (seg.memori != null) return Math.max(0, seg.memori);
+  if (seg.stamina != null) return Math.max(0, seg.stamina) / spec.staminaPerMemori;
+  return 0;
+}
 
 export interface SegmentResult {
   segment: Segment;
@@ -57,15 +103,23 @@ export interface TimelineResult {
   totalWastedMinutes: number;
 }
 
+/**
+ * @param startDecayProgressMin プラン開始時点で減少タイマーが進んでいる分（0〜30）。
+ *   ゲーム内の「次の回復まで ○分」から `decayProgressFromNextDecay` で作る。
+ *   **既定の0は「たった今プレイを止めた」**＝従来の挙動。
+ */
 export function simulateTimeline(
   segments: readonly Segment[],
   startPercent: number,
   overheadSec: number,
+  startDecayProgressMin = 0,
   spec: GaugeSpec = GAUGE_SPEC
 ): TimelineResult {
   let internal = (Math.max(0, Math.min(100, startPercent)) / 100) * spec.max;
   let minute = 0;
-  let decayProgress = 0; // 次の減少に向けて累積した休憩分（ブロックを跨いで繰り越す）
+  // 次の減少に向けて累積した休憩分（ブロックを跨いで繰り越す）。
+  // 開始時点で進んでいるぶんを引き継ぐ（途中参加）。30ちょうどは「いま減る」なので許す。
+  let decayProgress = Math.max(0, Math.min(DECAY_INTERVAL_MIN, startDecayProgressMin));
   let totalPlays = 0;
   let totalWasted = 0;
   let totalWastedMinutes = 0;
@@ -93,14 +147,17 @@ export function simulateTimeline(
       totalWastedMinutes += wastedMin;
     } else if (seg.kind === "mysekai") {
       // マイセカイ採取も活動＝減少タイマー停止（progress据え置き＝繰り越し）。
-      // ゲージは 700/スタミナ（双葉は別枠だがUIでは素材換算のスタミナ入力に集約）。
-      internal = Math.min(spec.max, internal + mySekaiGaugeInternal(seg.stamina, 0, spec));
+      // ゲージは 700/スタミナ（双葉は別枠だがUIではメモリ入力に集約）。
+      internal = Math.min(
+        spec.max,
+        internal + mySekaiGaugeInternal(mysekaiMemoriOf(seg) * spec.staminaPerMemori, 0, spec)
+      );
       minute += Math.max(0, seg.minutes);
     } else {
       // 休憩: 進捗を繰り越し加算し、30分ごとに減少。
       decayProgress += Math.max(0, seg.minutes);
-      while (decayProgress >= 30) {
-        decayProgress -= 30;
+      while (decayProgress >= DECAY_INTERVAL_MIN) {
+        decayProgress -= DECAY_INTERVAL_MIN;
         internal = Math.max(0, internal - spec.decayPer30min);
       }
       minute += Math.max(0, seg.minutes);

@@ -12,8 +12,14 @@ import { NeuInput } from "../../components/ui/NeuInput";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { DurationInput } from "../../components/ui/DurationInput";
 import { TakiInput } from "../../components/ui/TakiInput";
+import { Switch } from "../../components/ui/Switch";
 import { Stat } from "./Stat";
-import { type Segment, simulateTimeline } from "./lib/timeline";
+import { type Segment, mysekaiMemoriOf, simulateTimeline } from "./lib/timeline";
+import {
+  MYSEKAI_FULL_HARVEST_MEMORI,
+  computePlanPoints,
+} from "./lib/planPoints";
+import { type AutoBlock, planAuto } from "./lib/autoPlan";
 import {
   watermark,
   drawPlanCanvas,
@@ -21,15 +27,7 @@ import {
 } from "./lib/planCanvas";
 import { getRefreshConstant } from "./lib/refreshConstant";
 import { fmtClock, fmtDuration, parseClock } from "./lib/format";
-import { LIVE_BONUS_MULTIPLIERS } from "../analyzer/lib/calcLivePt";
 import type { AnalyzerMusic } from "../analyzer/useAnalyzerMusics";
-
-/** 焚き数での点数倍率比。基準時速×この比＝その焚き数の時速。 */
-function takiRate(hourlyRate: number, refTaki: number, taki: number): number {
-  const ref = LIVE_BONUS_MULTIPLIERS[Math.max(0, Math.min(10, refTaki))] || 1;
-  const m = LIVE_BONUS_MULTIPLIERS[Math.max(0, Math.min(10, taki))] || 1;
-  return (hourlyRate * m) / ref;
-}
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 
@@ -47,6 +45,17 @@ interface PointsConfig {
   hourlyRate: number;
   /** 上の時速を出した焚き数 */
   refTaki: number;
+  /** マイセカイ1メモリあたりのPt（総合力・ボーナスから算出）。0なら計上しない。 */
+  mySekaiUnitPt: number;
+}
+
+/** 休憩中オートの前提。設定そのものは AutoPanel が持ち、ここは結果を計算するだけ。 */
+export interface AutoRuntimeInput {
+  cycleSec: number;
+  ptPerPlay: number;
+  taki: number;
+  dailyCap: number;
+  usedToday: number;
 }
 
 interface Props {
@@ -62,10 +71,17 @@ interface Props {
   overhead: number;
   /** プラン開始時点のゲージ%（上の「現在のゲージ」を引き継ぐ） */
   startPercent: number;
+  /**
+   * プラン開始時点で減少タイマーが進んでいる分（0〜30）。
+   * 上の「次の回復まで」から作る。0＝たった今プレイを止めた。
+   */
+  startDecayProgress?: number;
   /** エビ基準の周回ペース(回/時)。画像のメタ表示に使う。 */
   ratePerHour: number;
   /** 指定すると各プレイに焚き数を持たせ、累積到達ポイントも計算・表示する（全部入り） */
   points?: PointsConfig;
+  /** 指定すると休憩ブロックに「オートを回す」を出せる（周回プランのみ） */
+  auto?: AutoRuntimeInput;
   /** タイムライン本体（親が保持＝保存/呼び出し対象）。 */
   segments: Segment[];
   setSegments: Dispatch<SetStateAction<Segment[]>>;
@@ -83,8 +99,10 @@ export function PlanTimeline({
   selectedSong,
   overhead,
   startPercent,
+  startDecayProgress = 0,
   ratePerHour,
   points,
+  auto,
   segments,
   setSegments,
   startTime,
@@ -95,32 +113,41 @@ export function PlanTimeline({
 
   const startMOD = parseClock(startTime);
   const result = useMemo(
-    () => simulateTimeline(segments, startPercent, overhead),
-    [segments, startPercent, overhead],
+    () => simulateTimeline(segments, startPercent, overhead, startDecayProgress),
+    [segments, startPercent, overhead, startDecayProgress],
   );
 
-  // points指定時: 各ブロックの獲得pt・累積到達ptを並走計算。
-  // ゲージ100%到達後のムダ時間(wastedMinutes)は加点されない＝ゲージと連動する。
-  const pointRows = useMemo(() => {
-    if (!points) return null;
-    let cum = points.startPoints;
-    return result.points.map((pt) => {
+  /**
+   * 休憩に積んだオート。**ゲージには効かない**ので timeline とは別に計算する
+   * （オートはゲージが増えない種別＝休憩の価値を損なわない）。
+   */
+  const autoPlan = useMemo(() => {
+    if (!auto || !points) return null;
+    const blocks: AutoBlock[] = [];
+    result.points.forEach((pt, i) => {
       const seg = pt.segment;
-      let gained = 0;
-      if (seg.kind === "play") {
-        const effMin = Math.max(0, seg.minutes - pt.wastedMinutes);
-        gained =
-          takiRate(
-            points.hourlyRate,
-            points.refTaki,
-            seg.taki ?? points.refTaki,
-          ) *
-          (effMin / 60);
-      }
-      cum += gained;
-      return { gained: Math.round(gained), cumulative: Math.round(cum) };
+      if (seg.kind !== "rest" || !seg.auto) return;
+      blocks.push({
+        index: i,
+        startMinute: pt.startMinute,
+        restMinutes: seg.minutes,
+        requested: seg.auto.plays ?? null,
+      });
     });
-  }, [points, result]);
+    if (blocks.length === 0) return null;
+    return planAuto(blocks, { ...auto, startMinuteOfDay: startMOD });
+  }, [auto, points, result, startMOD]);
+
+  const autoPointsByIndex = useMemo(() => {
+    if (!autoPlan) return undefined;
+    return new Map([...autoPlan.byIndex].map(([i, b]) => [i, b.points]));
+  }, [autoPlan]);
+
+  // points指定時: 各ブロックの獲得pt・累積到達ptを並走計算（計算は lib/planPoints）。
+  const pointRows = useMemo(
+    () => (points ? computePlanPoints(result, points, autoPointsByIndex) : null),
+    [points, result, autoPointsByIndex],
+  );
 
   const finalPoints =
     pointRows && pointRows.length
@@ -152,10 +179,16 @@ export function PlanTimeline({
   };
   const addRest = (minutes: number) =>
     setSegments((s) => [...s, { id: newId(), kind: "rest", minutes }]);
+  // 既定は「全回収1回」。実運用で積むのはほぼこれなので、毎回打ち直させない。
   const addMysekai = () =>
     setSegments((s) => [
       ...s,
-      { id: newId(), kind: "mysekai", stamina: 30, minutes: 10 },
+      {
+        id: newId(),
+        kind: "mysekai",
+        memori: MYSEKAI_FULL_HARVEST_MEMORI,
+        minutes: 15,
+      },
     ]);
   const setPlayMinutes = (id: string, minutes: number) =>
     setSegments((s) =>
@@ -165,14 +198,33 @@ export function PlanTimeline({
     setSegments((s) =>
       s.map((g) => (g.id === id && g.kind === "play" ? { ...g, taki } : g)),
     );
+  const setRestAuto = (id: string, on: boolean) =>
+    setSegments((s) =>
+      s.map((g) =>
+        g.id === id && g.kind === "rest"
+          ? { ...g, auto: on ? (g.auto ?? {}) : undefined }
+          : g,
+      ),
+    );
+  const setRestAutoPlays = (id: string, plays: number | undefined) =>
+    setSegments((s) =>
+      s.map((g) =>
+        g.id === id && g.kind === "rest" && g.auto
+          ? { ...g, auto: { ...g.auto, plays } }
+          : g,
+      ),
+    );
   const setRestMinutes = (id: string, minutes: number) =>
     setSegments((s) =>
       s.map((g) => (g.id === id && g.kind === "rest" ? { ...g, minutes } : g)),
     );
-  const setMysekaiStamina = (id: string, stamina: number) =>
+  const setMysekaiMemori = (id: string, memori: number) =>
     setSegments((s) =>
       s.map((g) =>
-        g.id === id && g.kind === "mysekai" ? { ...g, stamina } : g,
+        // 旧データのスタミナは残さない（両方あると次に読むときどちらが正か割れる）。
+        g.id === id && g.kind === "mysekai"
+          ? { ...g, memori, stamina: undefined }
+          : g,
       ),
     );
   const setMysekaiMinutes = (id: string, minutes: number) =>
@@ -243,11 +295,17 @@ export function PlanTimeline({
           };
         }
         if (seg.kind === "mysekai") {
+          const memori = mysekaiMemoriOf(seg);
           return {
             time,
-            label: `マイセカイ採取　スタミナ${seg.stamina}`,
+            label: `マイセカイ採取　${memori}メモリ　${fmtDuration(seg.minutes)}`,
             sub: points
-              ? `${fmtDuration(seg.minutes)} ・ ${gauge(pt.endPercent)}`
+              ? [
+                  gained > 0 ? `+${gained.toLocaleString()}pt` : null,
+                  gauge(pt.endPercent),
+                ]
+                  .filter(Boolean)
+                  .join(" ・ ")
               : fmtDuration(seg.minutes),
             percent: cum ?? `${pt.endPercent.toFixed(1)}%`,
             warn: false,
@@ -257,14 +315,39 @@ export function PlanTimeline({
           pt.endPercent > 0
             ? `次の減少まで${Math.max(0, Math.ceil(30 - pt.decayProgressMin))}分`
             : undefined;
+        const autoRow = autoPlan?.byIndex.get(i);
+        /**
+         * ★ 画像では赤くするだけでは**理由が伝わらない**（受け取った人は
+         *   何が足りないのか分からない）。削られた理由を1語で添える。
+         */
+        const autoNote = autoRow
+          ? autoRow.droppedByCap > 0
+            ? `上限で${autoRow.droppedByCap}回ぶん回せず`
+            : autoRow.droppedByTime > 0
+              ? `休憩に入らない${autoRow.droppedByTime}回を除外`
+              : null
+          : null;
         return {
           time,
-          label: `休憩　${fmtDuration(seg.minutes)}`,
+          label:
+            autoRow && autoRow.plays > 0
+              ? `休憩＋オート${autoRow.plays}回　${fmtDuration(seg.minutes)}`
+              : `休憩　${fmtDuration(seg.minutes)}`,
           sub: points
-            ? [gauge(pt.endPercent), restSub].filter(Boolean).join(" ・ ")
+            ? [
+                gained > 0 ? `+${gained.toLocaleString()}pt` : null,
+                autoNote,
+                gauge(pt.endPercent),
+                // 幅は1行ぶんしかない。削られた理由がある行では、
+                // 「次の減少まで」より理由を優先して残す。
+                autoNote ? null : restSub,
+              ]
+                .filter(Boolean)
+                .join(" ・ ")
             : restSub,
           percent: cum ?? `${pt.endPercent.toFixed(1)}%`,
-          warn: false,
+          // 回数上限や休憩の尺で削られた休憩は、画像でも目立たせる。
+          warn: !!autoRow && (autoRow.droppedByCap > 0 || autoRow.droppedByTime > 0),
         };
       }),
       summary: points
@@ -351,6 +434,11 @@ export function PlanTimeline({
           <span className="font-bold" style={{ color: "var(--unit-color)" }}>
             {startPercent}%
           </span>
+          {/* ★ 開始時刻を先送りしても、ゲージとタイマーは「いまの値」のまま使う。
+              黙って現在値を未来へ持ち込むと、待っているあいだの減少が消える。 */}
+          <span className="ml-2 text-xs text-slate-400">
+            上の「現在のゲージ」「次の回復まで」を開始時点の値として使います
+          </span>
         </p>
       </div>
 
@@ -390,6 +478,7 @@ export function PlanTimeline({
         <p className="mt-4 text-sm text-slate-500">
           「＋稼働」「＋休憩」「＋マイセカイ」でシフトを積むと、各時点の時刻とゲージが出ます。
           稼働は初期値1時間（各ブロックで調整可）。曲は上の「曲」で選んでから追加してください。
+          {points && auto ? "休憩には「オート」を付けられます（オートはゲージを増やさないので、休んだままポイントだけ稼げます）。" : ""}
         </p>
       ) : (
         <>
@@ -397,17 +486,44 @@ export function PlanTimeline({
             {result.points.map((pt, i) => {
               const seg = pt.segment;
               const capped = pt.wastedPlays >= 1;
+              const autoRow = autoPlan?.byIndex.get(i);
+              // 弾いた理由は「次に効く手」がそれぞれ違うので、まとめず1行ずつ出す。
+              const autoWarnings: string[] = [];
+              if (autoRow) {
+                if (autoRow.droppedByTime > 0) {
+                  autoWarnings.push(
+                    `この休憩に入るオートは${autoRow.plays + autoRow.droppedByCap}回まで。${autoRow.droppedByTime}回ぶんは時間が足りません（休憩を延ばすか、短い曲に）`,
+                  );
+                }
+                if (autoRow.droppedByCap > 0) {
+                  autoWarnings.push(
+                    `1日の回数上限で${autoRow.droppedByCap}回は回せません（上限${auto?.dailyCap ?? 0}回・毎日4:00リセット。石でもライボでも増えません）`,
+                  );
+                }
+                if (autoRow.playsOnNextDay > 0) {
+                  autoWarnings.push(
+                    `4:00をまたぐので、うち${autoRow.playsOnNextDay}回は翌日ぶんの回数を先に食います（前日の残りは消えます）`,
+                  );
+                }
+              }
               return (
+                /**
+                 * ★ 狭い画面では**中身を2行目へ折り返す**。
+                 *   時刻(96px)・数値(112px)・並べ替え・削除を1行に固定で並べると、
+                 *   390px では中身に100px も残らず、曲名や警告が1文字ずつの縦書きに潰れる
+                 *   （利用者の半分はモバイル）。order で「時刻・数値・操作」を1行目、
+                 *   中身を2行目に落とし、sm 以上では元の横並びに戻す。
+                 */
                 <li
                   key={seg.id}
-                  className="neu-raised flex items-center gap-3 p-3"
+                  className="neu-raised flex flex-wrap items-center gap-x-3 gap-y-2 p-3"
                 >
-                  <div className="w-24 shrink-0 text-[11px] leading-tight text-slate-500">
+                  <div className="order-1 w-24 shrink-0 text-[11px] leading-tight text-slate-500">
                     {fmtClock(startMOD, pt.startMinute)}
                     <br />↓ {fmtClock(startMOD, pt.endMinute)}
                   </div>
 
-                  <div className="min-w-0 flex-1">
+                  <div className="order-3 w-full min-w-0 sm:order-2 sm:w-auto sm:flex-1">
                     {seg.kind === "play" ? (
                       <div className="flex flex-wrap items-center gap-2 text-sm">
                         <span
@@ -454,27 +570,47 @@ export function PlanTimeline({
                         <span className="font-bold text-slate-600">
                           マイセカイ
                         </span>
-                        <span className="text-xs text-slate-500">スタミナ</span>
+                        <span className="text-xs text-slate-500">メモリ</span>
                         <input
-                          inputMode="numeric"
-                          value={String(seg.stamina)}
+                          inputMode="decimal"
+                          value={String(mysekaiMemoriOf(seg))}
                           onChange={(e) =>
-                            setMysekaiStamina(
+                            setMysekaiMemori(
                               seg.id,
                               Math.max(0, Number(e.target.value) || 0),
                             )
                           }
-                          className="w-14 rounded-lg bg-neu px-1 py-1 text-center text-slate-800 shadow-neu-inset outline-none"
-                          aria-label="スタミナ"
+                          className="w-16 rounded-lg bg-neu px-1 py-1 text-center text-slate-800 shadow-neu-inset outline-none"
+                          aria-label="メモリ数"
                         />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setMysekaiMemori(
+                              seg.id,
+                              MYSEKAI_FULL_HARVEST_MEMORI,
+                            )
+                          }
+                          className="neu-raised neu-tactile rounded-lg px-2 py-1 text-[10px] text-slate-600"
+                        >
+                          全回収
+                        </button>
                         <span className="text-[10px] text-slate-400">
-                          ≈{(seg.stamina / 5).toFixed(1)}
-                          メモリ（5スタミナ≒1メモリ）
+                          ≈スタミナ{Math.round(mysekaiMemoriOf(seg) * 5)}
                         </span>
                         <DurationInput
                           value={seg.minutes}
                           onChange={(v) => setMysekaiMinutes(seg.id, v)}
+                          step={15}
                         />
+                        {points && pointRows && pointRows[i].gained > 0 && (
+                          <span
+                            className="text-xs font-bold"
+                            style={{ color: "var(--unit-color)" }}
+                          >
+                            +{pointRows[i].gained.toLocaleString()}
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -489,6 +625,58 @@ export function PlanTimeline({
                           value={seg.minutes}
                           onChange={(v) => setRestMinutes(seg.id, v)}
                         />
+                        {points && auto && (
+                          <>
+                            {/* オートはゲージを増やさないので、休憩の価値を落とさずに点だけ稼げる。 */}
+                            <Switch
+                              checked={!!seg.auto}
+                              onChange={(on) => setRestAuto(seg.id, on)}
+                              label="オート"
+                              className="text-xs"
+                            />
+                            {seg.auto && (
+                              <>
+                                <input
+                                  inputMode="numeric"
+                                  value={
+                                    seg.auto.plays == null
+                                      ? ""
+                                      : String(seg.auto.plays)
+                                  }
+                                  onChange={(e) => {
+                                    const v = e.target.value.replace(
+                                      /[^0-9]/g,
+                                      "",
+                                    );
+                                    setRestAutoPlays(
+                                      seg.id,
+                                      v === "" ? undefined : Number(v),
+                                    );
+                                  }}
+                                  placeholder="回るだけ"
+                                  className="w-20 rounded-lg bg-neu px-1 py-1 text-center text-xs text-slate-800 shadow-neu-inset outline-none"
+                                  aria-label="オートの回数"
+                                />
+                                <span className="text-xs text-slate-400">
+                                  回
+                                </span>
+                                {autoRow && (
+                                  <span className="text-xs text-slate-500">
+                                    → {autoRow.plays}回
+                                  </span>
+                                )}
+                                {autoRow && autoRow.points > 0 && (
+                                  <span
+                                    className="text-xs font-bold"
+                                    style={{ color: "var(--unit-color)" }}
+                                  >
+                                    +{autoRow.points.toLocaleString()}
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </>
+                        )}
                       </div>
                     )}
                     {capped && (
@@ -507,10 +695,15 @@ export function PlanTimeline({
                         </span>
                       </p>
                     )}
+                    {autoWarnings.map((w) => (
+                      <p key={w} className="mt-1 text-xs text-rose-600">
+                        ⚠ {w}
+                      </p>
+                    ))}
                   </div>
 
                   <div
-                    className={`shrink-0 text-right ${points ? "w-28" : "w-20"}`}
+                    className={`order-2 ml-auto shrink-0 text-right sm:order-3 sm:ml-0 ${points ? "w-28" : "w-20"}`}
                   >
                     {points && pointRows ? (
                       <>
@@ -549,7 +742,7 @@ export function PlanTimeline({
                     )}
                   </div>
 
-                  <div className="flex shrink-0 flex-col leading-none">
+                  <div className="order-2 flex shrink-0 flex-col leading-none sm:order-4">
                     <button
                       type="button"
                       aria-label="上へ"
@@ -573,7 +766,7 @@ export function PlanTimeline({
                     type="button"
                     aria-label="削除"
                     onClick={() => remove(seg.id)}
-                    className="shrink-0 text-slate-400 hover:text-slate-600"
+                    className="order-2 shrink-0 text-slate-400 hover:text-slate-600 sm:order-5"
                   >
                     ×
                   </button>
@@ -590,6 +783,35 @@ export function PlanTimeline({
                 value={`+${gainedPoints.toLocaleString()}`}
               />
             </div>
+          )}
+          {autoPlan && (
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <Stat
+                label="オート回数"
+                value={`${autoPlan.totalPlays}回`}
+                sub={autoPlan.byDay
+                  .map((d) => `${d.plays}/${d.cap}`)
+                  .join(" ・ ")}
+              />
+              <Stat
+                label="オートのpt"
+                value={`+${autoPlan.totalPoints.toLocaleString()}`}
+              />
+              {/* ★ ライボは**表示だけ**。手動ブロックの消費を数えていないので、
+                  ここで「足りる/足りない」を判定すると全体としては嘘になる。 */}
+              <Stat
+                label="オートで焚くライボ"
+                value={`${autoPlan.totalLb}`}
+                sub="手動ぶんは含みません"
+              />
+            </div>
+          )}
+          {/* ★ 時計が無いと 4:00 リセットのまたぎを判定できない。黙って
+              「問題なし」に見せると、翌日ぶんを先に食う罠を見逃す。 */}
+          {autoPlan && startMOD === null && (
+            <p className="mt-2 text-xs text-rose-600">
+              ⚠ 開始時刻が空欄なので、オート回数の 4:00 リセットまたぎは判定していません。
+            </p>
           )}
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <Stat label="総時間" value={fmtDuration(result.totalMinutes)} />

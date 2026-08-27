@@ -5,12 +5,17 @@ import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { TakiInput } from "../../components/ui/TakiInput";
+import { Switch } from "../../components/ui/Switch";
 import { ProfileBar, SaveToProfile } from "../../components/ui/ProfileBar";
+import { calculateUnitBasePt } from "../analyzer/lib/mySekai";
+import { parseAmount } from "../analyzer/lib/inputParsing";
 import { RateCalibrator } from "./RateCalibrator";
 import { useAnalyzerMusics } from "../analyzer/useAnalyzerMusics";
 import { useGaugeInputs } from "./useGaugeInputs";
 import { GaugeInputsPanel } from "./GaugeInputsPanel";
 import { PlanTimeline } from "./PlanTimeline";
+import { AutoPanel } from "./AutoPanel";
+import { useAutoConfig } from "./useAutoConfig";
 import { nearestRoundTime } from "./lib/format";
 import type { Segment } from "./lib/timeline";
 import {
@@ -36,6 +41,11 @@ export default function PlanPage() {
   const [currentPt, setCurrentPt] = useState("");
   const [hourlyRate, setHourlyRate] = useState("500000");
   const [refTaki, setRefTaki] = useState(5);
+  // マイセカイの単価を出すための編成。周回の点数時速（実測）とは出どころが違い、
+  // こちらは総合力とボーナスから計算で出る。
+  const [talent, setTalent] = useState("");
+  const [bonus, setBonus] = useState("");
+  const [hasWorldPass, setHasWorldPass] = useState(false);
 
   // タイムライン本体（保存対象なので親で保持）
   const [segments, setSegments] = useState<Segment[]>([]);
@@ -46,13 +56,35 @@ export default function PlanPage() {
   const [planName, setPlanName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
 
+  /** 休憩にオートを積んでいるときだけ、難易度別データ（428KB）を読む。 */
+  const usesAuto = useMemo(
+    () => segments.some((g) => g.kind === "rest" && g.auto),
+    [segments],
+  );
+  const autoConfig = useAutoConfig({
+    enabled: usesAuto,
+    power: parseAmount(talent),
+    bonus: parseAmount(bonus, true),
+  });
+
+  /** マイセカイ 1メモリあたりのPt。総合力かボーナスが未入力なら0＝計上しない。 */
+  const mySekaiUnitPt = useMemo(() => {
+    const power = parseAmount(talent);
+    const bonusPct = parseAmount(bonus, true);
+    // ★ 片方だけ入れた状態で計算すると、ボーナス0%の低い単価が黙って出る。
+    //   両方揃うまでは0（＝計上しない）にして、入力を促す方が安全。
+    if (!(power > 0) || !(bonusPct > 0)) return 0;
+    return calculateUnitBasePt(power, bonusPct, hasWorldPass);
+  }, [talent, bonus, hasWorldPass]);
+
   const points = useMemo(
     () => ({
       startPoints: Number(currentPt) || 0,
       hourlyRate: Number(hourlyRate) || 0,
       refTaki,
+      mySekaiUnitPt,
     }),
-    [currentPt, hourlyRate, refTaki],
+    [currentPt, hourlyRate, refTaki, mySekaiUnitPt],
   );
 
   const doSave = () => {
@@ -69,10 +101,24 @@ export default function PlanPage() {
       inputs: {
         songId: inputs.songId,
         gauge: inputs.gauge,
+        nextDecay: inputs.nextDecay,
         rate: inputs.rate,
         currentPt,
         hourlyRate,
         refTaki,
+        talent,
+        bonus,
+        hasWorldPass,
+        auto: {
+          course: autoConfig.course,
+          usedToday: autoConfig.usedToday,
+          taki: autoConfig.taki,
+          songKey: autoConfig.songKey,
+          skillLeader: autoConfig.skillLeader,
+          skillTotal: autoConfig.skillTotal,
+          ptOverride: autoConfig.ptOverride,
+          cycleOverride: autoConfig.cycleOverride,
+        },
       },
     };
     setSaved(savePlan(plan));
@@ -84,10 +130,26 @@ export default function PlanPage() {
     setStartTime(plan.startTime);
     inputs.setSongId(plan.inputs.songId);
     inputs.setGauge(plan.inputs.gauge);
+    // 旧データには無いので、欠けていたら空欄（＝30分フル扱い）に戻す。
+    inputs.setNextDecay(plan.inputs.nextDecay ?? "");
     inputs.setRate(plan.inputs.rate);
     setCurrentPt(plan.inputs.currentPt);
     setHourlyRate(plan.inputs.hourlyRate);
     setRefTaki(plan.inputs.refTaki);
+    setTalent(plan.inputs.talent ?? "");
+    setBonus(plan.inputs.bonus ?? "");
+    setHasWorldPass(plan.inputs.hasWorldPass ?? false);
+    const a = plan.inputs.auto;
+    if (a) {
+      autoConfig.setCourse(a.course);
+      autoConfig.setUsedToday(a.usedToday);
+      autoConfig.setTaki(a.taki);
+      autoConfig.setSongKey(a.songKey);
+      autoConfig.setSkillLeader(a.skillLeader);
+      autoConfig.setSkillTotal(a.skillTotal);
+      autoConfig.setPtOverride(a.ptOverride);
+      autoConfig.setCycleOverride(a.cycleOverride ?? "");
+    }
     setPlanName(plan.name);
     setNotice(`「${plan.name}」を呼び出しました。`);
   };
@@ -99,6 +161,21 @@ export default function PlanPage() {
 
   return (
     <ToolPage morphKey="tool:plan" title="周回プラン" icon="event_note">
+      {/* ★ このページは編成の値を4か所（点数時速・焚き数・マイセカイ単価・オートのスコア）で
+          使う。反映ボタンを1つのパネルの中に隠すと、他のパネルの値が手打ちのまま残る
+          （実際そうなっていた）。ページの前提なので一番上に置く。 */}
+      <ProfileBar
+        apply={(p) => {
+          if (p.hourlyRate != null) setHourlyRate(String(p.hourlyRate));
+          if (p.taki != null) setRefTaki(p.taki);
+          if (p.power != null) setTalent(String(p.power));
+          if (p.bonus != null) setBonus(String(p.bonus));
+          // オートのスコアはスキルの内部値で変わる。ここを入れないと
+          // 既定値（150/650）のまま「編成から計算した」顔をする。
+          if (p.skillLeader != null) autoConfig.setSkillLeader(String(p.skillLeader));
+          if (p.skillTotal != null) autoConfig.setSkillTotal(String(p.skillTotal));
+        }}
+      />
       {dataError && (
         <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
           {dataError}
@@ -115,13 +192,8 @@ export default function PlanPage() {
       <Panel title="ポイント設定">
         {/* 時速・基準焚き数は稼働時間計算と同じ値。片方だけ編成から呼べると、
             もう片方で打ち直すことになるので両方に置く。 */}
+        {/* 保存は**その値を打っている場所の隣**に置く（何が保存されるか分かるように）。 */}
         <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <ProfileBar
-            apply={(p) => {
-              if (p.hourlyRate != null) setHourlyRate(String(p.hourlyRate));
-              if (p.taki != null) setRefTaki(p.taki);
-            }}
-          />
           <SaveToProfile
             collect={() => ({
               hourlyRate: Number(hourlyRate) || undefined,
@@ -179,6 +251,62 @@ export default function PlanPage() {
           ゲージが100%に達すると、そのぶんは加点されません（休憩・マイセカイで回復を）。
         </p>
       </Panel>
+
+      <Panel title="編成（マイセカイ・オートの計算に使う）">
+        {/* 点数時速は実測値だが、マイセカイの単価とオートのスコアは総合力とボーナスから
+            計算で出る。入れておくと採取ブロックとオートが点数として積み上がる。 */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="総合力" htmlFor="pl-talent">
+            <NeuInput
+              id="pl-talent"
+              inputMode="numeric"
+              value={talent}
+              onChange={(e) => setTalent(e.target.value)}
+              placeholder="例: 336,000"
+            />
+          </Field>
+          <Field label="イベントボーナス (%)" htmlFor="pl-bonus">
+            <NeuInput
+              id="pl-bonus"
+              inputMode="decimal"
+              value={bonus}
+              onChange={(e) => setBonus(e.target.value)}
+              placeholder="例: 821"
+            />
+          </Field>
+          <Field label="ワールドパス">
+            <Switch
+              checked={hasWorldPass}
+              onChange={setHasWorldPass}
+              label="ワールドパス 有効"
+            />
+          </Field>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <SaveToProfile
+            collect={() => ({
+              power: parseAmount(talent) || undefined,
+              bonus: parseAmount(bonus, true) || undefined,
+            })}
+          />
+        </div>
+        <p className="mt-3 text-xs text-slate-500">
+          {mySekaiUnitPt > 0 ? (
+            <>
+              1メモリあたり{" "}
+              <span className="font-bold" style={{ color: "var(--unit-color)" }}>
+                {mySekaiUnitPt.toLocaleString()} pt
+              </span>
+              。全回収1回（約89.5メモリ）で約{" "}
+              {Math.floor(mySekaiUnitPt * 89.5).toLocaleString()} pt です。
+            </>
+          ) : (
+            "総合力とイベントボーナスを入れると、マイセカイ採取のポイントも積み上がります（未入力のあいだは0のまま）。"
+          )}
+        </p>
+      </Panel>
+
+      <AutoPanel config={autoConfig} />
 
       <Panel title="プランの保存・呼び出し">
         <div className="flex flex-wrap items-center gap-2">
@@ -242,7 +370,9 @@ export default function PlanPage() {
         selectedSong={selectedSong}
         overhead={overhead}
         startPercent={gaugePct}
+        startDecayProgress={inputs.startDecayProgress}
         ratePerHour={ratePerHour}
+        auto={autoConfig.runtime}
         segments={segments}
         setSegments={setSegments}
         startTime={startTime}
