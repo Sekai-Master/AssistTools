@@ -161,6 +161,21 @@ export default function PlanPage() {
 
   return (
     <ToolPage morphKey="tool:plan" title="周回プラン" icon="event_note">
+      {/* ★ このページは編成の値を4か所（点数時速・焚き数・マイセカイ単価・オートのスコア）で
+          使う。反映ボタンを1つのパネルの中に隠すと、他のパネルの値が手打ちのまま残る
+          （実際そうなっていた）。ページの前提なので一番上に置く。 */}
+      <ProfileBar
+        apply={(p) => {
+          if (p.hourlyRate != null) setHourlyRate(String(p.hourlyRate));
+          if (p.taki != null) setRefTaki(p.taki);
+          if (p.power != null) setTalent(String(p.power));
+          if (p.bonus != null) setBonus(String(p.bonus));
+          // オートのスコアはスキルの内部値で変わる。ここを入れないと
+          // 既定値（150/650）のまま「編成から計算した」顔をする。
+          if (p.skillLeader != null) autoConfig.setSkillLeader(String(p.skillLeader));
+          if (p.skillTotal != null) autoConfig.setSkillTotal(String(p.skillTotal));
+        }}
+      />
       {dataError && (
         <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
           {dataError}
@@ -177,23 +192,12 @@ export default function PlanPage() {
       <Panel title="ポイント設定">
         {/* 時速・基準焚き数は稼働時間計算と同じ値。片方だけ編成から呼べると、
             もう片方で打ち直すことになるので両方に置く。 */}
+        {/* 保存は**その値を打っている場所の隣**に置く（何が保存されるか分かるように）。 */}
         <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <ProfileBar
-            apply={(p) => {
-              if (p.hourlyRate != null) setHourlyRate(String(p.hourlyRate));
-              if (p.taki != null) setRefTaki(p.taki);
-              // マイセカイの単価はこの2つで決まる。周回だけ反映して
-              // 採取が0点のまま、という片手落ちにしない。
-              if (p.power != null) setTalent(String(p.power));
-              if (p.bonus != null) setBonus(String(p.bonus));
-            }}
-          />
           <SaveToProfile
             collect={() => ({
               hourlyRate: Number(hourlyRate) || undefined,
               taki: refTaki,
-              power: parseAmount(talent) || undefined,
-              bonus: parseAmount(bonus, true) || undefined,
             })}
           />
         </div>
@@ -248,9 +252,9 @@ export default function PlanPage() {
         </p>
       </Panel>
 
-      <Panel title="マイセカイの単価">
-        {/* 点数時速は実測値だが、マイセカイの単価は総合力とボーナスから計算で出る。
-            入れておくと採取ブロックが点数として積み上がる（入れなければ0のまま）。 */}
+      <Panel title="編成（マイセカイ・オートの計算に使う）">
+        {/* 点数時速は実測値だが、マイセカイの単価とオートのスコアは総合力とボーナスから
+            計算で出る。入れておくと採取ブロックとオートが点数として積み上がる。 */}
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="総合力" htmlFor="pl-talent">
             <NeuInput
@@ -277,6 +281,14 @@ export default function PlanPage() {
               label="ワールドパス 有効"
             />
           </Field>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <SaveToProfile
+            collect={() => ({
+              power: parseAmount(talent) || undefined,
+              bonus: parseAmount(bonus, true) || undefined,
+            })}
+          />
         </div>
         <p className="mt-3 text-xs text-slate-500">
           {mySekaiUnitPt > 0 ? (

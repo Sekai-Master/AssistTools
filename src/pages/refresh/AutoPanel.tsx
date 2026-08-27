@@ -2,6 +2,7 @@ import { Panel } from "../../components/ui/Panel";
 import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { TakiInput } from "../../components/ui/TakiInput";
+import { SaveToProfile } from "../../components/ui/ProfileBar";
 import { PASS_LABEL, type PassCourse } from "../ranking/lib/lbRun";
 import { fmtDuration } from "./lib/format";
 import type { AutoConfig } from "./useAutoConfig";
@@ -157,6 +158,9 @@ export function AutoPanel({ config }: { config: AutoConfig }) {
         <summary className="cursor-pointer text-xs text-slate-500">
           スキルの内部値（オートのスコア計算に使う）
         </summary>
+        <p className="mt-2 text-xs text-slate-400">
+          ページ上部の「編成」→「入力に反映」で入ります。ここで直した値は下のボタンで編成へ戻せます。
+        </p>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
           <span className="text-slate-500">先頭</span>
           <NeuInput
@@ -179,6 +183,14 @@ export function AutoPanel({ config }: { config: AutoConfig }) {
           <span className="text-xs text-slate-400">
             空欄なら既定値（150 / 650）で計算します
           </span>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <SaveToProfile
+            collect={() => ({
+              skillLeader: Number(skillLeader) || undefined,
+              skillTotal: Number(skillTotal) || undefined,
+            })}
+          />
         </div>
       </details>
 
