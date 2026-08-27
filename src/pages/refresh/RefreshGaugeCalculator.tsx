@@ -79,7 +79,9 @@ export default function RefreshGaugeCalculator() {
               >
                 {gaugePct}%
               </span>
-              　/　この曲は1回で +{perPlayPct.toFixed(2)}%
+              {/* ★ 区切りの全角空白は**文字列リテラルで置く**。JSX に地の文として書くと、
+                  行頭の空白トリムが U+3000 も食って「62.4%/ この曲は」と詰まる。 */}
+              {"　/　"}この曲は1回で +{perPlayPct.toFixed(2)}%
               {nextDecayMin != null && (
                 <>
                   {"　/　"}次の回復まで{" "}
