@@ -186,6 +186,30 @@ def song_length(title):
 
 
 AUTO_TOL = 0.003        # オート1回ぶんの許容幅（比例）
+LB_MULT = 35            # ライブボーナス10炊きの倍率。オート1回 = step3 x 35
+
+
+def solve_mixed_boost(d, auto):
+    """炊き数が混ざった区間を拾う。返り値 (最低プレイ数, 単位数) / 該当しなければ None。
+
+    なぜ要るか（2026-08-27 発覚）:
+      オート1回のPtは `step3 x 炊き数の倍率` で、10炊きなら x35。**走者は時々
+      炊き数を落とす**。09:39 の +162,000 は step3(2160) の **75倍** で、
+      75 = 35 + 35 + 5 ＝「10炊き2回 ＋ 1炊き1回」。前日 09:36 の 161,850 も
+      2158 x 75 で同じ形（log §37 で「端数10,790が説明できない」と書いた謎の正体）。
+      10炊きの格子だけで数えると、この区間のプレイを取りこぼす。
+    ⚠️最低プレイ数しか分からない（75単位は「35+35+5」とも「25+25+25」とも読める）。
+      どちらも3回なので回数は決まるが、一般には ceil(単位数/35) が下限。
+    """
+    step3 = auto // LB_MULT
+    if step3 <= 0 or d % step3:
+        return None
+    units = d // step3
+    if units % LB_MULT == 0:        # 素直な10炊きだけなら通常の判定に任せる
+        return None
+    if not (1 <= units <= LB_MULT * 12):
+        return None
+    return -(-units // LB_MULT), units
 
 
 def detect_unit(deltas, mys, default):
@@ -200,26 +224,33 @@ def detect_unit(deltas, mys, default):
     やり方: マイセカイ（850の倍数）を除いた増分を候補単価 u で割り、
     「ほぼ整数倍」になる本数が最も多い u を採る。u は候補自身の 1/k から作る。
     """
+    # ⚠️**オートの単価は必ず35の倍数**（ライブボーナス10炊きの倍率）。
+    #   この制約が無いと、周回の増分から作られた候補（2周ぶん÷3 など）が混ざる。
     cand = set()
     for d in deltas:
         if d <= 0 or d % mys == 0:
             continue
-        for k in range(1, 9):
+        for k in range(1, 13):
             u = d / float(k)
-            if default * 0.90 <= u <= default * 1.10:
+            if default * 0.90 <= u <= default * 1.10 and abs(u - round(u)) < 1e-6                     and round(u) % LB_MULT == 0:
                 cand.add(round(u))
-    best = (0, default)
+    # ⚠️同点のとき小さい候補を採ってはいけない。許容幅0.3%が広いので、単価が
+    #   75,530 → 75,600 に上がっても旧値で全部説明できてしまい、旧値を採り続けた
+    #   （2026-08-27 10:27 に発覚。Pt換算が −0.09% ずれる）。
+    #   **ヒット数が同じなら残差の小さいほう**を採る。
+    best = (0, 10 ** 12, default)
     for u in sorted(cand):
-        hits = 0
+        hits, err = 0, 0
         for d in deltas:
             if d <= 0 or d % mys == 0:
                 continue
             k = int(round(d / float(u)))
             if 1 <= k <= 12 and abs(d - k * u) <= u * AUTO_TOL * k:
                 hits += 1
-        if hits > best[0]:
-            best = (hits, u)
-    return best[1], best[0]
+                err += abs(d - k * u)
+        if hits > best[0] or (hits == best[0] and hits and err < best[1]):
+            best = (hits, err, u)
+    return best[2], best[0]
 
 
 def solve(d, auto, mys, chal=None):
@@ -339,11 +370,17 @@ def main():
     # オートの単価はその日の観測から取り直す（8/27 に 75,530 -> 75,600 へ動いた）
     deltas = [s1 - s0 for (t0, s0), (t1, s1) in zip(rows, rows[1:])]
     if a.song == AUTO_SONG:
-        det, hits = detect_unit([d for d in deltas if d < lap * 0.9], mys, auto)
+        # ⚠️`d < lap*0.9` で絞ってはいけない。10分刻みの板では1回ずつの増分はほとんど出ず、
+        #   複数回まとまった増分（226,800 = 3回ぶん など）が主。絞ると候補が空になり、
+        #   単価が 75,530 → 75,600 に上がっても旧値のままになる（2026-08-27 10:30 に発覚）。
+        #   周回の混入は「35の倍数」制約が防ぐ。
+        det, hits = detect_unit(deltas, mys, auto)
         if hits >= 3 and abs(det - auto) <= auto * 0.05:
             auto = det
 
-    n_auto = n_lap = n_mys = n_chal = 0
+    n_auto = n_lap = n_mys = n_chal = n_mixed = 0
+    mixed_pt = 0
+    mixed_rows = []
     unknown = []
     last_auto = None
     events = []
@@ -367,6 +404,15 @@ def main():
                 continue
         got = solve(d, auto, mys, a.challenge or None)
         if got is None:
+            mixed = solve_mixed_boost(d, auto)
+            if mixed:
+                # ⚠️**回数には足さない。** Pt としてはオート3回ぶんだが、8/26 で足すと
+                #   94回になり走者申告の91回（＋今夜の残り8回＝99でクォータ上限に一致）が
+                #   壊れる。ゲーム内のカウントに乗っていない何かなので、別枠で申告する。
+                n_mixed += 1
+                mixed_pt += d
+                mixed_rows.append((t1, d, mixed[0], mixed[1]))
+                continue
             unknown.append((t1, d))
             continue
         na, nm, nc = got
@@ -445,6 +491,11 @@ def main():
     print("消化 {0} / {1} 回（残り {2} 回）  周回 {3} 周  マイセカイ {4} 刻み  チャレライ {5} 回"
           .format(n_auto, a.quota, remain, n_lap, n_mys, n_chal))
     print("オート単価 {0:,}{1}".format(auto, "（実測から検出）" if auto != UNITS[a.ch][1] else ""))
+    if n_mixed:
+        print("⚠️炊き数が混ざった区間 {0} 件 / {1:,} Pt（回数には数えていない）:".format(n_mixed, mixed_pt))
+        for t, d, plays, units in mixed_rows:
+            print("   {0} +{1:,}　= 1回ぶん({2:,})の {3} 倍 ＝ Pt としてはオート{4}回相当"
+                  .format(t.strftime("%m-%d %H:%M"), d, auto // LB_MULT, units, plays))
     if last_auto:
         print("最後のオート {0}（{1:.0f}分前）  状態: {2}"
               .format(last_auto.strftime("%H:%M"), since_last, "稼働中" if running else "⚠️止まっている"))
