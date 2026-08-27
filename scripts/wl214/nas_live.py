@@ -86,7 +86,11 @@ def learn_auto(deltas, auto):
             if auto * 0.85 <= u <= auto * 1.15 and u % 35 == 0:
                 cnt[u] += 1
     for u, n in cnt.items():
-        if n >= 3 and u not in AUTO_SEEN and abs(u - auto) > auto * 0.003:
+        # ⚠️しきい値3だと再起動後の復帰に9分かかる（遡りで2本しか溜まらず、
+        #   ライブの3分更新をもう1本待つ）。曲を替えた直後の板が一番見られるので2にする。
+        #   周回(118,790)もマイセカイ(787,950)も、35で割った値が窓 0.85〜1.15倍 に
+        #   入らないので誤学習しない。
+        if n >= 2 and u not in AUTO_SEEN and abs(u - auto) > auto * 0.003:
             AUTO_SEEN.append(u)
 
 
@@ -175,7 +179,15 @@ def main():
     ap.add_argument("--ch", type=int, default=5)
     ap.add_argument("--every", type=int, default=20)
     ap.add_argument("--back", type=float, default=8.0)
-    ap.add_argument("--until", default="26:00")
+    # ⚠️既定を 26:00 のままにしない。最終日のブロックはイベント終了(19:59:59)で切れる。
+    #   昨日までの「26:00まで」の指標を最終日に出すと、存在しない2時間ぶんを見せる。
+    ap.add_argument("--until", default="20:00")
+    ap.add_argument("--target", type=int, default=326430319,
+                    help="目標Pt。あと何Pt・何周・いつ到達するかを出す")
+    ap.add_argument("--event-end", dest="event_end", default="2026-08-27T19:59:59",
+                    help="イベント終了。残り時間を出す")
+    ap.add_argument("--rate", type=float, default=29.5,
+                    help="周回していないときの参照レート（周/h）。昨夜の実測は29.5")
     ap.add_argument("--rows", type=int, default=6)
     ap.add_argument("--pace", type=int, default=60)   # 「いまのペース」を測る窓（分）
     ap.add_argument("--log", default=os.path.expanduser("~/wl214"))
@@ -276,8 +288,9 @@ def main():
 
         out = ["\033[H\033[J"]
         A = out.append
-        A("%sevent214  ch%d %s%s    %s" % (C["b"], a.ch, CHARA.get(a.ch, ""), C["0"],
-                                           t.strftime("%m/%d %H:%M")))
+        A("%sevent214  ch%d %s%s    %s    %s目標 %s%s"
+          % (C["b"], a.ch, CHARA.get(a.ch, ""), C["0"], t.strftime("%m/%d %H:%M"),
+             C["dim"], "{:,}".format(a.target), C["0"]))
         A("")
         A("  %s%s%s    %s%d位%s    %s%s%s"
           % (C["b"], a.name, C["0"], C["b"], rk, C["0"], C["b"], "{:,}".format(sc), C["0"]))
@@ -307,6 +320,43 @@ def main():
           % (C["dim"], pad("%s まで" % a.until, 16), C["0"], hm(left),
              C["c"], "{:,.0f}".format(now_pph * left / 60.0), C["0"],
              C["b"] + C["c"], "{:,.0f}".format(pred), C["0"]))
+        # ── 目標まで。**ポイントは減らせないので超過は不可逆**。超えたら赤で出す ──
+        # ⚠️1周の単価に `bgain/blk`（ブロック平均）を使ってはいけない。オートや
+        #   マイセカイが分子に入るので、周回していない時間帯に 1,029,004 のような
+        #   でたらめが出る（2026-08-27 に踏んだ）。**窓の中で周回が3周以上あるときだけ
+        #   実測を使い、無ければ章の単価**にする。
+        # ⚠️到達予測も同じ。オート中の時速（35万/h）で割ると「22時間後」になる。
+        #   周回していないときは**周回を始めたら何分か**を出す（参照レートで）。
+        gap = a.target - sc
+        u = unit_w if laps_w >= 3 else lap
+        lapping = laps_w >= 3
+        if gap > 0:
+            laps_left = gap / float(u)
+            if lapping and now_pph > 0:
+                mins = gap / now_pph * 60.0
+                eta = (t + datetime.timedelta(minutes=mins)).strftime("%H:%M")
+                tail = "直近ペースで %s   →  %s%s 到達%s" % (hm(mins), C["b"] + C["g"], eta, C["0"])
+            else:
+                mins = laps_left / a.rate * 60.0
+                tail = "%s%.1f周/h で回せば %s%s（周回はまだ）" % (C["dim"], a.rate, hm(mins), C["0"])
+            A("  %s%s%s  あと %s%s%s   %s%.1f周%s（1周 %s）   %s"
+              % (C["dim"], pad("目標まで", 16), C["0"],
+                 C["b"] + C["y"], "{:,}".format(gap), C["0"],
+                 C["b"] + C["y"], laps_left, C["0"], "{:,.0f}".format(u), tail))
+        else:
+            A("  %s%s%s  %s目標を %s Pt 超過（超過は戻せない）%s"
+              % (C["dim"], pad("目標まで", 16), C["0"], C["b"] + C["r"],
+                 "{:,}".format(-gap), C["0"]))
+        # ── イベントの残り時間 ──
+        try:
+            ev = datetime.datetime.strptime(a.event_end, "%Y-%m-%dT%H:%M:%S")
+            evleft = (ev - t).total_seconds() / 60.0
+            A("  %s%s%s  あと %s%s%s   （%s）"
+              % (C["dim"], pad("イベント終了", 16), C["0"],
+                 C["b"] + (C["r"] if evleft <= 30 else C["c"]), hm(max(0, evleft)), C["0"],
+                 ev.strftime("%m/%d %H:%M:%S")))
+        except ValueError:
+            pass
         A("")
         A("  %s順位のゆくえ%s" % (C["dim"], C["0"]))
         if last_nb.get("up"):
