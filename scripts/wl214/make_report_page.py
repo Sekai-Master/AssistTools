@@ -419,7 +419,11 @@ def build(rep, shifts, params):
         "generatedAt": rep["generatedAt"],
         "totalsAll": totals_all,
         "eventEnd": TEND.strftime("%Y-%m-%dT%H:%M"),
-        "isOver": (final.get("t") or "") >= TEND.strftime("%Y-%m-%dT%H:%M"),
+        # ⚠️終了したかどうかは**実時刻**で判定する。最終スナップショットの時刻で見ると、
+        #   sekai.best が終了時刻ちょうどで更新を止める（214 は 19:57 が最後）ため、
+        #   イベントが終わっているのに「走行中」の文面が出る（2026-08-27 に踏んだ）。
+        #   スナップショットの時刻は鮮度の表示（asOf）としてだけ使う。
+        "isOver": datetime.datetime.now() >= TEND,
         "asOf": final.get("t"),
         "dailySum": daily_sum,
         "unassignedPt": final["pt"] - daily_sum,
@@ -441,15 +445,65 @@ def build(rep, shifts, params):
     }
 
 
+# 章キャラの誕生日（マスタDB characterProfiles.json で確認済み）。
+# event214 の上位陣は、この5つを連結した数字に**着地**させて終わる。
+# 2026-08-27 の実測で、トップ100のうち21人がこの文法の値で終えていた。
+BIRTHDAYS = [("1112", "東雲彰人", "11/12"), ("1105", "MEIKO", "11/5"),
+             ("720", "草薙寧々", "7/20"), ("430", "東雲絵名", "4/30"),
+             ("319", "桃井愛莉", "3/19")]
+
+
+def decompose(score):
+    """スコアの文字列を、章キャラの誕生日で右から貪欲に分解する。
+    ⚠️長いコード（1112/1105）を先に試すこと。3桁を先に見ると 1112 が [112] に割れる。"""
+    s = str(score)
+    parts, i = [], len(s)
+    while i > 0:
+        for code, chara, mmdd in BIRTHDAYS:
+            if i - len(code) >= 0 and s[i - len(code):i] == code:
+                parts.append({"t": code, "chara": chara, "date": mmdd})
+                i -= len(code)
+                break
+        else:
+            i -= 1
+            parts.append({"t": s[i], "chara": None, "date": None})
+    return list(reversed(parts))
+
+
+def landing_block(board, runner_pt):
+    rows = board.get("data", board).get("eventRankings", [])
+    out = []
+    for e in sorted(rows, key=lambda r: r["rank"]):
+        if e["rank"] > 100:
+            continue
+        parts = decompose(int(e["score"]))
+        hits = [p for p in parts if p["chara"]]
+        # ⚠️「どこかにコードが含まれる」で拾ってはいけない。9桁の数字に3桁のコードが
+        #   偶然現れるので、トップ100のうち67人が該当してしまい意味を成さなかった。
+        #   着地の証拠は **末尾がコードで終わっていること**。ここで初めて
+        #   「合わせて終えた人」と「時間切れまで走った人」が分かれる（2026-08-27）。
+        if not hits or not parts[-1]["chara"]:
+            continue
+        out.append({"rank": e["rank"], "pt": int(e["score"]), "name": e["userName"],
+                    "parts": parts, "who": "＋".join(p["chara"] for p in hits),
+                    "isRunner": int(e["score"]) == runner_pt})
+    return {"rows": out, "total": min(100, len([e for e in rows if e["rank"] <= 100])),
+            "codes": [{"t": c, "chara": ch, "date": d} for c, ch, d in BIRTHDAYS]}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("-o", "--out", required=True, help="出力する .html")
     ap.add_argument("--report", default=REPORT)
     ap.add_argument("--shifts", default=SHIFTS)
     ap.add_argument("--params", default=PARAMS)
+    ap.add_argument("--board", default="",
+                    help="最終ボードの JSON（api.sekai.best/event/live の生）。着地の節を出す")
     a = ap.parse_args()
 
     data = build(jload(a.report), jload(a.shifts), jload(a.params))
+    if a.board:
+        data["landing"] = landing_block(jload(a.board), data["final"]["pt"])
     tpl = io.open(os.path.join(HERE, "report_page.html"), encoding="utf-8").read()
     # ⚠️プレースホルダは "/*__DATA__*/null" 全体で置く。コメントだけ置換すると `{...}null` になって落ちる
     marker = "/*__DATA__*/null"

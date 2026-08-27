@@ -43,7 +43,21 @@ TEND = datetime.datetime(2026, 8, 27, 20, 0)
 # ⚠️**走者名はリポジトリに書かない**（scripts/wl214/README.md の規約）。環境変数で渡す。
 #     WL214_RUNNER_NAMES="名義1,名義2,..."   （カンマ区切り・章ごとの改名を全部）
 # ⚠️部分一致で引くと別人を拾う（「歌姫」で3人の別プレイヤーが引っかかった）。**完全一致で引く。**
-NAMES = [n for n in os.environ.get("WL214_RUNNER_NAMES", "").split(",") if n.strip()]
+# ⚠️環境変数だけだと、イベント終了直後にレポートを回すとき設定漏れで落ちる。
+#   auto_watch と同じく **scripts/wl214/.runner（1行1名義・gitignore済み）へフォールバック**する。
+def _default_names():
+    env = [n.strip() for n in os.environ.get("WL214_RUNNER_NAMES", "").split(",") if n.strip()]
+    if env:
+        return env
+    f = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".runner")
+    try:
+        with io.open(f, encoding="utf-8") as fh:
+            return [ln for ln in fh.read().splitlines() if ln.strip()]
+    except IOError:
+        return []
+
+
+NAMES = _default_names()
 
 # 章の境界（JST）と、章ごとの実測単価 (周回, オート, マイセカイ刻み)。
 CHAPTERS = [
@@ -302,7 +316,10 @@ def in_shift(spans, t0, t1=None):
     return False
 
 
-def solve(d, lap, auto, mys, allow_chal=True, shift=False, seconds=None):
+AUTO_QUOTA = 99            # オートライブの1日あたり上限（04:00 リセット）
+
+
+def solve(d, lap, auto, mys, allow_chal=True, shift=False, seconds=None, auto_left=None):
     """増分 d を 周回 / オート / マイセカイ / チャレライ に分解する。
 
     ⚠️周回は1周の単価が卓の質で±1%揺れるので厳密な格子に乗らない。オートとマイセカイは
@@ -335,7 +352,13 @@ def solve(d, lap, auto, mys, allow_chal=True, shift=False, seconds=None):
         # ⚠️順序を固定すると必ずどちらかを取り違える。オートの許容は狭い(±0.4%)ので、
         #   無条件に先に当てると周回の増分まで食う（8/26 02:00 の実例は docstring 参照）。
         # ⚠️区間の長さで上限を切る。1回ぶんは区間の外で始まっていることがあるので +1 を許す。
-        max_auto = int(seconds / AUTO_CYCLE_MIN) + 1 if seconds else 99
+        # ⚠️区間の長さだけでなく **その日に残っているオート枠** でも切る。
+        #   8/25 が 101回（上限99）と出ていた＝周回2回をオートと読んでいた（2026-08-27）。
+        #   区間内では成立してしまう当てはめでも、日をまたいだ通算で物理的にあり得ない。
+        #   板（nas_live.py）にも同じ制約を入れてある。
+        max_auto = int(seconds / AUTO_CYCLE_MIN) + 1 if seconds else AUTO_QUOTA
+        if auto_left is not None:
+            max_auto = min(max_auto, max(0, auto_left))
         max_lap = int(seconds / LAP_CYCLE_MIN) + 1 if seconds else 99
 
         def as_auto():
@@ -488,7 +511,8 @@ def main():
             got = {"lap": 0, "auto": 0, "mys": d // mys, "chal": 0, "chalPt": 0, "unexplained": 0}
         else:
             got = solve(d, lap, auto, mys, shift=in_shift(spans, t0, t1),
-                        seconds=(t1 - t0).total_seconds())
+                        seconds=(t1 - t0).total_seconds(),
+                        auto_left=AUTO_QUOTA - days.get(key0, {}).get("autos", 0))
         key = (t1 - datetime.timedelta(hours=4)).strftime("%Y-%m-%d")
         e = days.setdefault(key, {"lapPt": 0, "autoPt": 0, "mysPt": 0, "chalPt": 0,
                                   "unexplainedPt": 0, "laps": 0, "autos": 0, "mysSteps": 0,
@@ -560,14 +584,18 @@ def main():
 
     # ── 1時間ごとの集計（支援者の実効値と突き合わせる）────────────
     hourly = {}
+    auto_used = {}          # 日(04:00区切り) -> ここまでに当てたオート回数
     for (t0, _, s0), (t1, _, s1) in zip(ser, ser[1:]):
         d = s1 - s0
         if d <= 0 or (t1 - t0).total_seconds() > 1200:
             continue
         b = units_at(t1)
         lap, auto, mys = b["lapUnit"], b["autoUnit"], b["mysStep"]
+        dkey = (t1 - datetime.timedelta(hours=4)).strftime("%Y-%m-%d")
         got = solve(d, lap, auto, mys, shift=in_shift(spans, t0, t1),
-                    seconds=(t1 - t0).total_seconds())
+                    seconds=(t1 - t0).total_seconds(),
+                    auto_left=AUTO_QUOTA - auto_used.get(dkey, 0))
+        auto_used[dkey] = auto_used.get(dkey, 0) + got["auto"]
         key = t1.strftime("%Y-%m-%dT%H")
         e = hourly.setdefault(key, {"laps": 0, "autos": 0, "mysSteps": 0, "pt": 0,
                                     "lapPt": 0, "autoPt": 0, "mysPt": 0, "seconds": 0})
