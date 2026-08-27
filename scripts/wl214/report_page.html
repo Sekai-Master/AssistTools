@@ -36,6 +36,7 @@
   --shadow:0 1px 2px rgba(0,0,0,.5),0 8px 26px rgba(0,0,0,.35);
 }
 
+
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{
@@ -157,6 +158,8 @@ h2 + .sub{color:var(--muted); font-size:13.5px; margin-top:6px; max-width:62ch}
   display:inline-flex; align-items:baseline; gap:6px; max-width:100%}
 .slot .m span{font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--muted)}
 .slot .m.enc{background:var(--accent-soft); box-shadow:inset 0 0 0 1px var(--accent)}
+/* 周/h が薄まっている枠の印（バケツが枠より広い） */
+.dil{color:var(--accent); font-weight:700; cursor:help}
 .slot .m.sub{opacity:.7; font-style:italic}
 .slot .nums{display:flex; gap:14px; justify-content:flex-end; font-family:"JetBrains Mono",monospace;
   font-variant-numeric:tabular-nums; font-size:12.5px; white-space:nowrap}
@@ -308,6 +311,7 @@ $("#chs").innerHTML = D.chapters.map(c =>
   '<div class="u">' + (c.names || []).map(n => esc(n)).join('<br>') + '</div>' +
   '<div class="b" style="color:' + c.color + '">+' + c.bonus + '%</div>' +
   '<div class="d">' + c.from.slice(5).replace("T", " ") + " 〜 " + c.to.slice(5).replace("T", " ") + '</div></div>').join("");
+
 
 /* ── モード切替。実測のみ / 全期間（推定込み）── */
 let MODE = "measured";
@@ -548,7 +552,9 @@ function renderSlots() {
     : "実測のある " + rows.length + " 枠のみ。") +
     " チップの数字は編成の<b>実効値</b>。枠線が付いているのが<b>アンコール担当</b>で、" +
     "スキルの重みが他枠の2倍以上あるので単価に一番効く。斜体は代打。" +
-    " 単価はその部屋の実効値から計算した値を、実測の単価に合わせて較正したもの。";
+    " 単価はその部屋の実効値から計算した値を、実測の単価に合わせて較正したもの。" +
+    " <b class=\"dil\">*</b> が付いた枠は、その1時間にマイセカイの回収など周回以外の時間が入っているため、" +
+    "周回だけの速さより低く出ています。";
   $("#slots").innerHTML = dates.map(dt => {
     const list = byDay[dt];
     const ch = D.chapters.find(c => c.ch === list[0].ch) || {};
@@ -570,10 +576,12 @@ function renderSlots() {
           '<span>' + Math.round(m.effective) + '</span></span>').join("");
         const n = (v, l) => '<u>' + v + '<i>' + l + '</i></u>';
         return '<div class="slot' + cls + '"><div class="hh">' +
-          String(s.hour).padStart(2, "0") + ':00</div><div class="mem">' + mem + '</div>' +
+          (s.label || String(s.hour).padStart(2, "0") + ":00") + '</div><div class="mem">' + mem + '</div>' +
           '<div class="nums">' +
-          n(s.lapsPerHour === null ? "—" : s.lapsPerHour.toFixed(1), "周/h") +
-          n(fmt(s.unit), "単価") +
+          n((s.lapsPerHour === null ? "—" : s.lapsPerHour.toFixed(1)) +
+            (s.diluted ? '<b class="dil" title="この1時間はマイセカイの回収や枠外の時間を含むため、周回だけの速さより低く出ます">*</b>' : ""),
+            "周/h") +
+          n(s.unit ? fmt(s.unit) : "—", "単価") +
           n(s.ptPerHour ? (s.ptPerHour / 1e4).toFixed(0) + "万" : "—", "時速") +
           '</div></div>';
       }).join("") + '</div>';

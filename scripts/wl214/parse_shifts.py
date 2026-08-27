@@ -37,7 +37,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(os.path.expanduser("~"), "brain", "log", "wl214-shifts.json")
 
 DAY_RE = re.compile(r"(\d+)日目\s+(\d+)/(\d+)\(([月火水木金土日])\)")
-SLOT_RE = re.compile(r"^(\d{1,2}):00\\?~(\d{1,2}):00$")
+# WARN: HH:00 決め打ちにしない。**30分始まりの枠が実在する**（2026-08-27 の 17:30〜18:00）。
+#   決め打ちだとその行が無言で落ち、走者が支援を受けて回した時間が記録から消える。
+#   シート全体でその1枠だけが 30分始まりだったので、目視では気づけなかった。
+SLOT_RE = re.compile(r"^(\d{1,2}):(\d{2})\\?~(\d{1,2}):(\d{2})$")
 
 
 def cells(line):
@@ -135,7 +138,7 @@ def parse(text):
             m = SLOT_RE.match(c[3].replace(" ", ""))
             if not m:
                 continue
-            slot = "{0:02d}:00".format(int(m.group(1)))
+            slot = "{0:02d}:{1:02d}".format(int(m.group(1)), int(m.group(2)))
             body = [c[4], c[5], c[6], c[7]]        # アンコ + 3枠
             if any(is_num(x) and x for x in body):
                 rows_val[slot] = [float(x) if is_num(x) and x else None for x in body]

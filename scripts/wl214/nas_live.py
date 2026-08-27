@@ -67,7 +67,37 @@ def hm(mins):
     return ("%dh%02dm" % (h, m)) if h else ("%dm" % m)
 
 
-def classify(d, lap, auto, mys):
+# その場で観測したオートの単価。曲を替えると章定数から外れるので、
+# 「35の倍数・章定数の0.85〜1.15倍・3回以上出た値」を格子に足す。
+AUTO_SEEN = []
+
+
+def learn_auto(deltas, auto):
+    """直近の増分から、章定数と別のオート単価が出ていれば覚える。"""
+    import collections
+    cnt = collections.Counter()
+    for d in deltas:
+        if d <= 0 or d % 35:
+            continue
+        for k in range(1, 6):
+            if d % k:
+                continue
+            u = d // k
+            if auto * 0.85 <= u <= auto * 1.15 and u % 35 == 0:
+                cnt[u] += 1
+    for u, n in cnt.items():
+        # ⚠️しきい値3だと再起動後の復帰に9分かかる（遡りで2本しか溜まらず、
+        #   ライブの3分更新をもう1本待つ）。曲を替えた直後の板が一番見られるので2にする。
+        #   周回(118,790)もマイセカイ(787,950)も、35で割った値が窓 0.85〜1.15倍 に
+        #   入らないので誤学習しない。
+        if n >= 2 and u not in AUTO_SEEN and abs(u - auto) > auto * 0.003:
+            AUTO_SEEN.append(u)
+
+
+MIN_AUTO_CYCLE = 105.0   # 秒。公開曲で最短のオート1周期（独りんぼエンヴィー expert 108.8秒）の下限
+
+
+def classify(d, lap, auto, mys, secs=None, autos_ok=True):
     """増分を 周回 / オート / マイセカイ / 停止 に分ける。
 
     ⚠️「合計に対して3%以内」で見ると、マイセカイの 600,950 が「周回5」に化ける
@@ -84,9 +114,23 @@ def classify(d, lap, auto, mys):
     #   ⚠️幅を持たせたぶん、マイセカイの少量回収（89刻み＝75,650）が1回ぶんに化けうる。
     #     実オートは850の倍数にならない（75,530%850=730 / 75,600%850=800）ので、
     #     850ぴったりの値はオートに採らない。
-    for k in range(1, 13):
-        if abs(d - k * auto) <= auto * 0.003 * k and d % mys != 0:
-            return "オート", k
+    #   ⚠️**曲を替えると単価が大きく動く。** 8/27 13:00 に走者が天地(75,600)から
+    #     0.0000034 APPEND(74,585)へ替えた瞬間、比例幅（±0.3%＝227）の外に出て
+    #     全区間が「不明」に落ちた。→ 章定数だけでなく、**その場で観測した単価**も
+    #     格子として持つ（AUTO_SEEN）。オートは 35 の倍数なのでそこで絞れる。
+    # ⚠️許容幅は k に比例して広がるので、**k が大きいほど周回を飲み込む**。
+    #   2026-08-27 17:36 に 12分の +596,750 が「オート8」に化けた（8×74,585=596,680、
+    #   幅±1,790 に差70が収まる）。正解は「周回5（1周119,350）」。
+    #   幅を狭めるのではなく **物理で切る**: 8回は 90秒/回 ＝ 最短の曲より速く、あり得ない。
+    #   同じ制約は report.py には入れてあったが board 側に無かった。
+    #   `autos_ok=False` はオート枠（99回/日）を使い切った後。以降のオート検出は全部偽。
+    if autos_ok:
+        for u in [auto] + [x for x in AUTO_SEEN if x != auto]:
+            for k in range(1, 13):
+                if secs is not None and k * MIN_AUTO_CYCLE > secs:
+                    break            # k は単調に増えるので、成り立たなくなったら打ち切り
+                if abs(d - k * u) <= u * 0.003 * k and d % mys != 0:
+                    return "オート", k
     # 周回は k 周ぶんの合計。1周あたりに直して、実測の幅に収まる k を探す。
     # ⚠️幅を上に広げないと、卓が良くなって単価が上がったときに「不明」に落ちる
     #   （2026-08-26 夜、1周が 118,783→119,140→119,402 と上がり、119,840 で上限を20超えた）。
@@ -147,7 +191,19 @@ def main():
     ap.add_argument("--ch", type=int, default=5)
     ap.add_argument("--every", type=int, default=20)
     ap.add_argument("--back", type=float, default=8.0)
-    ap.add_argument("--until", default="26:00")
+    # ⚠️既定を 26:00 のままにしない。最終日のブロックはイベント終了(19:59:59)で切れる。
+    #   昨日までの「26:00まで」の指標を最終日に出すと、存在しない2時間ぶんを見せる。
+    ap.add_argument("--until", default="20:00")
+    ap.add_argument("--target", type=int, default=330430319,
+                    help="目標Pt。あと何Pt・何周・いつ到達するかを出す")
+    ap.add_argument("--event-end", dest="event_end", default="2026-08-27T19:59:59",
+                    help="イベント終了。残り時間を出す")
+    ap.add_argument("--rate", type=float, default=29.5,
+                    help="周回していないときの参照レート（周/h）。昨夜の実測は29.5")
+    ap.add_argument("--block-start", dest="block_start", default="",
+                    help="周回ブロックの開始 HH:MM。走者の申告で上書きする（自動検出は板の刻み幅ぶんズレる）")
+    ap.add_argument("--auto-until", dest="auto_until", default="",
+                    help="オート枠を使い切った時刻 HH:MM。以降はオートとして検出しない")
     ap.add_argument("--rows", type=int, default=6)
     ap.add_argument("--pace", type=int, default=60)   # 「いまのペース」を測る窓（分）
     ap.add_argument("--log", default=os.path.expanduser("~/wl214"))
@@ -177,11 +233,32 @@ def main():
     except Exception as e:
         print("遡りに失敗（%s）。ライブだけで続ける" % e)
 
+    recent = []          # 直近の増分。曲替えでオートの単価が変わったのを学ぶ用
+
+    auto_until = None
+    if a.auto_until:
+        _h, _m = map(int, a.auto_until.split(":"))
+        auto_until = datetime.datetime.now().replace(hour=_h, minute=_m, second=59, microsecond=0)
+
+    blk_start = None
+    if a.block_start:
+        _h, _m = map(int, a.block_start.split(":"))
+        blk_start = datetime.datetime.now().replace(hour=_h, minute=_m, second=0, microsecond=0)
+
+    def auto_ok_at(t):
+        """オート枠（99回/日）が尽きた時刻より後はオートを検出しない。"""
+        return auto_until is None or t <= auto_until
+
     def feed(t, sc):
         """走者の1点を取り込み、分類・周回数・ブロック起点を更新する。"""
         s = state
         d = sc - s["prev"][1] if s["prev"] else 0
-        kind, k = classify(d, lap, auto, mys) if s["prev"] else ("—", 0)
+        if d > 0:
+            recent.append(d)
+            del recent[:-60]
+            learn_auto(recent, auto)
+        secs = (t - s["prev"][0]).total_seconds() if s["prev"] else None
+        kind, k = classify(d, lap, auto, mys, secs, autos_ok=auto_ok_at(t)) if s["prev"] else ("—", 0)
         if kind == "周回":
             if s["last_lap_t"] is not None and (t - s["last_lap_t"]).total_seconds() > 900:
                 s["first"] = None
@@ -215,6 +292,15 @@ def main():
     def render(t, rk, sc):
         s = state
         first = s["first"]
+        # ⚠️自動検出の起点は**板の刻み幅ぶん手前にズレる**。1周ぶんの増分が見えた行の
+        #   ひとつ前を起点に採るので、DBの12分刻みだと最大12分早く出る
+        #   （2026-08-27 は実際の開始 17:26 に対し 17:24 と表示。経過が2分長く、
+        #    そのぶん周/h が低く出る）。走者の申告があるならそちらを正とする。
+        #   Pt は据え置き（17:24〜17:26 は無稼働なので増分ゼロ）、時刻だけ差し替える。
+        #   ⚠️条件を `first[0] < blk_start` に限るのは、**このあと新しいブロックが
+        #     始まったときに巻き戻さない**ため。19時台に再開したら起点はそちらが正しい。
+        if first and blk_start and first[0] < blk_start:
+            first = (blk_start, first[1], first[2])
         blk = s["laps"] - first[2] if first else s["laps"]
         bmin = (t - first[0]).total_seconds() / 60.0 if first else 0.0
         bgain = sc - first[1] if first else 0
@@ -225,14 +311,24 @@ def main():
         #   途中の停止を引きずるので、いま走っている速さより低く出る（2026-08-26 実測で
         #   平均309万/h に対し直近350万/h。3.6時間ぶんで147万の差＝予想順位が1つ動く）。
         mine = hist.get(a.name, [])
-        now_pph = rate_of(mine, t, a.pace / 60.0) or avg_pph
+        # ⚠️ペースの窓を**ブロックの外へ広げない**。オート・マイセカイ・停止を含めると
+        #   いま走っている速さが薄まる（2026-08-27 17:39、実走 30.3周/h が 15.4周/h に見えた）。
+        win = a.pace / 60.0
+        if first:
+            win = min(win, max(0.05, (t - first[0]).total_seconds() / 3600.0))
+        now_pph = rate_of(mine, t, win) or avg_pph
         now_lph = now_pph / lap if lap else 0
         per = (3600.0 / now_lph) if now_lph > 0 else 0
         left = max(0.0, (until - t).total_seconds() / 60.0)
         pred = sc + now_pph * left / 60.0
+        # ⚠️hist は**名前がキー**。改名すると旧名のトラックが残り、同じ人が2人に見える。
+        #   2026-08-27 の実測で 40人枠に 47トラックあり、予想順位が 20位→26位に化けた。
+        #   板は3分ごとに上位40人を全員更新するので、**しばらく更新の無い名前は実体が無い**
+        #   （改名して消えたか、40位圏から落ちたか）。どちらも順位表に並べてはいけない。
+        STALE = datetime.timedelta(minutes=10)
         proj = []
         for nm, h in hist.items():
-            if nm == a.name or len(h) < 2:
+            if nm == a.name or len(h) < 2 or (t - h[-1][0]) > STALE:
                 continue
             r = max(rate_of(h, t, 1.0), rate_of(h, t, 3.0) * 0.7)
             proj.append((h[-1][1] + r * left / 60.0, nm))
@@ -242,18 +338,20 @@ def main():
 
         out = ["\033[H\033[J"]
         A = out.append
-        A("%sevent214  ch%d %s%s    %s" % (C["b"], a.ch, CHARA.get(a.ch, ""), C["0"],
-                                           t.strftime("%m/%d %H:%M")))
+        A("%sevent214  ch%d %s%s    %s    %s目標 %s%s"
+          % (C["b"], a.ch, CHARA.get(a.ch, ""), C["0"], t.strftime("%m/%d %H:%M"),
+             C["dim"], "{:,}".format(a.target), C["0"]))
         A("")
         A("  %s%s%s    %s%d位%s    %s%s%s"
           % (C["b"], a.name, C["0"], C["b"], rk, C["0"], C["b"], "{:,}".format(sc), C["0"]))
         A("")
         # 単価は「その窓で稼いだPt ÷ その窓の周回数」。**モデル値ではなく実測**なので、
         # 卓の質がそのまま出る（支援の実効値が落ちるとここが下がる）。
-        mine_w = [x for x in mine if (t - x[0]).total_seconds() <= a.pace * 60]
+        mine_w = [x for x in mine if (t - x[0]).total_seconds() <= win * 3600]
         laps_w = 0
         for (t0, s0), (t1, s1) in zip(mine_w, mine_w[1:]):
-            kk, nn = classify(s1 - s0, lap, auto, mys)
+            kk, nn = classify(s1 - s0, lap, auto, mys,
+                              (t1 - t0).total_seconds(), auto_ok_at(t1))
             if kk == "周回":
                 laps_w += nn
         gain_w = (mine_w[-1][1] - mine_w[0][1]) if len(mine_w) >= 2 else 0
@@ -273,6 +371,43 @@ def main():
           % (C["dim"], pad("%s まで" % a.until, 16), C["0"], hm(left),
              C["c"], "{:,.0f}".format(now_pph * left / 60.0), C["0"],
              C["b"] + C["c"], "{:,.0f}".format(pred), C["0"]))
+        # ── 目標まで。**ポイントは減らせないので超過は不可逆**。超えたら赤で出す ──
+        # ⚠️1周の単価に `bgain/blk`（ブロック平均）を使ってはいけない。オートや
+        #   マイセカイが分子に入るので、周回していない時間帯に 1,029,004 のような
+        #   でたらめが出る（2026-08-27 に踏んだ）。**窓の中で周回が3周以上あるときだけ
+        #   実測を使い、無ければ章の単価**にする。
+        # ⚠️到達予測も同じ。オート中の時速（35万/h）で割ると「22時間後」になる。
+        #   周回していないときは**周回を始めたら何分か**を出す（参照レートで）。
+        gap = a.target - sc
+        u = unit_w if laps_w >= 3 else lap
+        lapping = laps_w >= 3
+        if gap > 0:
+            laps_left = gap / float(u)
+            if lapping and now_pph > 0:
+                mins = gap / now_pph * 60.0
+                eta = (t + datetime.timedelta(minutes=mins)).strftime("%H:%M")
+                tail = "直近ペースで %s   →  %s%s 到達%s" % (hm(mins), C["b"] + C["g"], eta, C["0"])
+            else:
+                mins = laps_left / a.rate * 60.0
+                tail = "%s%.1f周/h で回せば %s%s（周回はまだ）" % (C["dim"], a.rate, hm(mins), C["0"])
+            A("  %s%s%s  あと %s%s%s   %s%.1f周%s（1周 %s）   %s"
+              % (C["dim"], pad("目標まで", 16), C["0"],
+                 C["b"] + C["y"], "{:,}".format(gap), C["0"],
+                 C["b"] + C["y"], laps_left, C["0"], "{:,.0f}".format(u), tail))
+        else:
+            A("  %s%s%s  %s目標を %s Pt 超過（超過は戻せない）%s"
+              % (C["dim"], pad("目標まで", 16), C["0"], C["b"] + C["r"],
+                 "{:,}".format(-gap), C["0"]))
+        # ── イベントの残り時間 ──
+        try:
+            ev = datetime.datetime.strptime(a.event_end, "%Y-%m-%dT%H:%M:%S")
+            evleft = (ev - t).total_seconds() / 60.0
+            A("  %s%s%s  あと %s%s%s   （%s）"
+              % (C["dim"], pad("イベント終了", 16), C["0"],
+                 C["b"] + (C["r"] if evleft <= 30 else C["c"]), hm(max(0, evleft)), C["0"],
+                 ev.strftime("%m/%d %H:%M:%S")))
+        except ValueError:
+            pass
         A("")
         A("  %s順位のゆくえ%s" % (C["dim"], C["0"]))
         if last_nb.get("up"):

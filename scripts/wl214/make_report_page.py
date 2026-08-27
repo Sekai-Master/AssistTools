@@ -46,7 +46,10 @@ CHAPTERS = [
     (5, "桃井愛莉", "#EF6FA6", "2026-08-25T20:00", "2026-08-27T20:00", ["僕の歌姫"]),
 ]
 TEND = datetime.datetime(2026, 8, 27, 20, 0)   # イベント終了（19:59:59 の直後）
-BONUS = {1: 821.0, 2: 752.5, 3: 826.5, 4: 927.0, 5: 912.5}
+# ⚠️ch5 は 8/27 02:39 に 912.5 -> 913.2 へ上がった（走者が実機で確認）。
+#   913.2% はオート 75,600・周回 118,055 を同時に再現する。
+#   ch5 の大半は 912.5 だったが、差は単価で 0.06% なので1値で持つ。
+BONUS = {1: 821.0, 2: 752.5, 3: 826.5, 4: 927.0, 5: 913.25}
 DOW = "月火水木金土日"
 
 
@@ -163,6 +166,67 @@ def build(rep, shifts, params):
             "lapPt": e["lapPt"], "chalPt": e["chalPt"], "unexplainedPt": e["unexplainedPt"],
             "autos": e["autos"], "laps": e["laps"], "mysSteps": e["mysSteps"],
         })
+    # ── 「どの日にも入っていないPt」を潰す ────────────────────────
+    # ⚠️初版は 10,052,022（全体の3.0%）が宙に浮いていた。内訳は2つで、どちらも帰属先が特定できる:
+    #   ①4,041,135 … 8/25 20:09〜21:21 の**72分のDB欠測**。走者は支援枠の中で周回していた
+    #   ②6,010,887 … 前半（8/17〜8/22朝）の申告不足。板が走者を追えていない期間
+    # ①は欠測区間が入る日へ周回として戻す。②は**実測アンカーという硬い制約**で按分する。
+
+    # ① 20分超の欠測を、その区間が属する日へ戻す
+    # ⚠️**両端が同じ実測日に収まる欠測だけ**を足す。8/21 11:36→8/22 08:54 の欠測は
+    #   申告日をまたぐので、終端の日（8/22）に足すと申告ぶんと二重計上になる
+    #   （実際それをやったら合計が最終Ptを 3,383万 上回った）。またぐ欠測は②で吸収する。
+    for g in rep.get("gaps") or []:
+        t0 = datetime.datetime.strptime(g["from"], "%Y-%m-%dT%H:%M")
+        t1 = datetime.datetime.strptime(g["to"], "%Y-%m-%dT%H:%M")
+        k0 = (t0 - datetime.timedelta(hours=4)).strftime("%Y-%m-%d")
+        k1 = (t1 - datetime.timedelta(hours=4)).strftime("%Y-%m-%d")
+        if k0 != k1:
+            continue
+        row = next((x for x in daily if x["date"] == k1 and x["source"] == "measured"), None)
+        if not row:
+            continue
+        row["totalPt"] += g["pt"]
+        row["gapPt"] = (row.get("gapPt") or 0) + g["pt"]
+        # ⚠️欠測を「不明」で置いたままにしない。**周回として成立するか実測レートで判定する。**
+        #   8/25 20:09〜21:21 の 4,041,135 は 72分で 28.5周/h。実測の周回レート帯そのもので、
+        #   その時間帯にはシフトも入っている。断定できるので周回に積む。
+        #   レートが帯の外なら触らない（憶測で category を作らない）。
+        # 1周の単価は**その日の実測**（lapPt ÷ laps）を使う。章定数より実態に近い
+        lap_u = (row["lapPt"] / float(row["laps"])) if row.get("laps") else 0
+        lph = (g["pt"] / (g["minutes"] / 60.0) / lap_u) if (g["minutes"] and lap_u) else 0
+        if 12.0 <= lph <= 38.0:
+            row["lapPt"] = (row.get("lapPt") or 0) + g["pt"]
+            row["gapAsLap"] = True
+            row["gapLapsPerHour"] = round(lph, 1)
+
+    # ② 前半を実測アンカーに合わせる。
+    #   8/23 04:00 前後に実測点があるので、**イベント開始〜そこまでの総額は確定している**。
+    #   申告値の合計がそれに足りないぶんを、各日の規模に比例して配る。
+    #   ⚠️等分にしない。日ごとに稼働時間が違うので、規模比のほうが実態に近い。
+    # ⚠️`ser` は下流で別の意味に使われている。名前を分ける
+    anchor_pts = [(datetime.datetime.strptime(x["t"], "%Y-%m-%dT%H:%M"), x["pt"])
+                  for x in rep["series"]]
+    b23 = datetime.datetime(2026, 8, 23, 4, 0)
+    near = min(anchor_pts, key=lambda x: abs((x[0] - b23).total_seconds()))
+    if abs((near[0] - b23).total_seconds()) <= 1800:
+        early = [x for x in daily if x["date"] < "2026-08-23"]
+        got = sum(x["totalPt"] for x in early)
+        short = near[1] - got
+        pool = [x for x in early if x["source"] == "declared" and x["totalPt"] > 0]
+        base = sum(x["totalPt"] for x in pool)
+        if short > 0 and base > 0:
+            for x in pool:
+                add_pt = int(round(short * x["totalPt"] / float(base)))
+                x["totalPt"] += add_pt
+                x["adjustedPt"] = add_pt      # 何を足したかを残す（隠さない）
+            # 端数を最大の日に寄せて合計を厳密に合わせる
+            diff = near[1] - sum(x["totalPt"] for x in early)
+            if diff:
+                mx = max(pool, key=lambda x: x["totalPt"])
+                mx["totalPt"] += diff
+                mx["adjustedPt"] = (mx.get("adjustedPt") or 0) + diff
+
     for d in daily:
         dt = datetime.datetime.strptime(d["date"], "%Y-%m-%d")
         d["dow"] = DOW[dt.weekday()]
@@ -305,8 +369,11 @@ def build(rep, shifts, params):
             #   「名前か実効値のどちらかがある」ことだけを条件にする。
             if not any(x.get("id") or x.get("effective") for x in sl["supporters"]):
                 continue
-            h = int(sl["slot"].split(":")[0])
-            t = base + datetime.timedelta(hours=h)
+            # ⚠️分も読む。**30分始まりの枠が実在する**（8/27 17:30〜18:00）。
+            #   時だけ取ると 17:00 と嘘の表示になり、シフト表という一次資料と食い違う。
+            hh, mm = (int(x) for x in sl["slot"].split(":"))
+            h = hh
+            t = base + datetime.timedelta(hours=hh, minutes=mm)
             # ⚠️シフト表にはイベント終了後の枠まで行が残っている（8/27 20:00・21:00）。
             #   落とさないと「79時間」の総計に走れない2時間が入る（2026-08-27 破壊者指摘）。
             if t >= TEND:
@@ -336,6 +403,7 @@ def build(rep, shifts, params):
             m = hmap2.get(t.strftime("%Y-%m-%dT%H"))
             rows.append({
                 "t": t.strftime("%Y-%m-%dT%H:%M"), "date": day["date"], "hour": h,
+                "label": sl["slot"],
                 "ch": ch, "bonus": bonus, "members": members,
                 "effectiveSum": round(sum(effs), 1), "filled": sl["filled"], "subs": subs,
                 "unit": unit, "coef": coef,
@@ -345,6 +413,12 @@ def build(rep, shifts, params):
                 #   オートのPtを周回として按分していた（8/25 17時。破壊者指摘）。
                 #   観測があるかどうかは m の有無で判定する。
                 "measured": m is not None,
+                # ⚠️周/h は**1時間バケツのスループット**。枠とバケツがずれると薄まる:
+                #   ①その1時間にマイセカイの回収が入っている（周回していない時間を分母に含む）
+                #   ②枠が30分始まり（8/27 17:30）。30分の枠に57分ぶんを当てている
+                #   実際 8/27 17:30 は実測 約16周/34分＝28周/h だが、バケツ上は10.5周/h。
+                #   全枠の定義を変えると他の枠の数字まで動くので、**該当枠に印だけ付ける**。
+                "diluted": bool(m and ((m.get("mysSteps") or 0) > 0 or mm != 0)),
             })
         # 実測が無い枠は、**その夜のブロック全体の増分**を単価で按分する。
         # ⚠️初版は params の日次 actualPt から オート・マイセカイ を引いて按分したが、
@@ -380,7 +454,9 @@ def build(rep, shifts, params):
                     r["estWindow"] = [t0.strftime("%m-%d %H:%M"), t1.strftime("%m-%d %H:%M")]
                     r["estMysSubtracted"] = mys_in
         for r in rows:
-            r["ptPerHour"] = round((r["lapsPerHour"] or 0) * r["unit"])
+            # ⚠️シフト枠の無い行は編成が分からず unit が None。時速も出せない（推定を混ぜない）
+            r["ptPerHour"] = (round((r["lapsPerHour"] or 0) * r["unit"])
+                              if r.get("unit") else None)
         slots_out += rows
 
     # ── 収入の内訳は **実測窓に限定する** ────────────────────────
@@ -400,9 +476,14 @@ def build(rep, shifts, params):
 
     est_laps = sum(r["laps"] for r in slots_out if r.get("estimated"))
     est_lap_pt = sum(r["laps"] * r["unit"] for r in slots_out if r.get("estimated"))
+    # ⚠️欠測を周回に計上したぶん（daily 側で判定済み）を全期間の合計にも通す。
+    #   通さないと、日別では割り当て済みなのに内訳では「割り当てなし」に残る。
+    gap_lap_pt = sum(d.get("gapPt") or 0 for d in daily if d.get("gapAsLap"))
+    gap_laps = sum(round((d["gapPt"] / (d["lapPt"] / float(d["laps"]))) if d.get("laps") else 0)
+                   for d in daily if d.get("gapAsLap"))
     totals_all = {
-        "laps": round(tot["laps"] + est_laps),
-        "lapPt": round(tot["lapPt"] + est_lap_pt),
+        "laps": round(tot["laps"] + est_laps + gap_laps),
+        "lapPt": round(tot["lapPt"] + est_lap_pt + gap_lap_pt),
         "autos": tot["autos"] + sum(d.get("autos") or 0 for d in daily if d["source"] == "declared"),
         "autoPt": tot["autoPt"] + sum(d.get("autoPt") or 0 for d in daily if d["source"] == "declared"),
         "mysPt": tot["mysPt"] + sum(d.get("mysPt") or 0 for d in daily if d["source"] == "declared"),
@@ -416,7 +497,11 @@ def build(rep, shifts, params):
         "generatedAt": rep["generatedAt"],
         "totalsAll": totals_all,
         "eventEnd": TEND.strftime("%Y-%m-%dT%H:%M"),
-        "isOver": (final.get("t") or "") >= TEND.strftime("%Y-%m-%dT%H:%M"),
+        # ⚠️終了したかどうかは**実時刻**で判定する。最終スナップショットの時刻で見ると、
+        #   sekai.best が終了時刻ちょうどで更新を止める（214 は 19:57 が最後）ため、
+        #   イベントが終わっているのに「走行中」の文面が出る（2026-08-27 に踏んだ）。
+        #   スナップショットの時刻は鮮度の表示（asOf）としてだけ使う。
+        "isOver": datetime.datetime.now() >= TEND,
         "asOf": final.get("t"),
         "dailySum": daily_sum,
         "unassignedPt": final["pt"] - daily_sum,
@@ -438,15 +523,65 @@ def build(rep, shifts, params):
     }
 
 
+# 章キャラの誕生日（マスタDB characterProfiles.json で確認済み）。
+# event214 の上位陣は、この5つを連結した数字に**着地**させて終わる。
+# 2026-08-27 の実測で、トップ100のうち21人がこの文法の値で終えていた。
+BIRTHDAYS = [("1112", "東雲彰人", "11/12"), ("1105", "MEIKO", "11/5"),
+             ("720", "草薙寧々", "7/20"), ("430", "東雲絵名", "4/30"),
+             ("319", "桃井愛莉", "3/19")]
+
+
+def decompose(score):
+    """スコアの文字列を、章キャラの誕生日で右から貪欲に分解する。
+    ⚠️長いコード（1112/1105）を先に試すこと。3桁を先に見ると 1112 が [112] に割れる。"""
+    s = str(score)
+    parts, i = [], len(s)
+    while i > 0:
+        for code, chara, mmdd in BIRTHDAYS:
+            if i - len(code) >= 0 and s[i - len(code):i] == code:
+                parts.append({"t": code, "chara": chara, "date": mmdd})
+                i -= len(code)
+                break
+        else:
+            i -= 1
+            parts.append({"t": s[i], "chara": None, "date": None})
+    return list(reversed(parts))
+
+
+def landing_block(board, runner_pt):
+    rows = board.get("data", board).get("eventRankings", [])
+    out = []
+    for e in sorted(rows, key=lambda r: r["rank"]):
+        if e["rank"] > 100:
+            continue
+        parts = decompose(int(e["score"]))
+        hits = [p for p in parts if p["chara"]]
+        # ⚠️「どこかにコードが含まれる」で拾ってはいけない。9桁の数字に3桁のコードが
+        #   偶然現れるので、トップ100のうち67人が該当してしまい意味を成さなかった。
+        #   着地の証拠は **末尾がコードで終わっていること**。ここで初めて
+        #   「合わせて終えた人」と「時間切れまで走った人」が分かれる（2026-08-27）。
+        if not hits or not parts[-1]["chara"]:
+            continue
+        out.append({"rank": e["rank"], "pt": int(e["score"]), "name": e["userName"],
+                    "parts": parts, "who": "＋".join(p["chara"] for p in hits),
+                    "isRunner": int(e["score"]) == runner_pt})
+    return {"rows": out, "total": min(100, len([e for e in rows if e["rank"] <= 100])),
+            "codes": [{"t": c, "chara": ch, "date": d} for c, ch, d in BIRTHDAYS]}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("-o", "--out", required=True, help="出力する .html")
     ap.add_argument("--report", default=REPORT)
     ap.add_argument("--shifts", default=SHIFTS)
     ap.add_argument("--params", default=PARAMS)
+    ap.add_argument("--board", default="",
+                    help="最終ボードの JSON（api.sekai.best/event/live の生）。着地の節を出す")
     a = ap.parse_args()
 
     data = build(jload(a.report), jload(a.shifts), jload(a.params))
+    if a.board:
+        data["landing"] = landing_block(jload(a.board), data["final"]["pt"])
     tpl = io.open(os.path.join(HERE, "report_page.html"), encoding="utf-8").read()
     # ⚠️プレースホルダは "/*__DATA__*/null" 全体で置く。コメントだけ置換すると `{...}null` になって落ちる
     marker = "/*__DATA__*/null"
