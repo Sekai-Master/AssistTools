@@ -37,29 +37,6 @@
 }
 
 
-/* ── 着地の作法。章キャラの誕生日を連結した数字（2026-08-27 の発見）── */
-.codes{display:flex; flex-wrap:wrap; gap:9px; margin:20px 0 24px}
-.codes span{display:inline-flex; align-items:baseline; gap:9px; background:var(--surface);
-  border:1px solid var(--line); border-radius:999px; padding:7px 15px 7px 9px; font-size:12.5px;
-  color:var(--ink-2); box-shadow:var(--shadow)}
-.codes b{font-family:"JetBrains Mono",ui-monospace,monospace; font-size:14px; font-variant-numeric:tabular-nums;
-  border-radius:6px; padding:2px 7px; color:#fff}
-.landmine{background:var(--surface); border:1px solid var(--line); border-radius:16px;
-  padding:30px 22px; text-align:center; margin-bottom:26px; box-shadow:var(--shadow)}
-.landmine .num{font-family:"JetBrains Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums;
-  font-size:clamp(24px,6.4vw,44px); letter-spacing:.01em; line-height:1.25; word-break:break-all}
-.landmine .num i{font-style:normal; border-radius:6px; padding:1px 4px; color:#fff}
-.landmine .who{margin-top:14px; font-size:13px; color:var(--muted)}
-.tblwrap{overflow-x:auto; -webkit-overflow-scrolling:touch}
-.ltbl{border-collapse:collapse; width:100%; font-size:13px; min-width:520px}
-.ltbl th{text-align:left; font-weight:700; color:var(--muted); font-size:11px; letter-spacing:.09em;
-  text-transform:uppercase; padding:0 12px 9px; border-bottom:1px solid var(--line-2); white-space:nowrap}
-.ltbl td{padding:9px 12px; border-bottom:1px solid var(--line); white-space:nowrap}
-.ltbl td.n{font-family:"JetBrains Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
-.ltbl td.n i{font-style:normal; border-radius:4px; padding:1px 3px; color:#fff}
-.ltbl tr.me td{background:var(--accent-soft)}
-.ltbl tr.me td:first-child{font-weight:700}
-
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{
@@ -181,6 +158,8 @@ h2 + .sub{color:var(--muted); font-size:13.5px; margin-top:6px; max-width:62ch}
   display:inline-flex; align-items:baseline; gap:6px; max-width:100%}
 .slot .m span{font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--muted)}
 .slot .m.enc{background:var(--accent-soft); box-shadow:inset 0 0 0 1px var(--accent)}
+/* 周/h が薄まっている枠の印（バケツが枠より広い） */
+.dil{color:var(--accent); font-weight:700; cursor:help}
 .slot .m.sub{opacity:.7; font-style:italic}
 .slot .nums{display:flex; gap:14px; justify-content:flex-end; font-family:"JetBrains Mono",monospace;
   font-variant-numeric:tabular-nums; font-size:12.5px; white-space:nowrap}
@@ -235,15 +214,6 @@ footer{margin-top:88px; padding-top:28px; border-top:1px solid var(--line);
 <section>
   <h2 id="h-landing">着地</h2>
   <div class="figs" id="summary"></div>
-</section>
-
-<section id="sec-landing" hidden>
-  <h2 id="h-land2"></h2>
-  <p class="sub">最終日の上位は、<b>このイベントの章キャラの誕生日</b>を繋げた数字ちょうどに合わせて終わっていた。走者の着地値もその文法で書かれている。</p>
-  <div class="codes" id="lcodes"></div>
-  <div class="landmine" id="lmine"></div>
-  <p class="sub" id="lsub"></p>
-  <div class="tblwrap"><table class="ltbl" id="ltbl"></table></div>
 </section>
 
 <section>
@@ -342,38 +312,6 @@ $("#chs").innerHTML = D.chapters.map(c =>
   '<div class="b" style="color:' + c.color + '">+' + c.bonus + '%</div>' +
   '<div class="d">' + c.from.slice(5).replace("T", " ") + " 〜 " + c.to.slice(5).replace("T", " ") + '</div></div>').join("");
 
-
-/* ── 着地の作法。--board を渡したときだけ出す ── */
-const CHCOL = {};
-D.chapters.forEach(c => { CHCOL[c.chara] = c.color; });
-if (D.landing && D.landing.rows && D.landing.rows.length) {
-  const L = D.landing;
-  const paint = (parts, tag) => parts.map(p => p.chara
-    ? '<' + tag + ' style="background:' + (CHCOL[p.chara] || 'var(--accent)') + '">' + p.t + '</' + tag + '>'
-    : p.t).join("");
-  $("#sec-landing").hidden = false;
-  $("#h-land2").textContent = fmt(fin.pt) + " という数字";
-  $("#lcodes").innerHTML = L.codes.map(c =>
-    '<span><b style="background:' + (CHCOL[c.chara] || 'var(--accent)') + '">' + c.t + '</b>' +
-    esc(c.chara) + '　' + c.date + '</span>').join("");
-  const mine = L.rows.find(r => r.isRunner);
-  if (mine) {
-    $("#lmine").innerHTML = '<div class="num">' + paint(mine.parts, "i") + '</div>' +
-      '<div class="who">' + esc(mine.who) + '　＝　第4章と第5章、走者が走り切った2つの章</div>';
-  }
-  /* ⚠️51行は長いので表は30位まで。総数は文で出す（隠すと「走者だけ特別」に見える）。 */
-  const shown = L.rows.filter(r => r.rank <= 30);
-  $("#lsub").textContent = "最終トップ100のうち " + L.rows.length +
-    " 人が同じ作法で終えている。末尾がたまたま一致する確率は 1% 前後なので、ほぼ全員が狙って合わせた数字。" +
-    "下表は 30 位まで（" + shown.length + " 人）。";
-  $("#ltbl").innerHTML =
-    '<thead><tr><th>順位</th><th>最終Pt</th><th>誰の誕生日か</th><th>名前</th></tr></thead><tbody>' +
-    shown.map(r => '<tr' + (r.isRunner ? ' class="me"' : '') + '>' +
-      '<td class="n">' + r.rank + '</td>' +
-      '<td class="n">' + paint(r.parts, "i") + '</td>' +
-      '<td>' + esc(r.who) + '</td>' +
-      '<td>' + esc(r.name) + '</td></tr>').join("") + '</tbody>';
-}
 
 /* ── モード切替。実測のみ / 全期間（推定込み）── */
 let MODE = "measured";
@@ -614,7 +552,9 @@ function renderSlots() {
     : "実測のある " + rows.length + " 枠のみ。") +
     " チップの数字は編成の<b>実効値</b>。枠線が付いているのが<b>アンコール担当</b>で、" +
     "スキルの重みが他枠の2倍以上あるので単価に一番効く。斜体は代打。" +
-    " 単価はその部屋の実効値から計算した値を、実測の単価に合わせて較正したもの。";
+    " 単価はその部屋の実効値から計算した値を、実測の単価に合わせて較正したもの。" +
+    " <b class=\"dil\">*</b> が付いた枠は、その1時間にマイセカイの回収など周回以外の時間が入っているため、" +
+    "周回だけの速さより低く出ています。";
   $("#slots").innerHTML = dates.map(dt => {
     const list = byDay[dt];
     const ch = D.chapters.find(c => c.ch === list[0].ch) || {};
@@ -636,10 +576,12 @@ function renderSlots() {
           '<span>' + Math.round(m.effective) + '</span></span>').join("");
         const n = (v, l) => '<u>' + v + '<i>' + l + '</i></u>';
         return '<div class="slot' + cls + '"><div class="hh">' +
-          String(s.hour).padStart(2, "0") + ':00</div><div class="mem">' + mem + '</div>' +
+          (s.label || String(s.hour).padStart(2, "0") + ":00") + '</div><div class="mem">' + mem + '</div>' +
           '<div class="nums">' +
-          n(s.lapsPerHour === null ? "—" : s.lapsPerHour.toFixed(1), "周/h") +
-          n(fmt(s.unit), "単価") +
+          n((s.lapsPerHour === null ? "—" : s.lapsPerHour.toFixed(1)) +
+            (s.diluted ? '<b class="dil" title="この1時間はマイセカイの回収や枠外の時間を含むため、周回だけの速さより低く出ます">*</b>' : ""),
+            "周/h") +
+          n(s.unit ? fmt(s.unit) : "—", "単価") +
           n(s.ptPerHour ? (s.ptPerHour / 1e4).toFixed(0) + "万" : "—", "時速") +
           '</div></div>';
       }).join("") + '</div>';

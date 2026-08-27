@@ -308,8 +308,11 @@ def build(rep, shifts, params):
             #   「名前か実効値のどちらかがある」ことだけを条件にする。
             if not any(x.get("id") or x.get("effective") for x in sl["supporters"]):
                 continue
-            h = int(sl["slot"].split(":")[0])
-            t = base + datetime.timedelta(hours=h)
+            # ⚠️分も読む。**30分始まりの枠が実在する**（8/27 17:30〜18:00）。
+            #   時だけ取ると 17:00 と嘘の表示になり、シフト表という一次資料と食い違う。
+            hh, mm = (int(x) for x in sl["slot"].split(":"))
+            h = hh
+            t = base + datetime.timedelta(hours=hh, minutes=mm)
             # ⚠️シフト表にはイベント終了後の枠まで行が残っている（8/27 20:00・21:00）。
             #   落とさないと「79時間」の総計に走れない2時間が入る（2026-08-27 破壊者指摘）。
             if t >= TEND:
@@ -339,6 +342,7 @@ def build(rep, shifts, params):
             m = hmap2.get(t.strftime("%Y-%m-%dT%H"))
             rows.append({
                 "t": t.strftime("%Y-%m-%dT%H:%M"), "date": day["date"], "hour": h,
+                "label": sl["slot"],
                 "ch": ch, "bonus": bonus, "members": members,
                 "effectiveSum": round(sum(effs), 1), "filled": sl["filled"], "subs": subs,
                 "unit": unit, "coef": coef,
@@ -348,6 +352,12 @@ def build(rep, shifts, params):
                 #   オートのPtを周回として按分していた（8/25 17時。破壊者指摘）。
                 #   観測があるかどうかは m の有無で判定する。
                 "measured": m is not None,
+                # ⚠️周/h は**1時間バケツのスループット**。枠とバケツがずれると薄まる:
+                #   ①その1時間にマイセカイの回収が入っている（周回していない時間を分母に含む）
+                #   ②枠が30分始まり（8/27 17:30）。30分の枠に57分ぶんを当てている
+                #   実際 8/27 17:30 は実測 約16周/34分＝28周/h だが、バケツ上は10.5周/h。
+                #   全枠の定義を変えると他の枠の数字まで動くので、**該当枠に印だけ付ける**。
+                "diluted": bool(m and ((m.get("mysSteps") or 0) > 0 or mm != 0)),
             })
         # 実測が無い枠は、**その夜のブロック全体の増分**を単価で按分する。
         # ⚠️初版は params の日次 actualPt から オート・マイセカイ を引いて按分したが、
@@ -383,7 +393,9 @@ def build(rep, shifts, params):
                     r["estWindow"] = [t0.strftime("%m-%d %H:%M"), t1.strftime("%m-%d %H:%M")]
                     r["estMysSubtracted"] = mys_in
         for r in rows:
-            r["ptPerHour"] = round((r["lapsPerHour"] or 0) * r["unit"])
+            # ⚠️シフト枠の無い行は編成が分からず unit が None。時速も出せない（推定を混ぜない）
+            r["ptPerHour"] = (round((r["lapsPerHour"] or 0) * r["unit"])
+                              if r.get("unit") else None)
         slots_out += rows
 
     # ── 収入の内訳は **実測窓に限定する** ────────────────────────
