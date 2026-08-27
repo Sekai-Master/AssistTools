@@ -13,21 +13,24 @@ import { SharePanel } from "./SharePanel";
 import { PlayerSettingsPanel } from "./PlayerSettingsPanel";
 import { ComparePanel } from "./ComparePanel";
 import { SaveToProfile } from "../../components/ui/ProfileBar";
-import { getActiveProfile, upsertProfileByName } from "../../lib/profiles";
+import { getActiveProfile, upsertProfileByName, useProfiles } from "../../lib/profiles";
 import { useRankingMusics } from "../ranking/useRankingMusics";
 import { DEFAULT_PARAMS, OVERHEAD_BY_LIVE } from "../ranking/lib/efficiency";
 import { ENVY_ID } from "../analyzer/lib/constants";
-import {
-  readPlayerSettings,
-  toPlayerState,
-  writePlayerSettings,
-  type PlayerSettings,
-} from "./lib/playerStore";
+import { readPlayerSettings, writePlayerSettings, type PlayerSettings } from "./lib/playerStore";
 import { evaluateDeck, type EvalContext } from "./lib/evaluate";
+import {
+  buildEvalContext,
+  deckProfileValues,
+  decksWithoutProfile,
+  profileValuesFromEval,
+  syncDecksToProfiles,
+  withDefaultStates,
+  type DeckEvalBase,
+} from "./lib/deckProfiles";
 import { swapCandidates } from "./lib/swap";
 import {
   CUSTOM_EVENT_ID,
-  customBonusTables,
   emptyCustomEvent,
   parseCustomEvent,
   type CustomEvent,
@@ -116,39 +119,20 @@ export default function DeckBuilder() {
    * ★ パネルごとに計算し直すと、比較や編成プロフィールへの保存と**別の値**が出かねない。
    *   同じ画面に違う総合力が並ぶのが一番たちが悪い。
    */
+  /** 計算の材料。一括変換（保存編成→プロフィール）と同じものを渡す。 */
+  const evalBase = useMemo<DeckEvalBase | null>(
+    () => (data ? { data, catalog, states, player } : null),
+    [data, catalog, states, player],
+  );
   const ctx = useMemo<EvalContext | null>(
-    () =>
-      data
-        ? {
-            catalog,
-            states,
-            player: toPlayerState(player),
-            // カスタムのときは、自分で置いた条件から作った表に差し替える。
-            // 計算式（eventBonus）はそのまま＝実在イベントと同じ経路を通る。
-            bonusTables:
-              eventId === CUSTOM_EVENT_ID
-                ? customBonusTables(custom, data.bonusTables)
-                : data.bonusTables,
-            powerTables: data.powerTables,
-            skills: data.skills,
-            characterRanks: player.characterRanks,
-            // チャレンジライブにイベントボーナスは無い。ここで外すと下流が全部止まる。
-            eventId: mode === "challenge" ? undefined : eventId,
-            // ★ ワールドリンクでは編成の属性の種類数にボーナスが乗る（最大5種類125%）。
-            //   チャレンジライブとカスタム条件では効かせない（実在イベントの制約から外れる）。
-            worldBloom:
-              mode !== "challenge" &&
-              eventId !== CUSTOM_EVENT_ID &&
-              data.events.find((e) => e.id === eventId)?.type === "world_bloom",
-            // ★ 総合力の上限はイベント固有（ワールドリンク第3弾のみ）。チャレンジライブと
-            //   カスタム条件では効かせない（どちらも実在イベントの制約から外れるため）。
-            powerLimit:
-              mode === "challenge" || eventId === CUSTOM_EVENT_ID
-                ? undefined
-                : data.events.find((e) => e.id === eventId)?.powerLimit,
-          }
-        : null,
-    [data, catalog, states, player, eventId, custom, mode]
+    () => (evalBase ? buildEvalContext(evalBase, { eventId, custom, mode }) : null),
+    [evalBase, eventId, custom, mode],
+  );
+  const profiles = useProfiles();
+  /** ビルダーには有るのに、まだプロフィール（＝他ツールの受け口）になっていない編成。 */
+  const unlinkedDecks = useMemo(
+    () => decksWithoutProfile(decks, profiles),
+    [decks, profiles],
   );
   const evaluated = useMemo(
     () => (ctx ? evaluateDeck(cardIds, leaderIndex, Number(supportBonus) || 0, ctx) : null),
@@ -200,13 +184,9 @@ export default function DeckBuilder() {
   /** 台帳に無いカードを既定の育成状態で登録する（無いと編集パネルが開かない）。 */
   const ensureStates = (ids: (number | null)[]) => {
     setStates((prev) => {
-      let next = prev;
-      for (const id of ids) {
-        if (id == null || next[id]) continue;
-        const card = catalog.get(id);
-        if (!card) continue;
-        next = { ...next, [id]: defaultCardState(maxLevelOf(card), isTrainable(card)) };
-      }
+      // 既定値の埋め方は lib/deckProfiles と共有する（別々に持つと、開いたときと
+      // 一括書き出しで違う数字が出る）。
+      const next = withDefaultStates(ids, catalog, prev);
       if (next === prev) return prev;
       writeCardStates(next);
       return next;
@@ -228,6 +208,16 @@ export default function DeckBuilder() {
     if (saved) setCustom(saved);
     setDeckName(d.name);
     setOpenIndex(null);
+    /*
+     * ★ 呼び出したら**その場でプロフィールにも書く。**
+     *   保存時にしか書いていなかったので、バックアップから取り込んだ編成は
+     *   ビルダーには並ぶのに他のツールからは1件も呼べなかった。
+     *   開いた編成は「いま使っている編成」なので、ここで揃えるのが自然。
+     */
+    if (evalBase) {
+      const result = deckProfileValues(d, evalBase, { eventId, custom });
+      if (result) upsertProfileByName(d.name, result.values);
+    }
   };
 
   /**
@@ -307,14 +297,7 @@ export default function DeckBuilder() {
    */
   const pushToProfile = (name: string) => {
     if (!evaluated || cards.length === 0) return;
-    upsertProfileByName(name, {
-      source: "deck",
-      power: evaluated.power.total,
-      skillLeader: Math.round(evaluated.skill.leader * 10) / 10,
-      skillTotal: Math.round(evaluated.skill.total * 10) / 10,
-      // ボーナスは切り捨てず小数のまま（0.5% が最終Ptに効く）。
-      ...(evaluated.bonus ? { bonus: evaluated.bonus.total } : {}),
-    });
+    upsertProfileByName(name, profileValuesFromEval(evaluated));
   };
 
   const store = () => {
@@ -376,6 +359,43 @@ export default function DeckBuilder() {
             setOpenIndex(null);
           }}
         />
+
+        {/* ★ 取り込んだ編成が「ビルダーには有るのにツールからは呼べない」状態を検出して出す。
+            保存済み編成が持っているのはカード5枚の並びだけで、総合力・ボーナス・
+            スキルの内部値はプロフィールに書かれて初めて他のツールから読める。 */}
+        {unlinkedDecks.length > 0 && evalBase && (
+          <div className="neu-raised mb-4 flex flex-wrap items-center gap-3 p-3 text-sm">
+            <span className="text-slate-600">
+              保存した編成のうち{" "}
+              <span className="font-bold">{unlinkedDecks.length}件</span>{" "}
+              が、他のツール（周回プラン・アナライザー等）から呼べません。
+            </span>
+            <NeuButton
+              className="!px-3 !py-1.5 !text-xs"
+              onClick={() => {
+                const { written, states: filled } = syncDecksToProfiles(
+                  unlinkedDecks,
+                  evalBase,
+                  // イベントを持たない古い保存は、いま選んでいるイベントで計算する
+                  // （＝ビルダーで開いたときと同じ数字にする）。
+                  { eventId, custom },
+                );
+                // 育成状態を埋めたぶんは書き戻す（開いたときと同じ既定値で計算するため）。
+                if (filled !== states) {
+                  setStates(filled);
+                  writeCardStates(filled);
+                }
+                setNotice(`${written}件を編成として登録しました`);
+                setTimeout(() => setNotice(null), 2600);
+              }}
+            >
+              ツールから呼べるようにする
+            </NeuButton>
+            <span className="text-xs text-slate-400">
+              育成状態が無いカードは、編成を開いたときと同じ既定値で計算します
+            </span>
+          </div>
+        )}
 
         {/* 保存済み編成の呼び出しと保存。周回プラン（planStorage）と同じ作法で名前付き。 */}
         <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">

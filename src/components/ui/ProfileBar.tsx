@@ -1,15 +1,19 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { NeuButton } from "./NeuButton";
+import { ConfirmDialog } from "./ConfirmDialog";
 import {
+  PROFILE_FIELDS,
   createProfile,
   formatProfileText,
+  omitEmpty,
   getActiveId,
   setActiveProfile,
   updateProfile,
   useActiveProfile,
   useProfiles,
   type Profile,
+  type ProfileField,
 } from "../../lib/profiles";
 
 /**
@@ -82,6 +86,26 @@ export function ProfileBar({ apply }: { apply: (p: Profile) => void }) {
  * ページ上部の切り替えバーに混ぜていたが、「何が保存されるのか」が入力欄から
  * 離れていて読めなかった（Nori 指摘 2026-08-01）。取り込む対象の近くに置く。
  */
+const FIELD_LABEL = new Map(PROFILE_FIELDS.map((f) => [f.key as string, f]));
+
+/** 上書きされる項目を「いまの値 → 新しい値」で並べる。 */
+function diffRows(values: Partial<Profile>, target: Profile | undefined) {
+  return Object.entries(values)
+    .filter(([key]) => FIELD_LABEL.has(key))
+    .map(([key, value]) => {
+      const field = FIELD_LABEL.get(key)!;
+      const before = target?.[key as ProfileField];
+      return {
+        key,
+        label: field.label,
+        unit: field.unit,
+        before: typeof before === "number" ? before.toLocaleString() : null,
+        after: typeof value === "number" ? value.toLocaleString() : String(value),
+        changed: before !== value,
+      };
+    });
+}
+
 export function SaveToProfile({ collect }: { collect: () => Partial<Profile> }) {
   const profiles = useProfiles();
   const active = useActiveProfile();
@@ -89,13 +113,19 @@ export function SaveToProfile({ collect }: { collect: () => Partial<Profile> }) 
   //   数値をいじっていたときに、意図しないものを壊す。
   const [dest, setDest] = useState<string>("");
   const [done, setDone] = useState<string | null>(null);
+  /**
+   * ★ 確認を挟む理由（Nori 指摘 2026-08-27）: 「入力に反映」（編成→入力）と
+   *   「取り込む」（入力→編成）は**向きが逆**で、取り違えると編成側が壊れる。
+   *   しかも壊れたことは押した瞬間には見えない。何がどう変わるかを出してから書く。
+   */
+  const [pending, setPending] = useState<Partial<Profile> | null>(null);
   if (!active) return null;
 
   const target = dest || active.id;
   const NEW = "__new__";
+  const targetProfile = profiles.find((p) => p.id === target);
 
-  const save = () => {
-    const values = collect();
+  const write = (values: Partial<Profile>) => {
     if (target === NEW) {
       const created = createProfile("", values);
       setDone(created.name);
@@ -105,6 +135,19 @@ export function SaveToProfile({ collect }: { collect: () => Partial<Profile> }) 
     }
     setTimeout(() => setDone(null), 2600);
   };
+
+  const start = () => {
+    const values = omitEmpty(collect());
+    // 新規作成は何も壊さないので確認を挟まない（手数を増やすだけになる）。
+    if (target === NEW) {
+      write(values);
+      return;
+    }
+    setPending(values);
+  };
+
+  const rows = pending ? diffRows(pending, targetProfile) : [];
+  const changedRows = rows.filter((r) => r.changed);
 
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
@@ -123,7 +166,7 @@ export function SaveToProfile({ collect }: { collect: () => Partial<Profile> }) 
         {/* 上書きが不安なときの逃げ道。既存を壊さずに残せる。 */}
         <option value={NEW}>＋ 新しい編成として保存</option>
       </select>
-      <NeuButton className="!px-3 !py-1" onClick={save}>
+      <NeuButton className="!px-3 !py-1" onClick={start}>
         取り込む
       </NeuButton>
       {done && (
@@ -131,6 +174,53 @@ export function SaveToProfile({ collect }: { collect: () => Partial<Profile> }) 
           「{done}」に保存しました
         </span>
       )}
+
+      <ConfirmDialog
+        open={pending !== null}
+        title={`編成「${targetProfile?.name ?? ""}」を上書きします`}
+        confirmLabel={changedRows.length === 0 ? "そのまま保存" : "上書きする"}
+        onCancel={() => setPending(null)}
+        onConfirm={() => {
+          if (pending) write(pending);
+          setPending(null);
+        }}
+      >
+        <p>
+          いまの入力を<span className="font-bold">編成に書き込みます</span>。
+          ツール側の入力は変わりません（逆向きは上の「入力に反映」）。
+        </p>
+        {rows.length === 0 ? (
+          <p className="mt-3 text-slate-500">
+            入力が空なので、書き込むものがありません。
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-1">
+            {rows.map((r) => (
+              <li key={r.key} className="flex flex-wrap items-baseline gap-x-2">
+                <span className="text-slate-500">{r.label}</span>
+                <span className="tabular-nums text-slate-400">
+                  {r.before ?? "未設定"}
+                </span>
+                <span aria-hidden>→</span>
+                <span
+                  className={
+                    r.changed
+                      ? "font-bold tabular-nums text-slate-700"
+                      : "tabular-nums text-slate-400"
+                  }
+                >
+                  {r.after}
+                  {r.unit}
+                </span>
+                {!r.changed && <span className="text-xs text-slate-400">変更なし</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-3 text-xs text-slate-400">
+          空欄の項目は書き込みません（編成に入っている値はそのまま残ります）。
+        </p>
+      </ConfirmDialog>
     </span>
   );
 }

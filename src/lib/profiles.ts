@@ -233,6 +233,21 @@ export function upsertProfileByName(name: string, values: Partial<Profile>): Pro
   return createProfile(trimmed, values);
 }
 
+/**
+ * 空欄（undefined）の項目を落とす。**入力欄が空なのは「消してくれ」ではない。**
+ *
+ * ★ updateProfile は patch をそのまま spread するので、`hourlyRate: undefined` を
+ *   渡すと編成に入っていた時速が消える。ツールから編成へ書き戻すときは必ずここを通す
+ *   （設定画面の台帳では逆に、空にする＝消すの意味で undefined を使うので通さない）。
+ */
+export function omitEmpty(values: Partial<Profile>): Partial<Profile> {
+  const out: Partial<Profile> = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== undefined) (out as Record<string, unknown>)[key] = value;
+  }
+  return out;
+}
+
 export function updateProfile(id: string, patch: Partial<Profile>): void {
   const { id: _ignored, order: _order, ...rest } = patch;
   // clampProfile は数値欄しか見ないので、name/source はそのまま通す。
