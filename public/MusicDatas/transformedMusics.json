@@ -13538,6 +13538,25 @@
     "event_rate": 105
   },
   {
+    "id": "788",
+    "title": "アンチサイノウ",
+    "pronunciation": "あんちさいのう",
+    "creatorArtistId": 28,
+    "artistName": "syudou",
+    "default": 2768401,
+    "Unit": "9_oth",
+    "categories": [
+      "mv_2d"
+    ],
+    "publishedAt": 1787829300000,
+    "published": true,
+    "isNewlyWrittenMusic": true,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_788.webp",
+    "music_time": 91,
+    "event_rate": 105
+  },
+  {
     "id": "789",
     "title": "天秤、指先で触れて",
     "pronunciation": "てんびん、ゆびさきでふれて",
