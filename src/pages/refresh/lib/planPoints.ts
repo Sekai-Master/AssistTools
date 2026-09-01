@@ -20,7 +20,7 @@ import type { TimelineResult } from "./timeline";
 /**
  * マイセカイ「全回収」1回ぶんのメモリ数の目安。
  *
- * 出典: event214 の実測（wl214/params.json の mysekai）。総合力33.6万・ボーナス821%
+ * 出典: event214 の実測（Sekai-Master-Private の public/wl214/params.json の mysekai）。総合力33.6万・ボーナス821%
  * のとき単価 7,500 Pt/メモリ で、全回収1回が 671,000 Pt。671,000 ÷ 7,500 = 89.5。
  * 1 LB = スタミナ1メモリぶんの回復なので、申告の「全回収で85〜90 LB」とも一致する。
  * ★ 資材の溜まり方で上下するので、あくまで初期値。ブロックごとに直せる。
