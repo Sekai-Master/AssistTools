@@ -130,7 +130,8 @@ async function adminRoute(req: Request, env: Env, url: URL): Promise<Response> {
     if (!isRecord(body) || typeof body.id !== 'string' || typeof body.eventId !== 'number' || typeof body.kind !== 'string' || typeof body.text !== 'string') {
       return error('post の形が不正', 400)
     }
-    const queued = await queuePost(env.DB, body.id, body.eventId, body.kind, body.text, now)
+    if (body.payload !== undefined && !isRecord(body.payload)) return error('payload はオブジェクト', 400)
+    const queued = await queuePost(env.DB, body.id, body.eventId, body.kind, body.text, now, body.payload)
     return json({ ok: true, queued })
   }
 

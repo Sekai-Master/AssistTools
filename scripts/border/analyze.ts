@@ -15,6 +15,7 @@ import path from 'node:path'
 import { fitModel } from '../../workers/border/src/fit.ts'
 import { RANKS, buildShape, durationHours, type EventMeta, type Sample, type Shape } from '../../workers/border/src/model.ts'
 import { resultText, type ResultRank } from '../../workers/border/src/posts.ts'
+import type { PostPayload, ResultPostRank } from '../../workers/border/src/snapshot.ts'
 import { buildReport, type PredictionLog, type Report } from './report.ts'
 
 const SITE = 'https://sekaimaster.pages.dev'
@@ -130,13 +131,13 @@ async function collectShapes(events: readonly EventMeta[], have: readonly Shape[
   return fresh
 }
 
-function resultRanks(report: Report): ResultRank[] {
+function resultRanks(report: Report): (ResultRank & ResultPostRank)[] {
   // 投稿には「経過85%前後で出していた予測」を使う（開催中に積んだマイルストーンと同じ時点）
-  const out: ResultRank[] = []
+  const out: (ResultRank & ResultPostRank)[] = []
   for (const r of report.ranks) {
     const at = r.prospective.find((x) => x.checkpoint === 0.85) ?? r.prospective[r.prospective.length - 1]
     if (!at || !at.visible) continue
-    out.push({ rank: r.rank, final: r.final, predicted: at.predicted, progress: at.progress })
+    out.push({ rank: r.rank, final: r.final, predicted: at.predicted, progress: at.progress, error: at.error, inBand: at.inBand })
   }
   return out
 }
@@ -179,7 +180,12 @@ async function main() {
     const ranks = resultRanks(report)
     if (ranks.length > 0 && e.aggregateAt > NOW - POST_WINDOW_MS) {
       const text = resultText(e.name, ranks)
-      if (text) await write('PUT', '/admin/posts', { id: `${e.id}:result`, eventId: e.id, kind: 'result', text })
+      const payload: PostPayload = {
+        kind: 'result',
+        event: { id: e.id, name: e.name, type: e.eventType, unit: e.unit, startAt: e.startAt, aggregateAt: e.aggregateAt, durationHours: durationHours(e) },
+        ranks: ranks.map(({ rank, final, predicted, progress, error, inBand }) => ({ rank, final, predicted, progress, error, inBand })),
+      }
+      if (text) await write('PUT', '/admin/posts', { id: `${e.id}:result`, eventId: e.id, kind: 'result', text, payload })
     }
   }
   if (targets.length === 0) say('- 答え合わせ: 対象なし')

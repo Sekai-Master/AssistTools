@@ -3,6 +3,7 @@
  *
  * 口調は docs/x-operations.md に合わせる: 【見出し】で始める・事実だけを平叙で・URL は独立行・絵文字なし。
  */
+import { CONFIDENCE_LABEL, type Confidence } from './model.ts'
 
 export const BORDER_PAGE_URL = 'https://sekaimaster.pages.dev/border'
 
@@ -46,6 +47,14 @@ export interface PostRank {
   predicted: number
   low: number | null
   high: number | null
+  confidence?: Confidence | null
+}
+
+/** 1,410万〜1,595万 → "1,410〜1,595万"（両端とも万のときは前の万を省く） */
+export function formatRange(low: number, high: number): string {
+  const a = formatMan(low)
+  const b = formatMan(high)
+  return a.endsWith('万') && b.endsWith('万') ? `${a.slice(0, -1)}〜${b}` : `${a}〜${b}`
 }
 
 /** 投稿で並べる順（読み手に多い順位帯から） */
@@ -60,15 +69,19 @@ function fitLines(head: string[], body: string[], tail: string[]): string {
   }
 }
 
-/** 開催中のマイルストーン（経過50%・85%）の予測ポスト */
-export function milestoneText(eventName: string, progress: number, ranks: readonly PostRank[]): string | null {
+/**
+ * 開催中のマイルストーン（開始24時間・経過50%・85%）の予測ポスト。label は「開始24時間」「経過51%」など。
+ * 画像つきで送るときは、この文面が画像の代替テキストと、画像が作れなかったときの控えになる。
+ */
+export function milestoneText(eventName: string, label: string, ranks: readonly PostRank[]): string | null {
   const ordered = POST_ORDER.map((r) => ranks.find((x) => x.rank === r)).filter((x): x is PostRank => x != null)
   if (ordered.length === 0) return null
   const body = ordered.map((r) => {
-    const range = r.low != null && r.high != null ? `（${formatMan(r.low)}〜${formatMan(r.high)}）` : ''
+    const conf = r.confidence ? `・確度${CONFIDENCE_LABEL[r.confidence]}` : ''
+    const range = r.low != null && r.high != null ? `（${formatRange(r.low, r.high)}${conf}）` : ''
     return `${r.rank}位 ${formatMan(r.predicted)}${range}`
   })
-  const head = [`【ボーダー予測】${eventName}（経過${Math.round(progress * 100)}%）`, '']
+  const head = [`【ボーダー予測】${eventName}（${label}）`, '']
   const tail = ['', '括弧は8割の確率で収まる幅です。過去イベントの伸び方から自動で出しています。', BORDER_PAGE_URL]
   return fitLines(head, body, tail)
 }

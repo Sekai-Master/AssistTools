@@ -226,22 +226,44 @@ export interface PostRow {
   created_at: number
   sent_x_at: number | null
   sent_discord_at: number | null
+  /** 画像を作るためのデータ（kv の `post:{id}`。JSON 文字列のまま返す） */
+  payload: string | null
 }
 
-/** 同じ id はもう入っていれば無視する（マイルストーンを二重に出さない） */
-export async function queuePost(db: D1Database, id: string, eventId: number, kind: string, text: string, now: number): Promise<boolean> {
+/**
+ * 同じ id はもう入っていれば無視する（マイルストーンを二重に出さない）。
+ * payload は画像を作るためのデータで、新しく積めたときだけ kv の `post:{id}` に入れる。
+ * posts 表に列を足さないのは、マイグレーションを増やさずに済ませるため。
+ */
+export async function queuePost(
+  db: D1Database,
+  id: string,
+  eventId: number,
+  kind: string,
+  text: string,
+  now: number,
+  payload?: unknown,
+): Promise<boolean> {
   const r = await db
     .prepare('INSERT OR IGNORE INTO posts (id, event_id, kind, text, created_at) VALUES (?1, ?2, ?3, ?4, ?5)')
     .bind(id, eventId, kind, text, now)
     .run()
-  return (r.meta.changes ?? 0) > 0
+  const queued = (r.meta.changes ?? 0) > 0
+  if (queued && payload !== undefined) await kvSet(db, `post:${id}`, payload, now)
+  return queued
 }
 
 export type PostChannel = 'x' | 'discord'
 
 export async function unsentPosts(db: D1Database, channel: PostChannel): Promise<PostRow[]> {
   const col = channel === 'x' ? 'sent_x_at' : 'sent_discord_at'
-  const r = await db.prepare(`SELECT * FROM posts WHERE ${col} IS NULL ORDER BY created_at LIMIT 20`).all<PostRow>()
+  const r = await db
+    .prepare(
+      `SELECT p.id, p.event_id, p.kind, p.text, p.created_at, p.sent_x_at, p.sent_discord_at, k.v AS payload
+       FROM posts p LEFT JOIN kv k ON k.k = 'post:' || p.id
+       WHERE p.${col} IS NULL ORDER BY p.created_at LIMIT 20`,
+    )
+    .all<PostRow>()
   return r.results
 }
 

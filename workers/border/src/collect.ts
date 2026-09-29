@@ -20,13 +20,23 @@ import {
 import type { Env } from './env.ts'
 import { RANKS, durationHours, predict, type EventMeta, type Prediction } from './model.ts'
 import { milestoneText } from './posts.ts'
-import type { Snapshot } from './snapshot.ts'
+import type { PostPayload, Snapshot } from './snapshot.ts'
 
 export const LIVE_URL = 'https://api.sekai.best/event/live'
 export const USER_AGENT = 'sekaimaster-border/1.0 (+https://sekaimaster.pages.dev)'
 
-/** この経過率をまたいだ回に、予測ポストをキューに積む */
-export const MILESTONES = [0.5, 0.85] as const
+/**
+ * この時点をまたいだ回に、予測ポストをキューに積む。
+ * 開始24時間は序盤の「目安」（幅が広いことを確度で示す。2026-09-30 Nori 提案）
+ */
+/** 節目をこれ以上過ぎてから気づいた回は、その節目のポストを出さない（経過率。150h で約7.5時間） */
+export const MILESTONE_GRACE = 0.05
+
+export const MILESTONES: readonly { key: string; at: (e: EventMeta) => number; label: (progress: number) => string }[] = [
+  { key: 'h24', at: (e) => 24 / durationHours(e), label: () => '開始24時間' },
+  { key: 'p50', at: () => 0.5, label: (p) => `経過${Math.round(p * 100)}%` },
+  { key: 'p85', at: () => 0.85, label: (p) => `経過${Math.round(p * 100)}%` },
+]
 
 /** 日程を読み直すとき、終了からこの期間より古いイベントは D1 に入れない */
 const SCHEDULE_LOOKBACK_MS = 3 * 86_400_000
@@ -127,6 +137,7 @@ function snapshotOf(event: EventMeta, now: number, samples: LiveSample[], preds:
           predicted: p ? Math.round(p.predicted) : null,
           low: p?.low == null ? null : Math.round(p.low),
           high: p?.high == null ? null : Math.round(p.high),
+          confidence: p?.confidence ?? null,
           visible: p?.visible ?? false,
         }
       }),
@@ -194,14 +205,22 @@ export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): 
   if (!stale && preds.size > 0) {
     const prevProgress = prev && prev.event.id === event.id ? prev.progress : 0
     for (const m of MILESTONES) {
-      if (!(prevProgress < m && snap.progress >= m)) continue
+      const at = m.at(event)
+      if (!(prevProgress < at && snap.progress >= at)) continue
+      // 途中から動き出した・止まっていた等で節目を大きく過ぎていたら、その節目のポストは出さない
+      //（開始76時間に「開始24時間の予測」を出すのは嘘になる）
+      if (snap.progress - at > MILESTONE_GRACE) continue
+      const label = m.label(snap.progress)
       const text = milestoneText(
         event.name,
-        snap.progress,
-        [...preds.values()].filter((p) => p.visible).map((p) => ({ rank: p.rank, predicted: p.predicted, low: p.low, high: p.high })),
+        label,
+        snap.ranks
+          .filter((r) => r.visible && r.predicted != null)
+          .map((r) => ({ rank: r.rank, predicted: r.predicted as number, low: r.low, high: r.high, confidence: r.confidence })),
       )
-      const id = `${event.id}:p${Math.round(m * 100)}`
-      if (text && (await queuePost(env.DB, id, event.id, 'milestone', text, now))) queued.push(id)
+      const id = `${event.id}:${m.key}`
+      const payload: PostPayload = { kind: 'milestone', key: m.key, label, snapshot: snap }
+      if (text && (await queuePost(env.DB, id, event.id, 'milestone', text, now, payload))) queued.push(id)
     }
   }
 

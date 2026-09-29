@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { X_LIMIT, formatMan, milestoneText, resultText, xWeight } from '../src/posts.ts'
+import { X_LIMIT, formatMan, formatRange, milestoneText, resultText, xWeight } from '../src/posts.ts'
+
+describe('formatRange', () => {
+  it('両端が万なら前の万を省く', () => {
+    expect(formatRange(14_100_000, 15_950_000)).toBe('1,410〜1,595万')
+    expect(formatRange(9_000, 12_000)).toBe('9,000〜1万')
+  })
+})
 
 describe('xWeight', () => {
   it('日本語は2、ASCII は1、URL は一律23で数える', () => {
@@ -22,15 +29,23 @@ const ranks = [50, 100, 200, 500, 1000, 2000].map((rank) => ({ rank, predicted: 
 
 describe('milestoneText', () => {
   it('280 カウントに収まるよう順位の行を後ろから落とす', () => {
-    const t = milestoneText('とても長いイベント名がここに入ってもはみ出さないことを確かめるための名前', 0.5, ranks) as string
+    const t = milestoneText('とても長いイベント名がここに入ってもはみ出さないことを確かめるための名前', '経過50%', ranks) as string
     expect(xWeight(t)).toBeLessThanOrEqual(X_LIMIT)
     expect(t).toContain('【ボーダー予測】')
     expect(t).toContain('1000位')
     expect(t.endsWith('https://sekaimaster.pages.dev/border')).toBe(true)
   })
 
+  it('見出しに時点のラベル、各行に確度を入れる。範囲は前の「万」を省く', () => {
+    const t = milestoneText('After the Fire', '開始24時間', [
+      { rank: 1000, predicted: 15_025_880, low: 14_100_000, high: 15_950_000, confidence: 'rough' },
+    ]) as string
+    expect(t).toContain('【ボーダー予測】After the Fire（開始24時間）')
+    expect(t).toContain('1000位 1,503万（1,410〜1,595万・確度目安）')
+  })
+
   it('表に出せる順位が無ければ投稿しない', () => {
-    expect(milestoneText('x', 0.5, [])).toBeNull()
+    expect(milestoneText('x', '経過50%', [])).toBeNull()
   })
 })
 

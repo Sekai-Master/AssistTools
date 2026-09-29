@@ -15,6 +15,7 @@ import {
   BAND_MIN_SAMPLES,
   CANDIDATES,
   GRID,
+  MAX_ROUGH_WIDTH,
   RANKS,
   SCORE_TO,
   bandSamplesAt,
@@ -35,16 +36,24 @@ import {
 
 export const ALGORITHM = 'share-median-v1' as const
 
-/** 帯の幅（上側誤差 − 下側誤差）がこれ以下で安定してから表に出す */
-export const MAX_VISIBLE_BAND_WIDTH = 0.15
-/** どれだけ帯が締まっていても、これより前は出さない */
-export const MIN_VISIBLE_PROGRESS = 0.3
+/**
+ * 表に出す最初の経過率（150h のイベントで開始6時間）。
+ * これより後は、帯が MAX_ROUGH_WIDTH 以内なら確度つきで出す（広い序盤は「目安」）
+ */
+export const MIN_VISIBLE_PROGRESS = 0.04
 
-/** 採点・表示に使う代表の経過率 */
+/** 採点・表示に使う代表の経過率（中盤以降） */
 export const CHECKPOINTS = [0.5, 0.6, 0.7, 0.8, 0.9, 0.96] as const
+/** 序盤の代表の経過率（150h で 6h / 12h / 24h / 36h） */
+export const EARLY_CHECKPOINTS = [0.04, 0.08, 0.16, 0.24] as const
+/**
+ * 序盤と中盤以降の境目。帯の裾はそれぞれで選ぶ。
+ * 序盤は外れ方がずっと大きいので、同じ裾で揃えると片方だけ当たり率が足りなくなる
+ */
+export const EARLY_UNTIL = 0.3
 
 /** 「8割の幅」が実際に8割入るように、片側の裾をこの中から選ぶ（狭い順） */
-export const BAND_TAILS = [0.1, 0.075, 0.05, 0.035, 0.025] as const
+export const BAND_TAILS = [0.1, 0.075, 0.05, 0.035, 0.025, 0.015] as const
 export const TARGET_COVERAGE = 0.8
 
 /** Worker が毎回読むので、表の桁を落として小さくする（予測への影響は 1e-5 未満） */
@@ -76,6 +85,11 @@ export interface RankSummary {
   bandTail: number
   /** 帯の当たり率（前向き。その時点までのデータで作った帯に実測が入った割合）。選んだ裾のもの */
   coverage: { p: number; covered: number; total: number }[]
+  /** 序盤（EARLY_CHECKPOINTS）の同じもの */
+  medianAbsErrorEarly: { p: number; value: number | null }[]
+  bandEarly: { p: number; lo: number | null; hi: number | null }[]
+  bandTailEarly: number
+  coverageEarly: { p: number; covered: number; total: number }[]
   /** イベントごとの再現誤差（王者・代表の経過率） */
   replay: { eventId: number; champion: CandidateId; errors: { p: number; value: number | null }[] }[]
 }
@@ -107,18 +121,22 @@ function minProgressFrom(band: { lo: (number | null)[]; hi: (number | null)[] })
     const p = GRID[i]
     // 端（0.96 より後）は標本が少なく帯が欠けやすいので、ここに引きずられて順位ごと隠れないようにする
     if (p > SCORE_TO + 1e-9) continue
-    if (p < MIN_VISIBLE_PROGRESS) break
+    if (p < MIN_VISIBLE_PROGRESS - 1e-9) break
     const lo = band.lo[i]
     const hi = band.hi[i]
-    if (lo == null || hi == null || hi - lo > MAX_VISIBLE_BAND_WIDTH) break
+    if (lo == null || hi == null || hi - lo > MAX_ROUGH_WIDTH) break
     candidate = p
   }
   return candidate ?? 1.01
 }
 
 /** 裾 tail の帯が、前向き（その時点までのデータで作った帯）で実測をどれだけ含んだか */
-export function coverageOf(evals: readonly EventEval[], tail: number): RankSummary['coverage'] {
-  return CHECKPOINTS.map((p) => {
+export function coverageOf(
+  evals: readonly EventEval[],
+  tail: number,
+  checkpoints: readonly number[] = CHECKPOINTS,
+): RankSummary['coverage'] {
+  return checkpoints.map((p) => {
     let covered = 0
     let total = 0
     for (let i = 10; i < evals.length; i++) {
@@ -136,10 +154,13 @@ export function coverageOf(evals: readonly EventEval[], tail: number): RankSumma
 }
 
 /** 目標の当たり率を満たすいちばん狭い裾。どれも満たさなければいちばん広いもの */
-export function chooseTail(evals: readonly EventEval[]): { tail: number; coverage: RankSummary['coverage'] } {
+export function chooseTail(
+  evals: readonly EventEval[],
+  checkpoints: readonly number[] = CHECKPOINTS,
+): { tail: number; coverage: RankSummary['coverage'] } {
   let last: { tail: number; coverage: RankSummary['coverage'] } | null = null
   for (const tail of BAND_TAILS) {
-    const coverage = coverageOf(evals, tail)
+    const coverage = coverageOf(evals, tail, checkpoints)
     const covered = coverage.reduce((a, c) => a + c.covered, 0)
     const total = coverage.reduce((a, c) => a + c.total, 0)
     last = { tail, coverage }
@@ -173,8 +194,15 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
   for (const rank of RANKS) {
     const walk = walkForward(history, rank)
     const champion = walk.champion
+    // 帯の裾は序盤と中盤以降で別々に選び、境目（EARLY_UNTIL）でつなぐ
     const calibrated = chooseTail(walk.evals)
-    const band = bandsFrom(walk.evals, champion, calibrated.tail)
+    const calibratedEarly = chooseTail(walk.evals, EARLY_CHECKPOINTS)
+    const bandMain = bandsFrom(walk.evals, champion, calibrated.tail)
+    const bandEarly = bandsFrom(walk.evals, champion, calibratedEarly.tail)
+    const band = {
+      lo: GRID.map((p, i) => (p < EARLY_UNTIL - 1e-9 ? bandEarly.lo[i] : bandMain.lo[i])),
+      hi: GRID.map((p, i) => (p < EARLY_UNTIL - 1e-9 ? bandEarly.hi[i] : bandMain.hi[i])),
+    }
     const sameAllErrs = walk.evals.map((e) => e.errors.same_all)
     const tables: Record<string, (number | null)[]> = {}
     for (const d of durations) tables[String(d)] = candidateTable(champion, d, history, rank, sameAllErrs)
@@ -202,6 +230,13 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
       band: CHECKPOINTS.map((p) => ({ p, lo: at(band.lo, p), hi: at(band.hi, p) })),
       bandTail: calibrated.tail,
       coverage: calibrated.coverage,
+      medianAbsErrorEarly: EARLY_CHECKPOINTS.map((p) => {
+        const xs = recent.map((e) => at(e.errors[champion], p)).filter((v): v is number => v != null)
+        return { p, value: median(xs.map(Math.abs)) }
+      }),
+      bandEarly: EARLY_CHECKPOINTS.map((p) => ({ p, lo: at(band.lo, p), hi: at(band.hi, p) })),
+      bandTailEarly: calibratedEarly.tail,
+      coverageEarly: calibratedEarly.coverage,
       replay: walk.evals.slice(-12).map((e) => ({
         eventId: e.eventId,
         champion: e.champion,

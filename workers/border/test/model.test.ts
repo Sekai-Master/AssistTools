@@ -4,6 +4,7 @@ import {
   MAX_GAP_MS,
   buildShape,
   candidateTable,
+  confidenceOf,
   interpGrid,
   predict,
   quantile,
@@ -103,6 +104,16 @@ describe('walkForward', () => {
   })
 })
 
+describe('confidenceOf', () => {
+  it('帯の幅で 高（10pt以内）・中（30pt以内）・目安（80pt以内）。それより広ければ出さない', () => {
+    expect(confidenceOf(-0.04, 0.05)).toBe('high')
+    expect(confidenceOf(-0.1, 0.15)).toBe('mid')
+    expect(confidenceOf(-0.2, 0.4)).toBe('rough')
+    expect(confidenceOf(-0.4, 0.5)).toBeNull()
+    expect(confidenceOf(null, 0.1)).toBeNull()
+  })
+})
+
 describe('predict', () => {
   const e = meta(10, 0)
   const flat = GRID.map((p) => p)
@@ -136,6 +147,18 @@ describe('predict', () => {
   it('minProgress より前は記録用に出すが visible = false', () => {
     expect(predict(model, e, 1000, 300, e.startAt + 45 * H)?.visible).toBe(false)
     expect(predict(model, e, 1000, 700, e.startAt + 105 * H)?.visible).toBe(true)
+  })
+
+  it('確度は帯の幅から付き、帯が広すぎる予測は記録だけして出さない', () => {
+    expect(predict(model, e, 1000, 500, e.startAt + 75 * H)?.confidence).toBe('high')
+    const wide: Model = {
+      ...model,
+      ranks: { '1000': { ...model.ranks['1000'], minProgress: 0.04, band: { lo: GRID.map(() => -0.5), hi: GRID.map(() => 0.5) } } },
+    }
+    const p = predict(wide, e, 1000, 500, e.startAt + 75 * H)
+    expect(p?.predicted).toBeCloseTo(1000, 0)
+    expect(p?.confidence).toBeNull()
+    expect(p?.visible).toBe(false)
   })
 
   it('期間の表が無ければ all にフォールバックする', () => {

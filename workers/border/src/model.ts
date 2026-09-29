@@ -16,8 +16,11 @@ export const GRID: readonly number[] = Array.from({ length: 51 }, (_, i) => Math
 /** これより長いサンプルの空白をまたぐ補間は信用しない（216 の 23h 欠測で実害が出た） */
 export const MAX_GAP_MS = 2 * 3_600_000
 
-/** 評価に使う経過率の範囲 */
-export const EVAL_FROM = 0.3
+/**
+ * 評価に使う経過率の範囲。序盤（開始6時間＝150h の 0.04 あたり）から誤差を測り、
+ * 序盤は「目安」として幅つきで出す（2026-09-30 Nori 提案。6h 時点で |誤差| 中央 8〜12%）
+ */
+export const EVAL_FROM = 0.02
 export const EVAL_TO = 0.98
 /** 候補モデルの採点に使う経過率の範囲（意思決定に使う帯） */
 export const SCORE_FROM = 0.4
@@ -360,6 +363,29 @@ export interface Model {
   ranks: Record<string, RankModel>
 }
 
+/**
+ * 確度。帯の幅（上側誤差 − 下側誤差）で決める。数字の読み方を1語で伝えるためのもの。
+ *   high  … 幅 10ポイント以内（おおむね ±5%）
+ *   mid   … 幅 30ポイント以内（おおむね ±15%）
+ *   rough … それより広い（序盤の「目安」）
+ * MAX_ROUGH_WIDTH より広い帯は、幅として意味を持たないので表に出さない。
+ */
+export type Confidence = 'high' | 'mid' | 'rough'
+export const CONFIDENCE_HIGH_WIDTH = 0.1
+export const CONFIDENCE_MID_WIDTH = 0.3
+export const MAX_ROUGH_WIDTH = 0.8
+
+export const CONFIDENCE_LABEL: Record<Confidence, string> = { high: '高', mid: '中', rough: '目安' }
+
+export function confidenceOf(lo: number | null, hi: number | null): Confidence | null {
+  if (lo == null || hi == null) return null
+  const width = hi - lo
+  if (!(width >= 0) || width > MAX_ROUGH_WIDTH) return null
+  if (width <= CONFIDENCE_HIGH_WIDTH) return 'high'
+  if (width <= CONFIDENCE_MID_WIDTH) return 'mid'
+  return 'rough'
+}
+
 export interface Prediction {
   rank: number
   progress: number
@@ -369,6 +395,8 @@ export interface Prediction {
   /** 帯の下限・上限（終値の予測範囲） */
   low: number | null
   high: number | null
+  /** 帯の幅から決めた確度。帯が無い・広すぎるときは null */
+  confidence: Confidence | null
   visible: boolean
 }
 
@@ -387,6 +415,7 @@ export function predict(model: Model, meta: EventMeta, rank: number, current: nu
   // err = pred/final − 1 → final = pred/(1+err)。上側の誤差が下限、下側の誤差が上限になる
   const low = hi == null ? null : predicted / (1 + hi)
   const high = lo == null ? null : predicted / (1 + lo)
+  const confidence = confidenceOf(lo, hi)
   return {
     rank,
     progress: p,
@@ -395,6 +424,8 @@ export function predict(model: Model, meta: EventMeta, rank: number, current: nu
     predicted,
     low: low == null ? null : Math.max(low, current),
     high,
-    visible: p >= rm.minProgress,
+    confidence,
+    // 帯が無い・広すぎる予測は、確度を名乗れないので出さない（記録はする）
+    visible: p >= rm.minProgress && confidence != null,
   }
 }

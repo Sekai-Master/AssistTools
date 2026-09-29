@@ -1,6 +1,7 @@
 import { Panel } from "../../components/ui/Panel";
 import { ToolPage } from "../../components/ui/ToolPage";
-import { formatMan } from "../../../workers/border/src/posts";
+import { CONFIDENCE_LABEL, type Confidence } from "../../../workers/border/src/model";
+import { formatMan, formatRange } from "../../../workers/border/src/posts";
 import { DocLink } from "../legal/LegalDoc";
 import {
   candidateLabel,
@@ -91,26 +92,49 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
               <span className="text-sm font-bold text-slate-700">{r.rank}位</span>
               {r.visible && r.predicted != null ? (
                 <div>
-                  <p className="text-lg font-bold tabular-nums text-slate-800">{formatMan(r.predicted)}</p>
+                  <p className="flex items-baseline gap-2">
+                    <span className="text-lg font-bold tabular-nums text-slate-800">{formatMan(r.predicted)}</span>
+                    {r.confidence && <ConfidenceChip value={r.confidence} />}
+                  </p>
                   <p className="text-xs tabular-nums text-slate-500">
-                    {r.low != null && r.high != null && <>8割の幅 {formatMan(r.low)}〜{formatMan(r.high)}・</>}
+                    {r.low != null && r.high != null && <>8割の幅 {formatRange(r.low, r.high)}・</>}
                     いま {formatMan(r.current)}
                   </p>
                 </div>
               ) : (
                 <p className="text-xs leading-6 text-slate-500">
                   いま {formatMan(r.current)}・
-                  {r.showFrom != null && r.showFrom <= 1
-                    ? `予測は経過${formatPercent(r.showFrom)}から出します（それより前は外れ幅が大きいため）`
-                    : "この順位は外れ幅が大きいので予測を出していません"}
+                  {r.showFrom != null && snap.progress < r.showFrom
+                    ? `予測は経過${formatPercent(r.showFrom)}から出します`
+                    : "外れ幅が大きすぎるので、いまは予測を出していません"}
                 </p>
               )}
             </li>
           ))}
         </ul>
       )}
+      {snap.predicted && (
+        <p className="mt-3 text-[11px] leading-5 text-slate-500">
+          確度は8割の幅の広さです。高＝±5%くらい、中＝±15%くらい、目安＝それより広い（序盤）。
+          序盤の目安は、全体の熱さを読むためのものとして見てください。
+        </p>
+      )}
       {snap.modelVersion && <p className="mt-2 text-[11px] text-slate-400">モデル {snap.modelVersion}</p>}
     </Panel>
+  );
+}
+
+const CONFIDENCE_TONE: Record<Confidence, string> = {
+  high: "bg-[color:var(--unit-color)]/20 text-slate-700",
+  mid: "bg-slate-200 text-slate-600",
+  rough: "border border-dashed border-slate-400 text-slate-500",
+};
+
+function ConfidenceChip({ value }: { value: Confidence }) {
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${CONFIDENCE_TONE[value]}`}>
+      確度 {CONFIDENCE_LABEL[value]}
+    </span>
   );
 }
 
@@ -177,13 +201,15 @@ function ModelPanel({ model }: { model: ModelSummary }) {
           <tr>
             <th className="py-1 font-normal">順位</th>
             <th className="py-1 font-normal">使っている候補</th>
-            <th className="py-1 font-normal">誤差の中央値（経過50%／90%）</th>
+            <th className="py-1 font-normal">誤差の中央値（開始6時間／経過50%／90%）</th>
             <th className="py-1 font-normal">8割の幅に入った率</th>
           </tr>
         </thead>
         <tbody className="text-slate-700">
           {model.ranks.map((r) => {
             const at = (p: number) => r.medianAbsError.find((x) => Math.abs(x.p - p) < 1e-9)?.value;
+            // 序盤の列は新しい版のモデルにしか無い（古い版のサマリでは —）
+            const early = r.medianAbsErrorEarly?.find((x) => Math.abs(x.p - 0.04) < 1e-9)?.value;
             const fmt = (v: number | null | undefined) => (v == null ? "—" : formatPercent(v, 1));
             const cov = coverageRate(r);
             return (
@@ -191,7 +217,7 @@ function ModelPanel({ model }: { model: ModelSummary }) {
                 <td className="py-1.5">{r.rank}位</td>
                 <td className="py-1.5 pr-2">{candidateLabel(r.champion)}</td>
                 <td className="py-1.5">
-                  {fmt(at(0.5))}／{fmt(at(0.9))}
+                  {fmt(early)}／{fmt(at(0.5))}／{fmt(at(0.9))}
                 </td>
                 <td className="py-1.5">{cov.total > 0 ? `${formatPercent(cov.covered / cov.total)}（${cov.total}回中）` : "—"}</td>
               </tr>
