@@ -1,0 +1,51 @@
+name: Border prediction analysis
+
+# ボーダー予測の自己改善ジョブ（scripts/border/analyze.ts）。設計は docs/border-prediction.md。
+#
+# 終わったイベントの形を D1 に足し、前向き検証でモデルを選び直し、答え合わせを書く。
+# リポジトリには何もコミットしない（書き込み先は Worker の管理 API 経由の D1 だけ）。
+# ＝ Pages のビルドを走らせない。ビルドは無料枠で月500回しかない。
+
+on:
+  schedule:
+    # 22:30 JST（マラソンは 20:59 終了、sekai.best の最終サンプルは 21:15 ごろ）
+    - cron: "30 13 * * *"
+    # 10:30 JST（夜に失敗していたときの拾い直し。20:00 終了のワールドリンクもここで拾う）
+    - cron: "30 1 * * *"
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: "30日より古い欠けも埋める（初回の投入用）"
+        type: boolean
+        default: false
+      dry_run:
+        description: "D1 に書かずに結果だけ見る"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: border-analysis
+  cancel-in-progress: false
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # 依存パッケージは使わない（Node の型除去で .ts をそのまま動かす）ので npm ci は要らない
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Analyze
+        env:
+          BORDER_API: ${{ vars.BORDER_API }}
+          BORDER_ADMIN_TOKEN: ${{ secrets.BORDER_ADMIN_TOKEN }}
+          BACKFILL: ${{ inputs.backfill && '--backfill' || '' }}
+          DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: node scripts/border/analyze.ts $BACKFILL $DRY_RUN

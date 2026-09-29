@@ -33,6 +33,14 @@ function cardDataGeneratedAt(): string {
   }
 }
 
+/**
+ * /api/border は本番では Pages Functions（functions/api/border）が返す。
+ * 手元の vite にはそれが無いので、本番の同じパスへ中継して画面を確かめられるようにする。
+ */
+function borderApiProxy() {
+  return { '/api/border': { target: 'https://sekaimaster.pages.dev', changeOrigin: true } }
+}
+
 /*
  * ★ アクセス解析（Cloudflare Web Analytics）のビーコンは、ここでは入れていない。
  *   Cloudflare Pages 側の設定で有効にしてあり、**配信時に自動で挿入される**
@@ -56,8 +64,8 @@ export default defineConfig({
    *
    * 追加のポートが要るときは 3012-3019 から取る。ブロック外は使わない。
    */
-  server: { port: 3010, strictPort: true },
-  preview: { port: 3011, strictPort: true },
+  server: { port: 3010, strictPort: true, proxy: borderApiProxy() },
+  preview: { port: 3011, strictPort: true, proxy: borderApiProxy() },
   define: {
     __APP_VERSION__: JSON.stringify(appVersion()),
     __CARD_DATA_GENERATED_AT__: JSON.stringify(cardDataGeneratedAt()),
