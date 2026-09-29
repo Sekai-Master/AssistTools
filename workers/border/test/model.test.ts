@@ -161,6 +161,31 @@ describe('predict', () => {
     expect(p?.visible).toBe(false)
   })
 
+  it('過去に無い長さ: 範囲の外なら近い端の表を借りて帯を広げ、範囲の中なら all', () => {
+    const half = GRID.map((p) => Math.min(1, p * 1.2))
+    const m: Model = {
+      ...model,
+      knownDurations: [150, 222],
+      ranks: {
+        '1000': {
+          ...model.ranks['1000'],
+          minProgress: 0.04,
+          tables: { '150': flat, '222': flat, all: flat, far_long: half, far_short: flat },
+        },
+      },
+    }
+    const e246 = meta(12, 0, 246)
+    const t = e246.startAt + 123 * H // 経過 0.5
+    const p = predict(m, e246, 1000, 600, t)
+    expect(p?.extrapolatedFrom).toBe(222)
+    expect(p?.predicted).toBeCloseTo(600 / 0.6, 0) // far_long の 0.5×1.2
+    // 帯は 1.5 倍: 上側 0.02 → 0.03、下側 −0.05 → −0.075
+    expect(p?.low).toBeCloseTo(1000 / 1.03, 0)
+    expect(p?.high).toBeCloseTo(1000 / 0.925, 0)
+    const e198 = meta(13, 0, 198)
+    expect(predict(m, e198, 1000, 500, e198.startAt + 99 * H)?.extrapolatedFrom).toBeNull()
+  })
+
   it('期間の表が無ければ all にフォールバックする', () => {
     const e198 = meta(11, 0, 198)
     expect(predict(model, e198, 1000, 500, e198.startAt + 99 * H)?.predicted).toBeCloseTo(1000, 0)

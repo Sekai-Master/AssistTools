@@ -126,6 +126,7 @@ function snapshotOf(event: EventMeta, now: number, samples: LiveSample[], preds:
     sampleAt,
     progress: Math.min(1, Math.max(0, (sampleAt - event.startAt) / span)),
     modelVersion,
+    extrapolatedFrom: [...preds.values()].find((p) => p.extrapolatedFrom != null)?.extrapolatedFrom ?? null,
     predicted: preds.size > 0,
     ranks: [...samples]
       .sort((a, b) => a.rank - b.rank)

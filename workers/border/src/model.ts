@@ -361,6 +361,38 @@ export interface Model {
   algorithm: 'share-median-v1'
   grid: number[]
   ranks: Record<string, RankModel>
+  /**
+   * 標本が3件以上ある期間（時間）。これより長い／短い期間のイベントは「過去に無い長さ」として、
+   * いちばん近い端の期間の表（tables.far_long / far_short）で当て、帯を FAR_BAND_FACTOR 倍に広げる。
+   * 古い版のモデルには無い（そのときは tables.all）
+   */
+  knownDurations?: number[]
+}
+
+/**
+ * 過去に無い長さのイベントで帯を広げる倍率。
+ * 222h を「見たことのない長さ」として当てると、全マラソンの表では中盤に +6〜8% 高く外した（2026-09-30 実測・n=5）。
+ * いちばん近い長さを使うと偏りは少し減るが、長さの違いそのものの読めなさは帯に乗せる
+ */
+export const FAR_BAND_FACTOR = 1.5
+
+export interface TableChoice {
+  table: (number | null)[]
+  /** 過去に無い長さで、近い端の期間から借りたとき、その期間 */
+  extrapolatedFrom: number | null
+}
+
+export function chooseTable(model: Model, rm: RankModel, duration: number): TableChoice | null {
+  const exact = rm.tables[String(duration)]
+  if (exact) return { table: exact, extrapolatedFrom: null }
+  const known = model.knownDurations ?? []
+  if (known.length > 0) {
+    const max = Math.max(...known)
+    const min = Math.min(...known)
+    if (duration > max && rm.tables.far_long) return { table: rm.tables.far_long, extrapolatedFrom: max }
+    if (duration < min && rm.tables.far_short) return { table: rm.tables.far_short, extrapolatedFrom: min }
+  }
+  return rm.tables.all ? { table: rm.tables.all, extrapolatedFrom: null } : null
 }
 
 /**
@@ -397,6 +429,8 @@ export interface Prediction {
   high: number | null
   /** 帯の幅から決めた確度。帯が無い・広すぎるときは null */
   confidence: Confidence | null
+  /** 過去に無い長さで、近い端の期間（時間）の表を借りたとき、その期間。帯は広げてある */
+  extrapolatedFrom: number | null
   visible: boolean
 }
 
@@ -405,13 +439,16 @@ export function predict(model: Model, meta: EventMeta, rank: number, current: nu
   if (!rm || !(current > 0)) return null
   const p = progressAt(meta, t)
   if (!(p > 0) || p > 1.001) return null
-  const table = rm.tables[String(durationHours(meta))] ?? rm.tables.all
-  if (!table) return null
-  const share = interpGrid(table, Math.min(p, 1))
+  const choice = chooseTable(model, rm, durationHours(meta))
+  if (!choice) return null
+  const share = interpGrid(choice.table, Math.min(p, 1))
   if (share == null || share <= 0) return null
   const predicted = current / share
-  const lo = interpGrid(rm.band.lo, Math.min(p, 1))
-  const hi = interpGrid(rm.band.hi, Math.min(p, 1))
+  const widen = choice.extrapolatedFrom == null ? 1 : FAR_BAND_FACTOR
+  const loRaw = interpGrid(rm.band.lo, Math.min(p, 1))
+  const hiRaw = interpGrid(rm.band.hi, Math.min(p, 1))
+  const lo = loRaw == null ? null : loRaw * widen
+  const hi = hiRaw == null ? null : hiRaw * widen
   // err = pred/final − 1 → final = pred/(1+err)。上側の誤差が下限、下側の誤差が上限になる
   const low = hi == null ? null : predicted / (1 + hi)
   const high = lo == null ? null : predicted / (1 + lo)
@@ -425,6 +462,7 @@ export function predict(model: Model, meta: EventMeta, rank: number, current: nu
     low: low == null ? null : Math.max(low, current),
     high,
     confidence,
+    extrapolatedFrom: choice.extrapolatedFrom,
     // 帯が無い・広すぎる予測は、確度を名乗れないので出さない（記録はする）
     visible: p >= rm.minProgress && confidence != null,
   }

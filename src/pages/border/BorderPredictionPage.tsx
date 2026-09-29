@@ -113,6 +113,12 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
           ))}
         </ul>
       )}
+      {snap.predicted && snap.extrapolatedFrom != null && (
+        <p className="mt-3 rounded-lg bg-slate-200/60 px-3 py-2 text-xs leading-6 text-slate-600">
+          このイベントは {snap.event.durationHours} 時間で、過去に同じ長さの回がありません。
+          いちばん近い {snap.extrapolatedFrom} 時間の回の伸び方で予測し、幅はいつもより広く取っています。
+        </p>
+      )}
       {snap.predicted && (
         <p className="mt-3 text-[11px] leading-5 text-slate-500">
           確度は8割の幅の広さです。高＝±5%くらい、中＝±15%くらい、目安＝それより広い（序盤）。

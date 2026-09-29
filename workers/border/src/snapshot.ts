@@ -32,6 +32,11 @@ export interface Snapshot {
   sampleAt: number
   progress: number
   modelVersion: string | null
+  /**
+   * 過去に無い長さのイベントで、近い端の期間（時間）の伸び方を借りて予測しているとき、その期間。帯は広げてある。
+   * 古い版の Worker の出力には無い
+   */
+  extrapolatedFrom?: number | null
   predicted: boolean
   ranks: SnapshotRank[]
 }

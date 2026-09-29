@@ -187,6 +187,9 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
   if (history.length < 5) throw new Error(`学習に使えるマラソンが ${history.length} 件しかない`)
   const trainedThrough = history[history.length - 1].meta.id
   const durations = [...new Set(history.map((h) => durationHours(h.meta)))].sort((a, b) => a - b)
+  const durationCount = new Map<number, number>()
+  for (const h of history) durationCount.set(durationHours(h.meta), (durationCount.get(durationHours(h.meta)) ?? 0) + 1)
+  const knownDurations = durations.filter((d) => (durationCount.get(d) ?? 0) >= 3)
   const createdAt = new Date(now).toISOString()
 
   const ranks: Record<string, RankModel> = {}
@@ -208,6 +211,12 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
     for (const d of durations) tables[String(d)] = candidateTable(champion, d, history, rank, sameAllErrs)
     // 期間 -1 は「同じ期間」が無いので全マラソンへフォールバックする
     tables.all = candidateTable(champion, -1, history, rank, sameAllErrs)
+    // 過去に無い長さ用: いちばん長い／短い期間（標本3件以上）の表。候補によらず「その期間の全履歴」で作る
+    //（直近12件のように期間を見ない候補だと、長さの違いがそのまま偏りになる。2026-09-30 の 219 = 246h で発覚）
+    if (knownDurations.length > 0) {
+      tables.far_long = candidateTable('same_all', Math.max(...knownDurations), history, rank)
+      tables.far_short = candidateTable('same_all', Math.min(...knownDurations), history, rank)
+    }
     const minProgress = minProgressFrom(band)
     ranks[String(rank)] = {
       candidate: champion,
@@ -246,8 +255,8 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
   }
 
   // 版名には中身のハッシュを入れる。学習データが同じでもロジックを直せば別の版になり、切り替わる（レビュー 2026-09-30）
-  const version = `${ALGORITHM}@e${trainedThrough}-${fnv1a(JSON.stringify(ranks))}`
-  const model: Model = { version, createdAt, algorithm: ALGORITHM, grid: [...GRID], ranks }
+  const version = `${ALGORITHM}@e${trainedThrough}-${fnv1a(JSON.stringify({ ranks, knownDurations }))}`
+  const model: Model = { version, createdAt, algorithm: ALGORITHM, grid: [...GRID], ranks, knownDurations }
   const summary: ModelSummary = {
     version,
     algorithm: ALGORITHM,
