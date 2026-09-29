@@ -34,17 +34,20 @@ function error(message: string, status: number): Response {
   return json({ error: message }, status)
 }
 
-function authorized(req: Request, env: Env): boolean {
+async function authorized(req: Request, env: Env): Promise<boolean> {
   const token = env.ADMIN_TOKEN
   const header = req.headers.get('Authorization') ?? ''
   if (!token || !header.startsWith('Bearer ')) return false
+  // 長さも中身も時間から漏らさないよう、両方を SHA-256 にして同じ長さで全バイト比べる
   const enc = new TextEncoder()
-  const a = enc.encode(header.slice(7))
-  const b = enc.encode(token)
-  if (a.byteLength !== b.byteLength) return false
-  // 比較にかかる時間から一致位置を推測されないよう、途中で抜けずに全バイト見る
+  const [a, b] = await Promise.all([
+    crypto.subtle.digest('SHA-256', enc.encode(header.slice(7))),
+    crypto.subtle.digest('SHA-256', enc.encode(token)),
+  ])
+  const x = new Uint8Array(a)
+  const y = new Uint8Array(b)
   let diff = 0
-  for (let i = 0; i < a.byteLength; i++) diff |= a[i] ^ b[i]
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i]
   return diff === 0
 }
 
@@ -75,12 +78,19 @@ export function parseShapes(body: unknown): Shape[] | null {
 function isModel(x: unknown): x is Model {
   if (!isRecord(x) || typeof x.version !== 'string' || !isRecord(x.ranks) || !Array.isArray(x.grid)) return false
   return Object.values(x.ranks).every(
-    (r) => isRecord(r) && typeof r.minProgress === 'number' && isRecord(r.tables) && isRecord(r.band) && Object.values(r.tables).every(isShare),
+    (r) =>
+      isRecord(r) &&
+      typeof r.minProgress === 'number' &&
+      isRecord(r.tables) &&
+      Object.values(r.tables).every(isShare) &&
+      isRecord(r.band) &&
+      isShare(r.band.lo) &&
+      isShare(r.band.hi),
   )
 }
 
 async function adminRoute(req: Request, env: Env, url: URL): Promise<Response> {
-  if (!authorized(req, env)) return error('unauthorized', 401)
+  if (!(await authorized(req, env))) return error('unauthorized', 401)
   const path = url.pathname
   const now = Date.now()
 
@@ -96,7 +106,7 @@ async function adminRoute(req: Request, env: Env, url: URL): Promise<Response> {
   if (path === '/admin/model' && req.method === 'PUT') {
     const body = await readBody(req)
     if (!isRecord(body) || !isModel(body.model) || !isRecord(body.summary)) return error('model の形が不正', 400)
-    const changed = await putModel(env.DB, body.model.version, JSON.stringify(body.model), JSON.stringify(body.summary), now)
+    const changed = await putModel(env.DB, body.model, body.summary, now)
     return json({ ok: true, version: body.model.version, changed })
   }
 
@@ -111,7 +121,7 @@ async function adminRoute(req: Request, env: Env, url: URL): Promise<Response> {
   if (path === '/admin/reports' && req.method === 'PUT') {
     const body = await readBody(req)
     if (!isRecord(body) || typeof body.eventId !== 'number' || !isRecord(body.report)) return error('report の形が不正', 400)
-    await putReport(env.DB, body.eventId, JSON.stringify(body.report), now)
+    await putReport(env.DB, body.eventId, body.report, now)
     return json({ ok: true })
   }
 

@@ -2,7 +2,7 @@
  * 答え合わせのレポート（純粋関数）。予測ログを実測の終値で採点する。
  */
 import type { ModelSummary } from '../../workers/border/src/fit.ts'
-import { RANKS, durationHours, type EventMeta, type Model, type RankModel } from '../../workers/border/src/model.ts'
+import { RANKS, durationHours, type EventMeta } from '../../workers/border/src/model.ts'
 
 /** Worker の /admin/predictions が返す1行 */
 export interface PredictionLog {
@@ -103,19 +103,4 @@ export function buildReport(
     modelVersions: [...new Set(preds.map((p) => p.model_version))],
     ranks,
   }
-}
-
-const round5 = (v: number | null) => (v == null ? null : Math.round(v * 1e5) / 1e5)
-
-/** Worker が毎回読むので、表の桁を落として小さくする（予測への影響は 1e-5 未満） */
-export function roundModel(model: Model): Model {
-  const ranks: Record<string, RankModel> = {}
-  for (const [k, r] of Object.entries(model.ranks)) {
-    ranks[k] = {
-      ...r,
-      tables: Object.fromEntries(Object.entries(r.tables).map(([d, t]) => [d, t.map(round5)])),
-      band: { lo: r.band.lo.map(round5), hi: r.band.hi.map(round5) },
-    }
-  }
-  return { ...model, ranks }
 }

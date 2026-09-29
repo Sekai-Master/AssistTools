@@ -30,6 +30,12 @@ export const MILESTONES = [0.5, 0.85] as const
 
 /** 日程を読み直すとき、終了からこの期間より古いイベントは D1 に入れない */
 const SCHEDULE_LOOKBACK_MS = 3 * 86_400_000
+/**
+ * 開催していない間も、日程（288KB）を読み直すのはこの間隔に1回まで。
+ * イベントは数日前にはマスタに載るので、6時間に1回で開始に間に合う。
+ * 毎回読むと、Cron の大半を占める「開催していない回」が毎回 288KB を parse することになる（レビュー 2026-09-30）
+ */
+export const SCHEDULE_REFRESH_MS = 6 * 3_600_000
 
 export type CronResult =
   | { status: 'idle'; scheduleChanged: number }
@@ -84,9 +90,13 @@ export function parseLive(raw: unknown): { eventId: number | null; samples: Live
 }
 
 async function refreshSchedule(env: Env, now: number, fetcher: Fetcher): Promise<number> {
+  const last = Number((await kvGet(env.DB, 'schedule_at')) ?? '0')
+  if (now - last < SCHEDULE_REFRESH_MS) return 0
   const res = await fetcher(`${env.SITE_ORIGIN}/CardDatas/bonuses.json`, { headers: { 'User-Agent': USER_AGENT } })
   if (!res.ok) throw new Error(`bonuses.json ${res.status}`)
-  return upsertEvents(env.DB, parseSchedule(await res.json(), now))
+  const changed = await upsertEvents(env.DB, parseSchedule(await res.json(), now))
+  await kvSet(env.DB, 'schedule_at', now, now)
+  return changed
 }
 
 function snapshotOf(event: EventMeta, now: number, samples: LiveSample[], preds: Map<number, Prediction>, modelVersion: string | null): Snapshot {
@@ -154,8 +164,13 @@ export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): 
   const model = event.eventType === 'marathon' ? await activeModel(env.DB) : null
   if (model) {
     for (const s of live.samples) {
-      const p = predict(model.model, event, s.rank, s.score, s.ts)
-      if (p) preds.set(s.rank, p)
+      // 1順位の表が壊れていても、残りの順位と実測の保存は止めない
+      try {
+        const p = predict(model.model, event, s.rank, s.score, s.ts)
+        if (p) preds.set(s.rank, p)
+      } catch (err) {
+        console.error('predict failed', model.version, s.rank, err)
+      }
     }
     if (!stale) {
       await insertPredictions(
@@ -169,10 +184,10 @@ export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): 
   }
 
   const snap = snapshotOf(event, now, live.samples, preds, model?.version ?? null)
-  await kvSet(env.DB, 'current', JSON.stringify(snap), now)
+  await kvSet(env.DB, 'current', snap, now)
   if (!stale) {
-    const line = JSON.stringify([snap.sampleAt, snap.progress, snap.ranks.map((r) => [r.rank, r.current, r.predicted, r.low, r.high, r.visible ? 1 : 0])])
-    await kvAppend(env.DB, `history:${event.id}`, line, now)
+    const row = [snap.sampleAt, snap.progress, snap.ranks.map((r) => [r.rank, r.current, r.predicted, r.low, r.high, r.visible ? 1 : 0])]
+    await kvAppend(env.DB, `history:${event.id}`, row, now)
   }
 
   const queued: string[] = []

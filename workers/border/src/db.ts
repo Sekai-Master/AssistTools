@@ -37,8 +37,12 @@ export async function upsertEvents(db: D1Database, events: readonly EventMeta[])
      WHERE events.name IS NOT excluded.name OR events.type IS NOT excluded.type OR events.unit IS NOT excluded.unit
        OR events.start_at IS NOT excluded.start_at OR events.aggregate_at IS NOT excluded.aggregate_at`,
   )
-  const res = await db.batch(events.map((e) => stmt.bind(e.id, e.name, e.eventType, e.unit, e.startAt, e.aggregateAt)))
-  return res.reduce((n, r) => n + (r.meta.changes ?? 0), 0)
+  let changed = 0
+  for (let i = 0; i < events.length; i += 50) {
+    const res = await db.batch(events.slice(i, i + 50).map((e) => stmt.bind(e.id, e.name, e.eventType, e.unit, e.startAt, e.aggregateAt)))
+    changed += res.reduce((n, r) => n + (r.meta.changes ?? 0), 0)
+  }
+  return changed
 }
 
 export interface LiveSample {
@@ -127,10 +131,18 @@ export async function activeModelSummary(db: D1Database): Promise<string | null>
   return r?.summary ?? null
 }
 
-/** 新しい版を入れて有効にする。同じ版がすでに有効なら何もしない */
-export async function putModel(db: D1Database, version: string, body: string, summary: string, now: number): Promise<boolean> {
+/**
+ * 新しい版を入れて有効にする。同じ版がすでに有効なら何もしない。
+ * ★ kv・reports・models に入れる値は、必ずこのファイルの中で JSON.stringify する（引数は値で受ける）。
+ *   公開 API（public.ts）はこれらを文字列のまま連結して返すので、生の文字列が入る経路が1本でもあると
+ *   JSON の注入になる（セキュリティレビュー 2026-09-30）。
+ */
+export async function putModel(db: D1Database, model: Model, summary: unknown, now: number): Promise<boolean> {
+  const version = model.version
   const cur = await db.prepare('SELECT version FROM models WHERE active = 1 LIMIT 1').first<{ version: string }>()
   if (cur?.version === version) return false
+  const body = JSON.stringify(model)
+  const summaryJson = JSON.stringify(summary)
   await db.batch([
     db.prepare('UPDATE models SET active = 0 WHERE active = 1'),
     db
@@ -138,7 +150,7 @@ export async function putModel(db: D1Database, version: string, body: string, su
         `INSERT INTO models (version, created_at, active, body, summary) VALUES (?1, ?2, 1, ?3, ?4)
          ON CONFLICT(version) DO UPDATE SET active = 1, body = excluded.body, summary = excluded.summary`,
       )
-      .bind(version, now, body, summary),
+      .bind(version, now, body, summaryJson),
   ])
   return true
 }
@@ -171,28 +183,28 @@ export async function kvGet(db: D1Database, k: string): Promise<string | null> {
   return r?.v ?? null
 }
 
-export async function kvSet(db: D1Database, k: string, v: string, now: number): Promise<void> {
+export async function kvSet(db: D1Database, k: string, value: unknown, now: number): Promise<void> {
   await db
     .prepare('INSERT INTO kv (k, v, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(k) DO UPDATE SET v = excluded.v, updated_at = excluded.updated_at')
-    .bind(k, v, now)
+    .bind(k, JSON.stringify(value), now)
     .run()
 }
 
 /** カンマ区切りで追記する（読み出し側で [ ] を付ける）。Worker で JSON を parse し直さないため */
-export async function kvAppend(db: D1Database, k: string, item: string, now: number): Promise<void> {
+export async function kvAppend(db: D1Database, k: string, item: unknown, now: number): Promise<void> {
   await db
     .prepare(
       `INSERT INTO kv (k, v, updated_at) VALUES (?1, ?2, ?3)
        ON CONFLICT(k) DO UPDATE SET v = kv.v || ',' || excluded.v, updated_at = excluded.updated_at`,
     )
-    .bind(k, item, now)
+    .bind(k, JSON.stringify(item), now)
     .run()
 }
 
-export async function putReport(db: D1Database, eventId: number, body: string, now: number): Promise<void> {
+export async function putReport(db: D1Database, eventId: number, report: unknown, now: number): Promise<void> {
   await db
     .prepare('INSERT INTO reports (event_id, created_at, body) VALUES (?1, ?2, ?3) ON CONFLICT(event_id) DO UPDATE SET body = excluded.body, created_at = excluded.created_at')
-    .bind(eventId, now, body)
+    .bind(eventId, now, JSON.stringify(report))
     .run()
 }
 

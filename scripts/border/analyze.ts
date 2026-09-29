@@ -13,9 +13,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fitModel } from '../../workers/border/src/fit.ts'
-import { RANKS, buildShape, durationHours, type EventMeta, type Model, type Sample, type Shape } from '../../workers/border/src/model.ts'
+import { RANKS, buildShape, durationHours, type EventMeta, type Sample, type Shape } from '../../workers/border/src/model.ts'
 import { resultText, type ResultRank } from '../../workers/border/src/posts.ts'
-import { buildReport, roundModel, type PredictionLog, type Report } from './report.ts'
+import { buildReport, type PredictionLog, type Report } from './report.ts'
 
 const SITE = 'https://sekaimaster.pages.dev'
 const GRAPH = (id: number, rank: number) => `https://api.sekai.best/event/${id}/rankings/graph?rank=${rank}`
@@ -154,16 +154,15 @@ async function main() {
 
   // 2. 学習
   const { model, summary } = fitModel(events, shapes, NOW)
-  const rounded: Model = roundModel(model)
   say(`- モデル: ${summary.version}（学習 ${summary.poolSize} 件・期間 ${summary.durations.join('/')}h）`)
   for (const r of summary.ranks) {
     const mae = r.medianAbsError.map((x) => `${x.p}:${x.value == null ? '-' : (x.value * 100).toFixed(1)}`).join(' ')
     const cov = r.coverage.map((x) => `${x.covered}/${x.total}`).join(' ')
     say(`  - ${r.rank}位: 王者 ${r.champion}／表に出すのは経過 ${Math.round(r.minProgress * 100)}% から／|誤差|中央 ${mae}／帯の的中 ${cov}`)
   }
-  const put = await write<{ changed: boolean }>('PUT', '/admin/model', { model: rounded, summary })
+  const put = await write<{ changed: boolean }>('PUT', '/admin/model', { model, summary })
   if (put) say(`- 版の切り替え: ${put.changed ? 'した' : '同じ版なので無し'}`)
-  if (DRY) fs.writeFileSync('border-model.dry.json', JSON.stringify({ model: rounded, summary }, null, 1))
+  if (DRY) fs.writeFileSync('border-model.dry.json', JSON.stringify({ model, summary }, null, 1))
 
   // 3. 答え合わせ
   const reported = new Set(DRY && !TOKEN ? [] : (await admin<{ eventIds: number[] }>('GET', '/admin/reports')).eventIds)

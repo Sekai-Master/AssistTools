@@ -16,6 +16,7 @@ import {
   CANDIDATES,
   GRID,
   RANKS,
+  SCORE_TO,
   bandsFrom,
   candidateTable,
   durationHours,
@@ -39,6 +40,19 @@ export const MIN_VISIBLE_PROGRESS = 0.3
 
 /** 採点・表示に使う代表の経過率 */
 export const CHECKPOINTS = [0.5, 0.6, 0.7, 0.8, 0.9, 0.96] as const
+
+/** Worker が毎回読むので、表の桁を落として小さくする（予測への影響は 1e-5 未満） */
+const round5 = (v: number | null) => (v == null ? null : Math.round(v * 1e5) / 1e5)
+
+/** 版名用の短いハッシュ（FNV-1a 32bit）。暗号用途ではない */
+export function fnv1a(text: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(16).padStart(8, '0')
+}
 
 export interface RankSummary {
   rank: number
@@ -83,7 +97,8 @@ function minProgressFrom(band: { lo: (number | null)[]; hi: (number | null)[] })
   let candidate: number | null = null
   for (let i = GRID.length - 1; i >= 0; i--) {
     const p = GRID[i]
-    if (p > 0.98) continue
+    // 端（0.96 より後）は標本が少なく帯が欠けやすいので、ここに引きずられて順位ごと隠れないようにする
+    if (p > SCORE_TO + 1e-9) continue
     if (p < MIN_VISIBLE_PROGRESS) break
     const lo = band.lo[i]
     const hi = band.hi[i]
@@ -129,7 +144,6 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
   if (history.length < 5) throw new Error(`学習に使えるマラソンが ${history.length} 件しかない`)
   const trainedThrough = history[history.length - 1].meta.id
   const durations = [...new Set(history.map((h) => durationHours(h.meta)))].sort((a, b) => a - b)
-  const version = `${ALGORITHM}@e${trainedThrough}`
   const createdAt = new Date(now).toISOString()
 
   const ranks: Record<string, RankModel> = {}
@@ -144,7 +158,12 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
     // 期間 -1 は「同じ期間」が無いので全マラソンへフォールバックする
     tables.all = candidateTable(champion, -1, history, rank, sameAllErrs)
     const minProgress = minProgressFrom(band)
-    ranks[String(rank)] = { candidate: champion, minProgress, tables, band: { lo: band.lo, hi: band.hi } }
+    ranks[String(rank)] = {
+      candidate: champion,
+      minProgress,
+      tables: Object.fromEntries(Object.entries(tables).map(([d, t]) => [d, t.map(round5)])),
+      band: { lo: band.lo.map(round5), hi: band.hi.map(round5) },
+    }
 
     const recent = walk.evals.slice(-20)
     rankSummaries.push({
@@ -167,6 +186,8 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
     })
   }
 
+  // 版名には中身のハッシュを入れる。学習データが同じでもロジックを直せば別の版になり、切り替わる（レビュー 2026-09-30）
+  const version = `${ALGORITHM}@e${trainedThrough}-${fnv1a(JSON.stringify(ranks))}`
   const model: Model = { version, createdAt, algorithm: ALGORITHM, grid: [...GRID], ranks }
   const summary: ModelSummary = {
     version,

@@ -78,7 +78,7 @@ describe('runCron', () => {
   })
 
   it('開催中は実測を保存し、有効なモデルで予測してマイルストーンを1回だけ積む', async () => {
-    await putModel(env.DB, linear.version, JSON.stringify(linear), '{"version":"test@e1"}', 0)
+    await putModel(env.DB, linear, { version: 'test@e1' }, 0)
     // 経過率 76/150 ≈ 0.507（最初のマイルストーン 0.5 をまたぐ）
     let t = START + 76 * H
     const f = fakeFetch(() => liveBody(219, t, (t - START) / (150 * H)))
@@ -145,6 +145,14 @@ describe('API', () => {
     expect(await (await put()).json()).toMatchObject({ changed: false })
     const tr = (await (await handleRequest(new Request('https://w/v1/border/track-record'), env)).json()) as { model: { version: string } }
     expect(tr.model.version).toBe(linear.version)
+  })
+
+  it('公開 API は文字列を連結して返すが、入れる側で必ず JSON にするので壊れない', async () => {
+    const evil = 'x"]},{"injected":true,"a":["'
+    await handleRequest(adminReq('/admin/reports', { method: 'PUT', body: JSON.stringify({ eventId: 219, report: { name: evil } }) }), env)
+    const res = await handleRequest(new Request('https://w/v1/border/track-record'), env)
+    const body = JSON.parse(await res.text()) as { reports: { name: string }[] }
+    expect(body.reports).toEqual([{ name: evil }])
   })
 
   it('投稿キュー: チャンネルごとに送信済みを付ける', async () => {
