@@ -115,19 +115,20 @@ function at(values: readonly (number | null)[], p: number): number | null {
   return values[i] ?? null
 }
 
+/**
+ * 表に出し始める経過率。いまは全順位 MIN_VISIBLE_PROGRESS（開始6時間）で固定する。
+ * 幅が広すぎる・帯が無い時点は predict() の確度（null）で1点ずつ隠れるので、ここで経過率を切る必要は無い。
+ * ★ 以前は「後ろから見て帯が崩れた点で打ち切る」走査をしていたが、途中に1点だけ欠け・広すぎる点があると
+ *   そこより前がまるごと隠れる（序盤と中盤以降で帯をつなぐ 0.3 の段差でも起きうる）ので、やめた（レビュー 2026-09-30）
+ */
 function minProgressFrom(band: { lo: (number | null)[]; hi: (number | null)[] }): number {
-  let candidate: number | null = null
-  for (let i = GRID.length - 1; i >= 0; i--) {
-    const p = GRID[i]
-    // 端（0.96 より後）は標本が少なく帯が欠けやすいので、ここに引きずられて順位ごと隠れないようにする
-    if (p > SCORE_TO + 1e-9) continue
-    if (p < MIN_VISIBLE_PROGRESS - 1e-9) break
+  const shown = GRID.some((p, i) => {
     const lo = band.lo[i]
     const hi = band.hi[i]
-    if (lo == null || hi == null || hi - lo > MAX_ROUGH_WIDTH) break
-    candidate = p
-  }
-  return candidate ?? 1.01
+    return p >= MIN_VISIBLE_PROGRESS - 1e-9 && p <= SCORE_TO + 1e-9 && lo != null && hi != null && hi - lo <= MAX_ROUGH_WIDTH
+  })
+  // どの時点でも出せない順位は、表示しない印として 1 より大きい値を返す（画面は「出していません」と出す）
+  return shown ? MIN_VISIBLE_PROGRESS : 1.01
 }
 
 /** 裾 tail の帯が、前向き（その時点までのデータで作った帯）で実測をどれだけ含んだか */

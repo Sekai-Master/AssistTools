@@ -186,6 +186,17 @@ describe('predict', () => {
     expect(predict(m, e198, 1000, 500, e198.startAt + 99 * H)?.extrapolatedFrom).toBeNull()
   })
 
+  it('下側の誤差が −1 に近い帯は、上限が負や無限大になるので幅も確度も出さない', () => {
+    const broken: Model = {
+      ...model,
+      ranks: { '1000': { ...model.ranks['1000'], minProgress: 0.04, band: { lo: GRID.map(() => -0.97), hi: GRID.map(() => -0.3) } } },
+    }
+    const p = predict(broken, e, 1000, 500, e.startAt + 75 * H)
+    expect(p?.high).toBeNull()
+    expect(p?.confidence).toBeNull()
+    expect(p?.visible).toBe(false)
+  })
+
   it('期間の表が無ければ all にフォールバックする', () => {
     const e198 = meta(11, 0, 198)
     expect(predict(model, e198, 1000, 500, e198.startAt + 99 * H)?.predicted).toBeCloseTo(1000, 0)

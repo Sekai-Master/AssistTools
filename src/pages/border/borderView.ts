@@ -57,6 +57,15 @@ export interface RankView {
   showFrom: number | null;
 }
 
+/**
+ * 予測を出していない順位に添える一言。
+ * showFrom が 1 を超えるのは「この順位はどの時点でも出さない」印（モデル側の約束）なので、経過率として読まない
+ */
+export function hiddenReason(r: Pick<RankView, "showFrom">, progress: number): string {
+  if (r.showFrom != null && r.showFrom <= 1 && progress < r.showFrom) return `予測は経過${formatPercent(r.showFrom)}から出します`;
+  return "外れ幅が大きすぎるので、いまは予測を出していません";
+}
+
 export function rankViews(s: Snapshot, model: ModelSummary | null): RankView[] {
   return s.ranks.map((r) => ({
     ...r,

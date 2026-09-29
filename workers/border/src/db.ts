@@ -244,13 +244,21 @@ export async function queuePost(
   now: number,
   payload?: unknown,
 ): Promise<boolean> {
-  const r = await db
+  const insertPost = db
     .prepare('INSERT OR IGNORE INTO posts (id, event_id, kind, text, created_at) VALUES (?1, ?2, ?3, ?4, ?5)')
     .bind(id, eventId, kind, text, now)
-    .run()
-  const queued = (r.meta.changes ?? 0) > 0
-  if (queued && payload !== undefined) await kvSet(db, `post:${id}`, payload, now)
-  return queued
+  if (payload === undefined) {
+    const r = await insertPost.run()
+    return (r.meta.changes ?? 0) > 0
+  }
+  // 投稿の行と画像用のデータは1回の batch（＝1つのトランザクション）で書く。
+  // 別々に書くと、間で止まったときに画像用のデータの無い投稿ができる（レビュー 2026-09-30）。
+  // データは最初に積んだときのものを残す（同じ id の投稿は同じ中身）
+  const [, post] = await db.batch([
+    db.prepare('INSERT OR IGNORE INTO kv (k, v, updated_at) VALUES (?1, ?2, ?3)').bind(`post:${id}`, JSON.stringify(payload), now),
+    insertPost,
+  ])
+  return (post.meta.changes ?? 0) > 0
 }
 
 export type PostChannel = 'x' | 'discord'

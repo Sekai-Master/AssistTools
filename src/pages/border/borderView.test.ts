@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatJst, isStale, phaseOf, recordRows, type Report, type Snapshot } from "./borderView";
+import { formatJst, hiddenReason, isStale, phaseOf, recordRows, type Report, type Snapshot } from "./borderView";
 
 const H = 3_600_000;
 const START = Date.UTC(2026, 9, 1, 6, 0); // 10/1 15:00 JST
@@ -30,6 +30,14 @@ describe("phaseOf / isStale", () => {
     expect(isStale(snap, START + 81 * H)).toBe(false);
     expect(isStale(snap, START + 82 * H)).toBe(true);
     expect(isStale(snap, START + 160 * H)).toBe(false);
+  });
+});
+
+describe("hiddenReason", () => {
+  it("出し始める前は経過率を書き、出さない印（1 を超える値）のときは経過率として読まない", () => {
+    expect(hiddenReason({ showFrom: 0.04 }, 0.02)).toBe("予測は経過4%から出します");
+    expect(hiddenReason({ showFrom: 1.01 }, 0.5)).toBe("外れ幅が大きすぎるので、いまは予測を出していません");
+    expect(hiddenReason({ showFrom: 0.04 }, 0.5)).toBe("外れ幅が大きすぎるので、いまは予測を出していません");
   });
 });
 

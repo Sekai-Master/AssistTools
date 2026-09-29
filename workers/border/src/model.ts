@@ -376,6 +376,9 @@ export interface Model {
  */
 export const FAR_BAND_FACTOR = 1.5
 
+/** 帯の上限を計算するとき、1 + 下側の誤差 がこれ以下なら上限を出さない（予測の 20 倍を超える上限は意味が無い） */
+const MIN_DIVISOR = 0.05
+
 export interface TableChoice {
   table: (number | null)[]
   /** 過去に無い長さで、近い端の期間から借りたとき、その期間 */
@@ -451,8 +454,9 @@ export function predict(model: Model, meta: EventMeta, rank: number, current: nu
   const hi = hiRaw == null ? null : hiRaw * widen
   // err = pred/final − 1 → final = pred/(1+err)。上側の誤差が下限、下側の誤差が上限になる
   const low = hi == null ? null : predicted / (1 + hi)
-  const high = lo == null ? null : predicted / (1 + lo)
-  const confidence = confidenceOf(lo, hi)
+  // 下側の誤差が −1 に近いと割る数が 0 以下になり、上限が負や無限大になる。そういう帯は幅として出さない
+  const high = lo == null || 1 + lo <= MIN_DIVISOR ? null : predicted / (1 + lo)
+  const confidence = high == null ? null : confidenceOf(lo, hi)
   return {
     rank,
     progress: p,

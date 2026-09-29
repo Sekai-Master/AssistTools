@@ -8,6 +8,7 @@ import {
   coverageRate,
   formatJst,
   formatPercent,
+  hiddenReason,
   isStale,
   phaseOf,
   rankViews,
@@ -103,10 +104,7 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
                 </div>
               ) : (
                 <p className="text-xs leading-6 text-slate-500">
-                  いま {formatMan(r.current)}・
-                  {r.showFrom != null && snap.progress < r.showFrom
-                    ? `予測は経過${formatPercent(r.showFrom)}から出します`
-                    : "外れ幅が大きすぎるので、いまは予測を出していません"}
+                  いま {formatMan(r.current)}・{hiddenReason(r, snap.progress)}
                 </p>
               )}
             </li>
