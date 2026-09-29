@@ -40,6 +40,8 @@ export function App() {
               <Route path="/knowledge" element={<RoutePages.knowledge />} />
               {/* 記事も同じ入口。slug は useParams で受ける。 */}
               <Route path="/knowledge/:slug" element={<RoutePages.knowledge />} />
+              {/* ボーダー予測。公開前なのでハブのカードには出さない（URL を知っていれば開ける）。 */}
+              <Route path="/border" element={<RoutePages.border />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           )}

@@ -1,0 +1,25 @@
+{
+  // ボーダー予測の収集・公開 API。運用は docs/border-prediction.md
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "sekaimaster-border",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-30",
+  "workers_dev": true,
+  "triggers": {
+    // sekai.best は :00 / :30 前後に取り直すので、5分遅らせて拾う。
+    // ★ Cron Trigger はアカウントで5本まで。SAWAYAKA が3本使っている（2026-09-29 時点）
+    "crons": ["5,35 * * * *"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sekaimaster-border",
+      "database_id": "f55cadf7-314a-400f-a92d-d71e39a5eafe",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "SITE_ORIGIN": "https://sekaimaster.pages.dev"
+  },
+  "observability": { "enabled": true }
+}

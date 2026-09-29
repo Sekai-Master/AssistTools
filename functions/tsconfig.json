@@ -1,0 +1,5 @@
+{
+  // Pages Functions（Workers ランタイム）。npm run typecheck:border で見る
+  "extends": "../workers/border/tsconfig.json",
+  "include": ["."]
+}

@@ -39,6 +39,9 @@ export const PAGE_LOADERS: Record<string, Loader> = {
   "/changelog": () => import("../pages/legal/ChangelogPage"),
   // 知見ノート。一覧と記事で同じチャンクを使う（/knowledge/:slug も同じ入口）。
   "/knowledge": () => import("../pages/knowledge/KnowledgePage"),
+  // ボーダー予測。公開の判断が済むまではハブに載せない（TOOLS に入れない）ので、ここに置く。
+  // 載せるときは ROUTE_LOADERS へ移して TOOLS に登録する（docs/border-prediction.md「公開の手順」）。
+  "/border": () => import("../pages/border/BorderPredictionPage"),
 };
 
 const ALL_LOADERS: Record<string, Loader> = { ...ROUTE_LOADERS, ...PAGE_LOADERS };
@@ -111,6 +114,7 @@ export const RoutePages = {
   privacy: lazyOf("/privacy"),
   changelog: lazyOf("/changelog"),
   knowledge: lazyOf("/knowledge"),
+  border: lazyOf("/border"),
 };
 
 /** ツール以外のページの名前。ヘッダーには出さないが、遷移の読み上げには要る。 */
@@ -120,6 +124,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/terms": "利用規約",
   "/privacy": "プライバシーポリシー",
   "/changelog": "更新履歴",
+  "/border": "ボーダー予測",
   "/knowledge": "知見ノート",
 };
 

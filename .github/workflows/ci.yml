@@ -36,6 +36,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      # ボーダー予測の Worker・Pages Functions・解析ジョブ。サイトとは型の世界が違う
+      #（Workers ランタイム／Node）ので、npm run build の tsc -b には入っていない。
+      - name: Typecheck border
+        run: npm run typecheck:border
+
       # ★ 警告では落とさない。react-hooks v7 の新規則ぶんが warn で残っているので、
       #   そこで赤くすると「赤いのが普通」になって門番の意味が消える。
       #   エラーだけを止める。
