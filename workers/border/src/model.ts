@@ -298,30 +298,42 @@ export function walkForward(events: readonly HistoryEvent[], rank: number): Rank
   return { rank, evals, champion, rolling }
 }
 
-/** 候補 cand の直近 BAND_WINDOW 件の誤差から、格子ごとの非対称な帯（分位点）を作る */
+/** 帯を作るのに要る誤差の標本数の下限 */
+export const BAND_MIN_SAMPLES = 15
+
+/** 候補 cand の直近 BAND_WINDOW 件について、経過率 p の近く（±BAND_HALF_SPAN）の誤差を集める */
+export function bandSamplesAt(evals: readonly EventEval[], cand: CandidateId, p: number): number[] {
+  const xs: number[] = []
+  for (const ev of evals.slice(-BAND_WINDOW)) {
+    GRID.forEach((q, j) => {
+      const e = ev.errors[cand][j]
+      if (e != null && Math.abs(q - p) <= BAND_HALF_SPAN + 1e-9) xs.push(e)
+    })
+  }
+  return xs
+}
+
+/**
+ * 候補 cand の直近 BAND_WINDOW 件の誤差から、格子ごとの非対称な帯（分位点）を作る。
+ * tail は片側の裾（0.1 なら 10〜90パーセンタイル）。
+ */
 export function bandsFrom(
   evals: readonly EventEval[],
   cand: CandidateId,
+  tail: number = BAND_Q_LO,
 ): { lo: (number | null)[]; hi: (number | null)[]; n: number[] } {
-  const recent = evals.slice(-BAND_WINDOW)
   const lo: (number | null)[] = []
   const hi: (number | null)[] = []
   const n: number[] = []
   GRID.forEach((p) => {
-    const xs: number[] = []
-    for (const ev of recent) {
-      GRID.forEach((q, j) => {
-        const e = ev.errors[cand][j]
-        if (e != null && Math.abs(q - p) <= BAND_HALF_SPAN + 1e-9) xs.push(e)
-      })
-    }
+    const xs = bandSamplesAt(evals, cand, p)
     n.push(xs.length)
-    if (xs.length < 15) {
+    if (xs.length < BAND_MIN_SAMPLES) {
       lo.push(null)
       hi.push(null)
     } else {
-      lo.push(quantile(xs, BAND_Q_LO))
-      hi.push(quantile(xs, BAND_Q_HI))
+      lo.push(quantile(xs, tail))
+      hi.push(quantile(xs, 1 - tail))
     }
   })
   return { lo, hi, n }
