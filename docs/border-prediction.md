@@ -86,8 +86,14 @@ cd workers/border
 npx wrangler d1 create sekaimaster-border        # 出てきた database_id を wrangler.jsonc へ
 npx wrangler d1 migrations apply sekaimaster-border --remote
 npx wrangler deploy
-openssl rand -hex 32 | npx wrangler secret put ADMIN_TOKEN   # 同じ値を GitHub の secret に
+openssl rand -hex 32 | tr -d '
+' | npx wrangler secret put ADMIN_TOKEN   # 同じ値を GitHub の secret に
 ```
+
+- ⚠️ リポジトリの wrangler（4.118）は `d1 create` が認証エラー（code 10000）で通らなかった。4.143 では通った（2026-09-30）。Worker の操作は新しい wrangler で行う
+- ⚠️ Windows の openssl は行末に `` を付ける。`tr -d '
+'` だけだと 65 バイトのトークンになり、HTTP ヘッダーに入らない
+- 実際の値（2026-09-30 作成）: D1 `f55cadf7-314a-400f-a92d-d71e39a5eafe`、Worker `https://sekaimaster-border.norec-receipt-ai.workers.dev`
 
 - GitHub: `secrets.BORDER_ADMIN_TOKEN`（上と同じ値）と `vars.BORDER_API`（Worker の URL）
 - Pages プロジェクト `sekaimaster` の設定 → バインディングに D1 `BORDER_DB` = `sekaimaster-border`（本番・プレビュー両方）

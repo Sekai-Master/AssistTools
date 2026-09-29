@@ -14,7 +14,7 @@
     {
       "binding": "DB",
       "database_name": "sekaimaster-border",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "f55cadf7-314a-400f-a92d-d71e39a5eafe",
       "migrations_dir": "migrations"
     }
   ],
