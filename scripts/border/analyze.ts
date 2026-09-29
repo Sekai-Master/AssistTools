@@ -137,7 +137,7 @@ function resultRanks(report: Report): (ResultRank & ResultPostRank)[] {
   for (const r of report.ranks) {
     const at = r.prospective.find((x) => x.checkpoint === 0.85) ?? r.prospective[r.prospective.length - 1]
     if (!at || !at.visible) continue
-    out.push({ rank: r.rank, final: r.final, predicted: at.predicted, progress: at.progress, error: at.error, inBand: at.inBand })
+    out.push({ rank: r.rank, final: r.final, predicted: at.predicted, progress: at.progress, error: at.error, inBand: at.inBand, low: at.low, high: at.high })
   }
   return out
 }
@@ -183,7 +183,7 @@ async function main() {
       const payload: PostPayload = {
         kind: 'result',
         event: { id: e.id, name: e.name, type: e.eventType, unit: e.unit, startAt: e.startAt, aggregateAt: e.aggregateAt, durationHours: durationHours(e) },
-        ranks: ranks.map(({ rank, final, predicted, progress, error, inBand }) => ({ rank, final, predicted, progress, error, inBand })),
+        ranks: ranks.map(({ rank, final, predicted, progress, error, inBand, low, high }) => ({ rank, final, predicted, progress, error, inBand, low, high })),
       }
       if (text) await write('PUT', '/admin/posts', { id: `${e.id}:result`, eventId: e.id, kind: 'result', text, payload })
     }

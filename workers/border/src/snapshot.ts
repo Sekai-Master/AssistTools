@@ -54,6 +54,9 @@ export interface ResultPostRank {
   /** 予測 ÷ 実測 − 1 */
   error: number
   inBand: boolean | null
+  /** そのとき出していた8割の幅（画像に描く） */
+  low: number | null
+  high: number | null
 }
 
 /**
