@@ -4,23 +4,25 @@
  * やること:
  *   1. 終了済みマラソンの形（シェア列）を時系列順に並べ、候補モデルごとに前向き検証する
  *   2. 直近の成績で王者を決める（挑戦者が 5% 以上良ければ入れ替え）
- *   3. 王者の誤差の実測分布から、経過率ごとの非対称な帯を作る
+ *   3. 王者の誤差の実測分布から、経過率ごとの非対称な帯を作る。幅は「過去に実際8割以上入った中で
+ *      いちばん狭い裾」を順位帯ごとに選ぶ（固定の10〜90%だと実際は73〜80%しか入らなかった。2026-09-30 実測）
  *   4. Worker が割り算1回で予測できる形（期間ごとのシェア表＋帯）に焼き込む
  *
  * 人が方向の補正を足す枠は作らない（brain log 2026-09-02 §11.3）。偏りの補正は
  * 「補正つき候補」が前向き検証で勝ったときだけ自動で採用される。
  */
 import {
-  BAND_Q_HI,
-  BAND_Q_LO,
+  BAND_MIN_SAMPLES,
   CANDIDATES,
   GRID,
   RANKS,
   SCORE_TO,
+  bandSamplesAt,
   bandsFrom,
   candidateTable,
   durationHours,
   median,
+  quantile,
   walkForward,
   type CandidateId,
   type EventMeta,
@@ -40,6 +42,10 @@ export const MIN_VISIBLE_PROGRESS = 0.3
 
 /** 採点・表示に使う代表の経過率 */
 export const CHECKPOINTS = [0.5, 0.6, 0.7, 0.8, 0.9, 0.96] as const
+
+/** 「8割の幅」が実際に8割入るように、片側の裾をこの中から選ぶ（狭い順） */
+export const BAND_TAILS = [0.1, 0.075, 0.05, 0.035, 0.025] as const
+export const TARGET_COVERAGE = 0.8
 
 /** Worker が毎回読むので、表の桁を落として小さくする（予測への影響は 1e-5 未満） */
 const round5 = (v: number | null) => (v == null ? null : Math.round(v * 1e5) / 1e5)
@@ -66,7 +72,9 @@ export interface RankSummary {
   medianAbsError: { p: number; value: number | null }[]
   /** 代表の経過率ごとの帯（誤差の分位点） */
   band: { p: number; lo: number | null; hi: number | null }[]
-  /** 帯の当たり率（前向き。その時点までのデータで作った帯に実測が入った割合） */
+  /** 帯に使った片側の裾（0.1 なら 10〜90パーセンタイル） */
+  bandTail: number
+  /** 帯の当たり率（前向き。その時点までのデータで作った帯に実測が入った割合）。選んだ裾のもの */
   coverage: { p: number; covered: number; total: number }[]
   /** イベントごとの再現誤差（王者・代表の経過率） */
   replay: { eventId: number; champion: CandidateId; errors: { p: number; value: number | null }[] }[]
@@ -79,7 +87,7 @@ export interface ModelSummary {
   trainedThrough: number
   poolSize: number
   durations: number[]
-  bandQuantiles: [number, number]
+  targetCoverage: number
   ranks: RankSummary[]
 }
 
@@ -108,22 +116,36 @@ function minProgressFrom(band: { lo: (number | null)[]; hi: (number | null)[] })
   return candidate ?? 1.01
 }
 
-function coverageOf(evals: readonly EventEval[]): RankSummary['coverage'] {
+/** 裾 tail の帯が、前向き（その時点までのデータで作った帯）で実測をどれだけ含んだか */
+export function coverageOf(evals: readonly EventEval[], tail: number): RankSummary['coverage'] {
   return CHECKPOINTS.map((p) => {
     let covered = 0
     let total = 0
     for (let i = 10; i < evals.length; i++) {
       const cand = evals[i].champion
-      const band = bandsFrom(evals.slice(0, i), cand)
+      const xs = bandSamplesAt(evals.slice(0, i), cand, p)
       const e = at(evals[i].errors[cand], p)
-      const lo = at(band.lo, p)
-      const hi = at(band.hi, p)
-      if (e == null || lo == null || hi == null) continue
+      if (e == null || xs.length < BAND_MIN_SAMPLES) continue
+      const lo = quantile(xs, tail) as number
+      const hi = quantile(xs, 1 - tail) as number
       total++
       if (e >= lo && e <= hi) covered++
     }
     return { p, covered, total }
   })
+}
+
+/** 目標の当たり率を満たすいちばん狭い裾。どれも満たさなければいちばん広いもの */
+export function chooseTail(evals: readonly EventEval[]): { tail: number; coverage: RankSummary['coverage'] } {
+  let last: { tail: number; coverage: RankSummary['coverage'] } | null = null
+  for (const tail of BAND_TAILS) {
+    const coverage = coverageOf(evals, tail)
+    const covered = coverage.reduce((a, c) => a + c.covered, 0)
+    const total = coverage.reduce((a, c) => a + c.total, 0)
+    last = { tail, coverage }
+    if (total > 0 && covered / total >= TARGET_COVERAGE) return last
+  }
+  return last as { tail: number; coverage: RankSummary['coverage'] }
 }
 
 function historyFrom(events: readonly EventMeta[], shapes: readonly Shape[], now: number): HistoryEvent[] {
@@ -151,7 +173,8 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
   for (const rank of RANKS) {
     const walk = walkForward(history, rank)
     const champion = walk.champion
-    const band = bandsFrom(walk.evals, champion)
+    const calibrated = chooseTail(walk.evals)
+    const band = bandsFrom(walk.evals, champion, calibrated.tail)
     const sameAllErrs = walk.evals.map((e) => e.errors.same_all)
     const tables: Record<string, (number | null)[]> = {}
     for (const d of durations) tables[String(d)] = candidateTable(champion, d, history, rank, sameAllErrs)
@@ -177,7 +200,8 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
         return { p, value: median(xs.map(Math.abs)) }
       }),
       band: CHECKPOINTS.map((p) => ({ p, lo: at(band.lo, p), hi: at(band.hi, p) })),
-      coverage: coverageOf(walk.evals),
+      bandTail: calibrated.tail,
+      coverage: calibrated.coverage,
       replay: walk.evals.slice(-12).map((e) => ({
         eventId: e.eventId,
         champion: e.champion,
@@ -196,7 +220,7 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
     trainedThrough,
     poolSize: history.length,
     durations,
-    bandQuantiles: [BAND_Q_LO, BAND_Q_HI],
+    targetCoverage: TARGET_COVERAGE,
     ranks: rankSummaries,
   }
   return { model, summary }
