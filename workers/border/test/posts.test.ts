@@ -20,7 +20,9 @@ describe('formatMan', () => {
   it('万単位・3桁区切りで丸める', () => {
     expect(formatMan(15_025_880)).toBe('1,503万')
     expect(formatMan(5_536_871)).toBe('554万')
-    expect(formatMan(127_619_078)).toBe('12,762万')
+    expect(formatMan(127_619_078)).toBe('1億2,762万')
+    expect(formatMan(100_000_000)).toBe('1億')
+    expect(formatMan(99_990_000)).toBe('9,999万')
     expect(formatMan(9_999)).toBe('9,999')
   })
 })

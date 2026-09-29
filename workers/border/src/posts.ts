@@ -30,11 +30,16 @@ export function xWeight(text: string): number {
   return weight
 }
 
-/** 15,025,880 → "1,503万"。1万未満はそのまま */
+/** 15,025,880 → "1,503万"、127,619,078 → "1億2,762万"。1万未満はそのまま */
 export function formatMan(n: number): string {
   if (!Number.isFinite(n)) return '-'
   if (Math.abs(n) < 10_000) return Math.round(n).toLocaleString('en-US')
-  return `${Math.round(n / 10_000).toLocaleString('en-US')}万`
+  const man = Math.round(n / 10_000)
+  if (man < 10_000) return `${man.toLocaleString('en-US')}万`
+  // 1億を超えたら「1億2,762万」（sekaimaster-bot の src/border/format.ts と同じ書き方）
+  const oku = Math.floor(man / 10_000)
+  const rest = man % 10_000
+  return rest === 0 ? `${oku}億` : `${oku}億${rest.toLocaleString('en-US')}万`
 }
 
 export function formatPct(x: number, digits = 1): string {
