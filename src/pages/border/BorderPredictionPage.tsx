@@ -156,7 +156,7 @@ function RecordPanel({ reports }: { reports: Report[] }) {
               {rep.name}
               <span className="ml-2 text-xs font-normal text-slate-500">{formatJst(rep.aggregateAt + 60_000).split(" ")[0]} 終了</span>
             </h3>
-            <table className="mt-2 w-full text-left text-xs tabular-nums">
+            <table className="mt-2 w-full table-fixed text-left text-xs tabular-nums">
               <thead className="text-slate-500">
                 <tr>
                   <th className="py-1 font-normal">順位</th>
@@ -168,7 +168,7 @@ function RecordPanel({ reports }: { reports: Report[] }) {
               <tbody className="text-slate-700">
                 {recordRows(rep).map((r) => (
                   <tr key={r.rank} className="border-t border-[color:var(--neu-edge)]">
-                    <td className="py-1.5">{r.rank}位</td>
+                    <td className="whitespace-nowrap py-1.5">{r.rank}位</td>
                     <td className="py-1.5">{formatMan(r.final)}</td>
                     <td className="py-1.5">{r.predicted != null ? formatMan(r.predicted) : "—"}</td>
                     <td className="py-1.5">
@@ -204,7 +204,7 @@ function ModelPanel({ model }: { model: ModelSummary }) {
         <thead className="text-slate-500">
           <tr>
             <th className="py-1 font-normal">順位</th>
-            <th className="py-1 font-normal">使っている候補</th>
+            <th className="hidden py-1 font-normal sm:table-cell">使っている候補</th>
             <th className="py-1 font-normal">誤差の中央値（開始6時間／経過50%／90%）</th>
             <th className="py-1 font-normal">8割の幅に入った率</th>
           </tr>
@@ -218,8 +218,8 @@ function ModelPanel({ model }: { model: ModelSummary }) {
             const cov = coverageRate(r);
             return (
               <tr key={r.rank} className="border-t border-[color:var(--neu-edge)] align-top">
-                <td className="py-1.5">{r.rank}位</td>
-                <td className="py-1.5 pr-2">{candidateLabel(r.champion)}</td>
+                <td className="whitespace-nowrap py-1.5 pr-2">{r.rank}位</td>
+                <td className="hidden py-1.5 pr-2 sm:table-cell">{candidateLabel(r.champion)}</td>
                 <td className="py-1.5">
                   {fmt(early)}／{fmt(at(0.5))}／{fmt(at(0.9))}
                 </td>
