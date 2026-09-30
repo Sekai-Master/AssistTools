@@ -2,6 +2,13 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import sharp from 'sharp';
+import {
+  MIN_TABLE_SHARE,
+  indexMusicCategories,
+  previousCategoriesFrom,
+  resolveCategories,
+  tableShare,
+} from './lib/musicCategories.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,6 +25,8 @@ const metasUrl = `${SEKAI_BEST_BASE}/sekai-best-assets/music_metas.json`;
 const limitedTimeMusicsUrl = `${MASTER_DB_BASE}/limitedTimeMusics.json`;
 // 譜面レベルとノーツ数（難易度別）。スコア計算のレベル係数に効く。
 const musicDifficultiesUrl = `${MASTER_DB_BASE}/musicDifficulties.json`;
+// 曲のカテゴリ（MV の種類）。2026-08 下旬に musics.json から切り出された（#130）。
+const musicCategoriesUrl = `${MASTER_DB_BASE}/musicCategories.json`;
 const jacketRemoteUrl = (id) =>
   `${SEKAI_BEST_BASE}/sekai-jp-assets/music/jacket/jacket_s_${id}/jacket_s_${id}.webp`;
 
@@ -40,12 +49,18 @@ async function toThumbnail(input) {
 }
 
 (async () => {
-  const [musics, artists, metas, limitedTimeMusics, musicDifficulties] = await Promise.all([
+  const [musics, artists, metas, limitedTimeMusics, musicDifficulties, musicCategories] = await Promise.all([
     fetchJson(musicsUrl),
     fetchJson(artistsUrl),
     fetchJson(metasUrl),
     fetchJson(limitedTimeMusicsUrl),
     fetchJson(musicDifficultiesUrl),
+    // ★ カテゴリはビンゴでしか使わないので、取れなくても更新全体は止めない
+    //   （直前の配信データのカテゴリを引き継ぐ。scripts/lib/musicCategories.mjs）。
+    fetchJson(musicCategoriesUrl).catch((err) => {
+      console.warn(`::warning::musicCategories.json が取れない（${err.message}）。カテゴリは直前の配信データから引き継ぐ`);
+      return [];
+    }),
   ]);
 
   // メドレー等の除外（調整候補の母集合から落とす）。
@@ -159,15 +174,26 @@ async function toThumbnail(input) {
     return out;
   }
 
+  // カテゴリ（取り先の順と理由は scripts/lib/musicCategories.mjs）。
+  // 直前の配信データは、別表が取れないときの引き継ぎ用。上書きする前にここで読む。
+  let previousSnapshot = null;
+  try {
+    previousSnapshot = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'transformedMusics.json'), 'utf-8'));
+  } catch (err) {
+    console.warn('直前の transformedMusics.json を読めない（カテゴリの引き継ぎ無しで続ける）:', err.message);
+  }
+  const categoryIndex = indexMusicCategories(musicCategories);
+  const previousCategories = previousCategoriesFrom(previousSnapshot);
+  const categoryOf = new Map(
+    musics.map((m) => [m.id, resolveCategories(m, categoryIndex, previousCategories)])
+  );
+
   const transformed = musics.map((m) => {
     const id = String(m.id).padStart(3, '0');
     const artist = artists.find((a) => a.id === m.creatorArtistId);
     const seqStr = String(m.seq);
     const unit = unitMapping[seqStr.length >= 2 ? seqStr[1] : ''] || '';
-    let categories = m.categories.map((c) => (c === 'mv' ? 'mv_3d' : c));
-    if (categories.includes('image') && categories.length > 1) {
-      categories = categories.filter((c) => c !== 'image');
-    }
+    const { categories } = categoryOf.get(m.id);
     const meta = metas.find((x) => x.music_id === m.id);
     let published = m.publishedAt <= now;
     if (deletedIds.has(id)) published = false;
@@ -228,6 +254,28 @@ async function toThumbnail(input) {
     console.warn(
       `⚠ MASTERの base_score が無い公開曲 ${noBaseScore.length}件:`,
       noBaseScore.map((m) => `${m.id} ${m.title}`).join(', ')
+    );
+  }
+
+  // ★ #130 の再発に気付くための警告。上流で別表の形が変わると、曲は揃っているのに
+  //   カテゴリだけ引き継ぎ（または空）になり、上の曲の欠落検知を素通りする。
+  const categoryResults = [...categoryOf.values()];
+  const bySource = (s) => categoryResults.filter((r) => r.source === s).length;
+  console.log(
+    `カテゴリ: 別表 ${bySource('table')} / musics.json の欄 ${bySource('field')} / ` +
+      `引き継ぎ ${bySource('previous')} / なし ${bySource('none')}`
+  );
+  if (tableShare(categoryResults) < MIN_TABLE_SHARE) {
+    console.warn(
+      `::warning::カテゴリを別表（musicCategories.json）から取れた曲が ${bySource('table')}/${categoryResults.length} 曲しかない。` +
+        '上流の形が変わった可能性がある（#130）'
+    );
+  }
+  const noCategory = transformed.filter((m) => m.published && m.categories.length === 0);
+  if (noCategory.length > 0) {
+    console.warn(
+      `⚠ カテゴリが無い公開曲 ${noCategory.length}件:`,
+      noCategory.map((m) => `${m.id} ${m.title}`).join(', ')
     );
   }
 
