@@ -2,7 +2,7 @@
  * ボーダー予測ページの表示用の整形（純粋関数）。API の形は Worker 側と同じ型を使う。
  */
 import type { ModelSummary } from "../../../workers/border/src/fit";
-import { CANDIDATE_LABEL, type Confidence } from "../../../workers/border/src/model";
+import { CANDIDATE_LABEL, eventEndMs, type Confidence } from "../../../workers/border/src/model";
 import type { Snapshot } from "../../../workers/border/src/snapshot";
 import type { Report } from "../../../scripts/border/report";
 
@@ -57,12 +57,27 @@ export interface RankView {
   showFrom: number | null;
 }
 
+/** 経過率が p になる時刻（model.ts の progressAt の逆） */
+export function timeAtProgress(e: Pick<Snapshot["event"], "startAt" | "aggregateAt">, p: number): number {
+  return e.startAt + p * (eventEndMs(e) - e.startAt);
+}
+
 /**
- * 予測を出していない順位に添える一言。
- * showFrom が 1 を超えるのは「この順位はどの時点でも出さない」印（モデル側の約束）なので、経過率として読まない
+ * 予測を出していない順位に添える一言。event を渡すと、出し始める時刻も添える
+ * （経過4% は150時間の回なら約6時間、246時間の回なら約10時間と、長さで変わるため）。
+ * showFrom が 1 を超えるのは「この順位はどの時点でも出さない」印（モデル側の約束）なので、経過率として読まない。
+ * showFrom が無い（モデルがまだ無い）ときは理由を決めつけない。
  */
-export function hiddenReason(r: Pick<RankView, "showFrom">, progress: number): string {
-  if (r.showFrom != null && r.showFrom <= 1 && progress < r.showFrom) return `予測は経過${formatPercent(r.showFrom)}から出します`;
+export function hiddenReason(
+  r: Pick<RankView, "showFrom">,
+  progress: number,
+  event?: Pick<Snapshot["event"], "startAt" | "aggregateAt">,
+): string {
+  if (r.showFrom == null) return "予測はまだ出していません";
+  if (r.showFrom <= 1 && progress < r.showFrom) {
+    const when = event ? `（${formatJst(timeAtProgress(event, r.showFrom))}ごろ）` : "";
+    return `予測は経過${formatPercent(r.showFrom)}${when}から出します`;
+  }
   return "外れ幅が大きすぎるので、いまは予測を出していません";
 }
 

@@ -31,7 +31,7 @@ sekaimaster-bot（NAS）──▶ /admin/posts?unsent=… ──▶ X / Discord 
 | 投稿文 | `workers/border/src/posts.ts` | X の重み付き文字数で 280 以内に収める。数値はプログラムで埋める |
 | 解析ジョブ | `scripts/border/analyze.ts` | `node scripts/border/analyze.ts`（依存パッケージ無し） |
 | 公開の読み出し | `functions/api/border/[[path]].ts` → `workers/border/src/public.ts` | 画面用。D1 は Pages のバインディング `BORDER_DB` |
-| 画面 | `src/pages/border/` | `/border`。**まだハブに載せていない**（§6） |
+| 画面 | `src/pages/border/` | `/border`。**まだハブに載せていない**（§6）。いまの値（予測を出す前も）・予測・推移のグラフ（`BorderChart.tsx`。30分ごとの実測／その時点の予測／8割の幅、`/api/border/events/{id}/history`）・答え合わせ |
 | D1 | `workers/border/migrations/` | 表の定義と、書き込み行数を抑える工夫の理由はファイル冒頭 |
 
 ## 2. モデル（`share-median-v1`）
@@ -77,8 +77,8 @@ sekaimaster-bot（NAS）──▶ /admin/posts?unsent=… ──▶ X / Discord 
 | 項目 | 上限（無料） | ボーダー側の使用量 |
 |---|---|---|
 | D1 書き込み | 10万行/日 | 開催中: 1回あたり 実測6＋予測6＋kv 2 ＝14行 × 48回 ＝ **約670行/日**。開催外: 日程の差分のみ（0〜数行）。解析ジョブ: 1イベントあたり形6＋版1＋レポート1＋投稿1 |
-| D1 読み取り | 500万行/日 | Cron 1回で数行。画面は1リクエスト1〜2行（事前に組んだ kv を返す） |
-| Workers リクエスト | 10万/日 | Cron 48回/日＋画面の表示回数（`/api/border/*` だけが Functions を起動する） |
+| D1 読み取り | 500万行/日 | Cron 1回で数行。画面は1リクエスト1〜2行（事前に組んだ kv を返す）。表示1回で3リクエスト（いまの値・答え合わせ・推移） |
+| Workers リクエスト | 10万/日 | Cron 48回/日＋画面の表示1回につき3回、開いている間は10分ごとに3回（`/api/border/*` だけが Functions を起動する）。1人が1日じゅう開きっぱなしでも約430回 |
 | Cron Trigger | 5本/アカウント | 1本（SAWAYAKA が3本） |
 | Worker CPU | 10ms/回（Cron も同じ） | 実測1回の parse（約90KB）＋割り算6回。日程（288KB）は開催外の回にしか読まない |
 | Pages ビルド | 500回/月 | **増えない**（解析ジョブはコミットしない） |

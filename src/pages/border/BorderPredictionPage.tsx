@@ -1,8 +1,9 @@
 import { Panel } from "../../components/ui/Panel";
 import { ToolPage } from "../../components/ui/ToolPage";
-import { CONFIDENCE_LABEL, type Confidence } from "../../../workers/border/src/model";
+import { CONFIDENCE_LABEL, RANKS, type Confidence } from "../../../workers/border/src/model";
 import { formatMan, formatRange } from "../../../workers/border/src/posts";
 import { DocLink } from "../legal/LegalDoc";
+import { BorderCharts } from "./BorderChart";
 import {
   candidateLabel,
   coverageRate,
@@ -26,7 +27,7 @@ import { useBorderData } from "./useBorderData";
  */
 
 export default function BorderPredictionPage() {
-  const { current, record, loading, error, now } = useBorderData();
+  const { current, record, history, loading, error, now } = useBorderData();
   return (
     <ToolPage unit="mmj" title="ボーダー予測" icon="insights">
       <p className="text-sm leading-7 text-slate-600">
@@ -41,6 +42,16 @@ export default function BorderPredictionPage() {
         </Panel>
       )}
       {!loading && current && <CurrentPanel snap={current} model={record?.model ?? null} now={now} />}
+      {!loading && current && history.size > 0 && (
+        <Panel title="推移">
+          <p className="mb-3 text-xs leading-6 text-slate-500">
+            30分ごとの実測（実線）と、その時点で出していた最終値の予測（破線）・8割の幅（帯）です。
+            帯はその時点の予測なので、終了時の実測（＝最終値）が最後の帯の中に入れば当たりです。
+            グラフに触れる（キーボードなら左右キー）と、その時刻の数字が出ます。
+          </p>
+          <BorderCharts history={history} ranks={RANKS} startAt={current.event.startAt} endAt={current.event.aggregateAt + 60_000} />
+        </Panel>
+      )}
       {!loading && !current && !error && (
         <Panel>
           <p className="text-sm text-slate-600">まだ予測がありません。次のイベントが始まると30分ごとに更新されます。</p>
@@ -56,6 +67,11 @@ export default function BorderPredictionPage() {
 function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummary | null; now: number }) {
   const phase = phaseOf(snap, now);
   const rows = rankViews(snap, model);
+  const marathon = snap.event.type === "marathon";
+  // 予測を1つも出していない間、出し始めが全順位で同じなら、6行に同じ文を並べず冒頭で1回だけ言う。
+  // 出し始めが分からない（モデルがまだ無い）ときは、冒頭の「まだ出ていません」だけで足りる
+  const sameStart =
+    !snap.predicted && rows.length > 0 && rows[0].showFrom != null && rows.every((r) => r.showFrom === rows[0].showFrom);
   return (
     <Panel title={phase === "running" ? "開催中のイベント" : "直近のイベント（終了）"}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -80,37 +96,43 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
         </p>
       )}
 
-      {!snap.predicted ? (
+      {!snap.predicted && (
         <p className="mt-4 text-sm leading-7 text-slate-600">
-          {snap.event.type === "marathon"
-            ? "このイベントの予測はまだ出ていません。"
-            : "このイベントは予測の対象外です（いまはマラソン型のイベントだけを予測しています）。"}
+          {marathon
+            ? `このイベントの予測はまだ出ていません。${sameStart ? `${hiddenReason(rows[0], snap.progress, snap.event)}。` : ""}いまの値は30分ごとに更新しています。`
+            : "このイベントは予測の対象外です（いまはマラソン型のイベントだけを予測しています）。いまの値だけ載せています。"}
         </p>
-      ) : (
-        <ul className="mt-4 divide-y divide-[color:var(--neu-edge)]">
-          {rows.map((r) => (
-            <li key={r.rank} className="grid grid-cols-[4.5rem_1fr] items-baseline gap-x-3 py-3">
-              <span className="text-sm font-bold text-slate-700">{r.rank}位</span>
-              {r.visible && r.predicted != null ? (
-                <div>
-                  <p className="flex items-baseline gap-2">
-                    <span className="text-lg font-bold tabular-nums text-slate-800">{formatMan(r.predicted)}</span>
-                    {r.confidence && <ConfidenceChip value={r.confidence} />}
-                  </p>
-                  <p className="text-xs tabular-nums text-slate-500">
-                    {r.low != null && r.high != null && <>8割の幅 {formatRange(r.low, r.high)}・</>}
-                    いま {formatMan(r.current)}
-                  </p>
-                </div>
-              ) : (
-                <p className="text-xs leading-6 text-slate-500">
-                  いま {formatMan(r.current)}・{hiddenReason(r, snap.progress)}
-                </p>
-              )}
-            </li>
-          ))}
-        </ul>
       )}
+      {/* ★ 予測を出す前も、いまの値は出す（30分ごとに集めているのに、以前は1行の断りだけだった） */}
+      <ul className="mt-4 divide-y divide-[color:var(--neu-edge)]">
+        {rows.map((r) => (
+          <li key={r.rank} className="grid grid-cols-[4.5rem_1fr] items-baseline gap-x-3 py-3">
+            <span className="text-sm font-bold text-slate-700">{r.rank}位</span>
+            {r.visible && r.predicted != null ? (
+              <div>
+                <p className="flex items-baseline gap-2">
+                  <span className="text-lg font-bold tabular-nums text-slate-800">{formatMan(r.predicted)}</span>
+                  {r.confidence && <ConfidenceChip value={r.confidence} />}
+                </p>
+                <p className="text-xs tabular-nums text-slate-500">
+                  {r.low != null && r.high != null && <>8割の幅 {formatRange(r.low, r.high)}・</>}
+                  いま {formatMan(r.current)}
+                </p>
+              </div>
+            ) : (
+              <div>
+                <p className="flex items-baseline gap-2">
+                  <span className="text-base font-bold tabular-nums text-slate-700">{formatMan(r.current)}</span>
+                  <span className="text-xs text-slate-500">いま</span>
+                </p>
+                {marathon && !sameStart && (snap.predicted || r.showFrom != null) && (
+                  <p className="text-xs leading-6 text-slate-500">{hiddenReason(r, snap.progress, snap.event)}</p>
+                )}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
       {snap.predicted && snap.extrapolatedFrom != null && (
         <p className="mt-3 rounded-lg bg-slate-200/60 px-3 py-2 text-xs leading-6 text-slate-600">
           このイベントは {snap.event.durationHours} 時間で、過去に同じ長さの回がありません。
@@ -247,7 +269,7 @@ function HowPanel() {
           幅も、実際に外れた幅の分布から作り直します。人の勘で数字を足すことはしていません。
         </p>
         <p>
-          非公式の予測で、外れることがあります。予測は開始から約6時間後に出し始め、序盤は幅が広い「目安」として出します。50位・100位は終盤まで個人の事情で大きく動くので、ほかの順位より幅が広めです。
+          非公式の予測で、外れることがあります。予測は経過4%から出し始め（150時間のイベントなら開始から約6時間、246時間なら約10時間）、序盤は幅が広い「目安」として出します。50位・100位は終盤まで個人の事情で大きく動くので、ほかの順位より幅が広めです。
           ランキングのデータは <DocLink href="https://sekai.best/">Sekai Viewer</DocLink> のものを使っています。
         </p>
       </div>
