@@ -42,7 +42,7 @@ const linear: Model = {
       String(r),
       {
         candidate: 'same_all',
-        minProgress: r <= 100 ? 0.9 : 0.3,
+        minProgress: r <= 100 ? 0.9 : 0.04,
         tables: { all: GRID.map((p) => p) },
         band: { lo: GRID.map(() => -0.04), hi: GRID.map(() => 0.03) },
       },
@@ -109,6 +109,28 @@ describe('runCron', () => {
     expect(hist.rows).toHaveLength(2)
   })
 
+  it('開始24時間のポストを積み、画像用のデータ（payload）が投稿キューと一緒に取れる', async () => {
+    await putModel(env.DB, linear, { version: 'test@e1' }, 0)
+    const t = START + 25 * H
+    const r = await runCron(env, t + 5 * 60_000, fakeFetch(() => liveBody(219, t, 25 / 150)))
+    expect(r.status === 'collected' && r.queued).toEqual(['219:h24'])
+    const req = new Request('https://w/admin/posts?unsent=x', { headers: { Authorization: 'Bearer secret-token' } })
+    const body = (await (await handleRequest(req, env)).json()) as { posts: { id: string; text: string; payload: string }[] }
+    expect(body.posts).toHaveLength(1)
+    expect(body.posts[0].text).toContain('（開始24時間）')
+    const payload = JSON.parse(body.posts[0].payload) as { kind: string; key: string; snapshot: { ranks: { rank: number; confidence: string | null }[] } }
+    expect(payload.kind).toBe('milestone')
+    expect(payload.key).toBe('h24')
+    expect(payload.snapshot.ranks.find((x) => x.rank === 1000)?.confidence).toBe('high')
+  })
+
+  it('節目を大きく過ぎてから動き出したときは、その節目のポストを出さない', async () => {
+    await putModel(env.DB, linear, { version: 'test@e1' }, 0)
+    const t = START + 40 * H // 24h の節目（0.16）から 0.1 以上過ぎている
+    const r = await runCron(env, t + 5 * 60_000, fakeFetch(() => liveBody(219, t, 40 / 150)))
+    expect(r.status === 'collected' && r.queued).toEqual([])
+  })
+
   it('live が別イベントを返したら何も書かない', async () => {
     await runCron(env, START - 10 * H, fakeFetch(() => ({})))
     const r = await runCron(env, START + H, fakeFetch(() => liveBody(218, START + H, 1)))
@@ -137,6 +159,15 @@ describe('API', () => {
     expect(ok.status).toBe(200)
     const got = (await (await handleRequest(adminReq('/admin/shapes'), env)).json()) as { shapes: unknown[] }
     expect(got.shapes).toHaveLength(1)
+  })
+
+  it('日程を管理 API で入れると、Cron がそのイベントを開催中として拾う', async () => {
+    const put = await handleRequest(adminReq('/admin/events', { method: 'PUT', body: JSON.stringify({ events: [EVENT, { id: 'x' }, null] }) }), env)
+    expect(await put.json()).toMatchObject({ ok: true, count: 1 })
+    // bonuses.json を返さない fetch でも、日程が入っていれば収集する
+    const r = await runCron(env, START + H, (async (input: RequestInfo | URL) =>
+      String(input).includes('/event/live') ? Response.json(liveBody(219, START + H, 0.01)) : new Response('gone', { status: 500 })) as typeof fetch)
+    expect(r).toMatchObject({ status: 'collected', eventId: 219 })
   })
 
   it('同じ版のモデルは入れ直さない', async () => {

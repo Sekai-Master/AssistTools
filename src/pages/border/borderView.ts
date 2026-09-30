@@ -2,7 +2,7 @@
  * ボーダー予測ページの表示用の整形（純粋関数）。API の形は Worker 側と同じ型を使う。
  */
 import type { ModelSummary } from "../../../workers/border/src/fit";
-import { CANDIDATE_LABEL } from "../../../workers/border/src/model";
+import { CANDIDATE_LABEL, type Confidence } from "../../../workers/border/src/model";
 import type { Snapshot } from "../../../workers/border/src/snapshot";
 import type { Report } from "../../../scripts/border/report";
 
@@ -50,9 +50,20 @@ export interface RankView {
   predicted: number | null;
   low: number | null;
   high: number | null;
+  /** 確度（高・中・目安）。古い版の Worker が書いたスナップショットには無いので任意 */
+  confidence?: Confidence | null;
   visible: boolean;
   /** 表に出し始める経過率（モデルから） */
   showFrom: number | null;
+}
+
+/**
+ * 予測を出していない順位に添える一言。
+ * showFrom が 1 を超えるのは「この順位はどの時点でも出さない」印（モデル側の約束）なので、経過率として読まない
+ */
+export function hiddenReason(r: Pick<RankView, "showFrom">, progress: number): string {
+  if (r.showFrom != null && r.showFrom <= 1 && progress < r.showFrom) return `予測は経過${formatPercent(r.showFrom)}から出します`;
+  return "外れ幅が大きすぎるので、いまは予測を出していません";
 }
 
 export function rankViews(s: Snapshot, model: ModelSummary | null): RankView[] {
@@ -97,7 +108,10 @@ export function candidateLabel(id: string): string {
   return (CANDIDATE_LABEL as Record<string, string>)[id] ?? id;
 }
 
-/** 帯の当たり率（全チェックポイントの合算） */
+/** 帯の当たり率（序盤と中盤以降の全チェックポイントの合算。序盤は新しい版のモデルにしか無い） */
 export function coverageRate(r: ModelSummary["ranks"][number]): { covered: number; total: number } {
-  return r.coverage.reduce((a, c) => ({ covered: a.covered + c.covered, total: a.total + c.total }), { covered: 0, total: 0 });
+  return [...r.coverage, ...(r.coverageEarly ?? [])].reduce(
+    (a, c) => ({ covered: a.covered + c.covered, total: a.total + c.total }),
+    { covered: 0, total: 0 },
+  );
 }

@@ -15,6 +15,7 @@ import path from 'node:path'
 import { fitModel } from '../../workers/border/src/fit.ts'
 import { RANKS, buildShape, durationHours, type EventMeta, type Sample, type Shape } from '../../workers/border/src/model.ts'
 import { resultText, type ResultRank } from '../../workers/border/src/posts.ts'
+import type { PostPayload, ResultPostRank } from '../../workers/border/src/snapshot.ts'
 import { buildReport, type PredictionLog, type Report } from './report.ts'
 
 const SITE = 'https://sekaimaster.pages.dev'
@@ -68,24 +69,49 @@ async function write<T>(method: string, p: string, body: unknown): Promise<T | n
   return admin<T>(method, p, body)
 }
 
-async function loadEvents(): Promise<EventMeta[]> {
-  const res = await fetch(`${SITE}/CardDatas/bonuses.json`, { headers: { 'User-Agent': UA } })
-  if (!res.ok) throw new Error(`bonuses.json ${res.status}`)
-  const raw = (await res.json()) as { events?: unknown }
-  if (!Array.isArray(raw.events)) throw new Error('bonuses.json に events が無い')
+/** マスタ（sekai-master-db-diff）の events.json。サイトの bonuses.json より早く新しいイベントが載る */
+const MASTER_EVENTS = 'https://raw.githubusercontent.com/Sekai-World/sekai-master-db-diff/main/events.json'
+
+/** events.json（eventType）と bonuses.json（type）のどちらの形でも読む */
+export function parseEvents(list: unknown): EventMeta[] {
+  if (!Array.isArray(list)) return []
   const out: EventMeta[] = []
-  for (const e of raw.events as Record<string, unknown>[]) {
+  for (const e of list as Record<string, unknown>[]) {
     if (!e || typeof e.id !== 'number' || typeof e.startAt !== 'number' || typeof e.aggregateAt !== 'number') continue
+    const type = typeof e.eventType === 'string' ? e.eventType : typeof e.type === 'string' ? e.type : 'unknown'
     out.push({
       id: e.id,
       name: typeof e.name === 'string' ? e.name : `event ${e.id}`,
-      eventType: typeof e.type === 'string' ? e.type : 'unknown',
+      eventType: type,
       unit: typeof e.unit === 'string' ? e.unit : 'none',
       startAt: e.startAt,
       aggregateAt: e.aggregateAt,
     })
   }
   return out
+}
+
+/**
+ * イベントの一覧。マスタを正にし、読めなければサイトの bonuses.json に落ちる。
+ * ★ bonuses.json はカードデータの自動更新（テストが門番）が止まると古いまま残る。
+ *   2026-09-30 の周年アップデートでその更新が止まり、当日開始の event 219 が載らなかった
+ */
+async function loadEvents(): Promise<{ events: EventMeta[]; source: string }> {
+  try {
+    const res = await fetch(MASTER_EVENTS, { headers: { 'User-Agent': UA } })
+    if (res.ok) {
+      const events = parseEvents(await res.json())
+      if (events.length > 0) return { events, source: 'master' }
+    }
+  } catch (err) {
+    say(`- マスタの events.json を読めなかった（${err instanceof Error ? err.message : String(err)}）。サイトの bonuses.json を使う`)
+  }
+  const res = await fetch(`${SITE}/CardDatas/bonuses.json`, { headers: { 'User-Agent': UA } })
+  if (!res.ok) throw new Error(`bonuses.json ${res.status}`)
+  const raw = (await res.json()) as { events?: unknown }
+  const events = parseEvents(raw.events)
+  if (events.length === 0) throw new Error('bonuses.json に events が無い')
+  return { events, source: 'bonuses' }
 }
 
 /** graph API の応答から [ts, score] だけを取り出す（userName などの第三者情報は捨てる） */
@@ -130,20 +156,27 @@ async function collectShapes(events: readonly EventMeta[], have: readonly Shape[
   return fresh
 }
 
-function resultRanks(report: Report): ResultRank[] {
+function resultRanks(report: Report): (ResultRank & ResultPostRank)[] {
   // 投稿には「経過85%前後で出していた予測」を使う（開催中に積んだマイルストーンと同じ時点）
-  const out: ResultRank[] = []
+  const out: (ResultRank & ResultPostRank)[] = []
   for (const r of report.ranks) {
     const at = r.prospective.find((x) => x.checkpoint === 0.85) ?? r.prospective[r.prospective.length - 1]
     if (!at || !at.visible) continue
-    out.push({ rank: r.rank, final: r.final, predicted: at.predicted, progress: at.progress })
+    out.push({ rank: r.rank, final: r.final, predicted: at.predicted, progress: at.progress, error: at.error, inBand: at.inBand, low: at.low, high: at.high })
   }
   return out
 }
 
 async function main() {
   say(`# ボーダー予測 解析ジョブ ${new Date(NOW).toISOString()}${DRY ? '（dry-run）' : ''}`)
-  const events = await loadEvents()
+  const { events, source } = await loadEvents()
+
+  // 0. 日程を Worker へ（直近と、これからのイベント）。Worker はこれを見て収集を始める
+  const upcoming = events.filter((e) => e.aggregateAt >= NOW - 3 * 86_400_000)
+  const sched = await write<{ count: number; changed: number }>('PUT', '/admin/events', {
+    events: upcoming.map((e) => ({ id: e.id, name: e.name, type: e.eventType, unit: e.unit, startAt: e.startAt, aggregateAt: e.aggregateAt })),
+  })
+  say(`- 日程: ${source} から ${upcoming.length} 件（${upcoming.map((e) => e.id).join(', ')}）${sched ? `・変更 ${sched.changed} 行` : ''}`)
 
   // 1. 形
   const have = DRY && !TOKEN ? [] : (await admin<{ shapes: Shape[] }>('GET', '/admin/shapes')).shapes
@@ -179,7 +212,12 @@ async function main() {
     const ranks = resultRanks(report)
     if (ranks.length > 0 && e.aggregateAt > NOW - POST_WINDOW_MS) {
       const text = resultText(e.name, ranks)
-      if (text) await write('PUT', '/admin/posts', { id: `${e.id}:result`, eventId: e.id, kind: 'result', text })
+      const payload: PostPayload = {
+        kind: 'result',
+        event: { id: e.id, name: e.name, type: e.eventType, unit: e.unit, startAt: e.startAt, aggregateAt: e.aggregateAt, durationHours: durationHours(e) },
+        ranks: ranks.map(({ rank, final, predicted, progress, error, inBand, low, high }) => ({ rank, final, predicted, progress, error, inBand, low, high })),
+      }
+      if (text) await write('PUT', '/admin/posts', { id: `${e.id}:result`, eventId: e.id, kind: 'result', text, payload })
     }
   }
   if (targets.length === 0) say('- 答え合わせ: 対象なし')

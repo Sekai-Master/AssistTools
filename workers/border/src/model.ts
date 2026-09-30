@@ -16,8 +16,11 @@ export const GRID: readonly number[] = Array.from({ length: 51 }, (_, i) => Math
 /** これより長いサンプルの空白をまたぐ補間は信用しない（216 の 23h 欠測で実害が出た） */
 export const MAX_GAP_MS = 2 * 3_600_000
 
-/** 評価に使う経過率の範囲 */
-export const EVAL_FROM = 0.3
+/**
+ * 評価に使う経過率の範囲。序盤（開始6時間＝150h の 0.04 あたり）から誤差を測り、
+ * 序盤は「目安」として幅つきで出す（2026-09-30 Nori 提案。6h 時点で |誤差| 中央 8〜12%）
+ */
+export const EVAL_FROM = 0.02
 export const EVAL_TO = 0.98
 /** 候補モデルの採点に使う経過率の範囲（意思決定に使う帯） */
 export const SCORE_FROM = 0.4
@@ -358,6 +361,64 @@ export interface Model {
   algorithm: 'share-median-v1'
   grid: number[]
   ranks: Record<string, RankModel>
+  /**
+   * 標本が3件以上ある期間（時間）。これより長い／短い期間のイベントは「過去に無い長さ」として、
+   * いちばん近い端の期間の表（tables.far_long / far_short）で当て、帯を FAR_BAND_FACTOR 倍に広げる。
+   * 古い版のモデルには無い（そのときは tables.all）
+   */
+  knownDurations?: number[]
+}
+
+/**
+ * 過去に無い長さのイベントで帯を広げる倍率。
+ * 222h を「見たことのない長さ」として当てると、全マラソンの表では中盤に +6〜8% 高く外した（2026-09-30 実測・n=5）。
+ * いちばん近い長さを使うと偏りは少し減るが、長さの違いそのものの読めなさは帯に乗せる
+ */
+export const FAR_BAND_FACTOR = 1.5
+
+/** 帯の上限を計算するとき、1 + 下側の誤差 がこれ以下なら上限を出さない（予測の 20 倍を超える上限は意味が無い） */
+const MIN_DIVISOR = 0.05
+
+export interface TableChoice {
+  table: (number | null)[]
+  /** 過去に無い長さで、近い端の期間から借りたとき、その期間 */
+  extrapolatedFrom: number | null
+}
+
+export function chooseTable(model: Model, rm: RankModel, duration: number): TableChoice | null {
+  const exact = rm.tables[String(duration)]
+  if (exact) return { table: exact, extrapolatedFrom: null }
+  const known = model.knownDurations ?? []
+  if (known.length > 0) {
+    const max = Math.max(...known)
+    const min = Math.min(...known)
+    if (duration > max && rm.tables.far_long) return { table: rm.tables.far_long, extrapolatedFrom: max }
+    if (duration < min && rm.tables.far_short) return { table: rm.tables.far_short, extrapolatedFrom: min }
+  }
+  return rm.tables.all ? { table: rm.tables.all, extrapolatedFrom: null } : null
+}
+
+/**
+ * 確度。帯の幅（上側誤差 − 下側誤差）で決める。数字の読み方を1語で伝えるためのもの。
+ *   high  … 幅 10ポイント以内（おおむね ±5%）
+ *   mid   … 幅 30ポイント以内（おおむね ±15%）
+ *   rough … それより広い（序盤の「目安」）
+ * MAX_ROUGH_WIDTH より広い帯は、幅として意味を持たないので表に出さない。
+ */
+export type Confidence = 'high' | 'mid' | 'rough'
+export const CONFIDENCE_HIGH_WIDTH = 0.1
+export const CONFIDENCE_MID_WIDTH = 0.3
+export const MAX_ROUGH_WIDTH = 0.8
+
+export const CONFIDENCE_LABEL: Record<Confidence, string> = { high: '高', mid: '中', rough: '目安' }
+
+export function confidenceOf(lo: number | null, hi: number | null): Confidence | null {
+  if (lo == null || hi == null) return null
+  const width = hi - lo
+  if (!(width >= 0) || width > MAX_ROUGH_WIDTH) return null
+  if (width <= CONFIDENCE_HIGH_WIDTH) return 'high'
+  if (width <= CONFIDENCE_MID_WIDTH) return 'mid'
+  return 'rough'
 }
 
 export interface Prediction {
@@ -369,6 +430,10 @@ export interface Prediction {
   /** 帯の下限・上限（終値の予測範囲） */
   low: number | null
   high: number | null
+  /** 帯の幅から決めた確度。帯が無い・広すぎるときは null */
+  confidence: Confidence | null
+  /** 過去に無い長さで、近い端の期間（時間）の表を借りたとき、その期間。帯は広げてある */
+  extrapolatedFrom: number | null
   visible: boolean
 }
 
@@ -377,16 +442,21 @@ export function predict(model: Model, meta: EventMeta, rank: number, current: nu
   if (!rm || !(current > 0)) return null
   const p = progressAt(meta, t)
   if (!(p > 0) || p > 1.001) return null
-  const table = rm.tables[String(durationHours(meta))] ?? rm.tables.all
-  if (!table) return null
-  const share = interpGrid(table, Math.min(p, 1))
+  const choice = chooseTable(model, rm, durationHours(meta))
+  if (!choice) return null
+  const share = interpGrid(choice.table, Math.min(p, 1))
   if (share == null || share <= 0) return null
   const predicted = current / share
-  const lo = interpGrid(rm.band.lo, Math.min(p, 1))
-  const hi = interpGrid(rm.band.hi, Math.min(p, 1))
+  const widen = choice.extrapolatedFrom == null ? 1 : FAR_BAND_FACTOR
+  const loRaw = interpGrid(rm.band.lo, Math.min(p, 1))
+  const hiRaw = interpGrid(rm.band.hi, Math.min(p, 1))
+  const lo = loRaw == null ? null : loRaw * widen
+  const hi = hiRaw == null ? null : hiRaw * widen
   // err = pred/final − 1 → final = pred/(1+err)。上側の誤差が下限、下側の誤差が上限になる
   const low = hi == null ? null : predicted / (1 + hi)
-  const high = lo == null ? null : predicted / (1 + lo)
+  // 下側の誤差が −1 に近いと割る数が 0 以下になり、上限が負や無限大になる。そういう帯は幅として出さない
+  const high = lo == null || 1 + lo <= MIN_DIVISOR ? null : predicted / (1 + lo)
+  const confidence = high == null ? null : confidenceOf(lo, hi)
   return {
     rank,
     progress: p,
@@ -395,6 +465,9 @@ export function predict(model: Model, meta: EventMeta, rank: number, current: nu
     predicted,
     low: low == null ? null : Math.max(low, current),
     high,
-    visible: p >= rm.minProgress,
+    confidence,
+    extrapolatedFrom: choice.extrapolatedFrom,
+    // 帯が無い・広すぎる予測は、確度を名乗れないので出さない（記録はする）
+    visible: p >= rm.minProgress && confidence != null,
   }
 }

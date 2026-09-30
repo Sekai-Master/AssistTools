@@ -3,7 +3,7 @@
  *   - /v1/border/*  公開の読み出し（中身は public.ts。サイトは Pages Functions 経由で同じものを読む）
  *   - /admin/*      解析ジョブ・Bot 用（Bearer トークン必須）
  */
-import { runCron } from './collect.ts'
+import { parseSchedule, runCron } from './collect.ts'
 import {
   allShapes,
   markPostSent,
@@ -13,6 +13,7 @@ import {
   queuePost,
   reportedEventIds,
   unsentPosts,
+  upsertEvents,
   upsertShapes,
   type PostChannel,
 } from './db.ts'
@@ -96,6 +97,13 @@ async function adminRoute(req: Request, env: Env, url: URL): Promise<Response> {
 
   if (path === '/admin/shapes' && req.method === 'GET') return json({ shapes: await allShapes(env.DB) })
 
+  // 日程を解析ジョブから直接入れる。サイトの bonuses.json はカードデータの自動更新が止まると古いまま残る
+  //（2026-09-30: 周年アップデートでその更新がテストで止まり、event 219 が載らなかった）
+  if (path === '/admin/events' && req.method === 'PUT') {
+    const events = parseSchedule(await readBody(req), now)
+    return json({ ok: true, count: events.length, changed: await upsertEvents(env.DB, events) })
+  }
+
   if (path === '/admin/shapes' && req.method === 'PUT') {
     const shapes = parseShapes(await readBody(req))
     if (!shapes) return error('shapes の形が不正', 400)
@@ -130,7 +138,8 @@ async function adminRoute(req: Request, env: Env, url: URL): Promise<Response> {
     if (!isRecord(body) || typeof body.id !== 'string' || typeof body.eventId !== 'number' || typeof body.kind !== 'string' || typeof body.text !== 'string') {
       return error('post の形が不正', 400)
     }
-    const queued = await queuePost(env.DB, body.id, body.eventId, body.kind, body.text, now)
+    if (body.payload !== undefined && !isRecord(body.payload)) return error('payload はオブジェクト', 400)
+    const queued = await queuePost(env.DB, body.id, body.eventId, body.kind, body.text, now, body.payload)
     return json({ ok: true, queued })
   }
 

@@ -4,6 +4,7 @@ import {
   MAX_GAP_MS,
   buildShape,
   candidateTable,
+  confidenceOf,
   interpGrid,
   predict,
   quantile,
@@ -103,6 +104,16 @@ describe('walkForward', () => {
   })
 })
 
+describe('confidenceOf', () => {
+  it('帯の幅で 高（10pt以内）・中（30pt以内）・目安（80pt以内）。それより広ければ出さない', () => {
+    expect(confidenceOf(-0.04, 0.05)).toBe('high')
+    expect(confidenceOf(-0.1, 0.15)).toBe('mid')
+    expect(confidenceOf(-0.2, 0.4)).toBe('rough')
+    expect(confidenceOf(-0.4, 0.5)).toBeNull()
+    expect(confidenceOf(null, 0.1)).toBeNull()
+  })
+})
+
 describe('predict', () => {
   const e = meta(10, 0)
   const flat = GRID.map((p) => p)
@@ -136,6 +147,54 @@ describe('predict', () => {
   it('minProgress より前は記録用に出すが visible = false', () => {
     expect(predict(model, e, 1000, 300, e.startAt + 45 * H)?.visible).toBe(false)
     expect(predict(model, e, 1000, 700, e.startAt + 105 * H)?.visible).toBe(true)
+  })
+
+  it('確度は帯の幅から付き、帯が広すぎる予測は記録だけして出さない', () => {
+    expect(predict(model, e, 1000, 500, e.startAt + 75 * H)?.confidence).toBe('high')
+    const wide: Model = {
+      ...model,
+      ranks: { '1000': { ...model.ranks['1000'], minProgress: 0.04, band: { lo: GRID.map(() => -0.5), hi: GRID.map(() => 0.5) } } },
+    }
+    const p = predict(wide, e, 1000, 500, e.startAt + 75 * H)
+    expect(p?.predicted).toBeCloseTo(1000, 0)
+    expect(p?.confidence).toBeNull()
+    expect(p?.visible).toBe(false)
+  })
+
+  it('過去に無い長さ: 範囲の外なら近い端の表を借りて帯を広げ、範囲の中なら all', () => {
+    const half = GRID.map((p) => Math.min(1, p * 1.2))
+    const m: Model = {
+      ...model,
+      knownDurations: [150, 222],
+      ranks: {
+        '1000': {
+          ...model.ranks['1000'],
+          minProgress: 0.04,
+          tables: { '150': flat, '222': flat, all: flat, far_long: half, far_short: flat },
+        },
+      },
+    }
+    const e246 = meta(12, 0, 246)
+    const t = e246.startAt + 123 * H // 経過 0.5
+    const p = predict(m, e246, 1000, 600, t)
+    expect(p?.extrapolatedFrom).toBe(222)
+    expect(p?.predicted).toBeCloseTo(600 / 0.6, 0) // far_long の 0.5×1.2
+    // 帯は 1.5 倍: 上側 0.02 → 0.03、下側 −0.05 → −0.075
+    expect(p?.low).toBeCloseTo(1000 / 1.03, 0)
+    expect(p?.high).toBeCloseTo(1000 / 0.925, 0)
+    const e198 = meta(13, 0, 198)
+    expect(predict(m, e198, 1000, 500, e198.startAt + 99 * H)?.extrapolatedFrom).toBeNull()
+  })
+
+  it('下側の誤差が −1 に近い帯は、上限が負や無限大になるので幅も確度も出さない', () => {
+    const broken: Model = {
+      ...model,
+      ranks: { '1000': { ...model.ranks['1000'], minProgress: 0.04, band: { lo: GRID.map(() => -0.97), hi: GRID.map(() => -0.3) } } },
+    }
+    const p = predict(broken, e, 1000, 500, e.startAt + 75 * H)
+    expect(p?.high).toBeNull()
+    expect(p?.confidence).toBeNull()
+    expect(p?.visible).toBe(false)
   })
 
   it('期間の表が無ければ all にフォールバックする', () => {

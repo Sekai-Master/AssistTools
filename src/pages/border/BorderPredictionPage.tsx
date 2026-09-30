@@ -1,12 +1,14 @@
 import { Panel } from "../../components/ui/Panel";
 import { ToolPage } from "../../components/ui/ToolPage";
-import { formatMan } from "../../../workers/border/src/posts";
+import { CONFIDENCE_LABEL, type Confidence } from "../../../workers/border/src/model";
+import { formatMan, formatRange } from "../../../workers/border/src/posts";
 import { DocLink } from "../legal/LegalDoc";
 import {
   candidateLabel,
   coverageRate,
   formatJst,
   formatPercent,
+  hiddenReason,
   isStale,
   phaseOf,
   rankViews,
@@ -91,26 +93,52 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
               <span className="text-sm font-bold text-slate-700">{r.rank}位</span>
               {r.visible && r.predicted != null ? (
                 <div>
-                  <p className="text-lg font-bold tabular-nums text-slate-800">{formatMan(r.predicted)}</p>
+                  <p className="flex items-baseline gap-2">
+                    <span className="text-lg font-bold tabular-nums text-slate-800">{formatMan(r.predicted)}</span>
+                    {r.confidence && <ConfidenceChip value={r.confidence} />}
+                  </p>
                   <p className="text-xs tabular-nums text-slate-500">
-                    {r.low != null && r.high != null && <>8割の幅 {formatMan(r.low)}〜{formatMan(r.high)}・</>}
+                    {r.low != null && r.high != null && <>8割の幅 {formatRange(r.low, r.high)}・</>}
                     いま {formatMan(r.current)}
                   </p>
                 </div>
               ) : (
                 <p className="text-xs leading-6 text-slate-500">
-                  いま {formatMan(r.current)}・
-                  {r.showFrom != null && r.showFrom <= 1
-                    ? `予測は経過${formatPercent(r.showFrom)}から出します（それより前は外れ幅が大きいため）`
-                    : "この順位は外れ幅が大きいので予測を出していません"}
+                  いま {formatMan(r.current)}・{hiddenReason(r, snap.progress)}
                 </p>
               )}
             </li>
           ))}
         </ul>
       )}
+      {snap.predicted && snap.extrapolatedFrom != null && (
+        <p className="mt-3 rounded-lg bg-slate-200/60 px-3 py-2 text-xs leading-6 text-slate-600">
+          このイベントは {snap.event.durationHours} 時間で、過去に同じ長さの回がありません。
+          いちばん近い {snap.extrapolatedFrom} 時間の回の伸び方で予測し、幅はいつもより広く取っています。
+        </p>
+      )}
+      {snap.predicted && (
+        <p className="mt-3 text-[11px] leading-5 text-slate-500">
+          確度は8割の幅の広さです。高＝±5%くらい、中＝±15%くらい、目安＝それより広い（序盤）。
+          序盤の目安は、全体の熱さを読むためのものとして見てください。
+        </p>
+      )}
       {snap.modelVersion && <p className="mt-2 text-[11px] text-slate-400">モデル {snap.modelVersion}</p>}
     </Panel>
+  );
+}
+
+const CONFIDENCE_TONE: Record<Confidence, string> = {
+  high: "bg-[color:var(--unit-color)]/20 text-slate-700",
+  mid: "bg-slate-200 text-slate-600",
+  rough: "border border-dashed border-slate-400 text-slate-500",
+};
+
+function ConfidenceChip({ value }: { value: Confidence }) {
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${CONFIDENCE_TONE[value]}`}>
+      確度 {CONFIDENCE_LABEL[value]}
+    </span>
   );
 }
 
@@ -128,7 +156,7 @@ function RecordPanel({ reports }: { reports: Report[] }) {
               {rep.name}
               <span className="ml-2 text-xs font-normal text-slate-500">{formatJst(rep.aggregateAt + 60_000).split(" ")[0]} 終了</span>
             </h3>
-            <table className="mt-2 w-full text-left text-xs tabular-nums">
+            <table className="mt-2 w-full table-fixed text-left text-xs tabular-nums">
               <thead className="text-slate-500">
                 <tr>
                   <th className="py-1 font-normal">順位</th>
@@ -140,7 +168,7 @@ function RecordPanel({ reports }: { reports: Report[] }) {
               <tbody className="text-slate-700">
                 {recordRows(rep).map((r) => (
                   <tr key={r.rank} className="border-t border-[color:var(--neu-edge)]">
-                    <td className="py-1.5">{r.rank}位</td>
+                    <td className="whitespace-nowrap py-1.5">{r.rank}位</td>
                     <td className="py-1.5">{formatMan(r.final)}</td>
                     <td className="py-1.5">{r.predicted != null ? formatMan(r.predicted) : "—"}</td>
                     <td className="py-1.5">
@@ -176,22 +204,24 @@ function ModelPanel({ model }: { model: ModelSummary }) {
         <thead className="text-slate-500">
           <tr>
             <th className="py-1 font-normal">順位</th>
-            <th className="py-1 font-normal">使っている候補</th>
-            <th className="py-1 font-normal">誤差の中央値（経過50%／90%）</th>
+            <th className="hidden py-1 font-normal sm:table-cell">使っている候補</th>
+            <th className="py-1 font-normal">誤差の中央値（開始6時間／経過50%／90%）</th>
             <th className="py-1 font-normal">8割の幅に入った率</th>
           </tr>
         </thead>
         <tbody className="text-slate-700">
           {model.ranks.map((r) => {
             const at = (p: number) => r.medianAbsError.find((x) => Math.abs(x.p - p) < 1e-9)?.value;
+            // 序盤の列は新しい版のモデルにしか無い（古い版のサマリでは —）
+            const early = r.medianAbsErrorEarly?.find((x) => Math.abs(x.p - 0.04) < 1e-9)?.value;
             const fmt = (v: number | null | undefined) => (v == null ? "—" : formatPercent(v, 1));
             const cov = coverageRate(r);
             return (
               <tr key={r.rank} className="border-t border-[color:var(--neu-edge)] align-top">
-                <td className="py-1.5">{r.rank}位</td>
-                <td className="py-1.5 pr-2">{candidateLabel(r.champion)}</td>
+                <td className="whitespace-nowrap py-1.5 pr-2">{r.rank}位</td>
+                <td className="hidden py-1.5 pr-2 sm:table-cell">{candidateLabel(r.champion)}</td>
                 <td className="py-1.5">
-                  {fmt(at(0.5))}／{fmt(at(0.9))}
+                  {fmt(early)}／{fmt(at(0.5))}／{fmt(at(0.9))}
                 </td>
                 <td className="py-1.5">{cov.total > 0 ? `${formatPercent(cov.covered / cov.total)}（${cov.total}回中）` : "—"}</td>
               </tr>
