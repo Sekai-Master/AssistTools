@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { niceCeil, parseHistory, shownRuns, timeTicks, visibleEnd, yTicks, yTop, type HistoryPoint } from "./chartData";
+import { formatAxisMan, niceCeil, parseHistory, shownRuns, timeTicks, visibleEnd, yTicks, yTop, type HistoryPoint } from "./chartData";
 
 const H = 3_600_000;
 
@@ -59,6 +59,27 @@ describe("縦軸", () => {
 
   it("目盛りは上端を4つに割る", () => {
     expect(yTicks(20_000_000)).toEqual([0, 5_000_000, 10_000_000, 15_000_000, 20_000_000]);
+  });
+
+  // ★ 「1億5,000万」は左の余白（44px）に収まらず、「1億」が切れて「5,000万」が2つ並んで見えた（2026-10-01 の本番・50位）
+  it("目盛りの字: 1億以上は億の小数で短く書く。1億未満と0は今までどおり", () => {
+    expect(formatAxisMan(150_000_000)).toBe("1.5億");
+    expect(formatAxisMan(125_000_000)).toBe("1.25億");
+    expect(formatAxisMan(100_500_000)).toBe("1.01億"); // ちょうど半分は上へ（toFixed だと "1億" になる）
+    expect(formatAxisMan(100_000_000)).toBe("1億");
+    expect(formatAxisMan(200_000_000)).toBe("2億");
+    expect(formatAxisMan(75_000_000)).toBe("7,500万");
+    expect(formatAxisMan(5_000_000)).toBe("500万");
+    expect(formatAxisMan(0)).toBe("0");
+  });
+
+  it("どの上端でも、目盛りの字は余白に入る長さ（「7,500万」の6字）まで", () => {
+    for (let k = 5; k <= 10; k += 1) {
+      for (const f of [1, 1.2, 2, 2.2, 4, 5, 7.5]) {
+        const labels = yTicks(niceCeil(f * 10 ** k)).map(formatAxisMan);
+        expect(labels.filter((s) => s.length > 6)).toEqual([]);
+      }
+    }
   });
 
   it("上端は実測と、出していた予測の幅の上まで入れる", () => {
