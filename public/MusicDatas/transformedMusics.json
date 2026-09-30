@@ -336,7 +336,8 @@
     "default": 1500101,
     "Unit": "4_WxS",
     "categories": [
-      "mv_3d"
+      "mv_3d",
+      "mv_2d"
     ],
     "publishedAt": 1560148031000,
     "published": true,
@@ -8335,7 +8336,8 @@
     "default": 1638001,
     "Unit": "5_25",
     "categories": [
-      "original"
+      "original",
+      "mv_2d"
     ],
     "publishedAt": 1709186400000,
     "published": true,
@@ -8471,7 +8473,8 @@
     "default": 1644901,
     "Unit": "5_25",
     "categories": [
-      "mv_3d"
+      "mv_3d",
+      "mv_2d"
     ],
     "publishedAt": 1728453600000,
     "published": true,
@@ -9805,6 +9808,25 @@
     "event_rate": 112
   },
   {
+    "id": "550",
+    "title": "shake it!",
+    "pronunciation": "しぇいくいっと",
+    "creatorArtistId": 69,
+    "artistName": "emon(Tes.)",
+    "default": 1368601,
+    "Unit": "2_MMJ",
+    "categories": [
+      "mv_3d"
+    ],
+    "publishedAt": 1788242400000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_550.webp",
+    "music_time": 131.6,
+    "event_rate": 116
+  },
+  {
     "id": "551",
     "title": "ロストアンブレラ",
     "pronunciation": "ろすとあんぶれら",
@@ -10425,7 +10447,8 @@
     "default": 2755501,
     "Unit": "9_oth",
     "categories": [
-      "mv_3d"
+      "mv_3d",
+      "mv_2d"
     ],
     "publishedAt": 1759158000000,
     "published": true,
@@ -11779,7 +11802,8 @@
     "default": 2662901,
     "Unit": "5_25",
     "categories": [
-      "mv_3d"
+      "mv_3d",
+      "mv_2d"
     ],
     "publishedAt": 1774703100000,
     "published": true,
@@ -12083,7 +12107,8 @@
     "default": 2463801,
     "Unit": "3_VBS",
     "categories": [
-      "mv_3d"
+      "mv_3d",
+      "mv_2d"
     ],
     "publishedAt": 1776344700000,
     "published": true,
@@ -12566,7 +12591,7 @@
     "isFullLength": false,
     "jacketLink": "jacket_s_706.webp",
     "music_time": 134.6,
-    "event_rate": 117
+    "event_rate": 116
   },
   {
     "id": "707",
@@ -12968,6 +12993,44 @@
     "event_rate": 113
   },
   {
+    "id": "729",
+    "title": "LEMON MELON COOKIE",
+    "pronunciation": "れもんめろんくっきー",
+    "creatorArtistId": 342,
+    "artistName": "TAK",
+    "default": 1369601,
+    "Unit": "2_MMJ",
+    "categories": [
+      "mv_3d"
+    ],
+    "publishedAt": 1791093600000,
+    "published": false,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_729.webp",
+    "music_time": 124,
+    "event_rate": 114
+  },
+  {
+    "id": "730",
+    "title": "エメラルド",
+    "pronunciation": "えめらるど",
+    "creatorArtistId": 74,
+    "artistName": "キタニタツヤ",
+    "default": 2769201,
+    "Unit": "9_oth",
+    "categories": [
+      "mv_3d"
+    ],
+    "publishedAt": 1790694000000,
+    "published": true,
+    "isNewlyWrittenMusic": true,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_730.webp",
+    "music_time": 119.1,
+    "event_rate": 113
+  },
+  {
     "id": "732",
     "title": "天藍のアイスヘヴン",
     "pronunciation": "てんらんのあいすへゔん",
@@ -13109,7 +13172,7 @@
     "default": 2464401,
     "Unit": "3_VBS",
     "categories": [
-      "image"
+      "mv_2d"
     ],
     "publishedAt": 1778220000000,
     "published": true,
@@ -13402,7 +13465,7 @@
     "isFullLength": false,
     "jacketLink": "jacket_s_755.webp",
     "music_time": 156.2,
-    "event_rate": 123
+    "event_rate": 122
   },
   {
     "id": "756",
@@ -13440,7 +13503,7 @@
     "isFullLength": false,
     "jacketLink": "jacket_s_757.webp",
     "music_time": 129.7,
-    "event_rate": 116
+    "event_rate": 115
   },
   {
     "id": "758",
@@ -13538,6 +13601,82 @@
     "event_rate": 105
   },
   {
+    "id": "766",
+    "title": "アブノーマリティ･ダンシンガール",
+    "pronunciation": "あぶのーまりてぃだんしんがーる",
+    "creatorArtistId": 341,
+    "artistName": "ぐちり",
+    "default": 1269401,
+    "Unit": "1_L/n",
+    "categories": [
+      "mv_3d"
+    ],
+    "publishedAt": 1790920800000,
+    "published": false,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_766.webp",
+    "music_time": 130.2,
+    "event_rate": 116
+  },
+  {
+    "id": "774",
+    "title": "ラビットホール",
+    "pronunciation": "らびっとほーる",
+    "creatorArtistId": 4,
+    "artistName": "DECO*27",
+    "default": 1169501,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1791007200000,
+    "published": false,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_774.webp",
+    "music_time": 128.4,
+    "event_rate": 115
+  },
+  {
+    "id": "775",
+    "title": "ドゥーマー",
+    "pronunciation": "どぅーまー",
+    "creatorArtistId": 343,
+    "artistName": "東京真中",
+    "default": 1169701,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1791180000000,
+    "published": false,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_775.webp",
+    "music_time": 121.5,
+    "event_rate": 113
+  },
+  {
+    "id": "784",
+    "title": "オブソミート",
+    "pronunciation": "おぶそみーと",
+    "creatorArtistId": 207,
+    "artistName": "サツキ",
+    "default": 1169301,
+    "Unit": "0_VS",
+    "categories": [
+      "original"
+    ],
+    "publishedAt": 1790834400000,
+    "published": false,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_784.webp",
+    "music_time": 125.6,
+    "event_rate": 114
+  },
+  {
     "id": "788",
     "title": "アンチサイノウ",
     "pronunciation": "あんちさいのう",
@@ -13554,7 +13693,7 @@
     "isFullLength": false,
     "jacketLink": "jacket_s_788.webp",
     "music_time": 91,
-    "event_rate": 105
+    "event_rate": 104
   },
   {
     "id": "789",
@@ -13592,7 +13731,7 @@
     "isFullLength": false,
     "jacketLink": "jacket_s_790.webp",
     "music_time": 124.1,
-    "event_rate": 114
+    "event_rate": 113
   },
   {
     "id": "791",
@@ -13688,5 +13827,119 @@
     "jacketLink": "jacket_s_802.webp",
     "music_time": 121.6,
     "event_rate": 113
+  },
+  {
+    "id": "803",
+    "title": "空に免じて",
+    "pronunciation": "そらにめんじて",
+    "creatorArtistId": 108,
+    "artistName": "傘村トータ",
+    "default": 1168501,
+    "Unit": "0_VS",
+    "categories": [
+      "original"
+    ],
+    "publishedAt": 1787896800000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_803.webp",
+    "music_time": 131.5,
+    "event_rate": 116
+  },
+  {
+    "id": "804",
+    "title": "正解",
+    "pronunciation": "せいかい",
+    "creatorArtistId": 317,
+    "artistName": "雨良 Amala",
+    "default": 2468701,
+    "Unit": "3_VBS",
+    "categories": [
+      "mv_2d"
+    ],
+    "publishedAt": 1788674400000,
+    "published": true,
+    "isNewlyWrittenMusic": true,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_804.webp",
+    "music_time": 122.1,
+    "event_rate": 114
+  },
+  {
+    "id": "805",
+    "title": "きのせい",
+    "pronunciation": "きのせい",
+    "creatorArtistId": 340,
+    "artistName": "imie",
+    "default": 1169101,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1790143200000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_805.webp",
+    "music_time": 103,
+    "event_rate": 108
+  },
+  {
+    "id": "809",
+    "title": "敗走",
+    "pronunciation": "はいそう",
+    "creatorArtistId": 108,
+    "artistName": "傘村トータ",
+    "default": 1168901,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1789797600000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_809.webp",
+    "music_time": 116,
+    "event_rate": 112
+  },
+  {
+    "id": "811",
+    "title": "ヘレディティ",
+    "pronunciation": "へれでぃてぃ",
+    "creatorArtistId": 207,
+    "artistName": "サツキ",
+    "default": 2568801,
+    "Unit": "4_WxS",
+    "categories": [
+      "mv_2d"
+    ],
+    "publishedAt": 1789365600000,
+    "published": true,
+    "isNewlyWrittenMusic": true,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_811.webp",
+    "music_time": 127,
+    "event_rate": 115
+  },
+  {
+    "id": "814",
+    "title": "こわれちゃった！！",
+    "pronunciation": "こわれちゃった",
+    "creatorArtistId": 96,
+    "artistName": "タケノコ少年",
+    "default": 1169001,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1790056800000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_814.webp",
+    "music_time": 118.6,
+    "event_rate": 112
   }
 ]
