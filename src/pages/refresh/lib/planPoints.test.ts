@@ -52,7 +52,7 @@ describe("mySekaiPoints — 採取の点数", () => {
   });
 
   /**
-   * event214 の実測との突き合わせ（wl214/params.json の mysekai）。
+   * event214 の実測との突き合わせ（Sekai-Master-Private の public/wl214/params.json の mysekai）。
    * 総合力33.6万・ボーナス821%・ブースト（×500）で 単価7,500・全回収671,000pt。
    * ここがズレたら、マイセカイの点数はどこかで壊れている。
    */
