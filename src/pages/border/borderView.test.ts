@@ -39,6 +39,19 @@ describe("hiddenReason", () => {
     expect(hiddenReason({ showFrom: 1.01 }, 0.5)).toBe("外れ幅が大きすぎるので、いまは予測を出していません");
     expect(hiddenReason({ showFrom: 0.04 }, 0.5)).toBe("外れ幅が大きすぎるので、いまは予測を出していません");
   });
+
+  // ★ モデルがまだ無い（立ち上げ直後など）ときに「外れ幅が大きすぎる」と言わない
+  it("出し始めが分からないときは理由を決めつけない", () => {
+    expect(hiddenReason({ showFrom: null }, 0.5)).toBe("予測はまだ出していません");
+  });
+
+  // ★ 経過4% は長さで時刻が変わる（150時間なら約6時間、246時間なら約10時間）
+  it("イベントを渡すと、出し始める時刻を添える", () => {
+    const e150 = { startAt: START, aggregateAt: START + 150 * H - 60_000 };
+    expect(hiddenReason({ showFrom: 0.04 }, 0.01, e150)).toBe("予測は経過4%（10/1 21:00ごろ）から出します");
+    const e246 = { startAt: START, aggregateAt: START + 246 * H - 60_000 };
+    expect(hiddenReason({ showFrom: 0.04 }, 0.01, e246)).toBe("予測は経過4%（10/2 00:50ごろ）から出します");
+  });
 });
 
 describe("recordRows", () => {
