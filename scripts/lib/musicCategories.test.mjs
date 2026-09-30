@@ -21,6 +21,8 @@ describe("別表（musicCategories.json）の索引", () => {
       null,
       { id: 1, musicCategoryName: "mv" },
       { id: 2, musicId: 10, musicCategoryName: 5 },
+      // 行の id が無いと並び順を保証できない
+      { musicId: 10, musicCategoryName: "image" },
       row(3, 10, "mv"),
     ]);
     expect([...index.keys()]).toEqual([10]);
@@ -45,6 +47,11 @@ describe("1曲のカテゴリ", () => {
   it("別表に行が無ければ musics.json の欄を使う", () => {
     const r = resolveCategories({ id: 241, categories: ["original"] }, index, none);
     expect(r).toEqual({ categories: ["original"], source: "field" });
+  });
+
+  it("musics.json の欄の文字列でない要素は捨てる", () => {
+    const r = resolveCategories({ id: 241, categories: ["mv", null, 3] }, index, none);
+    expect(r).toEqual({ categories: ["mv_3d"], source: "field" });
   });
 
   // ★ 別表が取れない・形が変わったときに、ビンゴのためだけに更新全体を止めない。
@@ -107,7 +114,11 @@ describe("別表から取れた曲の割合", () => {
     expect(tableShare([])).toBe(1);
   });
 
-  it("警告の境目は半分", () => {
+  it("警告の境目は半分（ちょうど半分は警告しない。呼び出し側は < で比べる）", () => {
     expect(MIN_TABLE_SHARE).toBe(0.5);
+    expect(tableShare([{ source: "table" }, { source: "none" }]) < MIN_TABLE_SHARE).toBe(false);
+    expect(tableShare([{ source: "table" }, { source: "none" }, { source: "none" }]) < MIN_TABLE_SHARE).toBe(
+      true
+    );
   });
 });

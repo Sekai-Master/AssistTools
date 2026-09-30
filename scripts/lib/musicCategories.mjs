@@ -18,11 +18,17 @@
 /** 別表から取れた曲がこの割合を切ったら、上流の形が変わったとみなして警告する。 */
 export const MIN_TABLE_SHARE = 0.5;
 
-/** 別表の行を musicId → カテゴリ名の配列（行の id 順）にまとめる。壊れた行は捨てる。 */
+/**
+ * 別表の行を musicId → カテゴリ名の配列（行の id 順）にまとめる。
+ * 壊れた行（行の id・musicId・名前のどれかが無い）は捨てる。
+ */
 export function indexMusicCategories(rows) {
   const valid = (Array.isArray(rows) ? rows : [])
-    .filter((r) => r && r.musicId != null && typeof r.musicCategoryName === "string")
-    .sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+    .filter(
+      (r) =>
+        r && Number.isFinite(r.id) && r.musicId != null && typeof r.musicCategoryName === "string"
+    )
+    .sort((a, b) => a.id - b.id);
   const index = new Map();
   for (const r of valid) {
     index.set(r.musicId, [...(index.get(r.musicId) ?? []), r.musicCategoryName]);
@@ -59,7 +65,10 @@ function normalize(names) {
 export function resolveCategories(music, index, previous) {
   const fromTable = index.get(music.id);
   if (fromTable) return { categories: normalize(fromTable), source: "table" };
-  if (Array.isArray(music.categories)) return { categories: normalize(music.categories), source: "field" };
+  if (Array.isArray(music.categories)) {
+    const names = music.categories.filter((c) => typeof c === "string");
+    return { categories: normalize(names), source: "field" };
+  }
   const kept = previous.get(music.id);
   if (kept) return { categories: kept, source: "previous" };
   return { categories: [], source: "none" };

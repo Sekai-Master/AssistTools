@@ -271,6 +271,15 @@ async function toThumbnail(input) {
         '上流の形が変わった可能性がある（#130）'
     );
   }
+  // 別表が取れているのに1曲だけ行が消えた、も引き継ぎで黙って埋まるので、どの曲かを出しておく。
+  const keptIds = [...categoryOf].filter(([, r]) => r.source === 'previous').map(([id]) => id);
+  if (keptIds.length > 0) {
+    const shown = keptIds.slice(0, 20).join(', ');
+    console.warn(
+      `⚠ 別表に行が無く、直前の配信データのカテゴリを引き継いだ曲 ${keptIds.length}件: ` +
+        (keptIds.length > 20 ? `${shown} ほか` : shown)
+    );
+  }
   const noCategory = transformed.filter((m) => m.published && m.categories.length === 0);
   if (noCategory.length > 0) {
     console.warn(
