@@ -249,6 +249,21 @@ describe("マイセカイのゲート", () => {
     const r = deckPower([owned(60, { level: 1 })], {}, t);
     expect(r.gate).toBe(0);
   });
+
+  // ★ 入力の上限はマスタの段数より余裕を持たせてある（GATE_LEVEL_INPUT_MAX）。
+  //   ここの合成の表は Lv2 まで。
+  it("表に無いレベルは黙って0にせず missing に出す", () => {
+    const r = deckPower([owned(60, { level: 1 })], { gateLevels: { light_sound: 3 } }, t);
+    expect(r.missing).toEqual(["ゲート（Leo/need）: Lv3 の率が無い"]);
+  });
+
+  // ★ 6周年の「交わるセカイのゲート」（unit=none）は率を持たない。
+  it("率を持たないゲートがあっても、VS の「一番高いもの」は変わらない", () => {
+    const t3 = { ...t, gates: [...t.gates, { id: 6, unit: "none", rates: [] }] };
+    const r = deckPower([owned(60, { level: 1 })], { gateLevels: { light_sound: 2 } }, t3);
+    expect(r.gate).toBe(69);
+    expect(r.missing).toEqual([]);
+  });
 });
 
 describe("家具・称号", () => {

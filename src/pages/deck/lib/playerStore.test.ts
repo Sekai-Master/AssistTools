@@ -20,7 +20,13 @@ import {
   writePlayerSettings,
   type PlayerSettings,
 } from "./playerStore";
-import { deckPower, type DeckPowerCard, type PowerTables } from "./power";
+import {
+  CHARACTER_RANK_INPUT_MAX,
+  GATE_LEVEL_INPUT_MAX,
+  deckPower,
+  type DeckPowerCard,
+  type PowerTables,
+} from "./power";
 import measurements from "./measurements.json";
 
 const DATA = path.join(process.cwd(), "public/CardDatas");
@@ -82,16 +88,17 @@ describe("保存", () => {
   it("壊れた値・範囲外は落として既定に倒す", () => {
     const parsed = parsePlayerSettings({
       areaEffects: { units: { light_sound: 15, bad: "x" }, attrs: { cool: 999 }, chars: { 1: 30, a: 5 } },
-      characterRanks: { 1: 58, 2: -1 },
-      gateLevels: { light_sound: 2, idol: 99 },
+      characterRanks: { 1: 58, 2: -1, 3: 205, 4: CHARACTER_RANK_INPUT_MAX + 1 },
+      gateLevels: { light_sound: 2, street: 70, idol: GATE_LEVEL_INPUT_MAX + 1 },
       fixtures: { 2: { S: 1, M: "x", L: null }, x: { S: 1 } },
       honorBonus: -3,
     });
     expect(parsed.areaEffects.units).toEqual({ light_sound: 15 });
     expect(parsed.areaEffects.attrs).toEqual({});
     expect(parsed.areaEffects.chars).toEqual({ 1: 30 });
-    expect(parsed.characterRanks).toEqual({ 1: 58 });
-    expect(parsed.gateLevels).toEqual({ light_sound: 2 });
+    // ★ 6周年でキャラランクの表は CR205、ゲートは Lv70 まで伸びた。そこまでは落とさない。
+    expect(parsed.characterRanks).toEqual({ 1: 58, 3: 205 });
+    expect(parsed.gateLevels).toEqual({ light_sound: 2, street: 70 });
     expect(parsed.fixtures).toEqual({ 2: { S: 1, M: 0, L: 0 } });
     expect(parsed.honorBonus).toBe(0);
   });
