@@ -5,6 +5,7 @@ import { cn } from "../../lib/utils";
 import { AREA_UNIT_ORDER, ATTR_LABEL, ATTR_ORDER, CHARACTERS, UNIT_NAME } from "./lib/characters";
 import { sanitizeDecimal } from "./lib/deckInputs";
 import type { FixtureCounts, PlayerSettings } from "./lib/playerStore";
+import { CHARACTER_RANK_INPUT_MAX, GATE_LEVEL_INPUT_MAX } from "./lib/power";
 
 /**
  * プレイヤー固有の育成状況の入力。
@@ -129,7 +130,7 @@ export function PlayerSettingsPanel({
         <Section
           title="エリアアイテム効果"
           where="持ち物 → エリアアイテム → 効果確認"
-          hint="効果一覧に出ている％をそのまま。同ユニット・同属性だけで揃えたときの2倍は自動で計算します"
+          hint="効果一覧に出ている％をそのまま。同ユニット・同属性だけで揃えたときの2倍は自動で計算します。6周年で増えた「想いの大樹」（全キャラクター・2種類以上のユニットで編成したとき）は、まだ計算に入っていません"
         >
           <div className="space-y-3">
             <div>
@@ -208,7 +209,7 @@ export function PlayerSettingsPanel({
                         <NumCell
                           label={`${c.name} のキャラクターランク`}
                           value={settings.characterRanks[c.ch] ?? 0}
-                          max={200}
+                          max={CHARACTER_RANK_INPUT_MAX}
                           width="w-12"
                           onChange={(v) =>
                             onChange({
@@ -229,7 +230,7 @@ export function PlayerSettingsPanel({
 
         <Section
           title="マイセカイのゲート"
-          hint="レベル1〜40。ゲートは5ユニットぶんだけで、VS のゲートはありません"
+          hint="ゲーム内のレベルをそのまま。入れるのはユニットの5つだけです（VS のゲートは無く、6周年で増えた「交わるセカイのゲート」は総合力に効きません）"
         >
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
             {AREA_UNIT_ORDER.filter((u) => u !== "piapro").map((u) => (
@@ -237,7 +238,7 @@ export function PlayerSettingsPanel({
                 <NumCell
                   label={`${UNIT_NAME[u]} のゲートのレベル`}
                   value={settings.gateLevels[u] ?? 0}
-                  max={40}
+                  max={GATE_LEVEL_INPUT_MAX}
                   onChange={(v) =>
                     onChange({ ...settings, gateLevels: { ...settings.gateLevels, [u]: Math.trunc(v) } })
                   }

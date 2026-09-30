@@ -11,7 +11,9 @@
  *   「S を何個置いたか」が復元できなくなる。
  */
 import {
+  CHARACTER_RANK_INPUT_MAX,
   FIXTURE_RATE_BY_SIZE,
+  GATE_LEVEL_INPUT_MAX,
   areaRatesFromEffects,
   type AreaEffects,
   type PlayerState,
@@ -29,7 +31,7 @@ export interface PlayerSettings {
   areaEffects: AreaEffects;
   /** キャラ → キャラクターランク。CR50 で上限5%。 */
   characterRanks: Record<number, number>;
-  /** ユニット内部名 → マイセカイのゲートのレベル（1〜40。0 は未設置）。 */
+  /** ユニット内部名 → マイセカイのゲートのレベル（0 は未設置）。 */
   gateLevels: Record<string, number>;
   /** キャラ → 置いた家具の個数。 */
   fixtures: Record<number, FixtureCounts>;
@@ -99,8 +101,10 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
       attrs: numRecord(area.attrs, { numericKey: false, max: 100 }),
       chars: toNumberKeys(numRecord(area.chars, { numericKey: true, max: 100 })),
     },
-    characterRanks: toNumberKeys(numRecord(p.characterRanks, { numericKey: true, max: 200 })),
-    gateLevels: numRecord(p.gateLevels, { numericKey: false, max: 40 }),
+    characterRanks: toNumberKeys(
+      numRecord(p.characterRanks, { numericKey: true, max: CHARACTER_RANK_INPUT_MAX })
+    ),
+    gateLevels: numRecord(p.gateLevels, { numericKey: false, max: GATE_LEVEL_INPUT_MAX }),
     fixtures,
     honorBonus: isNum(p.honorBonus) && p.honorBonus >= 0 ? p.honorBonus : 0,
     // 外部由来なので長さを切り、制御文字は落とす（画像に描く値なので暴れさせない）。

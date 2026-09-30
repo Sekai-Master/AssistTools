@@ -13,6 +13,7 @@
  *   称号           … 編成に1回だけ足す固定値
  * ═══════════════════════════════════════════════════════════════════
  */
+import { UNIT_NAME } from "./characters";
 
 /** ゲーム内の割合は float32 で計算されている。→ ratePower のコメント参照。 */
 const f = Math.fround;
@@ -54,7 +55,10 @@ export interface PowerTables {
   /** マイセカイキャンバスの固定加算（レアリティで額が違う）。 */
   canvasBonuses: { rarity: string; power: number[] }[];
   characterRanks: { ch: number; rank: number; rate: number[] }[];
-  /** マイセカイのゲート。rates[0] が Lv1。**5基のみで VS のゲートは無い。** */
+  /**
+   * マイセカイのゲート。rates[0] が Lv1。**率を持つのはユニットの5基だけで、VS のゲートは無い。**
+   * 6周年で増えた「交わるセカイのゲート」（unit=none）はレベルの行が無く、rates は空。
+   */
   gates: { id: number; unit: string; rates: number[] }[];
   unitCharacters: { id: number; ch: number; unit: string }[];
 }
@@ -105,6 +109,25 @@ export interface AreaRate {
 export const FIXTURE_RATE_BY_SIZE = { S: 0.1, M: 0.3, L: 0.6 } as const;
 
 /**
+ * 入力を受け付けるゲートのレベルの上限（ゲームの上限ではない）。
+ *
+ * ★ 6周年（マスタ 7.0.0.13）で、マスタのレベルの表が 40 段から 70 段に伸びた。
+ *   上限を 40 と直書きしていたので、41 以上を入れられなかった。
+ * ★ **マスタの段数ちょうどにしない。** 超えたら power.real.test.ts が落ちるが、
+ *   そのテストはカードデータの自動更新の門番でもあるので、落ちるとデータ全体が止まる。
+ *   余裕を持たせておき、表に無いレベルは deckPower() が missing に出す。
+ */
+export const GATE_LEVEL_INPUT_MAX = 100;
+
+/**
+ * 入力を受け付けるキャラクターランクの上限（同上）。
+ *
+ * ★ 率は CR50 の 5% で頭打ちだが、ランクそのものは表に行が無いと計算できない
+ *  （missing に出る）。6周年でマスタの表が CR205 まで伸びた（以前の上限は 200）。
+ */
+export const CHARACTER_RANK_INPUT_MAX = 250;
+
+/**
  * ゲーム内の「エリアアイテム効果一覧」に出ている値をそのまま写したもの。
  *
  * ★ スクショ解析はしない（アイコンに文字が無く、色と並び順に頼る読み取りになる）。
@@ -126,6 +149,10 @@ export interface AreaEffects {
  *   マスタ上は**ユニット・タイプのアイテムは必ず通常の2倍**（キャラのアイテムは
  *   全一致でも増えない）。配信データの全行でそうなっていることを
  *   power.real.test.ts が確認しているので、ここで 2 倍にしてしまってよい。
+ *
+ * ★ 6周年で増えた「想いの大樹」（全キャラ＋2種類以上のユニットで編成したとき）は
+ *   **まだ入力も計算も無い**。「2種類以上」の数え方（VS のカードをどう数えるか）を
+ *   実機で確かめてから足す（issue #136）。全一致の2倍は付かない（マスタで 0）。
  */
 export function areaRatesFromEffects(e: AreaEffects): AreaRate[] {
   const rate3 = (v: number) => [v, v, v];
@@ -149,7 +176,7 @@ export interface PlayerState {
   areaRates?: AreaRate[];
   /** キャラ → キャラクターランク。CR50 で上限5%、それ以上は伸びない。 */
   characterRanks?: Record<number, number>;
-  /** ユニット → ゲートのレベル（1〜40）。 */
+  /** ユニット → ゲートのレベル（1〜。表に無いレベルは missing に出す）。 */
   gateLevels?: Record<string, number>;
   /**
    * キャラ → 家具ボーナス(%)。**単位は % なので、S のぬいぐるみ1個なら 0.1。**
@@ -257,6 +284,7 @@ function areaUnitOf(
  *
  * ★ VS（piapro）のゲートは存在しない。実測では**全ゲートのうち一番高いもの**が効く
  *  （レン単体 34596 のとき、レオニだけ Lv2 で 69 ＝ 34596×0.2% だった）。
+ *   率を持たない「交わるセカイのゲート」（unit=none）は、ここでは常に 0 になる。
  *   ユニット限定カードはそのユニットのゲートだけを見る（モモジャンのリンが
  *   レオニ Lv2 に引っ張られず 0.1% ぶんだった）。
  */
@@ -337,6 +365,16 @@ export function deckPower(
   tables: PowerTables
 ): DeckPowerResult {
   const missing: string[] = [];
+
+  // ★ 表に無いゲートのレベルは黙って0にしない。入力の上限はマスタの段数より余裕を
+  //   持たせてあるので、打ち間違いや、ゲームの上限が上がった直後でデータの更新が
+  //   追いついていない間にここへ来る。
+  for (const [unit, lv] of Object.entries(player.gateLevels ?? {})) {
+    if (typeof lv !== "number" || lv < 1) continue;
+    const g = tables.gates.find((x) => x.unit === unit);
+    if (g?.rates[lv - 1] == null) missing.push(`ゲート（${UNIT_NAME[unit] ?? unit}）: Lv${lv} の率が無い`);
+  }
+
   const resolved = deck.map((owned) => {
     const card = tables.cards.find((c) => c.id === owned.cardId);
     if (!card) missing.push(`カード${owned.cardId}: カタログに無い`);

@@ -15,7 +15,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { AREA_UNIT_ORDER, ATTR_ORDER } from "./characters";
 import {
+  CHARACTER_RANK_INPUT_MAX,
+  GATE_LEVEL_INPUT_MAX,
   areaRatesFromEffects,
   deckPower,
   type AreaEffects,
@@ -56,31 +59,81 @@ const player: PlayerState = {
 };
 
 describe("配信データの前提", () => {
+  /** ゲートを持つユニット。VS（piapro）のゲートは無い。 */
+  const ゲートのあるユニット = new Set<string>(AREA_UNIT_ORDER.filter((u) => u !== "piapro"));
+  const ユニット = new Set<string>(AREA_UNIT_ORDER);
+  const タイプ = new Set<string>(ATTR_ORDER);
+  type Row = { unit?: string; attr?: string; ch?: number; rate: number[]; allMatch: number[] };
+  const rows: Row[] = power.areaItems;
+
+  /**
+   * エリアアイテムの行の対象の種類。**対象の欄は1つだけが実値で、残りは "any"** の形しか
+   * 知らないので、それ以外（ユニットと属性の両方が実値、など）は「不明」に落とす。
+   */
+  const 種類 = (a: Row): string => {
+    if (a.ch != null) return a.unit === "any" && a.attr === "any" ? "キャラ" : "不明";
+    if (ユニット.has(a.unit ?? "")) return a.attr === "any" ? "ユニット" : "不明";
+    if (タイプ.has(a.attr ?? "")) return a.unit === "any" ? "タイプ" : "不明";
+    if (a.unit === "multi_unit" && a.attr === "any") return "複数ユニット";
+    if (a.unit === "any" && a.attr === "any") return "全キャラ";
+    return "不明";
+  };
+
   it("総合力に要る表が全部入っている", () => {
     expect(tables.cards.length).toBeGreaterThan(1000);
-    expect(tables.gates).toHaveLength(5);
-    expect(tables.gates.every((g) => g.rates.length === 40)).toBe(true);
+    // ★ 率を持つゲートはユニットの5基だけ。段数は5基とも同じ（6周年で 40→70 段）。
+    const 率あり = tables.gates.filter((g) => g.rates.length > 0);
+    expect(new Set(率あり.map((g) => g.unit))).toEqual(ゲートのあるユニット);
+    expect(new Set(率あり.map((g) => g.rates.length)).size).toBe(1);
     // ★ 一度落とした欄。キャラ別のエリア効果26種がここに乗る。
     expect(power.areaItems.some((a: { ch?: number }) => a.ch != null)).toBe(true);
   });
 
+  // ★ 6周年で「交わるセカイのゲート」（unit=none）が増えたが、レベルの行が無い。
+  //   ここに率が入ったら、どのカードに効くのかを確かめてから power.ts に足すこと。
+  it("ユニット以外のゲートは総合力の率を持たない", () => {
+    const ほか = tables.gates.filter((g) => !ゲートのあるユニット.has(g.unit));
+    expect(ほか.filter((g) => g.rates.length > 0)).toEqual([]);
+  });
+
+  // ★ 入力の上限がマスタより小さいと、上のレベル・ランクを入れられず総合力が低く出る
+  //  （6周年でゲートが 40→70 段になり、直書きの 40 で入れられなくなっていた）。
+  //   上限には余裕を持たせてあるので、ここが落ちるのはマスタがそれも超えたとき。
+  it("入力の上限がマスタの段数に足りている", () => {
+    for (const g of tables.gates) expect(g.rates.length).toBeLessThanOrEqual(GATE_LEVEL_INPUT_MAX);
+    const 最大ランク = tables.characterRanks.reduce((m, r) => Math.max(m, r.rank), 0);
+    expect(最大ランク).toBeLessThanOrEqual(CHARACTER_RANK_INPUT_MAX);
+  });
+
   // ★ 0.1 に丸め直すと float32 の計算が変わって実機と1ずれる。
   it("ゲートの率が生の float32 値のまま入っている", () => {
-    expect(tables.gates[0].rates[0]).toBe(0.10000000149011612);
+    const 最初の = tables.gates.find((g) => g.rates.length > 0);
+    expect(最初の?.rates[0]).toBe(0.10000000149011612);
   });
 
   // ★ areaRatesFromEffects() が「全一致なら2倍」と決め打ちしている根拠。
   //   ここが崩れたら、効果一覧の数字だけからは全一致ぶんを出せなくなる。
   it("ユニット・タイプのエリアアイテムは全一致で必ず2倍、キャラのアイテムは増えない", () => {
-    type Row = { unit?: string; attr?: string; ch?: number; rate: number[]; allMatch: number[] };
-    const rows: Row[] = power.areaItems;
-    const 対象あり = (v?: string) => !!v && v !== "any";
-    const ユニットかタイプ = rows.filter((a) => 対象あり(a.unit) || 対象あり(a.attr));
-    const キャラ = rows.filter((a) => a.ch != null);
+    const ユニットかタイプ = rows.filter((a) => 種類(a) === "ユニット" || 種類(a) === "タイプ");
+    const キャラ = rows.filter((a) => 種類(a) === "キャラ");
     expect(ユニットかタイプ.length).toBeGreaterThan(0);
     expect(キャラ.length).toBeGreaterThan(0);
     expect(ユニットかタイプ.filter((a) => a.rate.some((v, i) => a.allMatch[i] !== v * 2))).toEqual([]);
     expect(キャラ.filter((a) => a.rate.some((v, i) => a.allMatch[i] !== v))).toEqual([]);
+  });
+
+  // ★ 6周年の「想いの大樹」で、対象が「全キャラ」（unit=any・attr=any）と
+  //  「2種類以上のユニットで編成したとき」（unit=multi_unit）の行が増えた。
+  //   power.ts はこの2種類をまだ計算していない（issue #136）。
+  //   これ以外の種類が増えたら、ここで止めて何を足すか決める。
+  it("エリアアイテムの対象は既知の種類だけで、全キャラ・複数ユニットに全一致の加算は無い", () => {
+    // 落ちたときにどの行かが分かるよう、対象の欄をそのまま出す。
+    const 不明 = rows
+      .filter((a) => 種類(a) === "不明")
+      .map((a) => `unit=${a.unit} attr=${a.attr} ch=${a.ch}`);
+    expect(不明).toEqual([]);
+    const 新しい種類 = rows.filter((a) => 種類(a) === "複数ユニット" || 種類(a) === "全キャラ");
+    expect(新しい種類.filter((a) => a.allMatch.some((v) => v !== 0))).toEqual([]);
   });
 });
 
