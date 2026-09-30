@@ -161,6 +161,15 @@ describe('API', () => {
     expect(got.shapes).toHaveLength(1)
   })
 
+  it('日程を管理 API で入れると、Cron がそのイベントを開催中として拾う', async () => {
+    const put = await handleRequest(adminReq('/admin/events', { method: 'PUT', body: JSON.stringify({ events: [EVENT, { id: 'x' }, null] }) }), env)
+    expect(await put.json()).toMatchObject({ ok: true, count: 1 })
+    // bonuses.json を返さない fetch でも、日程が入っていれば収集する
+    const r = await runCron(env, START + H, (async (input: RequestInfo | URL) =>
+      String(input).includes('/event/live') ? Response.json(liveBody(219, START + H, 0.01)) : new Response('gone', { status: 500 })) as typeof fetch)
+    expect(r).toMatchObject({ status: 'collected', eventId: 219 })
+  })
+
   it('同じ版のモデルは入れ直さない', async () => {
     const put = () => handleRequest(adminReq('/admin/model', { method: 'PUT', body: JSON.stringify({ model: linear, summary: { version: linear.version } }) }), env)
     expect(await (await put()).json()).toMatchObject({ changed: true })
