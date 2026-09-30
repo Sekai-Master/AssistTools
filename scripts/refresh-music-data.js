@@ -9,6 +9,7 @@ import {
   resolveCategories,
   tableShare,
 } from './lib/musicCategories.mjs';
+import { auditUnreleased, splitByRelease } from './lib/musicRelease.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -99,6 +100,13 @@ async function toThumbnail(input) {
   };
   const now = Date.now();
 
+  // ★ 公開日を過ぎた曲だけを扱う（scripts/lib/musicRelease.mjs）。公開前の曲は曲名もジャケットも出さない。
+  //   ログにも件数だけ出す（この repo の Actions のログは誰でも読めるので、曲名を書くと漏れる）。
+  const { released: releasedMusics, upcoming } = splitByRelease(musics, now);
+  if (upcoming.length > 0) {
+    console.log(`公開前の曲 ${upcoming.length}曲は入れない（公開日を過ぎた最初の更新で入る）`);
+  }
+
   // 難易度別データを music_id で引けるようにまとめる。
   //
   // event_rate と music_time は難易度によらず同じ値なので曲の直下に置く（従来どおり）。
@@ -185,16 +193,17 @@ async function toThumbnail(input) {
   const categoryIndex = indexMusicCategories(musicCategories);
   const previousCategories = previousCategoriesFrom(previousSnapshot);
   const categoryOf = new Map(
-    musics.map((m) => [m.id, resolveCategories(m, categoryIndex, previousCategories)])
+    releasedMusics.map((m) => [m.id, resolveCategories(m, categoryIndex, previousCategories)])
   );
 
-  const transformed = musics.map((m) => {
+  const transformed = releasedMusics.map((m) => {
     const id = String(m.id).padStart(3, '0');
     const artist = artists.find((a) => a.id === m.creatorArtistId);
     const seqStr = String(m.seq);
     const unit = unitMapping[seqStr.length >= 2 ? seqStr[1] : ''] || '';
     const { categories } = categoryOf.get(m.id);
     const meta = metas.find((x) => x.music_id === m.id);
+    // 公開前の曲はもう入ってこないので、ここで false になるのは配信停止とイベント限定だけ
     let published = m.publishedAt <= now;
     if (deletedIds.has(id)) published = false;
     // メドレー等（イベント限定・ソロ常設なし）は調整候補から除外する。
@@ -223,18 +232,26 @@ async function toThumbnail(input) {
   // 難易度別データを使うのはランキングだけ。同梱すると 340KB → 2.5MB になり、
   // 難易度データを使わないツールにまで転送量を押し付けることになる。
   const scoreData = {};
-  for (const m of musics) {
+  for (const m of releasedMusics) {
     const id = String(m.id).padStart(3, '0');
     const d = buildDifficulties(m.id);
     if (Object.keys(d).length > 0) scoreData[id] = d;
   }
 
-  // 欠落検知: マスタの曲が全てスナップショットに入ったか
-  const masterIds = new Set(musics.map((m) => String(m.id).padStart(3, '0')));
+  // 欠落検知: マスタの公開済みの曲が全てスナップショットに入ったか
+  const masterIds = new Set(releasedMusics.map((m) => String(m.id).padStart(3, '0')));
   const snapshotIds = new Set(transformed.map((m) => m.id));
   const missing = [...masterIds].filter((id) => !snapshotIds.has(id));
   if (missing.length > 0) {
     console.error('マスタにあるがスナップショットに無い曲:', missing);
+    process.exit(1);
+  }
+
+  // ★ 公開前の曲の痕跡が残っていないかの検算（カードの auditLeaks と同じ考え方）。
+  //   混ざっていたら書き出さずに止める。曲名はログに出さず件数だけ（ログは誰でも読める）。
+  const leaked = auditUnreleased(transformed, now);
+  if (leaked.length > 0) {
+    console.error(`公開前の曲が ${leaked.length}件 混ざっている。書き出さずに止める`);
     process.exit(1);
   }
 
