@@ -159,10 +159,10 @@ function RecordPanel({ reports }: { reports: Report[] }) {
             <table className="mt-2 w-full table-fixed text-left text-xs tabular-nums">
               <thead className="text-slate-500">
                 <tr>
-                  <th className="py-1 font-normal">順位</th>
-                  <th className="py-1 font-normal">実測</th>
-                  <th className="py-1 font-normal">予測</th>
-                  <th className="py-1 font-normal">誤差</th>
+                  <th className="w-[16%] py-1 font-normal">順位</th>
+                  <th className="w-[28%] py-1 font-normal">実測</th>
+                  <th className="w-[28%] py-1 font-normal">予測</th>
+                  <th className="w-[28%] py-1 font-normal">誤差</th>
                 </tr>
               </thead>
               <tbody className="text-slate-700">
@@ -247,7 +247,7 @@ function HowPanel() {
           幅も、実際に外れた幅の分布から作り直します。人の勘で数字を足すことはしていません。
         </p>
         <p>
-          非公式の予測で、外れることがあります。50位・100位は終盤まで個人の事情で大きく動くので、幅が十分に狭くなるまで出しません。
+          非公式の予測で、外れることがあります。予測は開始から約6時間後に出し始め、序盤は幅が広い「目安」として出します。50位・100位は終盤まで個人の事情で大きく動くので、ほかの順位より幅が広めです。
           ランキングのデータは <DocLink href="https://sekai.best/">Sekai Viewer</DocLink> のものを使っています。
         </p>
       </div>
