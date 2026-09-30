@@ -1,3 +1,5 @@
+import { formatMan } from "../../../workers/border/src/posts";
+
 /**
  * 推移のグラフ用の整形（純粋関数）。
  *
@@ -90,6 +92,18 @@ export function niceCeil(v: number): number {
 export function yTicks(top: number): number[] {
   const { parts } = niceOf(top);
   return Array.from({ length: parts + 1 }, (_, i) => (top * i) / parts);
+}
+
+/**
+ * 縦軸の目盛りの字。1億以上は「1.5億」のように億の小数で短く書く（1億未満は formatMan のまま）。
+ * ★ 「1億5,000万」は左の余白に収まらず、頭の「1億」が切れて「5,000万」に見えた（2026-10-01 の本番・50位）。
+ *   正確な数字はツールチップと表が出すので、目盛りは短さを取る。
+ */
+export function formatAxisMan(v: number): string {
+  if (v === 0) return "0";
+  // 小数第2位へは整数で丸める（toFixed(2) は 1.005 を "1.00" にするので、ちょうど半分の値で下に丸まる）
+  if (Math.abs(v) >= 100_000_000) return `${Math.round(v / 1_000_000) / 100}億`;
+  return formatMan(v);
 }
 
 /** 縦軸の上端: 実測と、出していた予測の幅の上端まで入るように */

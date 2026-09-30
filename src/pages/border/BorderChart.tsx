@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import { formatMan, formatRange } from "../../../workers/border/src/posts";
 import { formatJst } from "./borderView";
-import { isShown, shownRuns, timeTicks, visibleEnd, yTicks, yTop, type HistoryPoint } from "./chartData";
+import { formatAxisMan, isShown, shownRuns, timeTicks, visibleEnd, yTicks, yTop, type HistoryPoint } from "./chartData";
 
 /**
  * 推移のグラフ。順位ごとの小さなグラフを並べる。
@@ -104,8 +104,13 @@ function RankChart({ rank, points, startAt, endAt }: { rank: number; points: His
     const y = (v: number) => PAD.t + PLOT_H - (v / top) * PLOT_H;
     const line = <T extends HistoryPoint>(pts: readonly T[], pick: (p: T) => number) =>
       pts.map((p, i) => `${i === 0 ? "M" : "L"}${x(p.t).toFixed(1)},${y(pick(p)).toFixed(1)}`).join("");
-    const runs = shownRuns(points).map((run) => ({
+    const shown = shownRuns(points);
+    const runs = shown.map((run, i) => ({
       key: run[0].t,
+      // 1点だけの区間（予測を出し始めた最初の30分など）は、線も帯も長さ・面積が0で見えない。点と縦の幅で描く
+      single: run.length === 1 ? run[0] : null,
+      // 最新の予測には、実測の線と同じく終わりに点を打つ（出し始めの数時間は帯が細い筋で、破線もごく短い）
+      end: i === shown.length - 1 && run.length > 1 ? run[run.length - 1] : null,
       band: `${line(run, (p) => p.high)}${[...run].reverse().map((p) => `L${x(p.t).toFixed(1)},${y(p.low).toFixed(1)}`).join("")}Z`,
       predicted: line(run, (p) => p.predicted),
     }));
@@ -160,7 +165,7 @@ function RankChart({ rank, points, startAt, endAt }: { rank: number; points: His
               <g key={v}>
                 <line x1={PAD.l} x2={PAD.l + plotW} y1={y(v)} y2={y(v)} style={{ stroke: GRID }} strokeWidth={1} />
                 <text x={PAD.l - 6} y={y(v)} dy="0.32em" textAnchor="end" className="fill-slate-500 text-[10px] tabular-nums">
-                  {v === 0 ? "0" : formatMan(v)}
+                  {formatAxisMan(v)}
                 </text>
               </g>
             ))}
@@ -169,12 +174,31 @@ function RankChart({ rank, points, startAt, endAt }: { rank: number; points: His
                 {tk.label}
               </text>
             ))}
-            {geo.runs.map((run) => (
-              <g key={run.key}>
-                <path d={run.band} style={{ fill: PRED }} fillOpacity={0.12} />
-                <path d={run.predicted} fill="none" style={{ stroke: PRED }} strokeWidth={2} strokeDasharray="5 4" strokeLinejoin="round" strokeLinecap="round" />
-              </g>
-            ))}
+            {geo.runs.map((run) =>
+              run.single ? (
+                <g key={run.key} data-mark="pred-single">
+                  {/* 幅8pxの棒は、面の帯（0.12）と同じ薄さだと見えないので、凡例の見本と同じ 0.2 にしてある */}
+                  <line
+                    x1={x(run.single.t)}
+                    x2={x(run.single.t)}
+                    y1={y(run.single.high)}
+                    y2={y(run.single.low)}
+                    style={{ stroke: PRED }}
+                    strokeOpacity={0.2}
+                    strokeWidth={8}
+                  />
+                  <circle cx={x(run.single.t)} cy={y(run.single.predicted)} r={4} style={{ fill: PRED, stroke: SURFACE }} strokeWidth={2} />
+                </g>
+              ) : (
+                <g key={run.key} data-mark="pred-line">
+                  <path d={run.band} style={{ fill: PRED }} fillOpacity={0.12} />
+                  <path d={run.predicted} fill="none" style={{ stroke: PRED }} strokeWidth={2} strokeDasharray="5 4" strokeLinejoin="round" strokeLinecap="round" />
+                  {run.end && (
+                    <circle data-mark="pred-end" cx={x(run.end.t)} cy={y(run.end.predicted)} r={4} style={{ fill: PRED, stroke: SURFACE }} strokeWidth={2} />
+                  )}
+                </g>
+              ),
+            )}
             <path d={geo.actual} fill="none" style={{ stroke: ACTUAL }} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
             <circle cx={x(last.t)} cy={y(last.current)} r={4} style={{ fill: ACTUAL, stroke: SURFACE }} strokeWidth={2} />
             {a && (
