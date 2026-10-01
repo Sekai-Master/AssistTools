@@ -42,6 +42,8 @@ export const PAGE_LOADERS: Record<string, Loader> = {
   // ボーダー予測。公開の判断が済むまではハブに載せない（TOOLS に入れない）ので、ここに置く。
   // 載せるときは ROUTE_LOADERS へ移して TOOLS に登録する（docs/border-prediction.md「公開の手順」）。
   "/border": () => import("../pages/border/BorderPredictionPage"),
+  // 編成かんたん比較。Nori が使ってみるまでハブに載せない（載せるなら ROUTE_LOADERS へ移して TOOLS に登録）。
+  "/compare": () => import("../pages/compare/QuickComparePage"),
 };
 
 const ALL_LOADERS: Record<string, Loader> = { ...ROUTE_LOADERS, ...PAGE_LOADERS };
@@ -115,6 +117,7 @@ export const RoutePages = {
   changelog: lazyOf("/changelog"),
   knowledge: lazyOf("/knowledge"),
   border: lazyOf("/border"),
+  compare: lazyOf("/compare"),
 };
 
 /** ツール以外のページの名前。ヘッダーには出さないが、遷移の読み上げには要る。 */
@@ -125,6 +128,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/privacy": "プライバシーポリシー",
   "/changelog": "更新履歴",
   "/border": "ボーダー予測",
+  "/compare": "編成かんたん比較",
   "/knowledge": "知見ノート",
 };
 
