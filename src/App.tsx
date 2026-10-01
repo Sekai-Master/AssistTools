@@ -29,6 +29,7 @@ export function App() {
               <Route path="/worktime" element={<RoutePages.worktime />} />
               <Route path="/ranking" element={<RoutePages.ranking />} />
               <Route path="/deck" element={<RoutePages.deck />} />
+              <Route path="/compare" element={<RoutePages.compare />} />
               <Route path="/mysekai" element={<RoutePages.mysekai />} />
               <Route path="/lap" element={<RoutePages.lap />} />
               <Route path="/settings" element={<SettingsPage />} />
@@ -42,8 +43,6 @@ export function App() {
               <Route path="/knowledge/:slug" element={<RoutePages.knowledge />} />
               {/* ボーダー予測。公開前なのでハブのカードには出さない（URL を知っていれば開ける）。 */}
               <Route path="/border" element={<RoutePages.border />} />
-              {/* 編成かんたん比較。同じくハブにはまだ出さない（URL を知っていれば開ける）。 */}
-              <Route path="/compare" element={<RoutePages.compare />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           )}
