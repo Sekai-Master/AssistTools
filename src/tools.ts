@@ -105,6 +105,17 @@ export const TOOLS: ToolDef[] = [
     status: "ready",
   },
   {
+    id: "compare",
+    path: "/compare",
+    name: "編成かんたん比較",
+    shortName: "かんたん比較",
+    description:
+      "総合力・イベントボーナス・スキル（リーダーと内部値）を入れるだけで、編成ごとの1回のポイントを比べます。カードを組まずに、ゲームの画面の数字だけで比べられます。",
+    icon: "compare_arrows",
+    category: "deck",
+    status: "ready",
+  },
+  {
     id: "evc",
     path: "/evc",
     name: "スキル実効値計算機",
