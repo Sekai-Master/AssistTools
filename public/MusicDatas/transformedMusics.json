@@ -13582,6 +13582,25 @@
     "event_rate": 105
   },
   {
+    "id": "784",
+    "title": "オブソミート",
+    "pronunciation": "おぶそみーと",
+    "creatorArtistId": 207,
+    "artistName": "サツキ",
+    "default": 1169301,
+    "Unit": "0_VS",
+    "categories": [
+      "original"
+    ],
+    "publishedAt": 1790834400000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_784.webp",
+    "music_time": 125.6,
+    "event_rate": 114
+  },
+  {
     "id": "788",
     "title": "アンチサイノウ",
     "pronunciation": "あんちさいのう",
