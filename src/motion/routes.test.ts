@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { announceText, loadRoute, ROUTE_LOADERS, routeTitle } from "./routes";
+import { announceText, loadRoute, PAGE_LOADERS, PAGE_TITLES, ROUTE_LOADERS, routeTitle } from "./routes";
 import { READY_TOOLS, TOOL_CATEGORIES, TOOLS, toolsByCategory, unitOf } from "../tools";
 
 describe("ROUTE_LOADERS", () => {
@@ -16,6 +16,16 @@ describe("ROUTE_LOADERS", () => {
     const known = new Set(TOOLS.map((t) => t.path));
     for (const path of Object.keys(ROUTE_LOADERS)) {
       expect(known, `${path} は TOOLS に無い`).toContain(path);
+    }
+  });
+});
+
+describe("PAGE_LOADERS（ハブに載せないページ）", () => {
+  // ★ ハブに載せないページは PAGE_LOADERS・RoutePages・PAGE_TITLES・App.tsx の4か所に手で足す。
+  //   ページ名の付け忘れは遷移の読み上げが空になるだけで気づきにくいので、ここで落とす
+  it("loader のある path はすべてページ名を持つ", () => {
+    for (const path of Object.keys(PAGE_LOADERS)) {
+      expect(PAGE_TITLES, `${path} のページ名が無い`).toHaveProperty(path);
     }
   });
 });

@@ -42,6 +42,8 @@ export function App() {
               <Route path="/knowledge/:slug" element={<RoutePages.knowledge />} />
               {/* ボーダー予測。公開前なのでハブのカードには出さない（URL を知っていれば開ける）。 */}
               <Route path="/border" element={<RoutePages.border />} />
+              {/* 編成かんたん比較。同じくハブにはまだ出さない（URL を知っていれば開ける）。 */}
+              <Route path="/compare" element={<RoutePages.compare />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           )}

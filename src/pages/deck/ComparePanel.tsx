@@ -12,6 +12,7 @@ import { ProfileBar } from "../../components/ui/ProfileBar";
 import { getActiveProfile } from "../../lib/profiles";
 import { cn } from "../../lib/utils";
 import { bestIndex, compareDecks, findUpset, type CompareCondition } from "./lib/compare";
+import { UpsetNote } from "./UpsetNote";
 import { evaluateDeck, type EvalContext } from "./lib/evaluate";
 import { DECK_SIZE, type DeckMode, type SavedDeck } from "./lib/deckStore";
 
@@ -275,18 +276,8 @@ export function ComparePanel({
             </table>
           </div>
 
-          {/* ★ 逆転はこのツールの存在意義そのもの。数字を並べるだけだと見落とされる。 */}
-          {upset && (
-            <p className="mt-3 rounded-lg p-3 text-sm shadow-neu-inset text-slate-700">
-              <span className="font-bold" style={{ color: "var(--unit-color)" }}>
-                ボーナスが低い方が勝っています。
-              </span>{" "}
-              「{upset.winner.name}」はボーナス {upset.winner.bonus}%（{upset.loser.name} より
-              {(upset.loser.bonus - upset.winner.bonus).toFixed(1)}% 低い）ですが、総合力の差で
-              最終ポイントは {Math.round((upset.winner.eventPt ?? 0) - (upset.loser.eventPt ?? 0)).toLocaleString()}
-              pt 上回ります。ゲーム内のおまかせ編成では出てこない編成です。
-            </p>
-          )}
+          {/* ★ 逆転はこのツールの存在意義そのもの。数字を並べるだけだと見落とされる（文面は編成かんたん比較と共通）。 */}
+          {upset && <UpsetNote upset={upset} />}
 
           <p className="mt-3 text-xs text-slate-400">
             スキルは編成ごとにカードのスキルレベルから計算しています（先頭/内部値）。
