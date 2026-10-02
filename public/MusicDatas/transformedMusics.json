@@ -13582,6 +13582,25 @@
     "event_rate": 105
   },
   {
+    "id": "766",
+    "title": "アブノーマリティ･ダンシンガール",
+    "pronunciation": "あぶのーまりてぃだんしんがーる",
+    "creatorArtistId": 341,
+    "artistName": "ぐちり",
+    "default": 1269401,
+    "Unit": "1_L/n",
+    "categories": [
+      "mv_3d"
+    ],
+    "publishedAt": 1790920800000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_766.webp",
+    "music_time": 130.2,
+    "event_rate": 115
+  },
+  {
     "id": "784",
     "title": "オブソミート",
     "pronunciation": "おぶそみーと",
