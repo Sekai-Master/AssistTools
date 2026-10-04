@@ -12993,6 +12993,25 @@
     "event_rate": 113
   },
   {
+    "id": "729",
+    "title": "LEMON MELON COOKIE",
+    "pronunciation": "れもんめろんくっきー",
+    "creatorArtistId": 342,
+    "artistName": "TAK",
+    "default": 1369601,
+    "Unit": "2_MMJ",
+    "categories": [
+      "mv_3d"
+    ],
+    "publishedAt": 1791093600000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_729.webp",
+    "music_time": 124,
+    "event_rate": 113
+  },
+  {
     "id": "730",
     "title": "エメラルド",
     "pronunciation": "えめらるど",
