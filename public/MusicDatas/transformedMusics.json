@@ -13620,6 +13620,25 @@
     "event_rate": 115
   },
   {
+    "id": "767",
+    "title": "デーモンロード",
+    "pronunciation": "でーもんろーど",
+    "creatorArtistId": 77,
+    "artistName": "Kanaria",
+    "default": 1469801,
+    "Unit": "3_VBS",
+    "categories": [
+      "mv_3d"
+    ],
+    "publishedAt": 1791266400000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_767.webp",
+    "music_time": 125.2,
+    "event_rate": 114
+  },
+  {
     "id": "774",
     "title": "ラビットホール",
     "pronunciation": "らびっとほーる",
