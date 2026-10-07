@@ -13677,6 +13677,25 @@
     "event_rate": 113
   },
   {
+    "id": "776",
+    "title": "推定ラブソング",
+    "pronunciation": "すいていらぶそんぐ",
+    "creatorArtistId": 344,
+    "artistName": "あ子",
+    "default": 1169901,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1791352800000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_776.webp",
+    "music_time": 121,
+    "event_rate": 113
+  },
+  {
     "id": "784",
     "title": "オブソミート",
     "pronunciation": "おぶそみーと",
