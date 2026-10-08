@@ -128,6 +128,22 @@ async function songs(base: { sha: string; at: number }, now: number) {
   }
 }
 
+/**
+ * 投稿しない試し（--dry-run）のときだけ、直近の MINOR 以上の版で告知文を Claude に1本書かせる。
+ * 新しい版が無い日でも、鍵・モデル名・型の確かめが通るかをここで確かめられる（積まない）
+ */
+async function smoke() {
+  const latest = parseChangelog(fs.readFileSync('CHANGELOG.md', 'utf8')).find((e) => e.version.endsWith('.0'))
+  if (!latest) return
+  if (!hasKey()) {
+    console.log('（試し）鍵が無いので Claude は呼ばない')
+    return
+  }
+  const text = await askClaude({ label: `試し v${latest.version}`, system: RELEASE_SYSTEM, user: releaseUser(latest), maxTokens: 600 })
+  const bad = checkReleasePost(text, latest.version)
+  console.log(`---- （試し・積まない）v${latest.version}・型の確かめ: ${bad ?? '通った'}\n${text}`)
+}
+
 async function main() {
   const base = baseCommit()
   if (!base) {
@@ -136,6 +152,7 @@ async function main() {
   }
   const now = Date.now()
   await releases(base.sha, now)
+  if (DRY) await smoke()
   await songs(base, now)
 }
 
