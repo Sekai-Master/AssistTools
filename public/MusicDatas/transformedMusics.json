@@ -13031,6 +13031,25 @@
     "event_rate": 113
   },
   {
+    "id": "731",
+    "title": "アルティメットセンパイ",
+    "pronunciation": "あるてぃめっとせんぱい",
+    "creatorArtistId": 25,
+    "artistName": "ピノキオピー",
+    "default": 1570001,
+    "Unit": "4_WxS",
+    "categories": [
+      "mv_3d"
+    ],
+    "publishedAt": 1791439200000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_731.webp",
+    "music_time": 135,
+    "event_rate": 116
+  },
+  {
     "id": "732",
     "title": "天藍のアイスヘヴン",
     "pronunciation": "てんらんのあいすへゔん",
