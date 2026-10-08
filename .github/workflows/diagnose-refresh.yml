@@ -1,0 +1,50 @@
+name: Diagnose refresh failure
+
+# データ更新（カード・楽曲・マイセカイ）が失敗したら、Claude に一次診断を書かせて Issue にする。
+# 鍵（ANTHROPIC_API_KEY）が無いあいだは何もしない。中身は scripts/claude/diagnose-refresh.ts。
+# 費用は Max プランの毎月の API クレジットから（1回あたり数十円）。
+
+on:
+  workflow_run:
+    workflows: ["Refresh card data", "Refresh music data", "Refresh mysekai data"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  diagnose:
+    # ★ 鍵を持って動くので、このリポジトリの定期実行・手動実行の失敗にだけ反応する
+    #   （将来 pull_request で動くワークフローを対象に足しても、外のコードを鍵つきで動かさない）
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      (github.event.workflow_run.event == 'schedule' || github.event.workflow_run.event == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 失敗したときのコードで読む（あとから直っていても、その時点の中身で診断する）
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Failed log
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run view ${{ github.event.workflow_run.id }} --repo ${{ github.repository }} --log-failed > failed.log || true
+
+      - name: Diagnose
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_PATH: ${{ github.event.workflow_run.path }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: node scripts/claude/diagnose-refresh.ts failed.log

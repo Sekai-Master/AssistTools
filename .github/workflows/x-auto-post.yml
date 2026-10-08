@@ -1,0 +1,45 @@
+name: X auto post
+
+# 公式 X の投稿の自動作成（毎日 12:05 JST）。72時間前からの新しい版（MINOR 以上）と新しく公開された曲を知らせる（id は版・曲ごとなので二重にならない）。
+# 中身は scripts/claude/x-auto-post.ts。承認なしで出してよい（2026-09-30 Nori）。
+# 版の告知の言い回しは Claude（ANTHROPIC_API_KEY が無ければ型の文面）。曲名・版番号はデータのまま。
+
+on:
+  schedule:
+    - cron: "5 3 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "投稿キューに入れずに文面だけ見る"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: x-auto-post
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 72時間前の main と比べるので、履歴が要る
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Post
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BORDER_API: ${{ vars.BORDER_API }}
+          BORDER_ADMIN_TOKEN: ${{ secrets.BORDER_ADMIN_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: node scripts/claude/x-auto-post.ts $DRY_RUN
