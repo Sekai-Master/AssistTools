@@ -25,6 +25,8 @@ on:
 
 permissions:
   contents: read
+  # 答え合わせのあと、Claude の改善案を Issue にする（scripts/claude/border-insight-run.ts）
+  issues: write
 
 concurrency:
   group: border-analysis
@@ -46,6 +48,9 @@ jobs:
         env:
           BORDER_API: ${{ vars.BORDER_API }}
           BORDER_ADMIN_TOKEN: ${{ secrets.BORDER_ADMIN_TOKEN }}
+          # ③ 一言解説・④ 改善案。鍵が無ければ飛ばす
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
           BACKFILL: ${{ inputs.backfill && '--backfill' || '' }}
           DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
         run: node scripts/border/analyze.ts $BACKFILL $DRY_RUN

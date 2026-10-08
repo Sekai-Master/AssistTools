@@ -17,6 +17,7 @@ import { RANKS, buildShape, durationHours, type EventMeta, type Sample, type Sha
 import { resultText, type ResultRank } from '../../workers/border/src/posts.ts'
 import type { PostPayload, ResultPostRank } from '../../workers/border/src/snapshot.ts'
 import { buildReport, type PredictionLog, type Report } from './report.ts'
+import { addInsights } from '../claude/border-insight-run.ts'
 
 const SITE = 'https://sekaimaster.pages.dev'
 const GRAPH = (id: number, rank: number) => `https://api.sekai.best/event/${id}/rankings/graph?rank=${rank}`
@@ -210,6 +211,7 @@ async function main() {
     await write('PUT', '/admin/reports', { eventId: e.id, report })
     say(`- 答え合わせ: ${e.id} ${e.name}（予測ログ ${preds.length} 行・${durationHours(e)}h）`)
     const ranks = resultRanks(report)
+    let posted = false
     if (ranks.length > 0 && e.aggregateAt > NOW - POST_WINDOW_MS) {
       const text = resultText(e.name, ranks)
       const payload: PostPayload = {
@@ -217,7 +219,16 @@ async function main() {
         event: { id: e.id, name: e.name, type: e.eventType, unit: e.unit, startAt: e.startAt, aggregateAt: e.aggregateAt, durationHours: durationHours(e) },
         ranks: ranks.map(({ rank, final, predicted, progress, error, inBand, low, high }) => ({ rank, final, predicted, progress, error, inBand, low, high })),
       }
-      if (text) await write('PUT', '/admin/posts', { id: `${e.id}:result`, eventId: e.id, kind: 'result', text, payload })
+      if (text) {
+        await write('PUT', '/admin/posts', { id: `${e.id}:result`, eventId: e.id, kind: 'result', text, payload })
+        posted = true
+      }
+    }
+    // ③ 一言解説・④ 改善案（Claude）。失敗しても解析ジョブは止めない
+    if (!DRY) {
+      await addInsights({ report, summary, posted, queue: (p) => write('PUT', '/admin/posts', p), say }).catch((err) =>
+        say(`- Claude の補足: 失敗（${err instanceof Error ? err.message : String(err)}）`),
+      )
     }
   }
   if (targets.length === 0) say('- 答え合わせ: 対象なし')

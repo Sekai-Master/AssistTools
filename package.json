@@ -19,7 +19,7 @@
     "data:refresh": "node scripts/refresh-music-data.js",
     "data:refresh-cards": "node scripts/refresh-card-data.mjs",
     "data:refresh-mysekai": "node scripts/refresh-mysekai-data.mjs",
-    "typecheck:border": "tsc -p workers/border && tsc -p functions && tsc -p scripts/border",
+    "typecheck:border": "tsc -p workers/border && tsc -p functions && tsc -p scripts/border && tsc -p scripts/claude",
     "border:analyze": "node scripts/border/analyze.ts"
   },
   "dependencies": {
