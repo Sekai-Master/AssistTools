@@ -13658,6 +13658,25 @@
     "event_rate": 114
   },
   {
+    "id": "773",
+    "title": "ダーリン",
+    "pronunciation": "だーりん",
+    "creatorArtistId": 183,
+    "artistName": "MARETU",
+    "default": 1170101,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1791525600000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_773.webp",
+    "music_time": 132.5,
+    "event_rate": 116
+  },
+  {
     "id": "774",
     "title": "ラビットホール",
     "pronunciation": "らびっとほーる",
