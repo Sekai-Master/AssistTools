@@ -41,13 +41,46 @@ export function insightUser(r: Report): string {
   return [`イベント: ${r.name}（${r.durationHours}時間）`, '', ...reportFacts(r)].join('\n')
 }
 
-/** Claude の一言が型に合っているか。合っていなければ理由を返す */
-export function checkInsight(text: string): string | null {
+interface NumberToken {
+  value: number
+  decimals: number
+  percent: boolean
+}
+
+/** 文の中の数（「1,812万」の 1812、「-5.0%」の 5.0）。全角の数字も拾う。符号は見ない（向きは言葉で書かれる） */
+function numberTokens(text: string): NumberToken[] {
+  const src = text.normalize('NFKC')
+  return [...src.matchAll(/(\d[\d,]*)(?:\.(\d+))?(\s*%)?/g)].map((m) => ({
+    value: Number(`${m[1].replace(/,/g, '')}${m[2] ? `.${m[2]}` : ''}`),
+    decimals: m[2]?.length ?? 0,
+    percent: m[3] != null,
+  }))
+}
+
+/**
+ * 一言に出てくる数が、渡した事実（insightUser の文）にあるか（レビュー L4: 承認なしで X に出るので、数の作り話を止める）。
+ * % は丸めを許す（事実の「誤差 -10.0%」を「10%」と書くのは通す）。それ以外の数は同じ値が事実にあること。
+ * 差や比を自分で計算した数は通さない（外れたら積まないだけなので、厳しめに倒す）
+ */
+export function unknownNumber(text: string, facts: string): string | null {
+  const known = numberTokens(facts)
+  for (const t of numberTokens(text)) {
+    const tol = t.percent ? 0.5 * 10 ** -t.decimals + 1e-9 : 0
+    const ok = known.some((k) => k.percent === t.percent && Math.abs(k.value - t.value) <= tol)
+    if (!ok) return `${t.value}${t.percent ? '%' : ''}`
+  }
+  return null
+}
+
+/** Claude の一言が型に合っているか。合っていなければ理由を返す。facts は Claude に渡した文（insightUser） */
+export function checkInsight(text: string, facts: string): string | null {
   if (text.length === 0) return '空'
   if ([...text].length > 120) return `長すぎる（${[...text].length}字）`
   if (/https?:\/\//.test(text)) return 'URL が入っている'
   if (/[#＃]/.test(text)) return 'ハッシュタグが入っている'
   if (/\n\s*\n/.test(text)) return '段落が分かれている'
+  const stray = unknownNumber(text, facts)
+  if (stray) return `渡していない数が入っている（${stray}）`
   return safeForX(text)
 }
 

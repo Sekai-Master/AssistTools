@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { xWeight } from '../../workers/border/src/posts.ts'
 import type { Report } from '../border/report.ts'
-import { checkInsight, insightPost, reportFacts } from './insight.ts'
+import { checkInsight, insightPost, insightUser, reportFacts } from './insight.ts'
 import { sanitizeForIssue } from './diagnose.ts'
 import {
   CHANGELOG_URL,
@@ -189,11 +189,25 @@ describe('一言解説', () => {
   })
 
   it('長い・URL・ハッシュタグ・段落分けは通さない', () => {
-    expect(checkInsight('1000位は5%下に外れ、終盤の伸びが過去より強かったとみられます。')).toBeNull()
-    expect(checkInsight('あ'.repeat(121))).toContain('長すぎる')
-    expect(checkInsight('見て https://x.com')).toContain('URL')
-    expect(checkInsight('#プロセカ')).toContain('ハッシュタグ')
-    expect(checkInsight('一文目。\n\n二文目。')).toContain('段落')
+    const facts = insightUser(report)
+    expect(checkInsight('1000位は5%下に外れ、終盤の伸びが過去より強かったとみられます。', facts)).toBeNull()
+    expect(checkInsight('あ'.repeat(121), facts)).toContain('長すぎる')
+    expect(checkInsight('見て https://x.com', facts)).toContain('URL')
+    expect(checkInsight('#プロセカ', facts)).toContain('ハッシュタグ')
+    expect(checkInsight('一文目。\n\n二文目。', facts)).toContain('段落')
+  })
+
+  it('数は渡した事実にあるものだけ（% は丸めを許す）', () => {
+    const facts = insightUser(report)
+    // 事実の数そのもの・丸めた %・全角
+    expect(checkInsight('1000位は経過85%の予測が1,900万で、実測2,000万より5.0%低めでした。', facts)).toBeNull()
+    expect(checkInsight('1000位は経過50%で10%下に外れました。', facts)).toBeNull()
+    expect(checkInsight('１０００位は５%下でした。', facts)).toBeNull()
+    // 作った数・計算した差・無い順位
+    expect(checkInsight('1000位は7%下に外れました。', facts)).toContain('渡していない数')
+    expect(checkInsight('1000位は100万下に外れました。', facts)).toContain('渡していない数')
+    expect(checkInsight('500位は5%下でした。', facts)).toContain('渡していない数')
+    expect(checkInsight('1000位は5.4%下でした。', facts)).toContain('渡していない数')
   })
 
   it('投稿は 276 以内。入りきらなければハッシュタグを外す', () => {
