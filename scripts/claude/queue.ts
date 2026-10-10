@@ -10,6 +10,8 @@ export interface QueuedPost {
   text: string
   /** true なら Discord 側を送信済みにして X にだけ出す */
   xOnly: boolean
+  /** 添える画像の指示（xposts.ts の AnnouncePayload）。無ければ文字だけ */
+  payload?: Record<string, unknown> | null
 }
 
 export async function queuePost(p: QueuedPost, fetchImpl: typeof fetch = fetch): Promise<boolean> {
@@ -25,7 +27,7 @@ export async function queuePost(p: QueuedPost, fetchImpl: typeof fetch = fetch):
     if (!res.ok) throw new Error(`${method} ${path} → ${res.status}`)
     return (await res.json()) as { queued?: boolean }
   }
-  const r = await call('PUT', '/admin/posts', { id: p.id, eventId: p.eventId, kind: p.kind, text: p.text })
+  const r = await call('PUT', '/admin/posts', { id: p.id, eventId: p.eventId, kind: p.kind, text: p.text, ...(p.payload ? { payload: p.payload } : {}) })
   if (p.xOnly) await call('POST', '/admin/posts/sent', { id: p.id, channel: 'discord' })
   return r.queued === true
 }

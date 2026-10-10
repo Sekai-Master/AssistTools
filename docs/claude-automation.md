@@ -5,7 +5,7 @@ Max プランの毎月の API クレジット（Max 5x で月 $100・繰り越�
 | | いつ | 何をする | 出す先 | 中身 |
 |---|---|---|---|---|
 | ① 一次診断 | データ更新（カード・楽曲・マイセカイ）の Actions が失敗したとき | 失敗のログ・ワークフロー・動かしているスクリプト・データ元の直近のコミットから、原因の見立てと直し方の案を書く | Issue（ラベル `auto-diagnosis`。同じワークフローの件が開いていれば追記） | `.github/workflows/diagnose-refresh.yml`・`scripts/claude/diagnose*.ts` |
-| ② X の自動投稿 | 毎日 12:05 JST | 72時間前の main と比べ、新しい版（MINOR 以上・更新履歴の日付が7日以内）と新しく公開された曲（1曲1本）を知らせる。id が版・曲ごとなので二重にならない | X（投稿キュー経由・X だけ） | `.github/workflows/x-auto-post.yml`・`scripts/claude/x-auto-post.ts`・`xposts.ts` |
+| ② X の自動投稿 | 毎日 12:05 JST | 72時間前の main と比べ、新しい版（MINOR 以上・更新履歴の日付が7日以内）と新しく公開された曲（1曲1本）を知らせる。id が版・曲ごとなので二重にならない。**画像つき**（2026-10-10〜）: 新曲は Bot が描く新曲カード（ジャケ写・曲名・作者・ユニット色）、版は更新履歴の「追加」でいちばん先に名前が出るツールの画面（無ければ更新履歴のページ）を Bot が本番で撮る（`xposts.ts` の `songPayload`・`releasePayload`。描き方は sekaimaster-bot の `docs/border-relay.md`） | X（投稿キュー経由・X だけ） | `.github/workflows/x-auto-post.yml`・`scripts/claude/x-auto-post.ts`・`xposts.ts` |
 | ③ 一言解説 | 答え合わせを書いたとき（解析ジョブ） | 答え合わせの数字だけを使って、外れ方の要点を 90 字ほどで | Discord と X（答え合わせの投稿を積んだイベントだけ） | `scripts/claude/border-insight-run.ts`・`insight.ts` |
 | ④ モデルの改善案 | ③と同じとき | 外れ方を読み、次に試す候補を3つまで | Issue（ラベル `model-proposal`） | 同上 |
 
