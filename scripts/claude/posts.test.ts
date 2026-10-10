@@ -14,7 +14,9 @@ import {
   newSongs,
   parseChangelog,
   recentReleases,
+  releasePayload,
   safeForX,
+  songPayload,
   songPost,
   songPostId,
 } from './xposts.ts'
@@ -113,6 +115,50 @@ describe('新曲の告知', () => {
   it('曲名がメンションやドメインの形なら知らせない', () => {
     expect(songPost({ id: '9', title: '@everyone' })).toBeNull()
     expect(songPost({ id: '9', title: 'evil.example.com' })).toBeNull()
+  })
+})
+
+describe('告知に添える画像の指示', () => {
+  const doomer = { id: '775', title: 'ドゥーマー', artistName: '東京真中', Unit: '0_VS', jacketLink: 'jacket_s_775.webp' }
+
+  it('新曲: サイトのジャケ写と曲名・作者・ユニットを Bot に渡す', () => {
+    expect(songPayload(doomer)).toEqual({
+      kind: 'song',
+      title: 'ドゥーマー',
+      artist: '東京真中',
+      unit: '0_VS',
+      jacketUrl: 'https://sekaimaster.pages.dev/MusicDatas/jacket/jacket_s_775.webp',
+      alt: '新しく追加した曲「ドゥーマー」のジャケットと曲名のカード。効率曲ランキングと周回プランで選べます。',
+    })
+  })
+
+  it('新曲: ジャケ写のファイル名が読めなければ画像なし（文字だけで出る）', () => {
+    for (const jacketLink of [undefined, 123, '', '../x.webp', 'a/b.webp', 'https://evil/x.webp', 'x.svg']) {
+      expect(songPayload({ ...doomer, jacketLink }), String(jacketLink)).toBeNull()
+    }
+    // 作者・ユニットが読めなくてもカードは出す
+    expect(songPayload({ ...doomer, artistName: 5, Unit: null })).toMatchObject({ artist: null, unit: null })
+  })
+
+  const tools = [
+    { path: '/deck', name: '編成ビルダー' },
+    { path: '/compare', name: '編成かんたん比較' },
+    { path: '/ranking', name: '効率曲ランキング' },
+  ]
+  const entry = (body: string) => ({ version: '1.23.0', date: '2026-10-01', body })
+
+  it('版: 「追加」の節でいちばん先に名前が出てくるツールの画面を撮る', () => {
+    const body = 'まえがき。効率曲ランキングの話。\n\n### 追加\n\n- **編成かんたん比較を追加しました。** 計算は編成ビルダーと同じ式です。\n\n### 修正\n\n- 効率曲ランキングを直しました。'
+    expect(releasePayload(entry(body), tools)).toMatchObject({ kind: 'page', path: '/compare', width: 1600, height: 900 })
+  })
+
+  it('版: 「追加」が無ければ本文でいちばん先のツール、どれも無ければ更新履歴のページ', () => {
+    expect(releasePayload(entry('### 修正\n\n- 効率曲ランキングと編成ビルダーを直しました。'), tools)).toMatchObject({ path: '/ranking' })
+    expect(releasePayload(entry('### 修正\n\n- 表示を直しました。'), tools)).toMatchObject({ path: '/changelog' })
+  })
+
+  it('版: Bot が撮れない形のパス（サイトの外など）は選ばない', () => {
+    expect(releasePayload(entry('### 追加\n\n- 外のツール'), [{ path: '//evil.example', name: '外のツール' }])).toMatchObject({ path: '/changelog' })
   })
 })
 

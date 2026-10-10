@@ -79,6 +79,11 @@ export interface Song {
   title: string
   published?: boolean
   publishedAt?: number
+  artistName?: unknown
+  /** "0_VS" など */
+  Unit?: unknown
+  /** "jacket_s_775.webp"（public/MusicDatas/jacket/ の中のファイル名） */
+  jacketLink?: unknown
 }
 
 /** その時刻に公開済みの曲か（公開前の曲は書かない） */
@@ -104,6 +109,53 @@ export function newSongs(
 export function songPost(song: Song): string | null {
   const t = ['【更新】新しい曲を追加しました。効率曲ランキングと周回プランで選べます。', `「${song.title}」`, '', RANKING_URL].join('\n')
   return xWeight(t) <= X_BUDGET && safeForX(t) == null ? t : null
+}
+
+/**
+ * 投稿に添える画像の指示（投稿キューの payload）。描くのは Bot（sekaimaster-bot の src/border/songCard.ts・image.ts）。
+ * 2026-10-10 Nori「曲もジャケ写と一緒に出せるといいね」「新機能追加の告知とかも基本画像付きで」。
+ * Bot は本番のサイトの中しか読まないので、ここでも同じ形に絞る（外れたら画像なしで積む＝文字だけで出る）
+ */
+export type AnnouncePayload =
+  | { kind: 'song'; title: string; artist: string | null; unit: string | null; jacketUrl: string; alt: string }
+  | { kind: 'page'; path: string; alt: string; width: number; height: number }
+
+const shortString = (x: unknown, max: number) => (typeof x === 'string' && x.trim() && [...x].length <= max ? x.trim() : null)
+
+/** 新曲カードの指示。ジャケ写のファイル名が読めなければ null（文字だけで出す） */
+export function songPayload(song: Song): AnnouncePayload | null {
+  const file = typeof song.jacketLink === 'string' ? song.jacketLink : ''
+  if (!/^[A-Za-z0-9_-]+\.(webp|png|jpg)$/.test(file) || [...song.title].length > 100) return null
+  return {
+    kind: 'song',
+    title: song.title,
+    artist: shortString(song.artistName, 100),
+    unit: shortString(song.Unit, 20),
+    jacketUrl: `${SITE}/MusicDatas/jacket/${file}`,
+    alt: `新しく追加した曲「${song.title}」のジャケットと曲名のカード。効率曲ランキングと周回プランで選べます。`,
+  }
+}
+
+export interface ToolRef {
+  path: string
+  name: string
+}
+
+/**
+ * 版の告知に添えるページ。更新履歴の本文でいちばん先に名前が出てくるツールの画面を撮る
+ * （「追加」の節を先に見る。ついでに名前が出るだけのツールより、足したツールを選ぶため）。
+ * どのツールの名前も無ければ、更新履歴のページ（いちばん上がその版）
+ */
+export function releasePayload(e: ChangelogEntry, tools: readonly ToolRef[]): AnnouncePayload {
+  const added = e.body.match(/^### 追加\s*\n([\s\S]*?)(?=^### |(?![\s\S]))/m)?.[1] ?? ''
+  const first = (text: string) =>
+    tools
+      .map((t) => ({ t, at: text.indexOf(t.name) }))
+      .filter((x) => x.at >= 0 && /^\/[A-Za-z0-9_-]+$/.test(x.t.path))
+      .sort((a, b) => a.at - b.at)[0]?.t
+  const tool = first(added) ?? first(e.body)
+  if (tool) return { kind: 'page', path: tool.path, alt: `${tool.name}の画面（Sekai-Master v${e.version}）`, width: 1600, height: 900 }
+  return { kind: 'page', path: '/changelog', alt: `Sekai-Master の更新履歴のページ（いちばん上が v${e.version}）`, width: 1600, height: 900 }
 }
 
 /**

@@ -29,13 +29,17 @@ import {
   parseChangelog,
   recentReleases,
   releasePostId,
+  releasePayload,
   releaseUser,
   safeForX,
+  songPayload,
   songPost,
   songPostId,
+  type AnnouncePayload,
   type ChangelogEntry,
   type Song,
 } from './xposts.ts'
+import { READY_TOOLS } from '../../src/tools.ts'
 
 const DRY = process.argv.includes('--dry-run')
 const WINDOW_HOURS = 72
@@ -89,10 +93,10 @@ async function releaseText(e: ChangelogEntry): Promise<string | null> {
   return fallback
 }
 
-async function post(id: string, text: string) {
-  console.log(`---- ${id}\n${text}`)
+async function post(id: string, text: string, payload: AnnouncePayload | null) {
+  console.log(`---- ${id}\n${text}\n（画像: ${payload ? (payload.kind === 'song' ? `新曲カード ${payload.jacketUrl}` : `ページ ${payload.path}`) : 'なし'}）`)
   if (DRY) return
-  const queued = await queuePost({ id, eventId: 0, kind: 'announce', text, xOnly: true })
+  const queued = await queuePost({ id, eventId: 0, kind: 'announce', text, xOnly: true, payload })
   console.log(queued ? '→ 投稿キューに入れた' : '→ 入れ済み（二重にはしない）')
 }
 
@@ -107,7 +111,7 @@ async function releases(baseSha: string, now: number) {
   if (fresh.length > MAX_RELEASES_PER_RUN) throw new Error(`新しい版が ${fresh.length} 本ある（上限 ${MAX_RELEASES_PER_RUN}）。比べる元を疑って何も出さない`)
   for (const e of fresh) {
     const text = await releaseText(e)
-    if (text) await post(releasePostId(e.version), text)
+    if (text) await post(releasePostId(e.version), text, releasePayload(e, READY_TOOLS))
   }
 }
 
@@ -123,7 +127,7 @@ async function songs(base: { sha: string; at: number }, now: number) {
   if (added.length > MAX_SONGS_PER_RUN) throw new Error(`新しい曲が ${added.length} 曲ある（上限 ${MAX_SONGS_PER_RUN}）。比べる元を疑って何も出さない`)
   for (const s of added) {
     const text = songPost(s)
-    if (text) await post(songPostId(s), text)
+    if (text) await post(songPostId(s), text, songPayload(s))
     else console.log(`「${s.title}」は文面の確かめを通らないので知らせない`)
   }
 }
