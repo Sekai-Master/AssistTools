@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleRequest } from '../src/api.ts'
 import { parseLive, parseSchedule, runCron } from '../src/collect.ts'
 import { putModel } from '../src/db.ts'
@@ -162,7 +162,16 @@ describe('API', () => {
   })
 
   it('日程を管理 API で入れると、Cron がそのイベントを開催中として拾う', async () => {
-    const put = await handleRequest(adminReq('/admin/events', { method: 'PUT', body: JSON.stringify({ events: [EVENT, { id: 'x' }, null] }) }), env)
+    // 管理 API は本物の時計で古い日程を捨てる（終了から3日）。固定の日付の EVENT が、実際の日付が進むと捨てられて
+    // 落ちていた（2026-10-10 20:59 JST から）。時計をイベントの開催中に止める
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(START + H)
+    let put: Response
+    try {
+      put = await handleRequest(adminReq('/admin/events', { method: 'PUT', body: JSON.stringify({ events: [EVENT, { id: 'x' }, null] }) }), env)
+    } finally {
+      vi.useRealTimers()
+    }
     expect(await put.json()).toMatchObject({ ok: true, count: 1 })
     // bonuses.json を返さない fetch でも、日程が入っていれば収集する
     const r = await runCron(env, START + H, (async (input: RequestInfo | URL) =>
