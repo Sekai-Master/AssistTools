@@ -13582,6 +13582,25 @@
     "event_rate": 115
   },
   {
+    "id": "763",
+    "title": "ハイドレンジア",
+    "pronunciation": "はいどれんじあ",
+    "creatorArtistId": 309,
+    "artistName": "LonePi",
+    "default": 1670201,
+    "Unit": "5_25",
+    "categories": [
+      "mv_3d"
+    ],
+    "publishedAt": 1791612000000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_763.webp",
+    "music_time": 131.2,
+    "event_rate": 116
+  },
+  {
     "id": "764",
     "title": "オツキミリサイタル",
     "pronunciation": "おつきみりさいたる",
