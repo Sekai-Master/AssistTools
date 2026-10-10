@@ -29,8 +29,9 @@ export async function addInsights(d: InsightDeps): Promise<void> {
   }
   const { report } = d
   if (d.posted) {
-    const text = await askClaude({ label: `一言解説 ${report.eventId}`, system: INSIGHT_SYSTEM, user: insightUser(report), maxTokens: 300 })
-    const bad = checkInsight(text)
+    const facts = insightUser(report)
+    const text = await askClaude({ label: `一言解説 ${report.eventId}`, system: INSIGHT_SYSTEM, user: facts, maxTokens: 300 })
+    const bad = checkInsight(text, facts)
     const post = bad ? null : insightPost(report.name, text)
     if (post) {
       await d.queue({ id: `${report.eventId}:insight`, eventId: report.eventId, kind: 'insight', text: post })
