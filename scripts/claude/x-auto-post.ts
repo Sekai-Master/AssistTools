@@ -76,7 +76,7 @@ const parseSongs = (s: string | null): Song[] => {
 async function releaseText(e: ChangelogEntry): Promise<string | null> {
   if (hasKey()) {
     try {
-      const text = await askClaude({ label: `版の告知 v${e.version}`, system: RELEASE_SYSTEM, user: releaseUser(e), maxTokens: 600 })
+      const text = await askClaude({ label: `版の告知 v${e.version}`, system: RELEASE_SYSTEM, user: releaseUser(e), maxTokens: 4_000 })
       const bad = checkReleasePost(text, e.version)
       if (!bad) return text
       console.log(`Claude の文面が型に合わない（${bad}）。型の文面にする`)
@@ -143,7 +143,7 @@ async function smoke() {
     console.log('（試し）鍵が無いので Claude は呼ばない')
     return
   }
-  const text = await askClaude({ label: `試し v${latest.version}`, system: RELEASE_SYSTEM, user: releaseUser(latest), maxTokens: 600 })
+  const text = await askClaude({ label: `試し v${latest.version}`, system: RELEASE_SYSTEM, user: releaseUser(latest), maxTokens: 4_000 })
   const bad = checkReleasePost(text, latest.version)
   console.log(`---- （試し・積まない）v${latest.version}・型の確かめ: ${bad ?? '通った'}\n${text}`)
 }

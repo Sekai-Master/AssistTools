@@ -85,7 +85,7 @@ async function main() {
     label: '一次診断',
     system: DIAGNOSIS_SYSTEM,
     user: diagnosisUser({ workflow, runUrl, log, files: workflowPath ? collectFiles(workflowPath) : [], upstream: await upstreamCommits() }),
-    maxTokens: 2_000,
+    maxTokens: 8_000,
   })
   const day = new Date().toISOString().slice(0, 10)
   const url = await upsertIssue({

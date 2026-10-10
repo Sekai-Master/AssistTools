@@ -44,6 +44,28 @@ describe('askClaude', () => {
     expect(String(err)).not.toContain('sk-test-key')
   })
 
+  // 2026-10-10 の 219 の改善案: thinking が上限を使い切り、thinking の塊だけが返った（文が空）
+  it('考える段階で上限に達して文が無いときは、そうと分かる失敗にする', async () => {
+    const { f } = fakeFetch([
+      { status: 200, body: { content: [{ type: 'thinking', thinking: '' }], stop_reason: 'max_tokens', usage: { input_tokens: 1, output_tokens: 10 } } },
+    ])
+    await expect(askClaude({ label: 't', system: 's', user: 'u', maxTokens: 10 }, f)).rejects.toThrow('考える段階で上限')
+  })
+
+  it('本文の途中で上限に達したものは使わない（切れた文を出さない）', async () => {
+    const { f } = fakeFetch([
+      { status: 200, body: { content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: '途中まで' }], stop_reason: 'max_tokens' } },
+    ])
+    await expect(askClaude({ label: 't', system: 's', user: 'u', maxTokens: 10 }, f)).rejects.toThrow('本文の途中で上限')
+  })
+
+  it('thinking の塊があっても、最後まで書けた文だけを返す', async () => {
+    const { f } = fakeFetch([
+      { status: 200, body: { content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: '答え' }], stop_reason: 'end_turn' } },
+    ])
+    expect(await askClaude({ label: 't', system: 's', user: 'u', maxTokens: 10 }, f)).toBe('答え')
+  })
+
   it('鍵が無ければ呼ばない', async () => {
     delete process.env.ANTHROPIC_API_KEY
     const { f, calls } = fakeFetch([{ status: 200, body: {} }])

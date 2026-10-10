@@ -8,7 +8,13 @@
  */
 export const MODEL = 'claude-sonnet-5'
 const ENDPOINT = 'https://api.anthropic.com/v1/messages'
-const TIMEOUT_MS = 120_000
+/**
+ * ★ Sonnet 5 は thinking が既定で動き、考えたトークンも max_tokens に数える（公式「On Claude Sonnet 5, where thinking
+ *   is on by default」、platform.claude.com/docs/en/build-with-claude/thinking、2026-10-10 に確認）。
+ *   max_tokens が小さいと考えるだけで使い切って本文が空になる（219 の改善案が 2500 で空だった）。
+ *   呼ぶ側の maxTokens は「考える分＋本文」で決め、長く考えても切れないよう待ち時間も長めに取る
+ */
+const TIMEOUT_MS = 360_000
 
 export function hasKey(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY)
@@ -24,6 +30,7 @@ export interface Ask {
 
 interface MessagesResponse {
   content?: { type?: string; text?: string }[]
+  stop_reason?: string
   usage?: { input_tokens?: number; output_tokens?: number }
   error?: { type?: string }
 }
@@ -53,8 +60,12 @@ export async function askClaude(a: Ask, fetchImpl: typeof fetch = fetch): Promis
       .map((c) => c.text)
       .join('')
       .trim()
-    console.log(`[claude] ${a.label}: 入力 ${body?.usage?.input_tokens ?? '?'}・出力 ${body?.usage?.output_tokens ?? '?'} トークン`)
-    if (!text) throw new Error('Claude API の応答に文が無い')
+    console.log(`[claude] ${a.label}: 入力 ${body?.usage?.input_tokens ?? '?'}・出力 ${body?.usage?.output_tokens ?? '?'} トークン・止まり方 ${body?.stop_reason ?? '?'}`)
+    if (!text) {
+      throw new Error(body?.stop_reason === 'max_tokens' ? `考える段階で上限（max_tokens ${a.maxTokens}）に達して本文が無い` : 'Claude API の応答に文が無い')
+    }
+    // 本文の途中で上限に達したものは使わない（途中で切れた文を出さない）
+    if (body?.stop_reason === 'max_tokens') throw new Error(`本文の途中で上限（max_tokens ${a.maxTokens}）に達した`)
     return text
   } finally {
     clearTimeout(timer)

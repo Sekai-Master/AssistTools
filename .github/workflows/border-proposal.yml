@@ -1,0 +1,42 @@
+name: Border model proposal (rerun)
+
+# ④ モデルの改善案だけを、答え合わせ済みのイベントについて作り直す（scripts/claude/proposal-rerun.ts）。
+# 解析ジョブ（border-analysis.yml）は答え合わせ済みのイベントを二度と扱わないので、改善案だけ失敗したときに手で起動する。
+# 答え合わせと一言解説は積み直さない。Issue は同じイベントなら同じものを書き換える（重ねない）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      event_id:
+        description: "イベントの id（例: 219）"
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: border-proposal
+  cancel-in-progress: false
+
+jobs:
+  proposal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Proposal
+        env:
+          BORDER_API: ${{ vars.BORDER_API }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          EVENT_ID: ${{ inputs.event_id }}
+        run: node scripts/claude/proposal-rerun.ts "$EVENT_ID"

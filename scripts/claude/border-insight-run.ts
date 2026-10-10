@@ -30,7 +30,7 @@ export async function addInsights(d: InsightDeps): Promise<void> {
   const { report } = d
   if (d.posted) {
     const facts = insightUser(report)
-    const text = await askClaude({ label: `一言解説 ${report.eventId}`, system: INSIGHT_SYSTEM, user: facts, maxTokens: 300 })
+    const text = await askClaude({ label: `一言解説 ${report.eventId}`, system: INSIGHT_SYSTEM, user: facts, maxTokens: 4_000 })
     const bad = checkInsight(text, facts)
     const post = bad ? null : insightPost(report.name, text)
     if (post) {
@@ -41,7 +41,7 @@ export async function addInsights(d: InsightDeps): Promise<void> {
     }
   }
   if (process.env.GH_TOKEN && process.env.GITHUB_REPOSITORY) {
-    const body = await askClaude({ label: `改善案 ${report.eventId}`, system: PROPOSAL_SYSTEM, user: proposalUser(report, d.summary), maxTokens: 2_500 })
+    const body = await askClaude({ label: `改善案 ${report.eventId}`, system: PROPOSAL_SYSTEM, user: proposalUser(report, d.summary), maxTokens: 16_000 })
     const url = await upsertIssue({
       title: `[モデル改善案] ${report.eventId} ${report.name}`,
       dedupePrefix: `[モデル改善案] ${report.eventId} `,
