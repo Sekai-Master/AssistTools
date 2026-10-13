@@ -1,5 +1,5 @@
 /**
- * ② 公式 X の投稿の自動作成（.github/workflows/x-auto-post.yml から毎日 12:05 JST）。
+ * ② 公式 X の投稿の自動作成（.github/workflows/x-auto-post.yml から毎日 12:17 JST）。
  *
  *   node scripts/claude/x-auto-post.ts [--dry-run]
  *

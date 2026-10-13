@@ -16,7 +16,7 @@ name: Refresh mysekai data
 
 on:
   schedule:
-    - cron: "0 19 * * *" # 04:00 JST
+    - cron: "41 19 * * *" # 04:41 JST（毎時の始まりは GitHub が混んで遅れるので分をずらす。2026-10-13）
   workflow_dispatch:
 
 permissions:
