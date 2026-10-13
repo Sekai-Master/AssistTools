@@ -11917,7 +11917,7 @@
     "default": 2156701,
     "Unit": "0_VS",
     "categories": [
-      "image"
+      "original"
     ],
     "publishedAt": 1760162400000,
     "published": true,
@@ -14017,6 +14017,25 @@
     "jacketLink": "jacket_s_811.webp",
     "music_time": 127,
     "event_rate": 115
+  },
+  {
+    "id": "812",
+    "title": "星、ときどき光",
+    "pronunciation": "ほし、ときどきひかり",
+    "creatorArtistId": 290,
+    "artistName": "あばらや",
+    "default": 2270401,
+    "Unit": "1_L/n",
+    "categories": [
+      "mv_2d"
+    ],
+    "publishedAt": 1791784800000,
+    "published": true,
+    "isNewlyWrittenMusic": true,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_812.webp",
+    "music_time": 118,
+    "event_rate": 112
   },
   {
     "id": "813",
