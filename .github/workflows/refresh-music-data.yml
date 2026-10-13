@@ -19,8 +19,9 @@ name: Refresh music data
 
 on:
   schedule:
-    # 03:00 JST（= 18:00 UTC）。イベント開始の 20:00 JST より後、朝より前。
-    - cron: "0 18 * * *"
+    # 03:13 JST（= 18:13 UTC）。イベント開始の 20:00 JST より後、朝より前。
+    # 毎時の始まりは GitHub が混んで遅れるので分をずらす（2026-10-13）
+    - cron: "13 18 * * *"
   workflow_dispatch:
 
 permissions:
