@@ -14074,5 +14074,24 @@
     "jacketLink": "jacket_s_814.webp",
     "music_time": 118.6,
     "event_rate": 112
+  },
+  {
+    "id": "824",
+    "title": "Palette",
+    "pronunciation": "ぱれっと",
+    "creatorArtistId": 350,
+    "artistName": "ゆよゆっぺ・meola",
+    "default": 1170501,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1792130400000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_824.webp",
+    "music_time": 115.1,
+    "event_rate": 111
   }
 ]
