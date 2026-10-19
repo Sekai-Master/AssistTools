@@ -13867,6 +13867,25 @@
     "event_rate": 113
   },
   {
+    "id": "793",
+    "title": "バカ通信",
+    "pronunciation": "ばかつうしん",
+    "creatorArtistId": 351,
+    "artistName": "isonosuke",
+    "default": 1570601,
+    "Unit": "4_WxS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1792389600000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_793.webp",
+    "music_time": 118.8,
+    "event_rate": 112
+  },
+  {
     "id": "794",
     "title": "デロスサントス",
     "pronunciation": "でろすさんとす",
