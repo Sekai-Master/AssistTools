@@ -7702,7 +7702,8 @@
     "default": 1538901,
     "Unit": "4_WxS",
     "categories": [
-      "mv_3d"
+      "mv_3d",
+      "mv_2d"
     ],
     "publishedAt": 1711346400000,
     "published": true,
