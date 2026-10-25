@@ -78,16 +78,20 @@ function fitLines(head: string[], body: string[], tail: string[]): string {
  * 開催中のマイルストーン（開始24時間・経過50%・85%）の予測ポスト。label は「開始24時間」「経過51%」など。
  * 画像つきで送るときは、この文面が画像の代替テキストと、画像が作れなかったときの控えになる。
  */
-export function milestoneText(eventName: string, label: string, ranks: readonly PostRank[]): string | null {
+export function milestoneText(eventName: string, label: string, ranks: readonly PostRank[], reference = false): string | null {
   const ordered = POST_ORDER.map((r) => ranks.find((x) => x.rank === r)).filter((x): x is PostRank => x != null)
   if (ordered.length === 0) return null
   const body = ordered.map((r) => {
-    const conf = r.confidence ? `・確度${CONFIDENCE_LABEL[r.confidence]}` : ''
+    // 参考値（過去に無い長さ）のときは確度を名乗らない
+    const conf = reference ? '' : r.confidence ? `・確度${CONFIDENCE_LABEL[r.confidence]}` : ''
     const range = r.low != null && r.high != null ? `（${formatRange(r.low, r.high)}${conf}）` : ''
     return `${r.rank}位 ${formatMan(r.predicted)}${range}`
   })
-  const head = [`【ボーダー予測】${eventName}（${label}）`, '']
-  const tail = ['', '括弧は8割の確率で収まる幅です。過去イベントの伸び方から自動で出しています。', BORDER_PAGE_URL]
+  const head = [`【ボーダー予測${reference ? '・参考値' : ''}】${eventName}（${label}）`, '']
+  const note = reference
+    ? '過去に無い長さのイベントで、外れやすい参考値です。括弧は8割の幅の目安です。'
+    : '括弧は8割の確率で収まる幅です。過去イベントの伸び方から自動で出しています。'
+  const tail = ['', note, BORDER_PAGE_URL]
   return fitLines(head, body, tail)
 }
 
