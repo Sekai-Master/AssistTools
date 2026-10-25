@@ -134,7 +134,7 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
         ))}
       </ul>
       {snap.predicted && snap.extrapolatedFrom != null && (
-        <p className="mt-3 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900">
+        <p className="mt-3 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-700">
           <b>この回の予測は参考値です。</b>
           このイベントは {snap.event.durationHours} 時間で、過去に同じ長さの回がありません。
           いちばん近い {snap.extrapolatedFrom} 時間の回の伸び方を借りて出しているので、大きく外れることがあります
@@ -161,7 +161,7 @@ const CONFIDENCE_TONE: Record<Confidence, string> = {
 function ConfidenceChip({ value, reference }: { value: Confidence; reference: boolean }) {
   // 過去に無い長さ（外挿）のときは確度を名乗らず「参考値」と書く（2026-10-25、221 の 1000位が大きく外れた）
   if (reference) {
-    return <span className="rounded-full border border-dashed border-amber-500 px-2 py-0.5 text-[11px] font-bold text-amber-700">参考値</span>;
+    return <span className="rounded-full border border-dashed border-amber-600 px-2 py-0.5 text-[11px] font-bold text-amber-700">参考値</span>;
   }
   return (
     <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${CONFIDENCE_TONE[value]}`}>
