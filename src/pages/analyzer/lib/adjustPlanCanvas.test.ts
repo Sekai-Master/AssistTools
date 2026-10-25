@@ -194,6 +194,37 @@ describe("buildAdjustPlanCanvasData — R6 Step2消失バグ修正（sweep plan=
   });
 });
 
+describe("buildAdjustPlanCanvasData — 各行のイベントバッジ（percentSub）", () => {
+  it("全ステップの行に、その行の獲得Ptに対応するバッジ数が付く", () => {
+    const d = buildAdjustPlanCanvasData({ ...COMMON, mySekai: MYSEKAI, step2: STEP2_MULTI, finalRun: FINAL_EARN });
+    expect(d.rows.map((r) => r.percentSub)).toEqual([
+      "バッジ 500個", // マイセカイ 5,000 Pt
+      "バッジ 6,243個", // 62,437 Pt × 1回
+      "バッジ 3,618個", // 18,090 Pt × 2回 = 1,809 × 2
+      "バッジ 100個", // ラストプレイ 1,005 Pt
+    ]);
+  });
+
+  it("複数回の行は合計Ptを割らず、1回ぶんを切り捨ててから回数を掛ける", () => {
+    const plan: MultiLivePlan = {
+      units: [{ basePoint: 100, liveBonus: 1, minScore: 0, maxScore: 19_999, pt: 4_735, count: 3 }],
+      liveCount: 3,
+      lbCost: 3,
+      totalPt: 14_205,
+    };
+    const d = buildAdjustPlanCanvasData({ ...COMMON, step2: { kind: "multi", plan, songForBase: () => SONG } });
+    expect(d.rows[0].percent).toBe("+14,205 Pt");
+    expect(d.rows[0].percentSub).toBe("バッジ 1,419個"); // 1,420 ではない
+  });
+
+  it("sweep（1本で取り切る）と scoreZero の締めにも付く", () => {
+    const sweep = buildAdjustPlanCanvasData({ ...COMMON, step2: STEP2_SWEEP });
+    expect(sweep.rows[0].percentSub).toBe("バッジ 300個");
+    const zero = buildAdjustPlanCanvasData({ ...COMMON, finalRun: FINAL_ZERO });
+    expect(zero.rows[0].percentSub).toBe("バッジ 109個");
+  });
+});
+
 describe("deriveCurrentLb — 5.1（現在ボーナスのまま着地）の締めLB逆引き", () => {
   it("calcLivePt が requiredPt と一致するLBを、liveBonuses の並び順で最初に見つかったものとして返す", () => {
     const base = 100;
@@ -220,6 +251,13 @@ describe("buildAdjustPlanCanvasData — 合計（マイセカイはライブ回�
     const total = d.summary.find((s) => s.label === "合計獲得")!.value;
     const expected = MYSEKAI.totalPt + MULTI_PLAN.totalPt + FINAL_EARN.pt;
     expect(total).toBe(`${expected.toLocaleString()} Pt`);
+  });
+
+  it("合計獲得の下にイベントバッジの合計を添える（1回ごとに切り捨てた和）", () => {
+    const d = buildAdjustPlanCanvasData({ ...COMMON, mySekai: MYSEKAI, step2: STEP2_MULTI, finalRun: FINAL_EARN });
+    const sub = d.summary.find((s) => s.label === "合計獲得")!.sub;
+    // マイセカイ 5,000→500 / 62,437→6,243 / 18,090→1,809 ×2 / ラストプレイ 1,005→100
+    expect(sub).toBe("バッジ 10,461個（目安）");
   });
 
   it("LB合計はクリスタル換算つき・回復時間（約Nh）は出さない", () => {

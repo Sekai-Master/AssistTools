@@ -1,5 +1,6 @@
 import { StepSection } from "./StepSection";
 import type { CalculationResultV6 } from "../lib/calculator";
+import { badgesForMySekai, formatBadges } from "../lib/eventBadges";
 
 /** Step1: マイセカイで何をいくつ採るか。 */
 export function MySekaiStep({ result }: { result: CalculationResultV6 }) {
@@ -64,7 +65,7 @@ export function MySekaiStep({ result }: { result: CalculationResultV6 }) {
         <span className="font-bold" style={{ color: "var(--unit-color)" }}>
           {a.totalPt.toLocaleString()}
         </span>{" "}
-        Pt（単価 {result.unitBasePt} Pt/個）
+        Pt（単価 {result.unitBasePt} Pt/個） ・ {formatBadges(badgesForMySekai(a.totalPt))}
       </p>
       {/* R5: Step2が着地不能にならないよう動的に確保した額（dynamicReserve）。 */}
       {a.appliedReserve !== undefined && (

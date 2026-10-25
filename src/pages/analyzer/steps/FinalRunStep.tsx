@@ -7,6 +7,7 @@ import type { CalculationResultV6 } from "../lib/calculator";
 import type { LastPlayOutcome } from "../lib/lastPlay";
 import type { AnalyzerMusic } from "../useAnalyzerMusics";
 import { onJacketError } from "../../../lib/img";
+import { formatPlayBadges } from "../lib/eventBadges";
 
 interface Props {
   result: CalculationResultV6;
@@ -80,6 +81,9 @@ export function FinalRunStep({
               <p className="text-lg font-bold tabular-nums" style={{ color: "var(--unit-color)" }}>
                 +{lastPlay.pt.toLocaleString()} Pt
               </p>
+              <p className="text-xs font-bold tabular-nums text-slate-500">
+                {formatPlayBadges(lastPlay.pt)}
+              </p>
             </div>
           </div>
         ) : (
@@ -114,7 +118,9 @@ export function FinalRunStep({
           <p className="truncate font-bold text-slate-700">
             {selectedSong ? selectedSong.title : "楽曲"}
           </p>
-          <p className="text-xs text-slate-500">基礎点 {result.finalBase}</p>
+          <p className="text-xs tabular-nums text-slate-500">
+            基礎点 {result.finalBase} ・ {formatPlayBadges(result.finalRunPt)}
+          </p>
         </div>
       </div>
 

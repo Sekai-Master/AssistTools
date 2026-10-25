@@ -3,10 +3,13 @@ import { useRef, useState } from "react";
 import { NeuButton } from "../../../components/ui/NeuButton";
 import { drawPlanCanvas } from "../../refresh/lib/planCanvas";
 import {
+  adjustPlanContributions,
   buildAdjustPlanCanvasData,
   type AdjustCanvasFinalRun,
+  type AdjustCanvasMySekai,
   type AdjustCanvasStep2,
 } from "../lib/adjustPlanCanvas";
+import { BADGE_NOTE } from "../lib/eventBadges";
 import type { CalculationResultV6 } from "../lib/calculator";
 import type { FinalRunPlan } from "../lib/finalRun";
 import type { LastPlayOutcome } from "../lib/lastPlay";
@@ -53,6 +56,16 @@ export function PlanExportPanel({
 }) {
   const [notice, setNotice] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const buildMySekai = (): AdjustCanvasMySekai | undefined =>
+    result.useMySekai
+      ? {
+          countA: result.mySekaiAllocation.countA,
+          countB: result.mySekaiAllocation.countB,
+          countC: result.mySekaiAllocation.countC,
+          totalPt: result.mySekaiAllocation.totalPt,
+        }
+      : undefined;
 
   const buildStep2 = (): AdjustCanvasStep2 | undefined => {
     const live = result.liveAdjustment;
@@ -142,14 +155,7 @@ export function PlanExportPanel({
         targetPt: result.targetPt,
         currentPt: result.currentPt,
         maxScore: result.maxScore,
-        mySekai: result.useMySekai
-          ? {
-              countA: result.mySekaiAllocation.countA,
-              countB: result.mySekaiAllocation.countB,
-              countC: result.mySekaiAllocation.countC,
-              totalPt: result.mySekaiAllocation.totalPt,
-            }
-          : undefined,
+        mySekai: buildMySekai(),
         step2: buildStep2(),
         finalRun: buildFinalRun(),
         accent,
@@ -200,11 +206,28 @@ export function PlanExportPanel({
     );
   }
 
+  // 画像のフッターと同じ集計（adjustPlanContributions）から出す。画面と画像で数字が割れないように。
+  const totals = adjustPlanContributions(buildMySekai(), buildStep2(), buildFinalRun());
+
   return (
     <div className="neu-panel p-5 sm:p-6">
       <h2 className="mb-3 text-sm font-bold text-slate-600">
         Step1〜3 統合プランの画像
       </h2>
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 rounded-xl bg-neu p-3 shadow-neu-inset">
+        <span className="text-xs text-slate-500">
+          このプランの合計{" "}
+          <span className="font-mono font-bold tabular-nums text-slate-600">
+            {totals.totalPt.toLocaleString()} Pt
+          </span>{" "}
+          で手に入るイベントバッジ
+        </span>
+        <span className="font-mono text-lg font-bold tabular-nums text-slate-700">
+          {totals.totalBadges.toLocaleString()}
+          <span className="ml-0.5 text-xs font-normal text-slate-500">個</span>
+        </span>
+      </div>
+      <p className="mb-4 text-[11px] leading-relaxed text-slate-400">{BADGE_NOTE}</p>
       <div className="flex flex-wrap items-center gap-2">
         <NeuButton className="!py-2 !text-sm" onClick={() => void copyImage()}>
           画像をコピー

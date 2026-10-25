@@ -3,6 +3,7 @@ import { NeuButton } from "../../../../components/ui/NeuButton";
 import { maxEfficientLiveBonus } from "../../lib/calcLivePt";
 import type { MultiLiveAdjustResult, MultiLivePlan } from "../../lib/multiLiveAdjust";
 import { formatApproxMinutes, type TimeForBase } from "../../lib/planDuration";
+import { badgesForUnits, formatBadges } from "../../lib/eventBadges";
 import { FormationUnchangedBadge, LbCostNote } from "./badges";
 import { CompactPlanCard } from "./CompactPlanCard";
 import { AdoptedUnitLine } from "./UnitLine";
@@ -95,6 +96,7 @@ export function PrimaryPlanPanel({
             {currentDurationSec !== undefined ? formatApproxMinutes(currentDurationSec) : "所要時間不明"}
             {" "}・ LB合計{chosen.lbCost}
             <LbCostNote lbCost={chosen.lbCost} /> ・ 合計 {chosen.totalPt.toLocaleString()} Pt
+            ・ {formatBadges(badgesForUnits(chosen.units))}
           </span>
           <FormationUnchangedBadge />
           {!isPrimary && (
