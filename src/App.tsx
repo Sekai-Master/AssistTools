@@ -41,7 +41,7 @@ export function App() {
               <Route path="/knowledge" element={<RoutePages.knowledge />} />
               {/* 記事も同じ入口。slug は useParams で受ける。 */}
               <Route path="/knowledge/:slug" element={<RoutePages.knowledge />} />
-              {/* ボーダー予測。公開前なのでハブのカードには出さない（URL を知っていれば開ける）。 */}
+              {/* ボーダー予測と歴代ボーダー（2026-10-25 にハブへ載せた）。 */}
               <Route path="/border" element={<RoutePages.border />} />
               <Route path="/border/history" element={<RoutePages.borderHistory />} />
               <Route path="*" element={<NotFound />} />

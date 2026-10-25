@@ -27,7 +27,7 @@ import {
 
 /*
  * 歴代ボーダー（2026-10-25 Nori「ランキングと各イベントの分析体制が固まったので一つページ機能増やしても」）。
- * ボーダー予測と同じく、まだハブには載せていない（URL を知っている人だけ）。
+ * 2026-10-25 にボーダー予測と一緒にハブへ載せた（カテゴリ「イベント」）。
  * 並べ方は Bot の歴代ボーダーの画像と同じ（historyView.ts）。表は1回読むだけ（D1 の読み取りは1行）。
  * 200・500・2000位とワールドリンク、種別の出し入れは 2026-10-25 Nori「一部のイベントのデータがないことを明記しつつ参照可能に」
  * 「WLも入れる・チアフルを抜く、みたいな調整」。
@@ -106,7 +106,7 @@ export default function BorderHistoryPage() {
   };
 
   return (
-    <ToolPage unit="mmj" title="歴代ボーダー" icon="leaderboard">
+    <ToolPage morphKey="tool:border-history" title="歴代ボーダー" icon="military_tech">
       <p className="text-sm leading-7 text-slate-600">
         終わったイベントの最終ボーダー（終値）を、全部の回と並べて比べます。
         長さの違う回は終値では比べにくいので、1日あたり（日速）に直した順位と、同じ長さの回だけの順位も出します。
@@ -338,10 +338,10 @@ function RankingPanel({ pool, target, onSelect }: { pool: HistoryEvent[]; target
               <th scope="col" className="hidden px-2 py-2 font-bold sm:table-cell">
                 種別
               </th>
-              <th scope="col" className="hidden px-2 py-2 text-right font-bold sm:table-cell">
+              <th scope="col" className="hidden whitespace-nowrap px-2 py-2 text-right font-bold sm:table-cell">
                 日数
               </th>
-              <th scope="col" className="hidden px-2 py-2 text-right font-bold sm:table-cell">
+              <th scope="col" className="hidden whitespace-nowrap px-2 py-2 text-right font-bold sm:table-cell">
                 時間
               </th>
               <th scope="col" className={`px-2 py-2 text-right font-bold ${daily ? "hidden sm:table-cell" : ""}`}>
@@ -382,8 +382,9 @@ function RankingPanel({ pool, target, onSelect }: { pool: HistoryEvent[]; target
                   <td className="hidden px-2 py-1.5 sm:table-cell">
                     <TypeChip e={r.event} />
                   </td>
-                  <td className="hidden px-2 py-1.5 text-right tabular-nums sm:table-cell">{r.event.days}日</td>
-                  <td className="hidden px-2 py-1.5 text-right tabular-nums sm:table-cell">{r.event.hours}h</td>
+                  {/* 2桁の日数（10日・13日）で「13／日」と折れていた（2026-10-25 Nori）。数の列は折らない */}
+                  <td className="hidden whitespace-nowrap px-2 py-1.5 text-right tabular-nums sm:table-cell">{r.event.days}日</td>
+                  <td className="hidden whitespace-nowrap px-2 py-1.5 text-right tabular-nums sm:table-cell">{r.event.hours}h</td>
                   <td className={`whitespace-nowrap px-2 py-1.5 text-right tabular-nums ${finalCol}`}>{formatMan(r.final)}</td>
                   <td className={`whitespace-nowrap px-2 py-1.5 text-right tabular-nums ${dailyCol}`}>{formatMan(r.perDay)}</td>
                 </tr>
