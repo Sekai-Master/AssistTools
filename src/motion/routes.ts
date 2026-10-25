@@ -43,6 +43,8 @@ export const PAGE_LOADERS: Record<string, Loader> = {
   // ボーダー予測。公開の判断が済むまではハブに載せない（TOOLS に入れない）ので、ここに置く。
   // 載せるときは ROUTE_LOADERS へ移して TOOLS に登録する（docs/border-prediction.md「公開の手順」）。
   "/border": () => import("../pages/border/BorderPredictionPage"),
+  // 歴代ボーダー（終値の表）。ボーダー予測と同じく公開の判断が済むまではハブに載せない
+  "/border/history": () => import("../pages/border/BorderHistoryPage"),
 };
 
 const ALL_LOADERS: Record<string, Loader> = { ...ROUTE_LOADERS, ...PAGE_LOADERS };
@@ -116,6 +118,7 @@ export const RoutePages = {
   changelog: lazyOf("/changelog"),
   knowledge: lazyOf("/knowledge"),
   border: lazyOf("/border"),
+  borderHistory: lazyOf("/border/history"),
   compare: lazyOf("/compare"),
 };
 
@@ -127,6 +130,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/privacy": "プライバシーポリシー",
   "/changelog": "更新履歴",
   "/border": "ボーダー予測",
+  "/border/history": "歴代ボーダー",
   "/knowledge": "知見ノート",
 };
 

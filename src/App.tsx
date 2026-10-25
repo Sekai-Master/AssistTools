@@ -43,6 +43,7 @@ export function App() {
               <Route path="/knowledge/:slug" element={<RoutePages.knowledge />} />
               {/* ボーダー予測。公開前なのでハブのカードには出さない（URL を知っていれば開ける）。 */}
               <Route path="/border" element={<RoutePages.border />} />
+              <Route path="/border/history" element={<RoutePages.borderHistory />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           )}
