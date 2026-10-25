@@ -159,6 +159,18 @@ export const TOOLS: ToolDef[] = [
     category: "plan",
     status: "ready",
   },
+  // ボーダー予測と歴代ボーダーは 2026-10-25 にハブへ載せた（Nori「もう十分乗せれるクオリティでしょう」）
+  {
+    id: "border",
+    path: "/border",
+    name: "ボーダー予測",
+    shortName: "ボーダー予測",
+    description:
+      "開催中のイベントの50〜2000位の最終ボーダーを、過去のイベントの伸び方から予測します。8割の確率で収まる幅と、終わったあとの答え合わせも載せています。",
+    icon: "insights",
+    category: "plan",
+    status: "ready",
+  },
   {
     id: "ranking",
     path: "/ranking",
@@ -200,6 +212,17 @@ export const TOOLS: ToolDef[] = [
     shortName: "BINGO",
     description: "チアフルカーニバル用のBINGOカードを生成できます。",
     icon: "grid_on",
+    category: "event",
+    status: "ready",
+  },
+  {
+    id: "border-history",
+    path: "/border/history",
+    name: "歴代ボーダー",
+    shortName: "歴代ボーダー",
+    description:
+      "終わったイベントの最終ボーダーを全部の回と比べます。終値・1日あたり（日速）・同じ長さの回の3つの並べ方で、その回が歴代何位だったかが分かります。",
+    icon: "military_tech",
     category: "event",
     status: "ready",
   },

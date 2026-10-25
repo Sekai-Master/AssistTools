@@ -27,7 +27,7 @@ import {
 
 /*
  * 歴代ボーダー（2026-10-25 Nori「ランキングと各イベントの分析体制が固まったので一つページ機能増やしても」）。
- * ボーダー予測と同じく、まだハブには載せていない（URL を知っている人だけ）。
+ * 2026-10-25 にボーダー予測と一緒にハブへ載せた（カテゴリ「イベント」）。
  * 並べ方は Bot の歴代ボーダーの画像と同じ（historyView.ts）。表は1回読むだけ（D1 の読み取りは1行）。
  * 200・500・2000位とワールドリンク、種別の出し入れは 2026-10-25 Nori「一部のイベントのデータがないことを明記しつつ参照可能に」
  * 「WLも入れる・チアフルを抜く、みたいな調整」。
@@ -106,7 +106,7 @@ export default function BorderHistoryPage() {
   };
 
   return (
-    <ToolPage unit="mmj" title="歴代ボーダー" icon="leaderboard">
+    <ToolPage morphKey="tool:border-history" title="歴代ボーダー" icon="military_tech">
       <p className="text-sm leading-7 text-slate-600">
         終わったイベントの最終ボーダー（終値）を、全部の回と並べて比べます。
         長さの違う回は終値では比べにくいので、1日あたり（日速）に直した順位と、同じ長さの回だけの順位も出します。

@@ -2,7 +2,7 @@
 
 役割: [#128](https://github.com/Sekai-Master/AssistTools/issues/128)（自己改善システム）と [#129](https://github.com/Sekai-Master/AssistTools/issues/129)（収集と予測ログの器）の実装の正本。構成・モデル・無料枠の見積り・運用手順をここに置く。
 
-最終更新: 2026-10-25（歴代ボーダーの表と画面）
+最終更新: 2026-10-25（歴代ボーダー・日報・ハブへの掲載）
 
 ---
 
@@ -31,8 +31,8 @@ sekaimaster-bot（NAS）──▶ /admin/posts?unsent=… ──▶ X / Discord 
 | 投稿文 | `workers/border/src/posts.ts` | X の重み付き文字数で 280 以内に収める。数値はプログラムで埋める |
 | 解析ジョブ | `scripts/border/analyze.ts` | `node scripts/border/analyze.ts`（依存パッケージ無し） |
 | 公開の読み出し | `functions/api/border/[[path]].ts` → `workers/border/src/public.ts` | 画面用。D1 は Pages のバインディング `BORDER_DB` |
-| 画面 | `src/pages/border/` | `/border`。**まだハブに載せていない**（§6）。いまの値（予測を出す前も）・予測・推移のグラフ（`BorderChart.tsx`。30分ごとの実測／その時点の予測／8割の幅、`/api/border/events/{id}/history`）・答え合わせ |
-| 歴代ボーダー（終値の表） | `scripts/border/history.ts`・kv `finals`・`src/pages/border/BorderHistoryPage.tsx` | 終わった回（マラソン・チアフル・Memories・ワールドリンク）の 50〜2000位の6順位の終値。200・500・2000位は 86〜123回と 126・199回で記録が無い。**終わった回は Worker が終了15分後に `/event/live` の確定後の点（順位発表より後）で足し、終了20分後の時刻（payload の `postAt`）付きで歴代ボーダーの投稿を積む**（2026-10-25 Nori「完全に時間指定で」。Bot はその時刻ちょうどに出す。取れなければ5分ごとに3時間までやり直す）。解析ジョブも、終わって30日以内の回で表に無いものを sekai.best の時系列で書き足し、種（`scripts/border/data/finals-seed.json`）から足りない回・順位も書き足す（`mergeSeed`）。公開の読み出しは `/api/border/finals`（kv の1行・約90KB）。画面は `/border/history`（`?event=221` で回、`?types=` で比べる種別。終値・日速・同じ長さで並べ、記録の無い回は表の上に明記）。既定の種別（ワールドリンク抜き）の 50・100・1000位は、Bot の歴代ボーダーの4枚と同じ並べ方（`historyView.ts`。Bot は表を読むときにワールドリンクを捨てる）。**ハブには載せていない**（`/border` と同じ扱い） |
+| 画面 | `src/pages/border/` | `/border`。ハブの「計画」に載っている（§6）。いまの値（予測を出す前も）・予測・推移のグラフ（`BorderChart.tsx`。30分ごとの実測／その時点の予測／8割の幅、`/api/border/events/{id}/history`）・答え合わせ |
+| 歴代ボーダー（終値の表） | `scripts/border/history.ts`・kv `finals`・`src/pages/border/BorderHistoryPage.tsx` | 終わった回（マラソン・チアフル・Memories・ワールドリンク）の 50〜2000位の6順位の終値。200・500・2000位は 86〜123回と 126・199回で記録が無い。**終わった回は Worker が終了15分後に `/event/live` の確定後の点（順位発表より後）で足し、終了20分後の時刻（payload の `postAt`）付きで歴代ボーダーの投稿を積む**（2026-10-25 Nori「完全に時間指定で」。Bot はその時刻ちょうどに出す。取れなければ5分ごとに3時間までやり直す）。解析ジョブも、終わって30日以内の回で表に無いものを sekai.best の時系列で書き足し、種（`scripts/border/data/finals-seed.json`）から足りない回・順位も書き足す（`mergeSeed`）。公開の読み出しは `/api/border/finals`（kv の1行・約90KB）。画面は `/border/history`（`?event=221` で回、`?types=` で比べる種別。終値・日速・同じ長さで並べ、記録の無い回は表の上に明記）。既定の種別（ワールドリンク抜き）の 50・100・1000位は、Bot の歴代ボーダーの4枚と同じ並べ方（`historyView.ts`。Bot は表を読むときにワールドリンクを捨てる）。ハブの「イベント」に載っている（§6） |
 | D1 | `workers/border/migrations/` | 表の定義と、書き込み行数を抑える工夫の理由はファイル冒頭 |
 
 ## 2. モデル（`share-median-v1`）
@@ -115,14 +115,14 @@ openssl rand -hex 32 | tr -d '
 - **表の定義を変えたとき（migrations/ に足したとき）**: デプロイの前に `npx wrangler d1 migrations apply sekaimaster-border --remote`。0002（イベントの素材名の列）は 2026-10-25 に追加。先にデプロイすると、日程の取り込みが「asset という列が無い」で失敗する
 - **歴代の表の見回りのログ**: `npx wrangler tail sekaimaster-border` で `finals {"status":"added",...}`（足した）・`waiting`（確定後の点を待っている）。ふだんの回はログを出さない
 
-## 6. 公開の手順（運営者が決める）
+## 6. 公開（2026-10-25 に済み）
 
-`/border` は URL を知っていれば開けるが、ハブには載せていない。載せるときは:
+2026-10-25 に、ボーダー予測（カテゴリ「計画」）と歴代ボーダー（カテゴリ「イベント」）をハブに載せた（Nori「もう十分乗せれるクオリティでしょう」・v1.24.0）。
 
-1. `src/motion/routes.ts` の `/border` を `PAGE_LOADERS` から `ROUTE_LOADERS` へ移し、`src/tools.ts` の `TOOLS` に登録する（カテゴリは「計画」）
-2. `CHANGELOG.md` に MINOR で載せる（[versioning.md](versioning.md)）
-3. X で告知する（[x-operations.md](x-operations.md) の「新ツール」テンプレ）
-4. Bot の X 送信スイッチを入れる
+1. `src/motion/routes.ts` の `/border`・`/border/history` を `PAGE_LOADERS` から `ROUTE_LOADERS` へ移し、`src/tools.ts` の `TOOLS` に登録した（ページの色は `morphKey` からカテゴリの色を引く）
+2. `CHANGELOG.md` に MINOR で載せた（[versioning.md](versioning.md)）
+3. X で告知する（[x-operations.md](x-operations.md) の「新ツール」テンプレ。画像は Bot の `page` でページを撮って添える）
+4. Bot の X 送信スイッチは 2026-09-30 から入っている
 
 ## 7. 判断の記録
 

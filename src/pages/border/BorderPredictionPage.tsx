@@ -23,14 +23,13 @@ import {
 import { useBorderData } from "./useBorderData";
 
 /*
- * ★ いまはハブに載せていない（src/tools.ts の TOOLS に無い）。URL を知っている人だけが開ける。
- *   公開の判断は運営者がする（docs/border-prediction.md「公開の手順」）。
+ * 2026-10-25 にハブへ載せた（src/tools.ts の TOOLS・カテゴリ「計画」。Nori「もう十分乗せれるクオリティでしょう」）。
  */
 
 export default function BorderPredictionPage() {
   const { current, record, history, loading, error, now } = useBorderData();
   return (
-    <ToolPage unit="mmj" title="ボーダー予測" icon="insights">
+    <ToolPage morphKey="tool:border" title="ボーダー予測" icon="insights">
       <p className="text-sm leading-7 text-slate-600">
         開催中のイベントの主要ボーダー（50〜2000位）の最終値を、過去のイベントの伸び方から予測します。
         イベントが終わるたびに予測と実測を突き合わせて、使うモデルと予測の幅を自動で選び直しています。
