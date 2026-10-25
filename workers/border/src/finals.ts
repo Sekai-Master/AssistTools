@@ -12,7 +12,7 @@
  *   足す回だけ /event/live（約100KB）と表（約90KB）を parse する（イベント1回につき1〜数回）。
  */
 import { LIVE_URL, USER_AGENT, parseLive } from './collect.ts'
-import { justEndedEvent, kvGet, kvSet, queuePost } from './db.ts'
+import { justEndedEvent, kvGetStamped, putFinalsIfUnchanged } from './db.ts'
 import type { Env } from './env.ts'
 import { FINAL_RANKS, announceAt, historyMeta, historyPostText, parseHistory, type HistoryEvent } from './history.ts'
 
@@ -22,6 +22,8 @@ export const FINALS_FETCH_AFTER_MS = 15 * 60_000
 export const FINALS_POST_AFTER_MS = 20 * 60_000
 /** 終了からこの時間たっても取れなければ、解析ジョブに任せる */
 export const FINALS_GIVE_UP_MS = 3 * 3_600_000
+/** Cron は時刻ちょうどより数秒遅れて動くことがある。早く動いたときに5分待たないよう、少し手前から見る */
+const CRON_SLACK_MS = 30_000
 
 /** 集計終了（20:59:59）の1秒後が終了（21:00:00） */
 export const endOf = (aggregateAt: number) => aggregateAt + 1_000
@@ -35,8 +37,12 @@ export type FinalsResult =
 type Fetcher = typeof fetch
 
 export async function runFinals(env: Env, now: number, fetcher: Fetcher = fetch): Promise<FinalsResult> {
-  const ev = await justEndedEvent(env.DB, now, FINALS_FETCH_AFTER_MS - 1_000, FINALS_GIVE_UP_MS)
+  // 集計終了（aggregateAt）から数えた区間。終了は集計終了の1秒後
+  const ev = await justEndedEvent(env.DB, now, endOf(0) + FINALS_FETCH_AFTER_MS - CRON_SLACK_MS, FINALS_GIVE_UP_MS)
   if (!ev) return { status: 'idle' }
+  // 素材名が無いと Memories を見分けられず、マラソンとして表に入れてしまう（入れた行は後から直されない）。
+  // 埋まるまで待ち、3時間たっても無ければ解析ジョブ（マスタの素材名を使う）に任せる（#159 レビュー HIGH-1。222 は MMJ Memories）
+  if (!ev.asset) return { status: 'waiting', eventId: ev.id, reason: '素材名がまだ無い' }
   const master = {
     id: ev.id,
     name: ev.name,
@@ -51,14 +57,22 @@ export async function runFinals(env: Env, now: number, fetcher: Fetcher = fetch)
   if (!meta) return { status: 'skip', eventId: ev.id, reason: '歴代の表の対象外' }
 
   // 表はまだ無いなら作らない（種は解析ジョブが入れる。ここで1行だけの表を作ると種が入らなくなる）
-  const raw = await kvGet(env.DB, 'finals')
-  if (!raw) return { status: 'skip', eventId: ev.id, reason: '表がまだ無い' }
-  const table = parseHistory(JSON.parse(raw) as unknown)
+  const stored = await kvGetStamped(env.DB, 'finals')
+  if (!stored) return { status: 'skip', eventId: ev.id, reason: '表がまだ無い' }
+  const raw = JSON.parse(stored.v) as { events?: unknown[] }
+  const table = parseHistory(raw)
   if (table.some((e) => e.id === ev.id)) return { status: 'skip', eventId: ev.id, reason: '表に入っている' }
+  // 読めない行を黙って捨てて書き戻さない（解析ジョブと同じ。#159 レビュー LOW-4）
+  if (table.length !== (Array.isArray(raw.events) ? raw.events.length : 0)) return { status: 'skip', eventId: ev.id, reason: '表に読めない行がある' }
 
-  const res = await fetcher(LIVE_URL, { headers: { 'User-Agent': USER_AGENT } })
-  if (!res.ok) return { status: 'waiting', eventId: ev.id, reason: `live ${res.status}` }
-  const live = parseLive(await res.json())
+  let live: ReturnType<typeof parseLive>
+  try {
+    const res = await fetcher(LIVE_URL, { headers: { 'User-Agent': USER_AGENT } })
+    if (!res.ok) return { status: 'waiting', eventId: ev.id, reason: `live ${res.status}` }
+    live = parseLive(await res.json())
+  } catch (err) {
+    return { status: 'waiting', eventId: ev.id, reason: `live を読めなかった（${err instanceof Error ? err.message : String(err)}）` }
+  }
   if (live.eventId !== ev.id) return { status: 'waiting', eventId: ev.id, reason: `live は ${live.eventId} を返した` }
   const finals: Record<string, number> = {}
   const sources: Record<string, string> = {}
@@ -73,15 +87,20 @@ export async function runFinals(env: Env, now: number, fetcher: Fetcher = fetch)
 
   const row: HistoryEvent = { ...meta, finals, sources }
   const events = [...table, row].sort((a, b) => a.id - b.id)
-  await kvSet(env.DB, 'finals', { events, updatedAt: now }, now)
-
-  let queued = false
-  if (meta.type !== 'world_bloom') {
-    queued = await queuePost(env.DB, `${ev.id}:history`, ev.id, 'history', historyPostText(ev.name, ev.id, env.SITE_ORIGIN), now, {
-      kind: 'history',
-      eventId: ev.id,
-      postAt: endOf(ev.aggregateAt) + FINALS_POST_AFTER_MS,
-    })
+  // ワールドリンクは投稿を積まない（Bot の画像はワールドリンクを数えない）
+  const post =
+    meta.type === 'world_bloom'
+      ? undefined
+      : {
+          id: `${ev.id}:history`,
+          eventId: ev.id,
+          kind: 'history',
+          text: historyPostText(ev.name, ev.id, env.SITE_ORIGIN),
+          payload: { kind: 'history', eventId: ev.id, postAt: endOf(ev.aggregateAt) + FINALS_POST_AFTER_MS },
+        }
+  // 表と投稿は1回の書き込みで。あいだに解析ジョブが表を書いていたら何もせず、次の5分でやり直す
+  if (!(await putFinalsIfUnchanged(env.DB, { events, updatedAt: now }, stored.at, now, post))) {
+    return { status: 'waiting', eventId: ev.id, reason: '表が読んだあとに書き換わった' }
   }
-  return { status: 'added', eventId: ev.id, queued }
+  return { status: 'added', eventId: ev.id, queued: post != null }
 }

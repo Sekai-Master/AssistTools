@@ -1,6 +1,9 @@
+import fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { handleRequest } from '../src/api.ts'
 import { parseSchedule } from '../src/collect.ts'
-import { kvGet, kvSet, unsentPosts, upsertEvents } from '../src/db.ts'
+import { kvGet, kvGetStamped, kvSet, putFinalsIfUnchanged, unsentPosts, upsertEvents } from '../src/db.ts'
+import { FINALS_CRON } from '../src/index.ts'
 import type { Env } from '../src/env.ts'
 import { FINALS_GIVE_UP_MS, endOf, runFinals } from '../src/finals.ts'
 import type { EventMeta } from '../src/model.ts'
@@ -88,5 +91,57 @@ describe('終わった直後の回を歴代の表へ（finals.ts）', () => {
     const [ok, bad] = parseSchedule({ events: [{ ...EV, type: 'marathon', asset: 'event_next_2026' }, { ...EV, id: 223, type: 'marathon', asset: '../x' }] }, AGG)
     expect(ok.asset).toBe('event_next_2026')
     expect(bad.asset).toBeNull()
+  })
+})
+
+describe('見回りの守り（#159 レビュー）', () => {
+  it('素材名が無い回は足さずに待つ（Memories をマラソンとして入れない）', async () => {
+    const { env, fetcher, calls } = await setup({ ...EV, asset: null })
+    expect(await runFinals(env, endOf(AGG) + 15 * M, fetcher(liveBody(222, AGG + 13 * M)))).toMatchObject({ status: 'waiting', reason: '素材名がまだ無い' })
+    expect(calls()).toBe(0)
+  })
+
+  it('live が読めない・失敗なら待つ', async () => {
+    const { env } = await setup()
+    const boom = (async () => {
+      throw new Error('network')
+    }) as unknown as typeof fetch
+    expect((await runFinals(env, endOf(AGG) + 15 * M, boom)).status).toBe('waiting')
+    const bad = (async () => new Response('x', { status: 503 })) as unknown as typeof fetch
+    expect(await runFinals(env, endOf(AGG) + 15 * M, bad)).toMatchObject({ status: 'waiting', reason: 'live 503' })
+  })
+
+  it('読んだあとに表が書き換わっていたら、表も投稿も書かない', async () => {
+    const { env } = await setup()
+    const before = await kvGetStamped(env.DB, 'finals')
+    await kvSet(env.DB, 'finals', { events: [SEED_ROW], updatedAt: 5 }, 5)
+    const post = { id: '222:history', eventId: 222, kind: 'history', text: 't', payload: { kind: 'history', eventId: 222 } }
+    expect(await putFinalsIfUnchanged(env.DB, { events: [] }, before?.at ?? -1, 10, post)).toBe(false)
+    expect((await kvGetStamped(env.DB, 'finals'))?.at).toBe(5)
+    expect(await unsentPosts(env.DB, 'x')).toEqual([])
+    expect(await putFinalsIfUnchanged(env.DB, { events: [] }, 5, 10, post)).toBe(true)
+    expect((await unsentPosts(env.DB, 'x')).map((p) => p.id)).toEqual(['222:history'])
+  })
+
+  it('管理 API の表の書き込みは、読んだときの更新時刻と違えば 409', async () => {
+    const { env } = await setup()
+    env.ADMIN_TOKEN = 'tok'
+    const put = (expectUpdatedAt?: number) =>
+      handleRequest(
+        new Request('https://w/admin/finals', {
+          method: 'PUT',
+          headers: { Authorization: 'Bearer tok', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ events: [SEED_ROW], expectUpdatedAt }),
+        }),
+        env,
+      )
+    expect((await put(12345)).status).toBe(409)
+    expect((await put(0)).status).toBe(200)
+    expect((await put()).status).toBe(200)
+  })
+
+  it('見回りの Cron の文字列は wrangler.jsonc と同じ', () => {
+    const conf = fs.readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8')
+    expect(conf).toContain(`"${FINALS_CRON}"`)
   })
 })

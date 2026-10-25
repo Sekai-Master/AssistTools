@@ -191,14 +191,17 @@ const FINALS_LOOKBACK_MS = 30 * 86_400_000
  * 表がまだ無ければ、2026-10-25 にまとめた種（data/finals-seed.json、1〜220）から始める。
  * 終値は sekai.best の確定後の点だけ（history.ts の confirmedFinal）。揃わない回は次の回にやり直す
  */
-async function updateFinals() {
+async function updateFinals(retried = false): Promise<void> {
   const res = await fetch(MASTER_EVENTS, { headers: { 'User-Agent': UA } })
   if (!res.ok) throw new Error(`マスタ ${res.status}`)
   const master = (await res.json()) as MasterEvent[]
   if (!Array.isArray(master)) throw new Error('マスタが配列でない')
   let stored: HistoryEvent[] = []
+  // 読んだときの表の更新時刻。書き戻すときに渡し、あいだに Worker の見回りが回を足していたら 409 で読み直す
+  let stamp: number | undefined
   if (!(DRY && !TOKEN)) {
-    const raw = await admin<{ events?: unknown[] }>('GET', '/admin/finals')
+    const raw = await admin<{ events?: unknown[]; updatedAt?: unknown }>('GET', '/admin/finals')
+    if (typeof raw?.updatedAt === 'number') stamp = raw.updatedAt
     stored = parseHistory(raw)
     // 壊れた行を黙って捨てて書き戻さない（レビュー LOW-3）
     const rawCount = Array.isArray(raw?.events) ? raw.events.length : 0
@@ -242,7 +245,16 @@ async function updateFinals() {
     return
   }
   const events = [...table, ...added].sort((a, b) => a.id - b.id)
-  await write('PUT', '/admin/finals', { events })
+  try {
+    await write('PUT', '/admin/finals', { events, expectUpdatedAt: stamp })
+  } catch (err) {
+    // あいだに Worker の見回りが書いた。1回だけ読み直してやり直す（#159 レビュー MEDIUM-2）
+    if (!retried && /→ 409/.test(err instanceof Error ? err.message : String(err))) {
+      say('- 歴代ボーダー: 読んだあとに表が書き換わったので読み直す')
+      return updateFinals(true)
+    }
+    throw err
+  }
   say(`- 歴代ボーダー: ${added.map((e) => `${e.id} ${e.name}`).join('・') || '種を入れた・書き足した'}（${events.length} 回）`)
 
   // 足した回のうち、終わって間もない回は歴代ボーダーの投稿（画像4枚）を積む。描くのと本文は Bot（sekaimaster-bot の historyCard.ts）

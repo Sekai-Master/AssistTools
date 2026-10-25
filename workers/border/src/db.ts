@@ -34,29 +34,50 @@ export async function activeEvent(db: D1Database, now: number): Promise<EventMet
  */
 export async function justEndedEvent(db: D1Database, now: number, from: number, until: number): Promise<EventMeta | null> {
   const r = await db
-    .prepare('SELECT * FROM events WHERE aggregate_at + ?2 <= ?1 AND aggregate_at + ?3 > ?1 ORDER BY aggregate_at DESC LIMIT 1')
+    // 列の側を式にしない（索引に乗るように。#159 レビュー LOW-7）
+    .prepare('SELECT * FROM events WHERE aggregate_at <= ?1 - ?2 AND aggregate_at > ?1 - ?3 ORDER BY aggregate_at DESC LIMIT 1')
     .bind(now, from, until)
     .first<EventRow>()
   return r ? toMeta(r) : null
 }
 
-export async function upsertEvents(db: D1Database, events: readonly EventMeta[]): Promise<number> {
-  if (events.length === 0) return 0
-  // 値が変わらない行は UPDATE しない（書き込み行数を増やさない）
-  const stmt = db.prepare(
-    `INSERT INTO events (id, name, type, unit, start_at, aggregate_at, asset) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+const UPSERT_EVENT = `INSERT INTO events (id, name, type, unit, start_at, aggregate_at, asset) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
      ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, unit = excluded.unit,
        start_at = excluded.start_at, aggregate_at = excluded.aggregate_at, asset = excluded.asset
      WHERE events.name IS NOT excluded.name OR events.type IS NOT excluded.type OR events.unit IS NOT excluded.unit
        OR events.start_at IS NOT excluded.start_at OR events.aggregate_at IS NOT excluded.aggregate_at
-       OR events.asset IS NOT excluded.asset`,
-  )
-  let changed = 0
-  for (let i = 0; i < events.length; i += 50) {
-    const res = await db.batch(events.slice(i, i + 50).map((e) => stmt.bind(e.id, e.name, e.eventType, e.unit, e.startAt, e.aggregateAt, e.asset ?? null)))
-    changed += res.reduce((n, r) => n + (r.meta.changes ?? 0), 0)
+       OR events.asset IS NOT excluded.asset`
+/** migrations/0002（素材名の列）を当てる前の表の書き方。先にデプロイしても日程の取り込みを止めない（#159 レビュー MEDIUM-3） */
+const UPSERT_EVENT_NO_ASSET = `INSERT INTO events (id, name, type, unit, start_at, aggregate_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+     ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, unit = excluded.unit,
+       start_at = excluded.start_at, aggregate_at = excluded.aggregate_at
+     WHERE events.name IS NOT excluded.name OR events.type IS NOT excluded.type OR events.unit IS NOT excluded.unit
+       OR events.start_at IS NOT excluded.start_at OR events.aggregate_at IS NOT excluded.aggregate_at`
+
+export async function upsertEvents(db: D1Database, events: readonly EventMeta[]): Promise<number> {
+  if (events.length === 0) return 0
+  // 値が変わらない行は UPDATE しない（書き込み行数を増やさない）
+  const write = async (withAsset: boolean) => {
+    const stmt = db.prepare(withAsset ? UPSERT_EVENT : UPSERT_EVENT_NO_ASSET)
+    let changed = 0
+    for (let i = 0; i < events.length; i += 50) {
+      const rows = events.slice(i, i + 50)
+      const res = await db.batch(
+        rows.map((e) =>
+          withAsset ? stmt.bind(e.id, e.name, e.eventType, e.unit, e.startAt, e.aggregateAt, e.asset ?? null) : stmt.bind(e.id, e.name, e.eventType, e.unit, e.startAt, e.aggregateAt),
+        ),
+      )
+      changed += res.reduce((n, r) => n + (r.meta.changes ?? 0), 0)
+    }
+    return changed
   }
-  return changed
+  try {
+    return await write(true)
+  } catch (err) {
+    if (!/asset/.test(err instanceof Error ? err.message : String(err))) throw err
+    console.error('events に asset の列が無い（migrations/0002 が未適用）。素材名なしで書く')
+    return write(false)
+  }
 }
 
 export interface LiveSample {
@@ -195,6 +216,50 @@ export async function upsertShapes(db: D1Database, shapes: readonly Shape[], now
 export async function kvGet(db: D1Database, k: string): Promise<string | null> {
   const r = await db.prepare('SELECT v FROM kv WHERE k = ?1').bind(k).first<{ v: string }>()
   return r?.v ?? null
+}
+
+/** kv の値と、その更新時刻（書き込みの衝突を見分けるため） */
+export async function kvGetStamped(db: D1Database, k: string): Promise<{ v: string; at: number } | null> {
+  const r = await db.prepare('SELECT v, updated_at FROM kv WHERE k = ?1').bind(k).first<{ v: string; updated_at: number }>()
+  return r ? { v: r.v, at: r.updated_at } : null
+}
+
+const UPDATE_IF_STAMP = 'UPDATE kv SET v = ?2, updated_at = ?3 WHERE k = ?1 AND updated_at = ?4'
+
+/** 読んだときの更新時刻のままなら書き換える。あいだに誰かが書いていたら false（書かない） */
+export async function kvSetIfStamp(db: D1Database, k: string, value: unknown, now: number, prevAt: number): Promise<boolean> {
+  const r = await db.prepare(UPDATE_IF_STAMP).bind(k, JSON.stringify(value), now, prevAt).run()
+  return (r.meta.changes ?? 0) > 0
+}
+
+/**
+ * 歴代の表（kv `finals`）を、読んだときの更新時刻のままなら書き換え、同じトランザクションで投稿を積む（finals.ts）。
+ * - 表と投稿を別々に書くと、間で落ちたときに「表には入ったが投稿が無い」になり、次の回は表に入っているので積み直さない（#159 レビュー MEDIUM-1）
+ * - 解析ジョブも同じ表を読んで書き戻すので、あいだに書かれていたら何もせず false（次の5分でやり直す。MEDIUM-2）
+ * 投稿の INSERT は「表がいま書いた時刻になっているときだけ」にして、表を書けなかったときは積まない
+ */
+export async function putFinalsIfUnchanged(
+  db: D1Database,
+  table: unknown,
+  prevAt: number,
+  now: number,
+  post?: { id: string; eventId: number; kind: string; text: string; payload: unknown },
+): Promise<boolean> {
+  const stmts = [db.prepare(UPDATE_IF_STAMP).bind('finals', JSON.stringify(table), now, prevAt)]
+  if (post) {
+    stmts.push(
+      db
+        .prepare(`INSERT OR IGNORE INTO kv (k, v, updated_at) SELECT ?1, ?2, ?3 WHERE EXISTS (SELECT 1 FROM kv WHERE k = 'finals' AND updated_at = ?3)`)
+        .bind(`post:${post.id}`, JSON.stringify(post.payload), now),
+      db
+        .prepare(
+          `INSERT OR IGNORE INTO posts (id, event_id, kind, text, created_at) SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM kv WHERE k = 'finals' AND updated_at = ?5)`,
+        )
+        .bind(post.id, post.eventId, post.kind, post.text, now),
+    )
+  }
+  const [r] = await db.batch(stmts)
+  return (r.meta.changes ?? 0) > 0
 }
 
 export async function kvSet(db: D1Database, k: string, value: unknown, now: number): Promise<void> {
