@@ -48,6 +48,8 @@ export default function BorderPredictionPage() {
       )}
       {!loading && current && <CurrentPanel snap={current} model={record?.model ?? null} now={now} />}
       {!loading && current && history.size > 0 && (
+        // id は X の告知で Bot がここまでスクロールして撮るための目印（sekaimaster-bot の page の anchor。2026-10-25）
+        <section id="trend" className="scroll-mt-20">
         <Panel title="推移">
           <p className="mb-3 text-xs leading-6 text-slate-500">
             30分ごとの実測（実線）と、その時点で出していた最終値の予測（破線）・8割の幅（帯）です。
@@ -56,6 +58,7 @@ export default function BorderPredictionPage() {
           </p>
           <BorderCharts history={history} ranks={RANKS} startAt={current.event.startAt} endAt={current.event.aggregateAt + 60_000} />
         </Panel>
+        </section>
       )}
       {!loading && !current && !error && (
         <Panel>
@@ -103,9 +106,12 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
 
       {!snap.predicted && (
         <p className="mt-4 text-sm leading-7 text-slate-600">
-          {marathon
-            ? `このイベントの予測はまだ出ていません。${sameStart ? `${hiddenReason(rows[0], snap.progress, snap.event)}。` : ""}いまの値は30分ごとに更新しています。`
-            : "このイベントは予測の対象外です（いまはマラソン型のイベントだけを予測しています）。いまの値だけ載せています。"}
+          {phase !== "running"
+            ? // 終わった回に「まだ出ていません」「30分ごとに更新」と出ていた（2026-10-25）。終わった回は最終の値を載せていると書く
+              "このイベントは終わりました。下の数字は最後に集めた値です。予測と実際の差は、終了から数時間後に下の答え合わせに載ります。"
+            : marathon
+              ? `このイベントの予測はまだ出ていません。${sameStart ? `${hiddenReason(rows[0], snap.progress, snap.event)}。` : ""}いまの値は30分ごとに更新しています。`
+              : "このイベントは予測の対象外です（いまはマラソン型のイベントだけを予測しています）。いまの値だけ載せています。"}
         </p>
       )}
       {/* ★ 予測を出す前も、いまの値は出す（30分ごとに集めているのに、以前は1行の断りだけだった） */}
