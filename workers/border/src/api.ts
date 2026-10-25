@@ -190,7 +190,10 @@ async function adminRoute(req: Request, env: Env, url: URL): Promise<Response> {
           p.progress > 0 &&
           p.progress <= 1 &&
           isRecord(p.ranks) &&
-          Object.values(p.ranks).every((xs) => Array.isArray(xs) && xs.length <= 2_000 && xs.every((v) => typeof v === 'number' && Number.isFinite(v))),
+          Object.keys(p.ranks).length <= 10 &&
+          Object.entries(p.ranks).every(
+            ([k, xs]) => /^\d+$/.test(k) && Array.isArray(xs) && xs.length <= 2_000 && xs.every((v) => typeof v === 'number' && Number.isFinite(v)),
+          ),
       )
     if (!ok || points == null || !isRecord(body)) return error('pace の形が不正', 400)
     await kvSet(env.DB, `pace:${body.eventId as number}`, { points, updatedAt: now }, now)

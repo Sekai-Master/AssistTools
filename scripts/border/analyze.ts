@@ -287,7 +287,8 @@ async function updatePace(events: readonly EventMeta[], shapes: readonly Shape[]
   for (const t of targets) {
     const points = pacePoints(t, [...byKey.values()], hoursOf)
     await write('PUT', '/admin/pace', { eventId: t.id, points })
-    const n = points[0] ? Math.min(...Object.values(points[0].ranks).map((xs) => xs.length)) : 0
+    const sizes = points[0] ? Object.values(points[0].ranks).map((xs) => xs.length) : []
+    const n = sizes.length > 0 ? Math.min(...sizes) : 0
     say(`- 日報の歴代ペース: ${t.id} ${t.name}（${points.length} 回ぶん・比べる回 ${n}〜）`)
   }
 }

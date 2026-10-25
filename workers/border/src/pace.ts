@@ -11,8 +11,8 @@
 import { GRID, GRID_STEP, eventEndMs, type EventMeta, type Shape } from './model.ts'
 
 const H = 3_600_000
-/** 日報を出す時刻（日本時間 21:00 ＝ UTC 12:00） */
-const DAILY_UTC_HOUR = 12
+/** 日報を出す時刻（日本時間 21:00 ＝ UTC 12:00）。daily.ts の「21時台か」の判定もこれを使う（2か所に直書きしない。#160 レビュー L4） */
+export const DAILY_UTC_HOUR = 12
 
 /** 日報を出す時刻の一覧（開始より後・終了より前の毎日21時）。終了の日の21時は答え合わせと歴代ボーダーが出るので含めない */
 export function dailyTimes(e: Pick<EventMeta, 'startAt' | 'aggregateAt'>): number[] {

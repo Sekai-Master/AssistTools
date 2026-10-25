@@ -31,7 +31,7 @@ export default {
       ctx.waitUntil(
         runDaily(env, now).then(
           (r) => {
-            if (r.status !== 'idle' && r.status !== 'exists') console.log('daily', JSON.stringify(r))
+            if (r.status === 'queued' || r.status === 'skip') console.log('daily', JSON.stringify(r))
           },
           (err) => console.error('daily failed', err),
         ),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { handleRequest } from '../src/api.ts'
 import { dailyRanks, runDaily } from '../src/daily.ts'
-import { kvGet, kvSet, unsentPosts } from '../src/db.ts'
+import { kvAppend, kvGet, kvSet, unsentPosts } from '../src/db.ts'
 import type { Env } from '../src/env.ts'
 import { GRID } from '../src/model.ts'
 import { dailyAtProgress, dailyTimes, paceRank, pacePoints } from '../src/pace.ts'
@@ -59,15 +59,14 @@ describe('日報の数字（dailyRanks）', () => {
 
   it('初日は直近24時間を出さない。直近1時間は1時間前の点から', () => {
     const t = Date.UTC(2026, 9, 26, 12, 3)
-    const r = dailyRanks(snapAt(t), rows([t - H]), null)
-    expect(r).toMatchObject({ day: 1, fresh: true })
-    expect(r.ranks[0]).toMatchObject({ rank: 50, d24: null, h1: 1e7, pace: null })
+    const [r] = dailyRanks(snapAt(t), rows([t - H, t - 24 * H]), null, true)
+    expect(r).toMatchObject({ rank: 50, d24: null, h1: 1e7, pace: null })
   })
 
-  it('3日目は24時間前の点から。点が45分より離れていれば空', () => {
+  it('3日目は24時間前の点から。点が20分より離れていれば空（23〜25時間ぶんを「直近24時間」と出さない）', () => {
     const t = Date.UTC(2026, 9, 28, 12, 3)
-    expect(dailyRanks(snapAt(t), rows([t - 24 * H, t - H]), null).ranks[0].d24).toBe(24e7)
-    expect(dailyRanks(snapAt(t), rows([t - 24 * H - 50 * M]), null).ranks[0].d24).toBeNull()
+    expect(dailyRanks(snapAt(t), rows([t - 24 * H, t - H]), null, false)[0].d24).toBe(24e7)
+    expect(dailyRanks(snapAt(t), rows([t - 24 * H - 30 * M]), null, false)[0].d24).toBeNull()
   })
 })
 
@@ -86,15 +85,44 @@ describe('日報を積む（runDaily）', () => {
     const [post] = await unsentPosts(env.DB, 'x')
     const payload = JSON.parse(post.payload as string)
     expect(payload).toMatchObject({ kind: 'daily', day: 2, fresh: false })
-    expect(post.text).toContain('【ボーダー日報】MORE MORE JUMP！ Memories（2日目）')
+    // 控えの本文にも6順位のいまの値（画像が作れない・古い Bot でも数字の無い投稿にしない）
+    expect(post.text).toContain('【ボーダー日報】MORE MORE JUMP！ Memories（2日目・21時台）')
+    expect(post.text).toContain('50位 ')
+    expect(post.text).toContain('1000位 ')
   })
 
-  it('21時台でなければ・21時より前の点・終了の日・ワールドリンクは積まない', async () => {
+  it('推移（kv history。収集が書き足す形）から直近の伸びを出す', async () => {
+    const env = await setup(snapAt(T))
+    for (const t of [T - 24 * H, T - H]) {
+      const s = snapAt(t)
+      await kvAppend(env.DB, 'history:222', [t, s.progress, s.ranks.map((r) => [r.rank, r.current, null, null, null, 0])], t)
+    }
+    await runDaily(env, T + 2 * M)
+    const [post] = await unsentPosts(env.DB, 'x')
+    expect(JSON.parse(post.payload as string).ranks[0]).toMatchObject({ rank: 50, d24: 24e7, h1: 1e7 })
+  })
+
+  it('何日目かは日報の時刻の何番目か（21時台に始まる回でも、:03 と :33 の点で日がずれない）', async () => {
+    // 21:20 開始の回。最初の日報は翌日の21時（「1日目」・開始から24時間たっていない）
+    const start = Date.UTC(2026, 10, 1, 12, 20)
+    const ev = { ...EV, id: 300, startAt: start, aggregateAt: start + 5 * 24 * H }
+    for (const [sample, want] of [
+      [Date.UTC(2026, 10, 2, 12, 33), '300:daily:1'],
+      [Date.UTC(2026, 10, 3, 12, 3), '300:daily:2'],
+    ] as const) {
+      const env = await setup({ ...snapAt(sample), event: ev, sampleAt: sample })
+      expect(await runDaily(env, sample + 2 * M)).toEqual({ status: 'queued', id: want })
+      const [post] = await unsentPosts(env.DB, 'x')
+      expect(JSON.parse(post.payload as string).fresh).toBe(want.endsWith(':1'))
+    }
+  })
+
+  it('21時台でなければ・終了の日・ワールドリンクは何もしない（ログも出さない）。21時より前の点なら待つ', async () => {
     expect(await runDaily(await setup(snapAt(T)), T + H)).toEqual({ status: 'idle' })
-    expect((await runDaily(await setup(snapAt(T - 30 * M)), T + 2 * M)).status).toBe('skip')
+    expect(await runDaily(await setup(snapAt(T - 30 * M)), T + 2 * M)).toMatchObject({ status: 'skip', reason: '21時以降の値がまだ無い' })
     const last = Date.UTC(2026, 9, 30, 12, 3)
-    expect(await runDaily(await setup(snapAt(last)), last + 2 * M)).toMatchObject({ status: 'skip', reason: '日報を出す日ではない' })
-    expect(await runDaily(await setup(snapAt(T, 1, 'world_bloom')), T + 2 * M)).toMatchObject({ status: 'skip', reason: '日報の対象外の種別' })
+    expect(await runDaily(await setup(snapAt(last)), last + 2 * M)).toEqual({ status: 'idle' })
+    expect(await runDaily(await setup(snapAt(T, 1, 'world_bloom')), T + 2 * M)).toEqual({ status: 'idle' })
   })
 
   it('解析ジョブが置いた歴代ペースを使う（管理 API で受け取る）', async () => {
@@ -112,6 +140,16 @@ describe('日報を積む（runDaily）', () => {
     await runDaily(env, T + 2 * M)
     const [post] = await unsentPosts(env.DB, 'x')
     expect(JSON.parse(post.payload as string).ranks[0].pace).toEqual({ pos: 2, of: 4 })
+    // 今日の21時の並びが無ければ（時刻が合わない）歴代ペースは空
+    const other = await setup(snapAt(T + 24 * H))
+    await kvSet(other.DB, 'pace:222', { points: [{ at: Date.UTC(2026, 9, 27, 12), progress: 0.3, ranks: { '50': [1] } }] }, 0)
+    await runDaily(other, T + 24 * H + 2 * M)
+    const [p2] = await unsentPosts(other.DB, 'x')
+    expect(JSON.parse(p2.payload as string).ranks[0].pace).toBeNull()
+    for (const points of [[{ at: 1, progress: 2, ranks: {} }], [{ at: 1, progress: 0.5, ranks: { x: [1] } }]]) {
+      const res = await handleRequest(new Request('https://w/admin/pace', { method: 'PUT', headers: { Authorization: 'Bearer tok' }, body: JSON.stringify({ eventId: 222, points }) }), env)
+      expect(res.status).toBe(400)
+    }
     const bad = await handleRequest(new Request('https://w/admin/pace', { method: 'PUT', headers: { Authorization: 'Bearer tok' }, body: JSON.stringify({ eventId: 222, points: [{ at: 1, progress: 2, ranks: {} }] }) }), env)
     expect(bad.status).toBe(400)
   })
