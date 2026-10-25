@@ -13,7 +13,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fitModel } from '../../workers/border/src/fit.ts'
-import { RANKS, buildShape, durationHours, type EventMeta, type Sample, type Shape } from '../../workers/border/src/model.ts'
+import { RANKS, buildShape, durationHours, eventEndMs, type EventMeta, type Sample, type Shape } from '../../workers/border/src/model.ts'
+import { pacePoints } from '../../workers/border/src/pace.ts'
 import { resultText, type ResultRank } from '../../workers/border/src/posts.ts'
 import type { PostPayload, ResultPostRank } from '../../workers/border/src/snapshot.ts'
 import { buildReport, type PredictionLog, type Report } from './report.ts'
@@ -268,6 +269,30 @@ async function updateFinals(retried = false): Promise<void> {
   }
 }
 
+/**
+ * 日報（毎日21時・Worker の daily.ts）の「歴代ペース」の下ごしらえ。日報を出す時刻ごとに、過去の回のその経過率での日速を並べて
+ * Worker の kv `pace:{id}` に置く（pace.ts）。過去の回の伸び方は、本番の形（D1 の shapes）を正にして、無い回（1〜85 など）は種で補う
+ */
+async function updatePace(events: readonly EventMeta[], shapes: readonly Shape[]) {
+  const daily = (e: EventMeta) => (e.eventType === 'marathon' || e.eventType === 'cheerful_carnival') && !e.name.includes('テストイベント')
+  const targets = events.filter((e) => daily(e) && e.startAt - 2 * 86_400_000 <= NOW && NOW < e.aggregateAt)
+  if (targets.length === 0) {
+    say('- 日報の歴代ペース: 対象の回なし')
+    return
+  }
+  const seed = (JSON.parse(fs.readFileSync(new URL('./data/pace-seed.json', import.meta.url), 'utf8')) as { shapes: Shape[] }).shapes
+  const byKey = new Map<string, Shape>()
+  for (const x of [...seed, ...shapes]) byKey.set(`${x.eventId}:${x.rank}`, x)
+  const hoursOf = new Map(events.filter(daily).map((e) => [e.id, (eventEndMs(e) - e.startAt) / 3_600_000] as const))
+  for (const t of targets) {
+    const points = pacePoints(t, [...byKey.values()], hoursOf)
+    await write('PUT', '/admin/pace', { eventId: t.id, points })
+    const sizes = points[0] ? Object.values(points[0].ranks).map((xs) => xs.length) : []
+    const n = sizes.length > 0 ? Math.min(...sizes) : 0
+    say(`- 日報の歴代ペース: ${t.id} ${t.name}（${points.length} 回ぶん・比べる回 ${n}〜）`)
+  }
+}
+
 async function main() {
   say(`# ボーダー予測 解析ジョブ ${new Date(NOW).toISOString()}${DRY ? '（dry-run）' : ''}`)
   const { events, source } = await loadEvents()
@@ -286,6 +311,9 @@ async function main() {
   say(`- 形: 既存 ${have.length} 本 ＋ 新規 ${fresh.length} 本`)
   for (let i = 0; i < fresh.length; i += 100) await write('PUT', '/admin/shapes', { shapes: fresh.slice(i, i + 100) })
   const shapes = [...have, ...fresh]
+
+  // 1.5 日報の歴代ペースの下ごしらえ（始まる2日前から開催中の回）。失敗しても解析ジョブは止めない
+  await updatePace(events, shapes).catch((err) => say(`- 日報の歴代ペース: 失敗（${err instanceof Error ? err.message : String(err)}）`))
 
   // 2. 学習
   const { model, summary } = fitModel(events, shapes, NOW)

@@ -71,3 +71,14 @@ export type PostPayload =
    * postAt があれば、Bot はその時刻ちょうどに出す（乱数の待ちも投稿の間隔も当てない。2026-10-25 Nori「完全に時間指定で」）
    */
   | { kind: 'history'; eventId: number; postAt?: number }
+  /**
+   * 日報（毎日21時）。Bot が画像を描く（sekaimaster-bot の dailyCard.ts）。snapshot は21時台の最新の値と予測（kv `current` と同じ形）。
+   * fresh は開始から24時間たっていない日（直近24時間の列を出さない）
+   */
+  | {
+      kind: 'daily'
+      day: number
+      fresh: boolean
+      snapshot: Snapshot
+      ranks: { rank: number; d24: number | null; h1: number | null; pace: { pos: number; of: number } | null }[]
+    }
