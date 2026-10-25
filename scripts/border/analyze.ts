@@ -17,7 +17,7 @@ import { RANKS, buildShape, durationHours, type EventMeta, type Sample, type Sha
 import { resultText, type ResultRank } from '../../workers/border/src/posts.ts'
 import type { PostPayload, ResultPostRank } from '../../workers/border/src/snapshot.ts'
 import { buildReport, type PredictionLog, type Report } from './report.ts'
-import { FINAL_RANKS, announceAt, confirmedFinal, historyMeta, parseHistory, type HistoryEvent, type MasterEvent } from './history.ts'
+import { FINAL_RANKS, announceAt, confirmedFinal, historyMeta, parseHistory, unknownMemories, type HistoryEvent, type MasterEvent } from './history.ts'
 import { addInsights } from '../claude/border-insight-run.ts'
 
 const SITE = 'https://sekaimaster.pages.dev'
@@ -181,25 +181,44 @@ async function updateFinals() {
   const res = await fetch(MASTER_EVENTS, { headers: { 'User-Agent': UA } })
   if (!res.ok) throw new Error(`マスタ ${res.status}`)
   const master = (await res.json()) as MasterEvent[]
-  const stored = DRY && !TOKEN ? [] : parseHistory(await admin<unknown>('GET', '/admin/finals'))
+  if (!Array.isArray(master)) throw new Error('マスタが配列でない')
+  let stored: HistoryEvent[] = []
+  if (!(DRY && !TOKEN)) {
+    const raw = await admin<{ events?: unknown[] }>('GET', '/admin/finals')
+    stored = parseHistory(raw)
+    // 壊れた行を黙って捨てて書き戻さない（レビュー LOW-3）
+    const rawCount = Array.isArray(raw?.events) ? raw.events.length : 0
+    if (stored.length !== rawCount) throw new Error(`保存済みの表に読めない行がある（${rawCount - stored.length} 行）。書き戻さない`)
+  }
   const seed = parseHistory(JSON.parse(fs.readFileSync(new URL('./data/finals-seed.json', import.meta.url), 'utf8')))
   const table = stored.length > 0 ? stored : seed
   const have = new Set(table.map((e) => e.id))
   const added: HistoryEvent[] = []
-  for (const e of [...master].sort((a, b) => a.id - b.id)) {
+  for (const e of [...master].filter((x) => x && typeof x.id === 'number').sort((a, b) => a.id - b.id)) {
     if (added.length >= FINALS_ADD_LIMIT) break
-    const meta = historyMeta(e)
-    if (!meta || have.has(e.id) || announceAt(e) > NOW) continue
-    const finals: Record<string, number> = {}
-    const sources: Record<string, string> = {}
-    for (const rank of FINAL_RANKS) {
-      const v = confirmedFinal(await loadSeries(e.id, rank), e)
-      if (v == null) break
-      finals[String(rank)] = v
-      sources[String(rank)] = 'sekai.best'
+    if (have.has(e.id) || announceAt(e) > NOW) continue
+    if (unknownMemories(e)) {
+      // 知らない Memories の略称は、マラソンとして確定させずに保留（対応表を足してから入れる。レビュー MEDIUM-2）
+      say(`- 歴代ボーダー: ${e.id} ${e.name} は知らない Memories の素材名（${e.assetbundleName}）。history.ts の対応表に足すまで入れない`)
+      continue
     }
-    if (Object.keys(finals).length === FINAL_RANKS.length) added.push({ ...meta, finals, sources })
-    else say(`- 歴代ボーダー: ${e.id} ${e.name} は確定後の点がまだ無い（次の回にやり直す）`)
+    const meta = historyMeta(e)
+    if (!meta) continue
+    // 1回の取得の失敗で、ほかの回を巻き込まない（レビュー MEDIUM-1）
+    try {
+      const finals: Record<string, number> = {}
+      const sources: Record<string, string> = {}
+      for (const rank of FINAL_RANKS) {
+        const v = confirmedFinal(await loadSeries(e.id, rank), e)
+        if (v == null) break
+        finals[String(rank)] = v
+        sources[String(rank)] = 'sekai.best'
+      }
+      if (Object.keys(finals).length === FINAL_RANKS.length) added.push({ ...meta, finals, sources })
+      else say(`- 歴代ボーダー: ${e.id} ${e.name} は確定後の点がまだ無い（次の回にやり直す）`)
+    } catch (err) {
+      say(`- 歴代ボーダー: ${e.id} ${e.name} は取得に失敗（${err instanceof Error ? err.message : String(err)}）。次の回にやり直す`)
+    }
   }
   if (added.length === 0 && stored.length > 0) {
     say(`- 歴代ボーダー: 足す回なし（${stored.length} 回）`)
@@ -208,6 +227,15 @@ async function updateFinals() {
   const events = [...table, ...added].sort((a, b) => a.id - b.id)
   await write('PUT', '/admin/finals', { events })
   say(`- 歴代ボーダー: ${added.map((e) => `${e.id} ${e.name}`).join('・') || '種を入れた'}（${events.length} 回）`)
+
+  // 足した回のうち、終わって間もない回は歴代ボーダーの投稿（画像4枚）を積む。描くのと本文は Bot（sekaimaster-bot の historyCard.ts）
+  for (const e of added) {
+    const ended = master.find((m) => m.id === e.id)
+    if (!ended || ended.aggregateAt < NOW - POST_WINDOW_MS) continue
+    const text = [`【歴代ボーダー】${e.name}`, '', '歴代の中での位置づけと、50・100・1000位の歴代ランキングです。', `${SITE}/border`].join('\n')
+    await write('PUT', '/admin/posts', { id: `${e.id}:history`, eventId: e.id, kind: 'history', text, payload: { kind: 'history', eventId: e.id } })
+    say(`- 歴代ボーダー: ${e.id} の投稿を積んだ`)
+  }
 }
 
 async function main() {

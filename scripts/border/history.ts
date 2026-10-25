@@ -54,10 +54,20 @@ const MEMORIES_UNIT: Record<string, string> = {
 const JST = 9 * 3_600_000
 const ymd = (ms: number) => new Date(ms + JST).toISOString().slice(0, 10)
 
-/** マスタの1行を歴代の表の行（終値はまだ空）にする。対象外の回は null */
+/**
+ * 素材名が Memories の形なのに、略称が対応表に無い回か。
+ * そのまま入れるとマラソンとして確定してしまい、あとで対応表を足しても直らない（保存済みの表が優先）ので、保留にする（レビュー MEDIUM-2）
+ */
+export function unknownMemories(e: MasterEvent): boolean {
+  const m = /^event_memories_([a-z0-9]+)_\d{4}$/.exec(e.assetbundleName ?? '')
+  return m != null && !Object.hasOwn(MEMORIES_UNIT, m[1])
+}
+
+/** マスタの1行を歴代の表の行（終値はまだ空）にする。対象外の回と、知らない Memories の回は null */
 export function historyMeta(e: MasterEvent): Omit<HistoryEvent, 'finals' | 'sources'> | null {
   if (e.eventType !== 'marathon' && e.eventType !== 'cheerful_carnival') return null
   if (e.name.includes('テストイベント')) return null
+  if (unknownMemories(e)) return null
   let type: HistoryType = e.eventType
   let unit = e.unit ?? 'none'
   const m = /^event_memories_([a-z0-9]+)_\d{4}$/.exec(e.assetbundleName ?? '')

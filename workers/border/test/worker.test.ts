@@ -151,8 +151,11 @@ describe('API', () => {
     expect((await handleRequest(new Request('https://w/v1/border/finals'), env)).status).toBe(404)
     const empty = (await (await handleRequest(adminReq('/admin/finals'), env)).json()) as { events: unknown[] }
     expect(empty.events).toEqual([])
-    const bad = await handleRequest(adminReq('/admin/finals', { method: 'PUT', body: JSON.stringify({ events: [{ id: 'x' }] }) }), env)
-    expect(bad.status).toBe(400)
+    for (const events of [[{ id: 'x' }], [], [{ id: 1, name: 'a', finals: [] }], [{ id: 1, name: 'a', finals: { '50': 'x' } }], [{ id: 1, name: 'a', finals: {} }, { id: 1, name: 'b', finals: {} }]]) {
+      const bad = await handleRequest(adminReq('/admin/finals', { method: 'PUT', body: JSON.stringify({ events }) }), env)
+      expect(bad.status, JSON.stringify(events)).toBe(400)
+    }
+    expect((await handleRequest(new Request('https://w/admin/finals'), env)).status).toBe(401)
     const row = { id: 220, name: 'Stars Off Orbit', type: 'marathon', finals: { '50': 59100000 } }
     const put = await handleRequest(adminReq('/admin/finals', { method: 'PUT', body: JSON.stringify({ events: [row] }) }), env)
     expect(await put.json()).toMatchObject({ ok: true, count: 1 })

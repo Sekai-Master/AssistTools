@@ -143,11 +143,25 @@ async function adminRoute(req: Request, env: Env, url: URL): Promise<Response> {
 
   if (path === '/admin/finals' && req.method === 'PUT') {
     const body = await readBody(req)
-    if (!isRecord(body) || !Array.isArray(body.events) || !body.events.every((e) => isRecord(e) && typeof e.id === 'number' && isRecord(e.finals))) {
-      return error('finals の形が不正', 400)
-    }
-    await kvSet(env.DB, 'finals', { events: body.events, updatedAt: now }, now)
-    return json({ ok: true, count: body.events.length })
+    // 誤投入で表を壊さない（レビュー LOW-2）: 1〜2,000 行・id は整数で重複なし・終値は有限の数
+    const events: unknown[] | null = isRecord(body) && Array.isArray(body.events) ? body.events : null
+    const ok =
+      events != null &&
+      events.length >= 1 &&
+      events.length <= 2_000 &&
+      events.every(
+        (e) =>
+          isRecord(e) &&
+          Number.isInteger(e.id) &&
+          typeof e.name === 'string' &&
+          isRecord(e.finals) &&
+          !Array.isArray(e.finals) &&
+          Object.values(e.finals).every((v) => typeof v === 'number' && Number.isFinite(v)),
+      ) &&
+      new Set(events.map((e) => (e as { id: number }).id)).size === events.length
+    if (!ok || events == null) return error('finals の形が不正', 400)
+    await kvSet(env.DB, 'finals', { events, updatedAt: now }, now)
+    return json({ ok: true, count: events.length })
   }
 
   if (path === '/admin/posts' && req.method === 'PUT') {

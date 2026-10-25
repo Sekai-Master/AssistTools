@@ -32,7 +32,7 @@ export async function publicBorderResponse(db: D1Database, path: string): Promis
     return rawJson(`{"eventId":${id},"rows":[${v ?? ''}]}`, 60)
   }
 
-  // 歴代ボーダー（終値の表）。解析ジョブが終わった回を書き足す kv の1行（約50KB）。サイトの「歴代ボーダー」と Bot の画像が読む
+  // 歴代ボーダー（終値の表）。解析ジョブが終わった回を書き足す kv の1行（約65KB）。サイトの「歴代ボーダー」と Bot の画像が読む
   if (path === '/finals') {
     const v = await kvGet(db, 'finals')
     return v ? rawJson(v, 3600) : new Response(JSON.stringify({ error: 'no data yet' }), { status: 404, headers: { 'Content-Type': 'application/json; charset=utf-8' } })
