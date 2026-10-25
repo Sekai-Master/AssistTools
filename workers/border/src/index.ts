@@ -6,9 +6,10 @@
 import { handleRequest } from './api.ts'
 import { runCron } from './collect.ts'
 import type { Env } from './env.ts'
+import { runDaily } from './daily.ts'
 import { runFinals } from './finals.ts'
 
-/** 終わった直後の回を歴代の表へ足す見回り（wrangler.jsonc の crons と同じ文字列） */
+/** 5分ごとの見回り: 終わった直後の回を歴代の表へ足す（finals.ts）と、21時の日報（daily.ts）。wrangler.jsonc の crons と同じ文字列 */
 export const FINALS_CRON = '*/5 * * * *'
 
 export default {
@@ -18,12 +19,21 @@ export default {
   async scheduled(controller, env, ctx) {
     // 5分ごとの見回りと、30分ごとの収集は別の Cron。:05 と :35 は両方が別々に呼ばれる
     if (controller.cron === FINALS_CRON) {
+      const now = Date.now()
       ctx.waitUntil(
-        runFinals(env, Date.now()).then(
+        runFinals(env, now).then(
           (r) => {
             if (r.status !== 'idle') console.log('finals', JSON.stringify(r))
           },
           (err) => console.error('finals failed', err),
+        ),
+      )
+      ctx.waitUntil(
+        runDaily(env, now).then(
+          (r) => {
+            if (r.status !== 'idle' && r.status !== 'exists') console.log('daily', JSON.stringify(r))
+          },
+          (err) => console.error('daily failed', err),
         ),
       )
       return

@@ -172,6 +172,31 @@ async function adminRoute(req: Request, env: Env, url: URL): Promise<Response> {
     return json({ ok: true, count: events.length })
   }
 
+  // 日報の歴代ペースの下ごしらえ（解析ジョブが、日報を出す時刻ごとの過去の回の日速の並びを置く。pace.ts）
+  if (path === '/admin/pace' && req.method === 'PUT') {
+    const body = await readBody(req)
+    const points: unknown[] | null = isRecord(body) && Array.isArray(body.points) ? body.points : null
+    const ok =
+      isRecord(body) &&
+      Number.isInteger(body.eventId) &&
+      (body.eventId as number) > 0 &&
+      points != null &&
+      points.length <= 30 &&
+      points.every(
+        (p) =>
+          isRecord(p) &&
+          typeof p.at === 'number' &&
+          typeof p.progress === 'number' &&
+          p.progress > 0 &&
+          p.progress <= 1 &&
+          isRecord(p.ranks) &&
+          Object.values(p.ranks).every((xs) => Array.isArray(xs) && xs.length <= 2_000 && xs.every((v) => typeof v === 'number' && Number.isFinite(v))),
+      )
+    if (!ok || points == null || !isRecord(body)) return error('pace の形が不正', 400)
+    await kvSet(env.DB, `pace:${body.eventId as number}`, { points, updatedAt: now }, now)
+    return json({ ok: true, points: points.length })
+  }
+
   if (path === '/admin/posts' && req.method === 'PUT') {
     const body = await readBody(req)
     if (!isRecord(body) || typeof body.id !== 'string' || typeof body.eventId !== 'number' || typeof body.kind !== 'string' || typeof body.text !== 'string') {
