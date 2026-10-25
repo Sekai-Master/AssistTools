@@ -3,15 +3,18 @@
  * サイトの「歴代ボーダー」と Bot の画像はこの表を読む。
  *
  * 決まり（2026-10-25 Nori。正本は brain 外の Documents/border-research/old-borders/README.md）:
- * - 対象はマラソン・チアフル・Memories。ワールドリンクとテストの回（名前に「テストイベント」）は除く
+ * - 対象はマラソン・チアフル・Memories・ワールドリンク。テストの回（名前に「テストイベント」）は除く
+ *   （ワールドリンクは 2026-10-25 Nori「WLも入れる…みたいな調整」でサイトで出し入れできるよう入れた。
+ *     Bot の画像は読むときに除き、歴代ボーダーの投稿も積まない）
  * - 素材名が event_memories_<ユニット>_<年> の回は、種別を Memories に、ユニットを素材名のユニットに上書きする
  * - 終値は sekai.best の最後の点。ただし順位発表（集計終了の10分後）より後の点でなければ確定値とみなさない
  *   （sekai.best は 21:15 ごろに確定後の点を取る。199 は 20:57 で止まっていた）
- * - 順位は 50・100・1000位（200位以下は古い回に記録が無い）
+ * - 順位は 50・100・200・500・1000・2000位。200・500・2000位は 87〜123回の一部（14回）で記録が無く、その回には入れない
+ *   （2026-10-25 Nori「一部のイベントのデータがないことを明記しつつ参照可能に」）
  */
-export const FINAL_RANKS = [50, 100, 1000] as const
+export const FINAL_RANKS = [50, 100, 200, 500, 1000, 2000] as const
 
-export type HistoryType = 'marathon' | 'cheerful_carnival' | 'memories'
+export type HistoryType = 'marathon' | 'cheerful_carnival' | 'memories' | 'world_bloom'
 
 export interface HistoryEvent {
   id: number
@@ -40,7 +43,12 @@ export interface MasterEvent {
   rankingAnnounceAt?: number
 }
 
-const TYPE_LABEL: Record<HistoryType, string> = { marathon: 'マラソン', cheerful_carnival: 'チアフル', memories: 'Memories' }
+const TYPE_LABEL: Record<HistoryType, string> = {
+  marathon: 'マラソン',
+  cheerful_carnival: 'チアフル',
+  memories: 'Memories',
+  world_bloom: 'ワールドリンク',
+}
 /** 特殊形式の上書きは、ここ1か所にまとめる */
 const MEMORIES_UNIT: Record<string, string> = {
   vbs: 'street',
@@ -65,7 +73,7 @@ export function unknownMemories(e: MasterEvent): boolean {
 
 /** マスタの1行を歴代の表の行（終値はまだ空）にする。対象外の回と、知らない Memories の回は null */
 export function historyMeta(e: MasterEvent): Omit<HistoryEvent, 'finals' | 'sources'> | null {
-  if (e.eventType !== 'marathon' && e.eventType !== 'cheerful_carnival') return null
+  if (e.eventType !== 'marathon' && e.eventType !== 'cheerful_carnival' && e.eventType !== 'world_bloom') return null
   if (e.name.includes('テストイベント')) return null
   if (unknownMemories(e)) return null
   let type: HistoryType = e.eventType
@@ -97,6 +105,37 @@ export function confirmedFinal(series: readonly (readonly [number, number])[], e
   const last = series[series.length - 1]
   if (!last || last[0] <= announceAt(e) || !(last[1] > 0)) return null
   return last[1]
+}
+
+/**
+ * 保存済みの表に、種の表から足りない回と足りない順位を書き足す（既にある値は変えない）。
+ * 2026-10-25 に 3順位・ワールドリンク抜きで入れた表を、6順位・ワールドリンク入りへ広げるため。
+ * 種に無い回（解析ジョブが後から足した回）はそのまま残す
+ */
+export function mergeSeed(stored: HistoryEvent[], seed: HistoryEvent[]): { events: HistoryEvent[]; changed: number } {
+  const byId = new Map(stored.map((e) => [e.id, e]))
+  let changed = 0
+  for (const s of seed) {
+    const cur = byId.get(s.id)
+    if (!cur) {
+      byId.set(s.id, s)
+      changed++
+      continue
+    }
+    const missing = Object.keys(s.finals).filter((r) => !(r in cur.finals))
+    // 種別やユニットも種に合わせる（ワールドリンクを入れたときに種別の名前を足したので、古い行と食い違わないように）
+    const metaDiff = cur.type !== s.type || cur.typeLabel !== s.typeLabel || cur.unit !== s.unit
+    if (missing.length === 0 && !metaDiff) continue
+    const finals = { ...cur.finals }
+    const sources = { ...cur.sources }
+    for (const r of missing) {
+      finals[r] = s.finals[r]
+      sources[r] = s.sources[r]
+    }
+    byId.set(s.id, { ...cur, type: s.type, typeLabel: s.typeLabel, unit: s.unit, finals, sources })
+    changed++
+  }
+  return { events: [...byId.values()].sort((a, b) => a.id - b.id), changed }
 }
 
 /** kv の表を読む。壊れていれば空 */

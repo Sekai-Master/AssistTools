@@ -17,7 +17,7 @@ import { RANKS, buildShape, durationHours, type EventMeta, type Sample, type Sha
 import { resultText, type ResultRank } from '../../workers/border/src/posts.ts'
 import type { PostPayload, ResultPostRank } from '../../workers/border/src/snapshot.ts'
 import { buildReport, type PredictionLog, type Report } from './report.ts'
-import { FINAL_RANKS, announceAt, confirmedFinal, historyMeta, parseHistory, unknownMemories, type HistoryEvent, type MasterEvent } from './history.ts'
+import { FINAL_RANKS, announceAt, confirmedFinal, historyMeta, mergeSeed, parseHistory, unknownMemories, type HistoryEvent, type MasterEvent } from './history.ts'
 import { addInsights } from '../claude/border-insight-run.ts'
 
 const SITE = 'https://sekaimaster.pages.dev'
@@ -197,7 +197,10 @@ async function updateFinals() {
     if (stored.length !== rawCount) throw new Error(`保存済みの表に読めない行がある（${rawCount - stored.length} 行）。書き戻さない`)
   }
   const seed = parseHistory(JSON.parse(fs.readFileSync(new URL('./data/finals-seed.json', import.meta.url), 'utf8')))
-  const table = stored.length > 0 ? stored : seed
+  // 種から足りない回・順位を書き足す（空の表なら種そのもの）
+  const merged = mergeSeed(stored, seed)
+  const table = merged.events
+  if (merged.changed > 0) say(`- 歴代ボーダー: 種から ${merged.changed} 回ぶんを書き足す`)
   const have = new Set(table.map((e) => e.id))
   const added: HistoryEvent[] = []
   for (const e of [...master].filter((x) => x && typeof x.id === 'number').sort((a, b) => a.id - b.id)) {
@@ -226,18 +229,19 @@ async function updateFinals() {
       say(`- 歴代ボーダー: ${e.id} ${e.name} は取得に失敗（${err instanceof Error ? err.message : String(err)}）。次の回にやり直す`)
     }
   }
-  if (added.length === 0 && stored.length > 0) {
+  if (added.length === 0 && merged.changed === 0) {
     say(`- 歴代ボーダー: 足す回なし（${stored.length} 回）`)
     return
   }
   const events = [...table, ...added].sort((a, b) => a.id - b.id)
   await write('PUT', '/admin/finals', { events })
-  say(`- 歴代ボーダー: ${added.map((e) => `${e.id} ${e.name}`).join('・') || '種を入れた'}（${events.length} 回）`)
+  say(`- 歴代ボーダー: ${added.map((e) => `${e.id} ${e.name}`).join('・') || '種を入れた・書き足した'}（${events.length} 回）`)
 
   // 足した回のうち、終わって間もない回は歴代ボーダーの投稿（画像4枚）を積む。描くのと本文は Bot（sekaimaster-bot の historyCard.ts）
   for (const e of added) {
     const ended = master.find((m) => m.id === e.id)
-    if (!ended || ended.aggregateAt < NOW - POST_WINDOW_MS || e.id < HISTORY_POSTS_FROM) continue
+    // ワールドリンクは Bot の画像に載らない（historyCard.ts の parseHistory が除く）ので積まない。積むと画像が作れず、2時間の先送りのあと文字だけで出てしまう
+    if (!ended || ended.aggregateAt < NOW - POST_WINDOW_MS || e.id < HISTORY_POSTS_FROM || e.type === 'world_bloom') continue
     const text = [`【歴代ボーダー】${e.name}`, '', '歴代の中での位置づけと、50・100・1000位の歴代ランキングです。', `${SITE}/border`].join('\n')
     await write('PUT', '/admin/posts', { id: `${e.id}:history`, eventId: e.id, kind: 'history', text, payload: { kind: 'history', eventId: e.id } })
     say(`- 歴代ボーダー: ${e.id} の投稿を積んだ`)
