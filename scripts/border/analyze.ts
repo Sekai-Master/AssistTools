@@ -169,6 +169,12 @@ function resultRanks(report: Report): (ResultRank & ResultPostRank)[] {
   return out
 }
 
+/**
+ * 歴代ボーダーの投稿を自動で積むのは、この id の回から。221 は 2026-10-25 に手で出す（Bot の4枚の対応〈sekaimaster-bot #13〉と
+ * X で4枚を付ける操作の確かめが済む前に積むと、古い Bot が画像なしの文字だけで出してしまうため）
+ */
+const HISTORY_POSTS_FROM = 222
+
 /** 1回に足す回の上限（初回や長く止まっていたあとに sekai.best を叩きすぎない） */
 const FINALS_ADD_LIMIT = 10
 
@@ -231,7 +237,7 @@ async function updateFinals() {
   // 足した回のうち、終わって間もない回は歴代ボーダーの投稿（画像4枚）を積む。描くのと本文は Bot（sekaimaster-bot の historyCard.ts）
   for (const e of added) {
     const ended = master.find((m) => m.id === e.id)
-    if (!ended || ended.aggregateAt < NOW - POST_WINDOW_MS) continue
+    if (!ended || ended.aggregateAt < NOW - POST_WINDOW_MS || e.id < HISTORY_POSTS_FROM) continue
     const text = [`【歴代ボーダー】${e.name}`, '', '歴代の中での位置づけと、50・100・1000位の歴代ランキングです。', `${SITE}/border`].join('\n')
     await write('PUT', '/admin/posts', { id: `${e.id}:history`, eventId: e.id, kind: 'history', text, payload: { kind: 'history', eventId: e.id } })
     say(`- 歴代ボーダー: ${e.id} の投稿を積んだ`)
