@@ -66,3 +66,8 @@ export interface ResultPostRank {
 export type PostPayload =
   | { kind: 'milestone'; key: string; label: string; snapshot: Snapshot }
   | { kind: 'result'; event: SnapshotEvent; ranks: ResultPostRank[] }
+  /**
+   * 歴代ボーダーの4枚。Bot が /api/border/finals の表から描く。
+   * postAt があれば、Bot はその時刻ちょうどに出す（乱数の待ちも投稿の間隔も当てない。2026-10-25 Nori「完全に時間指定で」）
+   */
+  | { kind: 'history'; eventId: number; postAt?: number }

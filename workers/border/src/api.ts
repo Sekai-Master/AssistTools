@@ -8,6 +8,7 @@ import {
   allShapes,
   kvGet,
   kvSet,
+  kvSetIfStamp,
   markPostSent,
   predictionsFor,
   putModel,
@@ -160,7 +161,14 @@ async function adminRoute(req: Request, env: Env, url: URL): Promise<Response> {
       ) &&
       new Set(events.map((e) => (e as { id: number }).id)).size === events.length
     if (!ok || events == null) return error('finals の形が不正', 400)
-    await kvSet(env.DB, 'finals', { events, updatedAt: now }, now)
+    // 読んだときの更新時刻（expectUpdatedAt）があれば、そのままのときだけ書く。Worker の見回り（finals.ts）が
+    // あいだに回を足していたら 409 で、解析ジョブは読み直す（#159 レビュー MEDIUM-2）
+    const expect = isRecord(body) && typeof body.expectUpdatedAt === 'number' ? body.expectUpdatedAt : null
+    if (expect != null) {
+      if (!(await kvSetIfStamp(env.DB, 'finals', { events, updatedAt: now }, now, expect))) return error('finals は読んだあとに書き換わった', 409)
+    } else {
+      await kvSet(env.DB, 'finals', { events, updatedAt: now }, now)
+    }
     return json({ ok: true, count: events.length })
   }
 

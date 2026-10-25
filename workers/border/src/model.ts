@@ -35,6 +35,8 @@ export interface EventMeta {
   unit: string
   startAt: number
   aggregateAt: number
+  /** 素材名（bonuses.json の asset）。歴代の表で Memories の判定とロゴに使う。古い行・取れないときは無い */
+  asset?: string | null
 }
 
 export interface Shape {
