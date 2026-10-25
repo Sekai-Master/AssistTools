@@ -456,7 +456,11 @@ export function predict(model: Model, meta: EventMeta, rank: number, current: nu
   const low = hi == null ? null : predicted / (1 + hi)
   // 下側の誤差が −1 に近いと割る数が 0 以下になり、上限が負や無限大になる。そういう帯は幅として出さない
   const high = lo == null || 1 + lo <= MIN_DIVISOR ? null : predicted / (1 + lo)
-  const confidence = high == null ? null : confidenceOf(lo, hi)
+  // ★ 過去に無い長さ（外挿）のときは、帯の幅がいくら狭くても「高」「中」を名乗らない。広げた後の帯で確度を決めていたため、
+  //   102h の 221 で終盤に「確度 高」と出たが、1000位は開始24時間の予測（約1,640万）を終了前に実測が上回った（2026-10-25）。
+  //   表示の側は extrapolatedFrom を見て「参考値」と書く（サイト・Bot の画像と本文・Worker の本文）
+  const measured = high == null ? null : confidenceOf(lo, hi)
+  const confidence = measured != null && choice.extrapolatedFrom != null ? 'rough' : measured
   return {
     rank,
     progress: p,

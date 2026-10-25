@@ -112,7 +112,7 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
               <div>
                 <p className="flex items-baseline gap-2">
                   <span className="text-lg font-bold tabular-nums text-slate-800">{formatMan(r.predicted)}</span>
-                  {r.confidence && <ConfidenceChip value={r.confidence} />}
+                  {r.confidence && <ConfidenceChip value={r.confidence} reference={snap.extrapolatedFrom != null} />}
                 </p>
                 <p className="text-xs tabular-nums text-slate-500">
                   {r.low != null && r.high != null && <>8割の幅 {formatRange(r.low, r.high)}・</>}
@@ -134,9 +134,11 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
         ))}
       </ul>
       {snap.predicted && snap.extrapolatedFrom != null && (
-        <p className="mt-3 rounded-lg bg-slate-200/60 px-3 py-2 text-xs leading-6 text-slate-600">
+        <p className="mt-3 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900">
+          <b>この回の予測は参考値です。</b>
           このイベントは {snap.event.durationHours} 時間で、過去に同じ長さの回がありません。
-          いちばん近い {snap.extrapolatedFrom} 時間の回の伸び方で予測し、幅はいつもより広く取っています。
+          いちばん近い {snap.extrapolatedFrom} 時間の回の伸び方を借りて出しているので、大きく外れることがあります
+          （102 時間の回では、1000位の開始24時間の予測 約1,640万を、終了の数時間前に実測が上回りました）。
         </p>
       )}
       {snap.predicted && (
@@ -156,7 +158,11 @@ const CONFIDENCE_TONE: Record<Confidence, string> = {
   rough: "border border-dashed border-slate-400 text-slate-500",
 };
 
-function ConfidenceChip({ value }: { value: Confidence }) {
+function ConfidenceChip({ value, reference }: { value: Confidence; reference: boolean }) {
+  // 過去に無い長さ（外挿）のときは確度を名乗らず「参考値」と書く（2026-10-25、221 の 1000位が大きく外れた）
+  if (reference) {
+    return <span className="rounded-full border border-dashed border-amber-500 px-2 py-0.5 text-[11px] font-bold text-amber-700">参考値</span>;
+  }
   return (
     <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${CONFIDENCE_TONE[value]}`}>
       確度 {CONFIDENCE_LABEL[value]}

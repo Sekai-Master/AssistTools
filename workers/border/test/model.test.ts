@@ -182,7 +182,11 @@ describe('predict', () => {
     // 帯は 1.5 倍: 上側 0.02 → 0.03、下側 −0.05 → −0.075
     expect(p?.low).toBeCloseTo(1000 / 1.03, 0)
     expect(p?.high).toBeCloseTo(1000 / 0.925, 0)
+    // 帯は幅 10.5 ポイントで本来は「中」だが、外挿なので「高」「中」を名乗らない（2026-10-25、221）
+    expect(p?.confidence).toBe('rough')
+    expect(p?.visible).toBe(true)
     const e198 = meta(13, 0, 198)
+    expect(predict(m, e198, 1000, 500, e198.startAt + 99 * H)?.confidence).not.toBe(null)
     expect(predict(m, e198, 1000, 500, e198.startAt + 99 * H)?.extrapolatedFrom).toBeNull()
   })
 

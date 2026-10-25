@@ -46,6 +46,21 @@ describe('milestoneText', () => {
     expect(t).toContain('1000位 1,503万（1,410〜1,595万・確度目安）')
   })
 
+  it('参考値（過去に無い長さ）: 見出しに「参考値」、確度は名乗らず、外れやすいと書く', () => {
+    const t = milestoneText(
+      'Vivid BAD SQUAD Memories',
+      '開始24時間',
+      [{ rank: 1000, predicted: 16_400_000, low: 12_280_000, high: 19_870_000, confidence: 'rough' }],
+      true,
+    ) as string
+    expect(t).toContain('【ボーダー予測・参考値】Vivid BAD SQUAD Memories（開始24時間）')
+    expect(t).toContain('1000位 1,640万（1,228〜1,987万）')
+    expect(t).not.toContain('確度')
+    expect(t).toContain('外れやすい参考値')
+    // 長い名前でも 280 に収まる
+    expect(xWeight(milestoneText('とても長いイベント名がここに入ってもはみ出さないことを確かめるための名前', '経過50%', ranks, true) as string)).toBeLessThanOrEqual(X_LIMIT)
+  })
+
   it('表に出せる順位が無ければ投稿しない', () => {
     expect(milestoneText('x', '経過50%', [])).toBeNull()
   })

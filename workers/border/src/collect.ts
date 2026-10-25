@@ -218,6 +218,7 @@ export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): 
         snap.ranks
           .filter((r) => r.visible && r.predicted != null)
           .map((r) => ({ rank: r.rank, predicted: r.predicted as number, low: r.low, high: r.high, confidence: r.confidence })),
+        snap.extrapolatedFrom != null,
       )
       const id = `${event.id}:${m.key}`
       const payload: PostPayload = { kind: 'milestone', key: m.key, label, snapshot: snap }
