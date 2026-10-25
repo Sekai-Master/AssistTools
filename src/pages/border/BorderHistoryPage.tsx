@@ -244,7 +244,7 @@ function StandingPanel({
                     </div>
                     <div className="flex flex-wrap items-baseline justify-between gap-x-2">
                       <dt>同じ{target.hours}時間の回</dt>
-                      <dd>{s.same.of > 1 ? <PlaceText p={s.same} /> : <span className="font-bold text-slate-700">はじめての長さ</span>}</dd>
+                      <dd>{s.same.of > 1 ? <PlaceText p={s.same} /> : <span className="font-bold text-slate-700">前例なし</span>}</dd>
                     </div>
                     <div className="flex flex-wrap items-baseline justify-between gap-x-2">
                       <dt>日速に換算</dt>
