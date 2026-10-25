@@ -291,6 +291,8 @@ function RankingPanel({ pool, target, onSelect }: { pool: HistoryEvent[]; target
   }, [target.id, rank, mode, hours, pool]);
 
   return (
+    // id は X の告知で Bot がここまでスクロールして撮るための目印（sekaimaster-bot の page の anchor。2026-10-25）
+    <section id="ranking" className="scroll-mt-20">
     <Panel title="歴代ランキング">
       <div role="group" aria-label="順位" className="mb-3">
         <Segmented options={RANK_OPTIONS} value={rank} onChange={(v) => setRank(v as HistoryRank)} />
@@ -395,6 +397,7 @@ function RankingPanel({ pool, target, onSelect }: { pool: HistoryEvent[]; target
         {rows.length === 0 && <p className="py-4 text-sm text-slate-500">この条件の回はありません。</p>}
       </div>
     </Panel>
+    </section>
   );
 }
 
