@@ -256,6 +256,13 @@ describe('一言解説', () => {
     expect(checkInsight('1000位は5.4%下でした。', facts)).toContain('渡していない数')
   })
 
+  it('順位の数と幅に入った数も渡す（221 は事実に無い「6」で弾かれた。6順位の数とみられる）', () => {
+    const facts = insightUser(report)
+    expect(facts).toContain('全体: 1順位。8割の幅の中は、経過50%で1順位・経過85%で0順位')
+    expect(checkInsight('1順位のうち、経過85%で幅に入ったのは0順位でした。', facts)).toBeNull()
+    expect(checkInsight('6順位のうち4順位が幅の中でした。', facts)).toContain('渡していない数')
+  })
+
   it('投稿は 276 以内。入りきらなければハッシュタグを外す', () => {
     const short = insightPost(report.name, '1000位は5%下に外れました。') ?? ''
     expect(short).toContain('#プロセカボーダー')
