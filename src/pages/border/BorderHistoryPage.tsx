@@ -338,10 +338,10 @@ function RankingPanel({ pool, target, onSelect }: { pool: HistoryEvent[]; target
               <th scope="col" className="hidden px-2 py-2 font-bold sm:table-cell">
                 種別
               </th>
-              <th scope="col" className="hidden px-2 py-2 text-right font-bold sm:table-cell">
+              <th scope="col" className="hidden whitespace-nowrap px-2 py-2 text-right font-bold sm:table-cell">
                 日数
               </th>
-              <th scope="col" className="hidden px-2 py-2 text-right font-bold sm:table-cell">
+              <th scope="col" className="hidden whitespace-nowrap px-2 py-2 text-right font-bold sm:table-cell">
                 時間
               </th>
               <th scope="col" className={`px-2 py-2 text-right font-bold ${daily ? "hidden sm:table-cell" : ""}`}>
@@ -382,8 +382,9 @@ function RankingPanel({ pool, target, onSelect }: { pool: HistoryEvent[]; target
                   <td className="hidden px-2 py-1.5 sm:table-cell">
                     <TypeChip e={r.event} />
                   </td>
-                  <td className="hidden px-2 py-1.5 text-right tabular-nums sm:table-cell">{r.event.days}日</td>
-                  <td className="hidden px-2 py-1.5 text-right tabular-nums sm:table-cell">{r.event.hours}h</td>
+                  {/* 2桁の日数（10日・13日）で「13／日」と折れていた（2026-10-25 Nori）。数の列は折らない */}
+                  <td className="hidden whitespace-nowrap px-2 py-1.5 text-right tabular-nums sm:table-cell">{r.event.days}日</td>
+                  <td className="hidden whitespace-nowrap px-2 py-1.5 text-right tabular-nums sm:table-cell">{r.event.hours}h</td>
                   <td className={`whitespace-nowrap px-2 py-1.5 text-right tabular-nums ${finalCol}`}>{formatMan(r.final)}</td>
                   <td className={`whitespace-nowrap px-2 py-1.5 text-right tabular-nums ${dailyCol}`}>{formatMan(r.perDay)}</td>
                 </tr>
