@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { Panel } from "../../components/ui/Panel";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { CONFIDENCE_LABEL, RANKS, type Confidence } from "../../../workers/border/src/model";
@@ -33,6 +34,11 @@ export default function BorderPredictionPage() {
       <p className="text-sm leading-7 text-slate-600">
         開催中のイベントの主要ボーダー（50〜2000位）の最終値を、過去のイベントの伸び方から予測します。
         イベントが終わるたびに予測と実測を突き合わせて、使うモデルと予測の幅を自動で選び直しています。
+      </p>
+      <p className="mt-1 text-sm">
+        <Link to="/border/history" className="font-bold text-slate-600 underline underline-offset-4">
+          終わったイベントの歴代ボーダー（終値を全部の回と比べる）へ
+        </Link>
       </p>
 
       {loading && <Panel><p className="text-sm text-slate-500">読み込み中…</p></Panel>}
