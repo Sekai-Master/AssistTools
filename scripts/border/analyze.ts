@@ -17,6 +17,7 @@ import { RANKS, buildShape, durationHours, type EventMeta, type Sample, type Sha
 import { resultText, type ResultRank } from '../../workers/border/src/posts.ts'
 import type { PostPayload, ResultPostRank } from '../../workers/border/src/snapshot.ts'
 import { buildReport, type PredictionLog, type Report } from './report.ts'
+import { FINAL_RANKS, announceAt, confirmedFinal, historyMeta, parseHistory, unknownMemories, type HistoryEvent, type MasterEvent } from './history.ts'
 import { addInsights } from '../claude/border-insight-run.ts'
 
 const SITE = 'https://sekaimaster.pages.dev'
@@ -168,6 +169,81 @@ function resultRanks(report: Report): (ResultRank & ResultPostRank)[] {
   return out
 }
 
+/**
+ * 歴代ボーダーの投稿を自動で積むのは、この id の回から。221 は 2026-10-25 に手で出す（Bot の4枚の対応〈sekaimaster-bot #13〉と
+ * X で4枚を付ける操作の確かめが済む前に積むと、古い Bot が画像なしの文字だけで出してしまうため）
+ */
+const HISTORY_POSTS_FROM = 222
+
+/** 1回に足す回の上限（初回や長く止まっていたあとに sekai.best を叩きすぎない） */
+const FINALS_ADD_LIMIT = 10
+
+/**
+ * 歴代ボーダーの表（Worker の kv `finals`）に、順位発表を過ぎた回を足す。
+ * 表がまだ無ければ、2026-10-25 にまとめた種（data/finals-seed.json、1〜220）から始める。
+ * 終値は sekai.best の確定後の点だけ（history.ts の confirmedFinal）。揃わない回は次の回にやり直す
+ */
+async function updateFinals() {
+  const res = await fetch(MASTER_EVENTS, { headers: { 'User-Agent': UA } })
+  if (!res.ok) throw new Error(`マスタ ${res.status}`)
+  const master = (await res.json()) as MasterEvent[]
+  if (!Array.isArray(master)) throw new Error('マスタが配列でない')
+  let stored: HistoryEvent[] = []
+  if (!(DRY && !TOKEN)) {
+    const raw = await admin<{ events?: unknown[] }>('GET', '/admin/finals')
+    stored = parseHistory(raw)
+    // 壊れた行を黙って捨てて書き戻さない（レビュー LOW-3）
+    const rawCount = Array.isArray(raw?.events) ? raw.events.length : 0
+    if (stored.length !== rawCount) throw new Error(`保存済みの表に読めない行がある（${rawCount - stored.length} 行）。書き戻さない`)
+  }
+  const seed = parseHistory(JSON.parse(fs.readFileSync(new URL('./data/finals-seed.json', import.meta.url), 'utf8')))
+  const table = stored.length > 0 ? stored : seed
+  const have = new Set(table.map((e) => e.id))
+  const added: HistoryEvent[] = []
+  for (const e of [...master].filter((x) => x && typeof x.id === 'number').sort((a, b) => a.id - b.id)) {
+    if (added.length >= FINALS_ADD_LIMIT) break
+    if (have.has(e.id) || announceAt(e) > NOW) continue
+    if (unknownMemories(e)) {
+      // 知らない Memories の略称は、マラソンとして確定させずに保留（対応表を足してから入れる。レビュー MEDIUM-2）
+      say(`- 歴代ボーダー: ${e.id} ${e.name} は知らない Memories の素材名（${e.assetbundleName}）。history.ts の対応表に足すまで入れない`)
+      continue
+    }
+    const meta = historyMeta(e)
+    if (!meta) continue
+    // 1回の取得の失敗で、ほかの回を巻き込まない（レビュー MEDIUM-1）
+    try {
+      const finals: Record<string, number> = {}
+      const sources: Record<string, string> = {}
+      for (const rank of FINAL_RANKS) {
+        const v = confirmedFinal(await loadSeries(e.id, rank), e)
+        if (v == null) break
+        finals[String(rank)] = v
+        sources[String(rank)] = 'sekai.best'
+      }
+      if (Object.keys(finals).length === FINAL_RANKS.length) added.push({ ...meta, finals, sources })
+      else say(`- 歴代ボーダー: ${e.id} ${e.name} は確定後の点がまだ無い（次の回にやり直す）`)
+    } catch (err) {
+      say(`- 歴代ボーダー: ${e.id} ${e.name} は取得に失敗（${err instanceof Error ? err.message : String(err)}）。次の回にやり直す`)
+    }
+  }
+  if (added.length === 0 && stored.length > 0) {
+    say(`- 歴代ボーダー: 足す回なし（${stored.length} 回）`)
+    return
+  }
+  const events = [...table, ...added].sort((a, b) => a.id - b.id)
+  await write('PUT', '/admin/finals', { events })
+  say(`- 歴代ボーダー: ${added.map((e) => `${e.id} ${e.name}`).join('・') || '種を入れた'}（${events.length} 回）`)
+
+  // 足した回のうち、終わって間もない回は歴代ボーダーの投稿（画像4枚）を積む。描くのと本文は Bot（sekaimaster-bot の historyCard.ts）
+  for (const e of added) {
+    const ended = master.find((m) => m.id === e.id)
+    if (!ended || ended.aggregateAt < NOW - POST_WINDOW_MS || e.id < HISTORY_POSTS_FROM) continue
+    const text = [`【歴代ボーダー】${e.name}`, '', '歴代の中での位置づけと、50・100・1000位の歴代ランキングです。', `${SITE}/border`].join('\n')
+    await write('PUT', '/admin/posts', { id: `${e.id}:history`, eventId: e.id, kind: 'history', text, payload: { kind: 'history', eventId: e.id } })
+    say(`- 歴代ボーダー: ${e.id} の投稿を積んだ`)
+  }
+}
+
 async function main() {
   say(`# ボーダー予測 解析ジョブ ${new Date(NOW).toISOString()}${DRY ? '（dry-run）' : ''}`)
   const { events, source } = await loadEvents()
@@ -232,6 +308,9 @@ async function main() {
     }
   }
   if (targets.length === 0) say('- 答え合わせ: 対象なし')
+
+  // 4. 歴代ボーダー（終値の表）に、終わった回を書き足す。失敗しても解析ジョブは止めない
+  await updateFinals().catch((err) => say(`- 歴代ボーダー: 失敗（${err instanceof Error ? err.message : String(err)}）`))
 
   const summaryFile = process.env.GITHUB_STEP_SUMMARY
   if (summaryFile) fs.appendFileSync(summaryFile, log.join('\n') + '\n')

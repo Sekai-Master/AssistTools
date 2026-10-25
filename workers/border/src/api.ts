@@ -6,6 +6,8 @@
 import { parseSchedule, runCron } from './collect.ts'
 import {
   allShapes,
+  kvGet,
+  kvSet,
   markPostSent,
   predictionsFor,
   putModel,
@@ -131,6 +133,35 @@ async function adminRoute(req: Request, env: Env, url: URL): Promise<Response> {
     if (!isRecord(body) || typeof body.eventId !== 'number' || !isRecord(body.report)) return error('report の形が不正', 400)
     await putReport(env.DB, body.eventId, body.report, now)
     return json({ ok: true })
+  }
+
+  // 歴代ボーダー（終値の表）。解析ジョブが読み、終わった回を足して丸ごと書き戻す（kv の1行。書き込みは1回1行）
+  if (path === '/admin/finals' && req.method === 'GET') {
+    const v = await kvGet(env.DB, 'finals')
+    return v ? new Response(v, { headers: { 'Content-Type': 'application/json; charset=utf-8' } }) : json({ events: [] })
+  }
+
+  if (path === '/admin/finals' && req.method === 'PUT') {
+    const body = await readBody(req)
+    // 誤投入で表を壊さない（レビュー LOW-2）: 1〜2,000 行・id は整数で重複なし・終値は有限の数
+    const events: unknown[] | null = isRecord(body) && Array.isArray(body.events) ? body.events : null
+    const ok =
+      events != null &&
+      events.length >= 1 &&
+      events.length <= 2_000 &&
+      events.every(
+        (e) =>
+          isRecord(e) &&
+          Number.isInteger(e.id) &&
+          typeof e.name === 'string' &&
+          isRecord(e.finals) &&
+          !Array.isArray(e.finals) &&
+          Object.values(e.finals).every((v) => typeof v === 'number' && Number.isFinite(v)),
+      ) &&
+      new Set(events.map((e) => (e as { id: number }).id)).size === events.length
+    if (!ok || events == null) return error('finals の形が不正', 400)
+    await kvSet(env.DB, 'finals', { events, updatedAt: now }, now)
+    return json({ ok: true, count: events.length })
   }
 
   if (path === '/admin/posts' && req.method === 'PUT') {
