@@ -65,7 +65,7 @@ export function parseSchedule(raw: unknown, now: number): EventMeta[] {
   const out: EventMeta[] = []
   for (const e of raw.events) {
     if (!isRecord(e)) continue
-    const { id, name, type, unit, startAt, aggregateAt } = e
+    const { id, name, type, unit, startAt, aggregateAt, asset } = e
     if (typeof id !== 'number' || typeof startAt !== 'number' || typeof aggregateAt !== 'number') continue
     if (aggregateAt < now - SCHEDULE_LOOKBACK_MS) continue
     out.push({
@@ -75,6 +75,8 @@ export function parseSchedule(raw: unknown, now: number): EventMeta[] {
       unit: typeof unit === 'string' ? unit : 'none',
       startAt,
       aggregateAt,
+      // 素材名は URL に使う（ロゴ）ので、英小文字・数字・下線だけ通す
+      asset: typeof asset === 'string' && /^[a-z0-9_]+$/.test(asset) ? asset : null,
     })
   }
   return out

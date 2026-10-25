@@ -10,10 +10,12 @@ export interface EventRow {
   unit: string
   start_at: number
   aggregate_at: number
+  /** migrations/0002 で足した列。古い行は null */
+  asset?: string | null
 }
 
 export function toMeta(r: EventRow): EventMeta {
-  return { id: r.id, name: r.name, eventType: r.type, unit: r.unit, startAt: r.start_at, aggregateAt: r.aggregate_at }
+  return { id: r.id, name: r.name, eventType: r.type, unit: r.unit, startAt: r.start_at, aggregateAt: r.aggregate_at, asset: r.asset ?? null }
 }
 
 /** 集計の後、この時間までは終値のサンプルを拾いに行く（sekai.best の最終サンプルは 20:59 終了の 16分後） */
@@ -27,19 +29,31 @@ export async function activeEvent(db: D1Database, now: number): Promise<EventMet
   return r ? toMeta(r) : null
 }
 
+/**
+ * 終わってから from〜until（ミリ秒）のあいだのイベントのうち、いちばん最近終わったもの。歴代の表へ足す見回り（finals.ts）用
+ */
+export async function justEndedEvent(db: D1Database, now: number, from: number, until: number): Promise<EventMeta | null> {
+  const r = await db
+    .prepare('SELECT * FROM events WHERE aggregate_at + ?2 <= ?1 AND aggregate_at + ?3 > ?1 ORDER BY aggregate_at DESC LIMIT 1')
+    .bind(now, from, until)
+    .first<EventRow>()
+  return r ? toMeta(r) : null
+}
+
 export async function upsertEvents(db: D1Database, events: readonly EventMeta[]): Promise<number> {
   if (events.length === 0) return 0
   // 値が変わらない行は UPDATE しない（書き込み行数を増やさない）
   const stmt = db.prepare(
-    `INSERT INTO events (id, name, type, unit, start_at, aggregate_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+    `INSERT INTO events (id, name, type, unit, start_at, aggregate_at, asset) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
      ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, unit = excluded.unit,
-       start_at = excluded.start_at, aggregate_at = excluded.aggregate_at
+       start_at = excluded.start_at, aggregate_at = excluded.aggregate_at, asset = excluded.asset
      WHERE events.name IS NOT excluded.name OR events.type IS NOT excluded.type OR events.unit IS NOT excluded.unit
-       OR events.start_at IS NOT excluded.start_at OR events.aggregate_at IS NOT excluded.aggregate_at`,
+       OR events.start_at IS NOT excluded.start_at OR events.aggregate_at IS NOT excluded.aggregate_at
+       OR events.asset IS NOT excluded.asset`,
   )
   let changed = 0
   for (let i = 0; i < events.length; i += 50) {
-    const res = await db.batch(events.slice(i, i + 50).map((e) => stmt.bind(e.id, e.name, e.eventType, e.unit, e.startAt, e.aggregateAt)))
+    const res = await db.batch(events.slice(i, i + 50).map((e) => stmt.bind(e.id, e.name, e.eventType, e.unit, e.startAt, e.aggregateAt, e.asset ?? null)))
     changed += res.reduce((n, r) => n + (r.meta.changes ?? 0), 0)
   }
   return changed

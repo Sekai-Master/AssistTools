@@ -17,7 +17,7 @@ import { RANKS, buildShape, durationHours, type EventMeta, type Sample, type Sha
 import { resultText, type ResultRank } from '../../workers/border/src/posts.ts'
 import type { PostPayload, ResultPostRank } from '../../workers/border/src/snapshot.ts'
 import { buildReport, type PredictionLog, type Report } from './report.ts'
-import { FINAL_RANKS, announceAt, confirmedFinal, historyMeta, mergeSeed, parseHistory, unknownMemories, type HistoryEvent, type MasterEvent } from './history.ts'
+import { FINAL_RANKS, announceAt, confirmedFinal, historyMeta, historyPostText, mergeSeed, parseHistory, unknownMemories, type HistoryEvent, type MasterEvent } from './history.ts'
 import { addInsights } from '../claude/border-insight-run.ts'
 
 const SITE = 'https://sekaimaster.pages.dev'
@@ -81,6 +81,8 @@ export function parseEvents(list: unknown): EventMeta[] {
   for (const e of list as Record<string, unknown>[]) {
     if (!e || typeof e.id !== 'number' || typeof e.startAt !== 'number' || typeof e.aggregateAt !== 'number') continue
     const type = typeof e.eventType === 'string' ? e.eventType : typeof e.type === 'string' ? e.type : 'unknown'
+    // 素材名はマスタでは assetbundleName、bonuses.json では asset
+    const asset = typeof e.assetbundleName === 'string' ? e.assetbundleName : typeof e.asset === 'string' ? e.asset : null
     out.push({
       id: e.id,
       name: typeof e.name === 'string' ? e.name : `event ${e.id}`,
@@ -88,6 +90,7 @@ export function parseEvents(list: unknown): EventMeta[] {
       unit: typeof e.unit === 'string' ? e.unit : 'none',
       startAt: e.startAt,
       aggregateAt: e.aggregateAt,
+      asset: asset != null && /^[a-z0-9_]+$/.test(asset) ? asset : null,
     })
   }
   return out
@@ -177,6 +180,11 @@ const HISTORY_POSTS_FROM = 222
 
 /** 1回に足す回の上限（初回や長く止まっていたあとに sekai.best を叩きすぎない） */
 const FINALS_ADD_LIMIT = 10
+/**
+ * 自分で取りに行くのは、終わってからこの期間内の回だけ。それより古い回は種の表が受け持つ
+ *（記録の無い 112・118 を毎回取りに行って「次の回にやり直す」と出し続けていた。2026-10-25）
+ */
+const FINALS_LOOKBACK_MS = 30 * 86_400_000
 
 /**
  * 歴代ボーダーの表（Worker の kv `finals`）に、順位発表を過ぎた回を足す。
@@ -205,7 +213,7 @@ async function updateFinals() {
   const added: HistoryEvent[] = []
   for (const e of [...master].filter((x) => x && typeof x.id === 'number').sort((a, b) => a.id - b.id)) {
     if (added.length >= FINALS_ADD_LIMIT) break
-    if (have.has(e.id) || announceAt(e) > NOW) continue
+    if (have.has(e.id) || announceAt(e) > NOW || e.aggregateAt < NOW - FINALS_LOOKBACK_MS) continue
     if (unknownMemories(e)) {
       // 知らない Memories の略称は、マラソンとして確定させずに保留（対応表を足してから入れる。レビュー MEDIUM-2）
       say(`- 歴代ボーダー: ${e.id} ${e.name} は知らない Memories の素材名（${e.assetbundleName}）。history.ts の対応表に足すまで入れない`)
@@ -242,7 +250,7 @@ async function updateFinals() {
     const ended = master.find((m) => m.id === e.id)
     // ワールドリンクは Bot の画像に載らない（historyCard.ts の parseHistory が除く）ので積まない。積むと画像が作れず、2時間の先送りのあと文字だけで出てしまう
     if (!ended || ended.aggregateAt < NOW - POST_WINDOW_MS || e.id < HISTORY_POSTS_FROM || e.type === 'world_bloom') continue
-    const text = [`【歴代ボーダー】${e.name}`, '', '歴代の中での位置づけと、50・100・1000位の歴代ランキングです。', `${SITE}/border`].join('\n')
+    const text = historyPostText(e.name, e.id, SITE)
     await write('PUT', '/admin/posts', { id: `${e.id}:history`, eventId: e.id, kind: 'history', text, payload: { kind: 'history', eventId: e.id } })
     say(`- 歴代ボーダー: ${e.id} の投稿を積んだ`)
   }
@@ -255,7 +263,8 @@ async function main() {
   // 0. 日程を Worker へ（直近と、これからのイベント）。Worker はこれを見て収集を始める
   const upcoming = events.filter((e) => e.aggregateAt >= NOW - 3 * 86_400_000)
   const sched = await write<{ count: number; changed: number }>('PUT', '/admin/events', {
-    events: upcoming.map((e) => ({ id: e.id, name: e.name, type: e.eventType, unit: e.unit, startAt: e.startAt, aggregateAt: e.aggregateAt })),
+    // 素材名も渡す（Worker が終了直後に歴代の表へ足すとき、Memories の判定とロゴに使う。finals.ts）
+    events: upcoming.map((e) => ({ id: e.id, name: e.name, type: e.eventType, unit: e.unit, startAt: e.startAt, aggregateAt: e.aggregateAt, asset: e.asset ?? null })),
   })
   say(`- 日程: ${source} から ${upcoming.length} 件（${upcoming.map((e) => e.id).join(', ')}）${sched ? `・変更 ${sched.changed} 行` : ''}`)
 
