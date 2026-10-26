@@ -3,7 +3,7 @@
  * ★ ここには Workers ランタイムの型を持ち込まない（サイト側の tsconfig でも通すため）。
  * ★ sekaimaster-bot（別リポジトリ）の src/border/client.ts が同じ形を読む。フィールドを変えたらそちらも直す。
  */
-import type { Confidence } from './model.ts'
+import type { Confidence, ThinDuration } from './model.ts'
 
 export interface SnapshotEvent {
   id: number
@@ -37,6 +37,11 @@ export interface Snapshot {
    * 古い版の Worker の出力には無い
    */
   extrapolatedFrom?: number | null
+  /**
+   * 標本が1〜2件しかない長さで、その長さの直近の回を混ぜた表を使っているとき、その長さの情報（extrapolatedFrom も付く）。
+   * 古い版の Worker の出力には無い
+   */
+  thin?: ThinDuration | null
   predicted: boolean
   ranks: SnapshotRank[]
 }

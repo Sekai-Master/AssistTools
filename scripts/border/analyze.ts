@@ -318,6 +318,8 @@ async function main() {
   // 2. 学習
   const { model, summary } = fitModel(events, shapes, NOW)
   say(`- モデル: ${summary.version}（学習 ${summary.poolSize} 件・期間 ${summary.durations.join('/')}h）`)
+  const thin = summary.thinDurations ?? []
+  if (thin.length > 0) say(`- 標本1〜2件の長さ（直近の回を混ぜた参考値の表）: ${thin.map((t) => `${t.duration}h（${t.samples}件・${t.latestEventId}）`).join('・')}`)
   for (const r of summary.ranks) {
     const mae = r.medianAbsError.map((x) => `${x.p}:${x.value == null ? '-' : (x.value * 100).toFixed(1)}`).join(' ')
     const cov = r.coverage.map((x) => `${x.covered}/${x.total}`).join(' ')
