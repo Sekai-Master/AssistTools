@@ -11,14 +11,17 @@ import {
   earlyBlended,
   fitModel,
   fnv1a,
+  thinTable,
   walkEarlyBlend,
 } from '../src/fit.ts'
 import {
   CANDIDATES,
   GRID,
   RANKS,
+  THIN_WEIGHT,
   candidateTable,
   chooseTable,
+  durationHours,
   median,
   walkForward,
   type CandidateId,
@@ -253,6 +256,24 @@ describe('fitModel の序盤の差し替え', () => {
     expect(value).toBeCloseTo(served as number, 9)
   })
 
+  it('標本1〜2件の長さの表（thin）も、借り先の切り替え点より前を blend に差し替えてから直近の回を混ぜる', () => {
+    const { model, hist } = fitFrom(historyOf(DURATIONS.map((hours) => ({ hours, f: byElapsed(hours) }))))
+    const rm = model.ranks['1000']
+    const switchAt = rm.earlyBlendUntil
+    expect(switchAt).toBeTypeOf('number')
+    // 80h は1件だけ（最短の 150h より短いので借り先は far_short = 150h の全履歴）
+    const latest = hist.find((h) => durationHours(h.meta) === 80)?.shapes.get(1000) as Shape
+    const base = candidateTable('same_all', 150, hist, 1000)
+    const early = earlyBlended(base, blendTable(80, hist, 1000), switchAt as number)
+    const round = (t: (number | null)[]) => t.map((v) => (v == null ? null : Math.round(v * 1e5) / 1e5))
+    expect(rm.tables['thin:80']).toEqual(round(thinTable(latest.share, early)))
+    // 差し替えが本当に効いている: 序盤の点は blend 抜きで混ぜた値と違い、切り替え点より後は同じ
+    const i = GRID.indexOf(0.1)
+    const j = GRID.indexOf(0.6)
+    expect(rm.tables['thin:80'][i]).not.toBeCloseTo(thinTable(latest.share, base)[i] as number, 3)
+    expect(rm.tables['thin:80'][j]).toBeCloseTo(thinTable(latest.share, base)[j] as number, 4)
+  })
+
   it('勝てない順位は表を現行のまま焼き込み、earlyBlendUntil を付けない', () => {
     // 全部同じ長さ・同じ形なら blend と現行は同じ値になり、5% 以上の差がつかない
     const { model, summary, hist } = fitFrom(historyOf(DURATIONS.map(() => ({ hours: 150, f: byElapsed(150) }))))
@@ -279,7 +300,7 @@ describe('fitModel の「同じ長さ」の表', () => {
     return { events, shapes, now: events[events.length - 1].aggregateAt + 24 * H }
   }
 
-  it('標本が3件未満の長さには表を作らず、Worker は過去に無い長さとして参考値にする', () => {
+  it('標本が3件未満の長さには「同じ長さ」の表を作らず、Worker は参考値にする', () => {
     const { events, shapes, now } = fixture()
     const { model } = fitModel(events, shapes, now)
     expect(model.knownDurations).toEqual([150])
@@ -288,5 +309,93 @@ describe('fitModel の「同じ長さ」の表', () => {
     expect(rm.tables['102']).toBeUndefined()
     expect(chooseTable(model, rm, 102)?.extrapolatedFrom).toBe(150)
     expect(chooseTable(model, rm, 150)?.extrapolatedFrom).toBeNull()
+    expect(chooseTable(model, rm, 150)?.thin).toBeNull()
+  })
+})
+
+describe('標本1〜2件の長さの表（thin）', () => {
+  const round = (t: readonly (number | null)[]) => t.map((v) => (v == null ? null : Math.round(v * 1e5) / 1e5))
+
+  it('thinTable: 直近の回を weight、借り先を 1 − weight で混ぜる。借り先が無い点は出さず、直近の回の欠測は借り先のまま', () => {
+    const t = thinTable([0.2, 0.2, null, 0, 0.5], [0.4, null, 0.3, 0.3, 0.5], 0.3)
+    expect(t[0]).toBeCloseTo(0.2 * 0.3 + 0.4 * 0.7, 12)
+    expect(t.slice(1)).toEqual([null, 0.3, 0.3, 0.5])
+    expect(THIN_WEIGHT).toBe(0.3)
+  })
+
+  /** 150h の回を5件、198h の回を3件、その間の 171h の回を1件、最後に 102h の回を1件（221 のように学習に1件しかない長さ）。102h は 150h と形が違う */
+  function fixture() {
+    const lengths = [150, 198, 171, 150, 198, 150, 198, 150, 150, 102]
+    const events: EventMeta[] = lengths.map((h, i) => ({
+      id: 200 + i, name: `e${i}`, eventType: 'marathon', unit: 'none',
+      startAt: Date.UTC(2026, 0, 1) + i * 10 * 24 * H, aggregateAt: Date.UTC(2026, 0, 1) + i * 10 * 24 * H + h * H,
+    }))
+    const shapes: Shape[] = events.flatMap((e, i) =>
+      RANKS.map((rank) => ({
+        eventId: e.id, rank, final: 1e7 * (1 + i / 20),
+        share: GRID.map((p) => (durationHours(e) === 102 ? p ** 1.6 : p ** (1 + i / 50))),
+      })),
+    )
+    const hist: HistoryEvent[] = events.map((meta) => ({
+      meta, shapes: new Map(shapes.filter((s) => s.eventId === meta.id).map((s) => [s.rank, s])),
+    }))
+    return { events, shapes, hist, now: events[events.length - 1].aggregateAt + 24 * H }
+  }
+
+  it('102h（最短より短い）は far_short に直近の 102h の回を3割混ぜた表を焼き、Worker は参考値として使う', () => {
+    const { events, shapes, hist, now } = fixture()
+    const { model, summary } = fitModel(events, shapes, now)
+    expect(model.thinDurations).toEqual([
+      { duration: 102, samples: 1, latestEventId: 209, weight: THIN_WEIGHT },
+      { duration: 171, samples: 1, latestEventId: 202, weight: THIN_WEIGHT },
+    ])
+    expect(summary.thinDurations).toEqual(model.thinDurations)
+    for (const rank of RANKS) {
+      const rm = model.ranks[String(rank)]
+      const latest = hist[9].shapes.get(rank) as Shape
+      const base = candidateTable('same_all', 150, hist, rank)
+      const early = rm.earlyBlendUntil == null ? base : earlyBlended(base, blendTable(102, hist, rank), rm.earlyBlendUntil)
+      expect(rm.tables['thin:102']).toEqual(round(thinTable(latest.share, early)))
+      // 借り先そのもの（far_short）とは違う表になっている
+      const j = GRID.indexOf(0.5)
+      expect(rm.tables['thin:102'][j]).not.toBeCloseTo(rm.tables.far_short[j] as number, 3)
+      const choice = chooseTable(model, rm, 102)
+      expect(choice?.table).toBe(rm.tables['thin:102'])
+      expect(choice?.extrapolatedFrom).toBe(150)
+      expect(choice?.thin).toEqual({ duration: 102, samples: 1, latestEventId: 209, weight: THIN_WEIGHT })
+    }
+  })
+
+  it('範囲の内側の長さ（171h）は all を借り先にし、札の数字はいちばん近い長さ', () => {
+    const { events, shapes, hist, now } = fixture()
+    const { model } = fitModel(events, shapes, now)
+    const rm = model.ranks['1000']
+    const latest = hist[2].shapes.get(1000) as Shape
+    const j = GRID.indexOf(0.6)
+    // 0.6 は切り替え点（最大 0.4）より後なので、blend の差し替えがあっても入らない
+    expect(rm.tables['thin:171'][j]).toBeCloseTo(THIN_WEIGHT * (latest.share[j] as number) + (1 - THIN_WEIGHT) * (rm.tables.all[j] as number), 4)
+    const choice = chooseTable(model, rm, 171)
+    expect(choice?.extrapolatedFrom).toBe(150)
+    expect(choice?.thin?.duration).toBe(171)
+  })
+
+  it('直近の回にその順位の形が無ければ表を作らず、借り先のまま（参考値の札は残る）', () => {
+    const { events, shapes, now } = fixture()
+    const { model } = fitModel(events, shapes.filter((s) => !(s.eventId === 209 && s.rank === 2000)), now)
+    const rm = model.ranks['2000']
+    expect(rm.tables['thin:102']).toBeUndefined()
+    const choice = chooseTable(model, rm, 102)
+    expect(choice?.table).toBe(rm.tables.far_short)
+    expect(choice?.extrapolatedFrom).toBe(150)
+    expect(choice?.thin).toBeNull()
+  })
+
+  it('thin の鍵は完全一致（数字だけの鍵）にならず、thinDurations の無い古い版のモデルでは借り先のまま', () => {
+    const { events, shapes, now } = fixture()
+    const { model } = fitModel(events, shapes, now)
+    const rm = model.ranks['1000']
+    expect(Object.keys(rm.tables).filter((k) => /^[0-9]+$/.test(k))).toEqual(['150', '198'])
+    const old = { ...model, thinDurations: undefined }
+    expect(chooseTable(old, rm, 102)?.table).toBe(rm.tables.far_short)
   })
 })
