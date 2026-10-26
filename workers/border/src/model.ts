@@ -375,7 +375,34 @@ export interface Model {
    * 古い版のモデルには無い（そのときは tables.all）
    */
   knownDurations?: number[]
+  /**
+   * 標本が1〜2件しかない長さ（§2.1.3）。この長さの表は tables[thinKey(長さ)] にあり、Worker は過去に無い長さと同じく
+   * 参考値（extrapolatedFrom）にして帯を広げる。古い版のモデルには無い。古い Worker はこの鍵を読まない（far_* か all のまま）
+   */
+  thinDurations?: ThinDuration[]
 }
+
+/**
+ * 標本が1〜2件しかない長さ。fit.ts がその長さ専用の表を焼く:
+ *   表 = THIN_WEIGHT × 同じ長さの直近の回の share ＋ (1 − THIN_WEIGHT) × 過去に無い長さと同じ借り先（序盤は blend）
+ * 222（102h）の前例は 221 の1件だけ。前向きの比較（border-research/experiments/thin-duration-2.md）で、
+ * 直近の1件をそのまま使うのは借り先より悪く、3割だけ混ぜるのが序盤〜中盤でいちばん当たった（2026-10-26）
+ */
+export interface ThinDuration {
+  duration: number
+  /** 学習にある同じ長さの回の数（1〜2） */
+  samples: number
+  /** 表に混ぜた回（同じ長さの直近の回）の id */
+  latestEventId: number
+  /** その回の share に掛けた重み（THIN_WEIGHT）。画面の説明文はこの値を読む（重みを変えても古い版の表示と食い違わない） */
+  weight: number
+}
+
+/** 標本1〜2件の長さの表で、同じ長さの直近の回の share に掛ける重み（残りは借り先の表）。版の thinDurations[*].weight にも残す */
+export const THIN_WEIGHT = 0.3
+
+/** 標本1〜2件の長さの表の鍵。数字だけの鍵（完全一致）と分け、古い Worker に完全一致として読ませない */
+export const thinKey = (duration: number): string => `thin:${duration}`
 
 /**
  * 過去に無い長さのイベントで帯を広げる倍率。
@@ -389,21 +416,39 @@ const MIN_DIVISOR = 0.05
 
 export interface TableChoice {
   table: (number | null)[]
-  /** 過去に無い長さで、近い端の期間から借りたとき、その期間 */
+  /**
+   * 参考値として出すとき、借りた先の期間。過去に無い長さなら近い端の期間。
+   * 標本1〜2件の長さ（thin）なら、標本3件以上の長さのうちいちばん近いもの（その長さの表の7割を作った借り先の目安）
+   */
   extrapolatedFrom: number | null
+  /** 標本1〜2件の長さの表を使ったとき、その長さの情報 */
+  thin: ThinDuration | null
+}
+
+/** 標本3件以上の長さのうち、duration にいちばん近いもの（同じ近さなら短いほう）。無ければ duration */
+function nearestKnown(known: readonly number[], duration: number): number {
+  let best: number | null = null
+  for (const d of known) {
+    if (best == null || Math.abs(d - duration) < Math.abs(best - duration) || (Math.abs(d - duration) === Math.abs(best - duration) && d < best)) best = d
+  }
+  return best ?? duration
 }
 
 export function chooseTable(model: Model, rm: RankModel, duration: number): TableChoice | null {
   const exact = rm.tables[String(duration)]
-  if (exact) return { table: exact, extrapolatedFrom: null }
+  if (exact) return { table: exact, extrapolatedFrom: null, thin: null }
   const known = model.knownDurations ?? []
+  // 標本1〜2件の長さ: 専用の表を使うが、確度は名乗らない（参考値の札と広い帯は過去に無い長さと同じ）
+  const thin = model.thinDurations?.find((t) => t.duration === duration) ?? null
+  const thinTable = rm.tables[thinKey(duration)]
+  if (thin && thinTable) return { table: thinTable, extrapolatedFrom: nearestKnown(known, duration), thin }
   if (known.length > 0) {
     const max = Math.max(...known)
     const min = Math.min(...known)
-    if (duration > max && rm.tables.far_long) return { table: rm.tables.far_long, extrapolatedFrom: max }
-    if (duration < min && rm.tables.far_short) return { table: rm.tables.far_short, extrapolatedFrom: min }
+    if (duration > max && rm.tables.far_long) return { table: rm.tables.far_long, extrapolatedFrom: max, thin: null }
+    if (duration < min && rm.tables.far_short) return { table: rm.tables.far_short, extrapolatedFrom: min, thin: null }
   }
-  return rm.tables.all ? { table: rm.tables.all, extrapolatedFrom: null } : null
+  return rm.tables.all ? { table: rm.tables.all, extrapolatedFrom: null, thin: null } : null
 }
 
 /**
@@ -442,6 +487,8 @@ export interface Prediction {
   confidence: Confidence | null
   /** 過去に無い長さで、近い端の期間（時間）の表を借りたとき、その期間。帯は広げてある */
   extrapolatedFrom: number | null
+  /** 標本1〜2件の長さの表を使ったとき、その長さの情報（extrapolatedFrom も付き、帯は広げてある） */
+  thin: ThinDuration | null
   visible: boolean
 }
 
@@ -479,6 +526,7 @@ export function predict(model: Model, meta: EventMeta, rank: number, current: nu
     high,
     confidence,
     extrapolatedFrom: choice.extrapolatedFrom,
+    thin: choice.thin,
     // 帯が無い・広すぎる予測は、確度を名乗れないので出さない（記録はする）
     visible: p >= rm.minProgress && confidence != null,
   }
