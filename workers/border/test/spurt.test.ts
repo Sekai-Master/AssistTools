@@ -4,6 +4,7 @@ import { kvAppend, kvSet, unsentPosts, upsertEvents } from '../src/db.ts'
 import type { Env } from '../src/env.ts'
 import type { Snapshot } from '../src/snapshot.ts'
 import { runSpurt, spurtRanks, spurtText } from '../src/spurt.ts'
+import { xWeight } from '../src/posts.ts'
 import { createD1 } from './d1shim.ts'
 
 const H = 3_600_000
@@ -48,6 +49,8 @@ describe('追い込みの数字（spurtRanks）', () => {
   it('控えの本文は見出しと6順位のいまの値', () => {
     const text = spurtText('名前', [{ rank: 50, current: 96_655_348 }], 'https://s')
     expect(text).toBe('【ラストスパート・残り3時間】名前\n\n50位 9,666万\n\nhttps://s/border')
+    const six = [50, 100, 200, 500, 1000, 2000].map((rank) => ({ rank, current: 296_655_348 }))
+    expect(xWeight(spurtText('長'.repeat(200), six, 'https://sekaimaster.pages.dev'))).toBeLessThan(280)
   })
 })
 
@@ -74,6 +77,11 @@ describe('追い込みを積む（runSpurt）', () => {
     expect(await runSpurt(await setup(snapAt(AT18 - 27 * M)), AT18 - 5 * M)).toEqual({ status: 'idle' })
     // 19:00 を過ぎてからでは「残り3時間」と出さない（止まっていて遅れた場合）
     expect(await runSpurt(await setup(snapAt(AT18 + 63 * M)), AT18 + H + 5 * M)).toEqual({ status: 'idle' })
+  })
+
+  it('チアフルも積む（日報と同じ対象）', async () => {
+    const t = AT18 + 3 * M
+    expect(await runSpurt(await setup(snapAt(t, 'cheerful_carnival'), 'cheerful_carnival'), t + 2 * M)).toEqual({ status: 'queued', id: '222:spurt' })
   })
 
   it('ワールドリンクなど日報の対象でない種別・いまの値が別の回なら積まない', async () => {

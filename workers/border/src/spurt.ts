@@ -50,16 +50,19 @@ export function spurtRanks(snap: Snapshot, rows: readonly HistoryRowLite[]): Spu
 
 /** 控えの本文（画像が作れなかったとき・古い Bot が読めないときにそのまま出る）。6順位のいまの値を入れる */
 export function spurtText(name: string, ranks: readonly { rank: number; current: number }[], site: string): string {
-  return [`【ラストスパート・残り3時間】${name}`, '', ...ranks.map((r) => `${r.rank}位 ${formatMan(r.current)}`), '', `${site}/border`].join('\n')
+  // 控えは X にそのまま出るので、名前が極端に長くても 280 に収まるよう縮める（6順位と URL で約 150。レビュー LOW-3）
+  const short = [...name].length > 40 ? `${[...name].slice(0, 39).join('')}…` : name
+  return [`【ラストスパート・残り3時間】${short}`, '', ...ranks.map((r) => `${r.rank}位 ${formatMan(r.current)}`), '', `${site}/border`].join('\n')
 }
 
 export async function runSpurt(env: Env, now: number): Promise<SpurtResult> {
-  // 終了3時間前〜2時間前のあいだに終わる回だけ（列の側を式にしない）
-  const ev = await env.DB.prepare('SELECT id, type FROM events WHERE aggregate_at > ?1 AND aggregate_at <= ?2 ORDER BY aggregate_at LIMIT 1')
+  // いまが終了3時間前〜2時間前のあいだにある回だけ。種別も WHERE で絞る（対象外の回が同じ時間帯に終わっても取りこぼさない。レビュー LOW-2）
+  const ev = await env.DB.prepare(
+    "SELECT id, type FROM events WHERE aggregate_at > ?1 AND aggregate_at <= ?2 AND type IN ('marathon', 'cheerful_carnival') ORDER BY aggregate_at LIMIT 1",
+  )
     .bind(now - endOf(0) + SPURT_BEFORE_MS - SPURT_WINDOW_MS, now - endOf(0) + SPURT_BEFORE_MS)
     .first<{ id: number; type: string }>()
   if (!ev) return { status: 'idle' }
-  if (ev.type !== 'marathon' && ev.type !== 'cheerful_carnival') return { status: 'idle' }
   const id = `${ev.id}:spurt`
   if (await env.DB.prepare('SELECT 1 AS x FROM posts WHERE id = ?1').bind(id).first()) return { status: 'exists', id }
 
