@@ -9,6 +9,7 @@
  *   4. Worker が割り算1回で予測できる形（期間ごとのシェア表＋帯）に焼き込む
  *   5. 序盤（経過率 20〜40% より前）は、伸び方を経過時間と残り時間でそろえて混ぜた表（blend）に差し替える。
  *      差し替えるか・どこまで差し替えるかは順位ごとに前向き検証で選び、現行に勝てなければ差し替えない
+ *   6. 標本が1〜2件しかない長さには、その長さの直近の回を3割だけ混ぜた専用の表を焼く（thinTable。Worker は参考値として出す）
  *
  * 人が方向の補正を足す枠は作らない（brain log 2026-09-02 §11.3）。偏りの補正は
  * 「補正つき候補」が前向き検証で勝ったときだけ自動で採用される。
@@ -30,6 +31,8 @@ import {
   interpGrid,
   median,
   quantile,
+  THIN_WEIGHT,
+  thinKey,
   walkForward,
   type CandidateId,
   type EventMeta,
@@ -38,6 +41,7 @@ import {
   type Model,
   type RankModel,
   type Shape,
+  type ThinDuration,
 } from './model.ts'
 
 export const ALGORITHM = 'share-median-v1' as const
@@ -109,6 +113,8 @@ export interface ModelSummary {
   trainedThrough: number
   poolSize: number
   durations: number[]
+  /** 標本1〜2件の長さと、表に混ぜた回。この項目より前の版には無い */
+  thinDurations?: ThinDuration[]
   targetCoverage: number
   ranks: RankSummary[]
 }
@@ -319,6 +325,35 @@ export function walkEarlyBlend(
   return { ...choice, atTime }
 }
 
+// ---------------------------------------------------------------------------
+// 標本が1〜2件しかない長さ（thin、2026-10-26）
+//
+// 222（102h）の前例は 221 の1件だけ。#171 で「同じ長さ」の表は標本3件以上の長さだけにし、1〜2件の長さは
+// 過去に無い長さとして far_short / far_long / all を借りる（参考値の札と広い帯）。ここではその借り先に、
+// 同じ長さの直近の回の share を THIN_WEIGHT だけ混ぜた表を、その長さ専用に焼く（借り先の序盤は blend に差し替える）。
+// 前向きの比較（border-research/experiments/thin-duration-2.md。同じ長さの前例を直近の1件だけ残した 57 回 × 6順位）:
+//   全順位の |誤差| の中央値 経過4〜8% 7.9→7.0%、10〜18% 7.5→6.5%、20〜28% 5.9→6.0%、30〜48% 5.5→4.8〜5.0%、50〜70% 4.2→3.8%、72〜96% 2.7→2.6%
+//   直近の1件をそのまま使う（重み 1）と、どの区間も借り先より悪い（4〜8% で 9.1%）。重み 0.5 以上は序盤で悪くなる
+// 標本1件なので確度は名乗らない。Worker は過去に無い長さと同じく参考値（extrapolatedFrom）にして帯を広げる（model.ts の chooseTable）
+// ---------------------------------------------------------------------------
+
+/**
+ * 標本1〜2件の長さの表。latest（同じ長さの直近の回の share）を weight、base（借り先の表）を 1 − weight で混ぜる。
+ * base が無い点は出さない（1件の形だけで予測しない）。latest が無い点（欠測）は base のまま
+ */
+export function thinTable(
+  latest: readonly (number | null)[],
+  base: readonly (number | null)[],
+  weight: number = THIN_WEIGHT,
+): (number | null)[] {
+  return base.map((b, i) => {
+    const a = latest[i]
+    if (b == null) return null
+    if (a == null || !(a > 0)) return b
+    return weight * a + (1 - weight) * b
+  })
+}
+
 function historyFrom(events: readonly EventMeta[], shapes: readonly Shape[], now: number): HistoryEvent[] {
   const byEvent = new Map<number, Map<number, Shape>>()
   for (const s of shapes) {
@@ -340,6 +375,12 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
   const durationCount = new Map<number, number>()
   for (const h of history) durationCount.set(durationHours(h.meta), (durationCount.get(durationHours(h.meta)) ?? 0) + 1)
   const knownDurations = durations.filter((d) => (durationCount.get(d) ?? 0) >= 3)
+  const thinDurations: ThinDuration[] = durations
+    .filter((d) => (durationCount.get(d) ?? 0) < 3)
+    .map((d) => {
+      const same = history.filter((h) => durationHours(h.meta) === d)
+      return { duration: d, samples: same.length, latestEventId: same[same.length - 1].meta.id, weight: THIN_WEIGHT }
+    })
   const createdAt = new Date(now).toISOString()
 
   const ranks: Record<string, RankModel> = {}
@@ -386,6 +427,18 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
       tables.far_long = candidateTable('same_all', Math.max(...knownDurations), history, rank)
       tables.far_short = candidateTable('same_all', Math.min(...knownDurations), history, rank)
     }
+    // 標本1〜2件の長さ: 借り先（Worker が過去に無い長さとして使う表）に、同じ長さの直近の回を THIN_WEIGHT だけ混ぜる。
+    // 長さがわかっているので、借り先の序盤は期間ごとの表と同じく blend に差し替える。直近の回にこの順位の形が無ければ作らない（借り先のまま）
+    for (const t of thinDurations) {
+      const latest = history.find((h) => h.meta.id === t.latestEventId)?.shapes.get(rank)
+      if (!latest) continue
+      const min = knownDurations.length > 0 ? Math.min(...knownDurations) : null
+      const max = knownDurations.length > 0 ? Math.max(...knownDurations) : null
+      const base =
+        min != null && t.duration < min ? tables.far_short : max != null && t.duration > max ? tables.far_long : tables.all
+      const early = switchAt == null ? base : earlyBlended(base, blendTable(t.duration, history, rank), switchAt)
+      tables[thinKey(t.duration)] = thinTable(latest.share, early, t.weight)
+    }
     const minProgress = minProgressFrom(band)
     ranks[String(rank)] = {
       candidate: champion,
@@ -426,8 +479,8 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
   }
 
   // 版名には中身のハッシュを入れる。学習データが同じでもロジックを直せば別の版になり、切り替わる（レビュー 2026-09-30）
-  const version = `${ALGORITHM}@e${trainedThrough}-${fnv1a(JSON.stringify({ ranks, knownDurations }))}`
-  const model: Model = { version, createdAt, algorithm: ALGORITHM, grid: [...GRID], ranks, knownDurations }
+  const version = `${ALGORITHM}@e${trainedThrough}-${fnv1a(JSON.stringify({ ranks, knownDurations, thinDurations }))}`
+  const model: Model = { version, createdAt, algorithm: ALGORITHM, grid: [...GRID], ranks, knownDurations, thinDurations }
   const summary: ModelSummary = {
     version,
     algorithm: ALGORITHM,
@@ -435,6 +488,7 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
     trainedThrough,
     poolSize: history.length,
     durations,
+    thinDurations,
     targetCoverage: TARGET_COVERAGE,
     ranks: rankSummaries,
   }
