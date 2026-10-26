@@ -83,10 +83,6 @@ export type PostPayload =
       ranks: { rank: number; d24: number | null; h1: number | null; pace: { pos: number; of: number } | null }[]
     }
   /**
-   * 終了前の追い込み（終了3時間前に1本。spurt.ts）。Bot が日報と同じ形の表で描く（sekaimaster-bot の dailyCard.ts）。
-   * snapshot は終了3時間前を過ぎた最初の値と予測。h3 は直近3時間（残りと同じ長さ）の伸び
-   */
-  /**
    * イベント開始直前の告知（start.ts）。Bot が開始カード（sekaimaster-bot の startCard.ts）を描き、postAt（開始15分前）ちょうどに出す。
    * event.type は歴代の表の種別（Memories を見分けたもの）。prev は同じ種別・同じ長さの直近の回の終値（無ければ null＝前例なし）。
    * firstPredictionAt は最初の予測が出る回の時刻（マラソンだけ）、dailyAt は最初の日報の時刻
@@ -99,6 +95,10 @@ export type PostPayload =
       firstPredictionAt: number | null
       dailyAt: number | null
     }
+  /**
+   * 終了前の追い込み（終了3時間前に1本。spurt.ts）。Bot が日報と同じ形の表で描く（sekaimaster-bot の dailyCard.ts）。
+   * snapshot は終了3時間前を過ぎた最初の値と予測。h3 は直近3時間（残りと同じ長さ）の伸び
+   */
   | {
       kind: 'spurt'
       hoursLeft: number

@@ -127,6 +127,11 @@ describe('開始の告知を積む（runStart）', () => {
     await runStart(env, START - 30 * M)
     const [post] = await unsentPosts(env.DB, 'x')
     expect(JSON.parse(post.payload as string).prev).toMatchObject({ id: 219 })
+    // 100位・1000位の終値が欠けた回は比べる相手にしない（本文が崩れる）
+    const holes = await setup({ table: { events: [TABLE.events[0], row(219, '欠けた回', 'memories', 102, { '50': 1 })] } })
+    await runStart(holes, START - 30 * M)
+    const [p3] = await unsentPosts(holes.DB, 'x')
+    expect(JSON.parse(p3.payload as string).prev).toMatchObject({ id: 200, name: '古いMemories' })
     const none = await setup({ table: { events: [] } })
     await runStart(none, START - 30 * M)
     const [p2] = await unsentPosts(none.DB, 'x')

@@ -77,7 +77,7 @@ export function startText(
     )
     return [head, '', ref, withSchedule && sched.length ? `${sched.join('、')}。` : null, `${site}/border/history`].filter((l): l is string => l != null).join('\n')
   }
-  // 入らなければ 予定の行 → 名前を縮める の順（ふつうは入る。222 で約 200）
+  // 入らなければ 予定の行 → 名前を縮める の順（ふつうは入る。222 は 242）
   for (const withSchedule of [true, false]) {
     const t = build(o.name, o.prev?.name ?? null, withSchedule)
     if (xWeight(t) <= START_TEXT_MAX_WEIGHT) return t
@@ -110,7 +110,16 @@ export async function runStart(env: Env, now: number): Promise<StartResult> {
   const stored = await kvGet(env.DB, 'finals')
   const table = stored ? parseHistory(JSON.parse(stored)) : []
   const prevRow = table
-    .filter((e) => e.type === meta.type && e.hours === meta.hours && e.id < ev.id && (e.type as HistoryType) !== 'world_bloom')
+    // 本文に出す 100位・1000位の終値がそろっている回だけ（欠けた回を「前回」にすると本文が崩れる。#173 レビュー L2）
+    .filter(
+      (e) =>
+        e.type === meta.type &&
+        e.hours === meta.hours &&
+        e.id < ev.id &&
+        (e.type as HistoryType) !== 'world_bloom' &&
+        typeof e.finals['100'] === 'number' &&
+        typeof e.finals['1000'] === 'number',
+    )
     .sort((a, b) => b.id - a.id)[0]
   const prev: StartPrev | null = prevRow ? { id: prevRow.id, name: prevRow.name, finals: prevRow.finals } : null
   const first = ev.eventType === 'marathon' ? firstPredictionAt(ev) : null
