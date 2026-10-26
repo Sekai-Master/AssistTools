@@ -190,6 +190,35 @@ describe('predict', () => {
     expect(predict(m, e198, 1000, 500, e198.startAt + 99 * H)?.extrapolatedFrom).toBeNull()
   })
 
+  it('標本1〜2件の長さ: 専用の表（thin:102）で割り、過去に無い長さと同じく帯を広げて確度は名乗らない', () => {
+    const thinShare = GRID.map((p) => Math.min(1, p * 0.8))
+    const thin = { duration: 102, samples: 1, latestEventId: 221, weight: 0.3 }
+    const m: Model = {
+      ...model,
+      knownDurations: [150, 222],
+      thinDurations: [thin],
+      ranks: {
+        '1000': {
+          ...model.ranks['1000'],
+          minProgress: 0.04,
+          tables: { '150': flat, '222': flat, all: flat, far_long: flat, far_short: flat, 'thin:102': thinShare },
+        },
+      },
+    }
+    const e102 = meta(14, 0, 102)
+    const p = predict(m, e102, 1000, 400, e102.startAt + 51 * H) // 経過 0.5
+    expect(p?.thin).toEqual(thin)
+    expect(p?.extrapolatedFrom).toBe(150)
+    expect(p?.predicted).toBeCloseTo(400 / 0.4, 0) // thin:102 の 0.5×0.8
+    // 帯は 1.5 倍: 上側 0.02 → 0.03、下側 −0.05 → −0.075
+    expect(p?.low).toBeCloseTo(1000 / 1.03, 0)
+    expect(p?.high).toBeCloseTo(1000 / 0.925, 0)
+    expect(p?.confidence).toBe('rough')
+    // 同じ長さの表がある 150h は thin を使わない
+    const e150 = meta(15, 0, 150)
+    expect(predict(m, e150, 1000, 500, e150.startAt + 75 * H)?.thin).toBeNull()
+  })
+
   it('下側の誤差が −1 に近い帯は、上限が負や無限大になるので幅も確度も出さない', () => {
     const broken: Model = {
       ...model,

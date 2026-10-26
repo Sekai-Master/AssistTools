@@ -147,8 +147,17 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
       {snap.predicted && snap.extrapolatedFrom != null && (
         <p className="mt-3 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-700">
           <b>この回の予測は参考値です。</b>
-          このイベントは {snap.event.durationHours} 時間で、過去に同じ長さの回がありません。
-          いちばん近い {snap.extrapolatedFrom} 時間の回の伸び方を借りて出しているので、大きく外れることがあります
+          {snap.thin ? (
+            <>
+              このイベントは {snap.event.durationHours} 時間で、過去に同じ長さの回が {snap.thin.samples} 回しかありません。
+              同じ長さの直近の回（第{snap.thin.latestEventId}回）の伸び方を{Math.round(snap.thin.weight * 10)}割、ほかの長さの回の伸び方を{10 - Math.round(snap.thin.weight * 10)}割で混ぜて出しているので、大きく外れることがあります
+            </>
+          ) : (
+            <>
+              このイベントは {snap.event.durationHours} 時間で、過去に同じ長さの回がありません。
+              いちばん近い {snap.extrapolatedFrom} 時間の回の伸び方を借りて出しているので、大きく外れることがあります
+            </>
+          )}
           （102 時間の回では、1000位の開始24時間の予測 約1,640万を、終了の数時間前に実測が上回りました）。
         </p>
       )}
