@@ -209,7 +209,9 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
     }
     const sameAllErrs = walk.evals.map((e) => e.errors.same_all)
     const tables: Record<string, (number | null)[]> = {}
-    for (const d of durations) tables[String(d)] = candidateTable(champion, d, history, rank, sameAllErrs)
+    // 「同じ長さ」の表は標本3件以上の長さだけ。1〜2件の長さに表を作ると Worker が完全一致として使い、
+    // 参考値の札（extrapolatedFrom）も帯の広げも外れる（221 の 102h が学習に入ると 222 が確度を名乗る。2026-10-26）
+    for (const d of knownDurations) tables[String(d)] = candidateTable(champion, d, history, rank, sameAllErrs)
     // 期間 -1 は「同じ期間」が無いので全マラソンへフォールバックする
     tables.all = candidateTable(champion, -1, history, rank, sameAllErrs)
     // 過去に無い長さ用: いちばん長い／短い期間（標本3件以上）の表。候補によらず「その期間の全履歴」で作る
