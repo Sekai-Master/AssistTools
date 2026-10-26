@@ -9,8 +9,9 @@ import type { Env } from './env.ts'
 import { runDaily } from './daily.ts'
 import { runFinals } from './finals.ts'
 import { runSpurt } from './spurt.ts'
+import { runStart } from './start.ts'
 
-/** 5分ごとの見回り: 終わった直後の回を歴代の表へ足す（finals.ts）と、21時の日報（daily.ts）、終了3時間前の追い込み（spurt.ts）。wrangler.jsonc の crons と同じ文字列 */
+/** 5分ごとの見回り: 終わった直後の回を歴代の表へ足す（finals.ts）と、21時の日報（daily.ts）、終了3時間前の追い込み（spurt.ts）、開始15分前の告知（start.ts）。wrangler.jsonc の crons と同じ文字列 */
 export const FINALS_CRON = '*/5 * * * *'
 
 export default {
@@ -43,6 +44,14 @@ export default {
             if (r.status === 'queued' || r.status === 'skip') console.log('spurt', JSON.stringify(r))
           },
           (err) => console.error('spurt failed', err),
+        ),
+      )
+      ctx.waitUntil(
+        runStart(env, now).then(
+          (r) => {
+            if (r.status === 'queued' || r.status === 'skip') console.log('start', JSON.stringify(r))
+          },
+          (err) => console.error('start failed', err),
         ),
       )
       return
