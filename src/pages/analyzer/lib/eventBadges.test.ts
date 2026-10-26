@@ -12,7 +12,7 @@ import { allocateMySekai, calculateUnitBasePt } from "./mySekai";
 /**
  * イベントバッジ換算（eventBadges.ts）の安全網。
  *
- * ★ ゲームのリザルトの実例（何Ptで何バッジか）との照合は 2026-10-26 時点で 2 件（5炊き・10炊き）。
+ * ★ ゲームのリザルトの実例（何Ptで何バッジか）との照合は 2026-10-26 時点で 3 件（5炊き・10炊き・1炊き）。
  *   末尾の「ゲーム内の実例との照合」がそれ。ほかは「式どおりに数えているか」を固めている。
  *   ワールドリンクの実例はまだ無い。
  */
@@ -105,6 +105,14 @@ describe("ゲーム内の実例との照合", () => {
     expect(badgesForPlay(32_970)).toBe(3_297);
     // rewardRate（30）側なら floor(32,970 × 30 / 35 / 10) = 2,826
     expect(badgesForPlay(32_970)).not.toBe(Math.floor((32_970 * 30) / 35 / 10));
+  });
+
+  it("1炊き・ソロの実機のリザルト（4,835 Pt・累計 64,180 → 483 バッジ。2026-10-26）と一致する＝累計から出さず1回ごとに切り捨てる", () => {
+    const total = 64_180;
+    const before = total - 4_835; // 59,345。一の位どうしの和が10になり、二つの式の答えが分かれる回
+    expect(badgesForPlay(4_835)).toBe(483);
+    // 累計から出していたなら floor(64,180 / 10) - floor(59,345 / 10) = 484
+    expect(badgesForPlay(4_835)).not.toBe(Math.floor(total / 10) - Math.floor(before / 10));
   });
   it("5炊き・ソロの実機のリザルト（4,655 Pt → 465 バッジ。2026-10-26）と一致する＝炊き倍率を掛けた後で切り捨てる", () => {
     expect(badgesForPlay(4_655)).toBe(465);
