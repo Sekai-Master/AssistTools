@@ -14113,5 +14113,24 @@
     "jacketLink": "jacket_s_824.webp",
     "music_time": 115.1,
     "event_rate": 111
+  },
+  {
+    "id": "825",
+    "title": "ディスコティックブルー",
+    "pronunciation": "でぃすこてぃっくぶるー",
+    "creatorArtistId": 203,
+    "artistName": "Rulmry.",
+    "default": 1170701,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1792994400000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_825.webp",
+    "music_time": 124.1,
+    "event_rate": 114
   }
 ]
