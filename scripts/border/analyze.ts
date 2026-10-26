@@ -321,7 +321,9 @@ async function main() {
   for (const r of summary.ranks) {
     const mae = r.medianAbsError.map((x) => `${x.p}:${x.value == null ? '-' : (x.value * 100).toFixed(1)}`).join(' ')
     const cov = r.coverage.map((x) => `${x.covered}/${x.total}`).join(' ')
-    say(`  - ${r.rank}位: 王者 ${r.champion}／表に出すのは経過 ${Math.round(r.minProgress * 100)}% から／|誤差|中央 ${mae}／帯の的中 ${cov}`)
+    const until = r.earlyBlend?.switchAt
+    const blend = until == null ? 'なし' : `経過 ${Math.round(until * 100)}% まで`
+    say(`  - ${r.rank}位: 王者 ${r.champion}／序盤の差し替え ${blend}／表に出すのは経過 ${Math.round(r.minProgress * 100)}% から／|誤差|中央 ${mae}／帯の的中 ${cov}`)
   }
   const put = await write<{ changed: boolean }>('PUT', '/admin/model', { model, summary })
   if (put) say(`- 版の切り替え: ${put.changed ? 'した' : '同じ版なので無し'}`)
