@@ -36,15 +36,16 @@ export interface DailyRank {
   pace: { pos: number; of: number } | null
 }
 
-type HistoryRowLite = [number, number, [number, number, ...unknown[]][]]
+export type HistoryRowLite = [number, number, [number, number, ...unknown[]][]]
 
-function nearest(rows: readonly HistoryRowLite[], t: number, tol: number): HistoryRowLite | null {
+/** t に最も近い推移の点（tol より離れていれば null）。追い込み（spurt.ts）も使う */
+export function nearest(rows: readonly HistoryRowLite[], t: number, tol: number): HistoryRowLite | null {
   let best: HistoryRowLite | null = null
   for (const r of rows) if (Math.abs(r[0] - t) <= tol && (!best || Math.abs(r[0] - t) < Math.abs(best[0] - t))) best = r
   return best
 }
 
-const valueIn = (row: HistoryRowLite | null, rank: number) => row?.[2].find((x) => x[0] === rank)?.[1] ?? null
+export const valueIn = (row: HistoryRowLite | null, rank: number) => row?.[2].find((x) => x[0] === rank)?.[1] ?? null
 
 /** 日報の各順位の数字（純粋関数）。fresh（開始から24時間たっていない日）は直近24時間を出さない */
 export function dailyRanks(snap: Snapshot, rows: readonly HistoryRowLite[], point: PacePoint | null, fresh: boolean): DailyRank[] {

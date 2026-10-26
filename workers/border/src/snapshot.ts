@@ -82,3 +82,13 @@ export type PostPayload =
       snapshot: Snapshot
       ranks: { rank: number; d24: number | null; h1: number | null; pace: { pos: number; of: number } | null }[]
     }
+  /**
+   * 終了前の追い込み（終了3時間前に1本。spurt.ts）。Bot が日報と同じ形の表で描く（sekaimaster-bot の dailyCard.ts）。
+   * snapshot は終了3時間前を過ぎた最初の値と予測。h3 は直近3時間（残りと同じ長さ）の伸び
+   */
+  | {
+      kind: 'spurt'
+      hoursLeft: number
+      snapshot: Snapshot
+      ranks: { rank: number; h1: number | null; h3: number | null }[]
+    }
