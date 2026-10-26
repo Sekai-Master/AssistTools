@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { BAND_TAILS, TARGET_COVERAGE, chooseTail, coverageOf, fnv1a } from '../src/fit.ts'
-import { CANDIDATES, GRID, type CandidateId, type EventEval } from '../src/model.ts'
+import { BAND_TAILS, TARGET_COVERAGE, chooseTail, coverageOf, fitModel, fnv1a } from '../src/fit.ts'
+import { CANDIDATES, GRID, RANKS, chooseTable, type CandidateId, type EventEval, type EventMeta, type Shape } from '../src/model.ts'
 
 /** 全格子で同じ誤差を持つ評価を並べる（王者は same_all） */
 function evalsFrom(errors: readonly number[]): EventEval[] {
@@ -55,5 +55,32 @@ describe('fnv1a', () => {
     expect(fnv1a('abc')).toMatch(/^[0-9a-f]{8}$/)
     expect(fnv1a('abc')).toBe(fnv1a('abc'))
     expect(fnv1a('abc')).not.toBe(fnv1a('abd'))
+  })
+})
+
+describe('fitModel の「同じ長さ」の表', () => {
+  const H = 3_600_000
+  /** 150h の回を8件、最後に 102h の回を1件（221 のような学習に1件しかない長さ） */
+  function fixture() {
+    const lengths = [150, 150, 150, 150, 150, 150, 150, 150, 102]
+    const events: EventMeta[] = lengths.map((h, i) => ({
+      id: 200 + i, name: `e${i}`, eventType: 'marathon', unit: 'none',
+      startAt: Date.UTC(2026, 0, 1) + i * 10 * 24 * H, aggregateAt: Date.UTC(2026, 0, 1) + i * 10 * 24 * H + h * H,
+    }))
+    const shapes: Shape[] = events.flatMap((e, i) =>
+      RANKS.map((rank) => ({ eventId: e.id, rank, final: 1e7 * (1 + i / 20), share: GRID.map((p) => p ** (1 + i / 50)) })),
+    )
+    return { events, shapes, now: events[events.length - 1].aggregateAt + 24 * H }
+  }
+
+  it('標本が3件未満の長さには表を作らず、Worker は過去に無い長さとして参考値にする', () => {
+    const { events, shapes, now } = fixture()
+    const { model } = fitModel(events, shapes, now)
+    expect(model.knownDurations).toEqual([150])
+    const rm = model.ranks['1000']
+    expect(rm.tables['150']).toBeDefined()
+    expect(rm.tables['102']).toBeUndefined()
+    expect(chooseTable(model, rm, 102)?.extrapolatedFrom).toBe(150)
+    expect(chooseTable(model, rm, 150)?.extrapolatedFrom).toBeNull()
   })
 })
