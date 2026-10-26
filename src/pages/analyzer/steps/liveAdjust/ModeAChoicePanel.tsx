@@ -15,6 +15,7 @@ import { RECOMMEND_LIMIT } from "../../lib/recommendPlans";
 const MODAL_MAX_CANDIDATES = 120;
 import { scoreBandBadge } from "../../lib/scoreBandBadge";
 import type { MultiLivePlan, MultiLiveUnit } from "../../lib/multiLiveAdjust";
+import { badgesForUnits, formatBadges, formatPlayBadges } from "../../lib/eventBadges";
 import {
   bulkUnitOf,
   fractionUnitOf,
@@ -82,7 +83,7 @@ function BulkFractionBody({ choice }: { choice: ModeAChoice }) {
           </span>
           <span className="font-mono text-xs tabular-nums text-slate-500">
             {bulk.liveBonus}炊き ・ スコア {bulk.minScore.toLocaleString()}〜{bulk.maxScore.toLocaleString()}
-            {" "}・ 1回 {bulk.pt.toLocaleString()} Pt
+            {" "}・ 1回 {bulk.pt.toLocaleString()} Pt ・ {formatPlayBadges(bulk.pt)}
           </span>
           {/* バルク行も実行難易度を出す（端数行と対称）。0炊きで中間帯を狙う行の
               「狙い撃ち」が隠れると、一番手加減が要る行の難しさが伝わらない。 */}
@@ -96,13 +97,14 @@ function BulkFractionBody({ choice }: { choice: ModeAChoice }) {
         </span>
         <span className="font-mono text-xs tabular-nums text-slate-500">
           {fraction.liveBonus}炊き ・ スコア {fraction.minScore.toLocaleString()}〜{fraction.maxScore.toLocaleString()}
-          {" "}・ {fraction.pt.toLocaleString()} Pt
+          {" "}・ {fraction.pt.toLocaleString()} Pt ・ {formatPlayBadges(fraction.pt)}
         </span>
         <ScoreBandTag band={scoreBandBadge(fraction)} />
       </div>
       <div className="border-t border-slate-200/60 pt-2 text-xs tabular-nums text-slate-500">
         合計{choice.liveCount}回 ・ LB合計{choice.lbCost}
         <LbCostNote lbCost={choice.lbCost} /> ・ {choice.totalPt.toLocaleString()} Pt
+        ・ {formatBadges(badgesForUnits(form.plan.units))}
       </div>
     </div>
   );
@@ -116,6 +118,7 @@ function MultiChoiceBody({ plan, kind }: { plan: MultiLivePlan; kind: ModeAChoic
         <span className="tabular-nums">
           全{plan.liveCount}回 ・ LB合計{plan.lbCost}
           <LbCostNote lbCost={plan.lbCost} /> ・ 合計 {plan.totalPt.toLocaleString()} Pt
+          ・ {formatBadges(badgesForUnits(plan.units))}
         </span>
         {kind === "keep" && <FormationUnchangedBadge />}
       </div>
@@ -127,7 +130,7 @@ function MultiChoiceBody({ plan, kind }: { plan: MultiLivePlan; kind: ModeAChoic
             </span>
             <span className="font-mono text-xs tabular-nums text-slate-500">
               {u.liveBonus}炊き ・ スコア {u.minScore.toLocaleString()}〜{u.maxScore.toLocaleString()}
-              {" "}× {u.count}回（1回 {u.pt.toLocaleString()} Pt）
+              {" "}× {u.count}回（1回 {u.pt.toLocaleString()} Pt・{formatPlayBadges(u.pt)}）
             </span>
             <ScoreBandTag band={scoreBandBadge(u)} />
           </li>

@@ -24,6 +24,7 @@ import type { MultiLivePlan } from "./multiLiveAdjust";
 import { ADJUST_LIVE_BONUSES, type AdjustmentPlan } from "./liveAdjust";
 import type { FinalRunPlan } from "./finalRun";
 import { calcLivePt } from "./calcLivePt";
+import { badgesForMySekai, badgesForPlay, badgesForUnits, formatBadges } from "./eventBadges";
 
 /** マイセカイ不使用モードで調整ライブに許すLB（0〜10）。calculator.ts の同名ローカルの鏡。 */
 const NO_MYSEKAI_LIVE_BONUSES: readonly number[] = Array.from(
@@ -134,6 +135,7 @@ function mySekaiRow(m: AdjustCanvasMySekai): PlanCanvasRow | undefined {
     label: "マイセカイ採取",
     sub: `木石 ${m.countA}・キラキラ ${m.countB}・草花 ${m.countC}`,
     percent: `+${m.totalPt.toLocaleString()} Pt`,
+    percentSub: formatBadges(badgesForMySekai(m.totalPt)),
     warn: false,
   };
 }
@@ -154,6 +156,7 @@ function multiRows(
       time: u.count > 1 ? `調整 ${u.count}回` : "調整",
       label: song ? `${song.title}（基礎点${u.basePoint}）` : `基礎点${u.basePoint}の曲（候補なし）`,
       percent: `+${(u.pt * u.count).toLocaleString()} Pt`,
+      percentSub: formatBadges(badgesForUnits([u])),
       warn: false,
       jacket: song?.jacketUrl,
       scoreBand: { min: u.minScore, max: u.maxScore },
@@ -171,6 +174,8 @@ function multiRows(
  */
 function sweepRow(step2: Extract<AdjustCanvasStep2, { kind: "sweep" }>): PlanCanvasRow {
   const { plan, requiredPt, song, current } = step2;
+  // sweep は1本で requiredPt を取り切るので、バッジもその1回ぶん。
+  const percentSub = formatBadges(badgesForPlay(requiredPt));
   if (plan) {
     // 種別「調整」＋曲名を上段に、焚き数は lb・目標ボーナスは bonusLabel に1回だけ
     // （旧実装は sub と bonusLabel の二重表示だった）。
@@ -178,6 +183,7 @@ function sweepRow(step2: Extract<AdjustCanvasStep2, { kind: "sweep" }>): PlanCan
       time: "調整",
       label: song ? song.title : "調整ライブ",
       percent: `+${requiredPt.toLocaleString()} Pt`,
+      percentSub,
       warn: false,
       jacket: song?.jacketUrl,
       scoreBand: { min: plan.minScore, max: plan.maxScore },
@@ -189,6 +195,7 @@ function sweepRow(step2: Extract<AdjustCanvasStep2, { kind: "sweep" }>): PlanCan
     time: "調整（編成そのまま）",
     label: song ? song.title : "調整ライブ",
     percent: `+${requiredPt.toLocaleString()} Pt`,
+    percentSub,
     warn: false,
     jacket: song?.jacketUrl,
     scoreBand: current?.scoreRange,
@@ -206,6 +213,7 @@ function step2Rows(step2: AdjustCanvasStep2 | undefined): PlanCanvasRow[] {
  * earn は目標スコア帯・焚き数・ボーナスを主役にする（他の Step2 行と統一）。
  */
 function finalRunRow(fr: AdjustCanvasFinalRun): PlanCanvasRow {
+  const percentSub = formatBadges(badgesForPlay(fr.pt));
   if (fr.kind === "scoreZero") {
     // 種別「ラストプレイ」＋曲名を上段に統一。「叩かない」は scoreText で下段先頭に
     // 置き、焚き数(lb)と横一列に揃える（他行とレイアウトを統一）。
@@ -213,6 +221,7 @@ function finalRunRow(fr: AdjustCanvasFinalRun): PlanCanvasRow {
       time: "ラストプレイ",
       label: fr.song ? `${fr.song.title}（基礎点${fr.basePoint}）` : `基礎点${fr.basePoint}の曲`,
       percent: `+${fr.pt.toLocaleString()} Pt`,
+      percentSub,
       warn: false,
       jacket: fr.song?.jacketUrl,
       scoreText: "叩かない（スコア0）",
@@ -226,6 +235,7 @@ function finalRunRow(fr: AdjustCanvasFinalRun): PlanCanvasRow {
     label: fr.song ? `${fr.song.title}（基礎点${fr.basePoint}）` : `基礎点${fr.basePoint}の曲`,
     sub: p ? (rest > 0 ? `（他${rest}案）` : undefined) : "条件を満たすプランが見つかりませんでした",
     percent: `+${fr.pt.toLocaleString()} Pt`,
+    percentSub,
     warn: !p,
     jacket: fr.song?.jacketUrl,
     scoreBand: p ? { min: p.minScore, max: p.maxScore } : undefined,
@@ -234,14 +244,23 @@ function finalRunRow(fr: AdjustCanvasFinalRun): PlanCanvasRow {
   };
 }
 
-/** 各ステップの (Pt, ライブ回数, LB) 寄与。スキップしたステップは 0。 */
-function contributions(
+/**
+ * 各ステップの (Pt, ライブ回数, LB, イベントバッジ) 寄与。スキップしたステップは 0。
+ * 画像のフッターと画面の合計表示（PlanExportPanel）が同じ数字を出すよう、両方がここを通る。
+ */
+export function adjustPlanContributions(
   mySekai: AdjustCanvasMySekai | undefined,
   step2: AdjustCanvasStep2 | undefined,
   finalRun: AdjustCanvasFinalRun | undefined
-): { totalPt: number; totalLives: number; totalLb: number } {
+): { totalPt: number; totalLives: number; totalLb: number; totalBadges: number } {
   const mySekaiPt = mySekai && mySekai.totalPt > 0 ? mySekai.totalPt : 0;
   const step2Pt = step2 ? (step2.kind === "multi" ? step2.plan.totalPt : step2.requiredPt) : 0;
+  // バッジは1回ごとに切り捨てるので、合計Ptから割り戻さずステップごとに数えて足す。
+  const step2Badges = step2
+    ? step2.kind === "multi"
+      ? badgesForUnits(step2.plan.units)
+      : badgesForPlay(step2.requiredPt)
+    : 0;
   const step2Lives = step2 ? (step2.kind === "multi" ? step2.plan.liveCount : 1) : 0;
   // sweep は plan（編成組み替え）か current（編成そのまま）のどちらかにLBがある。
   const step2Lb = step2
@@ -250,6 +269,8 @@ function contributions(
       : (step2.plan?.liveBonus ?? step2.current?.lb ?? 0)
     : 0;
   const finalPt = finalRun?.pt ?? 0;
+  const mySekaiBadges = badgesForMySekai(mySekaiPt);
+  const finalBadges = badgesForPlay(finalPt);
   const finalLb = finalRun
     ? finalRun.kind === "earn"
       ? finalRun.plan?.liveBonus ?? 0
@@ -260,6 +281,7 @@ function contributions(
     // マイセカイ採取はライブではないので回数に数えない。
     totalLives: step2Lives + (finalRun ? 1 : 0),
     totalLb: step2Lb + finalLb,
+    totalBadges: mySekaiBadges + step2Badges + finalBadges,
   };
 }
 
@@ -291,7 +313,7 @@ export function buildAdjustPlanCanvasData(args: {
   rows.push(...step2Rows(step2));
   if (finalRun) rows.push(finalRunRow(finalRun));
 
-  const { totalPt, totalLives, totalLb } = contributions(mySekai, step2, finalRun);
+  const { totalPt, totalLives, totalLb, totalBadges } = adjustPlanContributions(mySekai, step2, finalRun);
 
   return {
     heading: "ポイント調整プラン",
@@ -307,7 +329,8 @@ export function buildAdjustPlanCanvasData(args: {
     ],
     rows,
     summary: [
-      { label: "合計獲得", value: `${totalPt.toLocaleString()} Pt` },
+      // バッジは枠を増やさず合計Ptの下に添える（4枠にすると LB合計の値が枠からはみ出す）。
+      { label: "合計獲得", value: `${totalPt.toLocaleString()} Pt`, sub: `${formatBadges(totalBadges)}（目安）` },
       { label: "総ライブ回数", value: `${totalLives}回` },
       // 回復時間（約Nh）は削除（判断材料にならない）。クリスタル換算だけ残す。
       { label: "LB合計", value: `${totalLb}（クリスタル約${totalLb * CRYSTALS_PER_LIVE_BONUS}個）` },

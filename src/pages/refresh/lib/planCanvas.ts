@@ -25,6 +25,11 @@ export interface PlanCanvasRow {
   sub?: string;
   /** 終了時点のゲージ表示（"23.5%"） */
   percent: string;
+  /**
+   * 右カラムの値の下に小さく添える2行目（例「バッジ 473個」）。
+   * 無い行は従来どおり percent を縦中央に1行だけ描く（refresh・worktime の画像は1pxも変えない）。
+   */
+  percentSub?: string;
   /** 警告行（100%到達など）は赤で強調 */
   warn: boolean;
   /** プレイ行のジャケット画像URL（あれば行頭に描く） */
@@ -53,7 +58,8 @@ export interface PlanCanvasData {
   songTitle: string;
   meta: string[];
   rows: PlanCanvasRow[];
-  summary: { label: string; value: string }[];
+  /** sub はフッターの値の下に小さく添える行（例「バッジ 4,730個」）。無ければ従来どおり。 */
+  summary: { label: string; value: string; sub?: string }[];
   accent: string;
   /** 左上の小見出し（既定「リフレッシュゲージ 周回プラン」）。 */
   heading?: string;
@@ -222,7 +228,13 @@ export async function drawPlanCanvas(
     ctx.fillText(s.label, cx, fy + 20);
     ctx.fillStyle = textAccent(data);
     ctx.font = "bold 18px sans-serif";
-    ctx.fillText(s.value, cx, fy + 44);
+    // sub がある枠だけ値を少し持ち上げ、2行を枠の中に収める（無い枠は従来の位置のまま）。
+    ctx.fillText(s.value, cx, fy + (s.sub ? 40 : 44));
+    if (s.sub) {
+      ctx.fillStyle = MUTED;
+      ctx.font = "bold 12px sans-serif";
+      ctx.fillText(s.sub, cx, fy + 59);
+    }
   });
 
   ctx.textAlign = "right";
@@ -274,7 +286,21 @@ function drawNormalRow(
   ctx.textAlign = "right";
   ctx.fillStyle = r.warn ? WARN : textAccent(data);
   ctx.font = "bold 16px sans-serif";
-  ctx.fillText(r.percent, W - PAD - 4, cy);
+  ctx.fillText(r.percent, W - PAD - 4, cy - (r.percentSub ? 8 : 0));
+  if (r.percentSub) drawPercentSub(ctx, r, cy + 11);
+}
+
+/** 右カラムの2行目（percentSub）。値の右端に揃え、灰の小さめの太字で添える。 */
+function drawPercentSub(
+  ctx: CanvasRenderingContext2D,
+  r: PlanCanvasRow,
+  y: number,
+): void {
+  if (!r.percentSub) return;
+  ctx.textAlign = "right";
+  ctx.fillStyle = r.warn ? WARN : MUTED;
+  ctx.font = "bold 12px sans-serif";
+  ctx.fillText(r.percentSub, W - PAD - 4, y);
 }
 
 /**
@@ -319,7 +345,8 @@ function drawEmphasisRow(
   ctx.textAlign = "right";
   ctx.fillStyle = r.warn ? WARN : valueColor;
   ctx.font = "bold 18px sans-serif";
-  ctx.fillText(r.percent, W - PAD - 4, cy);
+  ctx.fillText(r.percent, W - PAD - 4, cy - (r.percentSub ? 9 : 0));
+  if (r.percentSub) drawPercentSub(ctx, r, cy + 13);
 
   // [中央 上段] 種別ラベル（灰・小）＋ 曲名（大）。曲名の位置は全行で統一。
   ctx.textAlign = "left";

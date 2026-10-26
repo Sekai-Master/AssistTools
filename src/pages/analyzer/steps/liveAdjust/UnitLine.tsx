@@ -2,6 +2,7 @@ import { NeuButton } from "../../../../components/ui/NeuButton";
 import { onJacketError } from "../../../../lib/img";
 import { scoreBandBadge } from "../../lib/scoreBandBadge";
 import type { MultiLiveUnit } from "../../lib/multiLiveAdjust";
+import { formatPlayBadges } from "../../lib/eventBadges";
 import { JACKET_BASE } from "../../assetPaths";
 import { FinishBadge, ScoreBandTag } from "./badges";
 import type { SuggestMusic } from "./types";
@@ -11,7 +12,7 @@ export function UnitLine({ u }: { u: MultiLiveUnit }) {
   return (
     <span className="font-mono tabular-nums">
       基礎点{u.basePoint} ・ {u.liveBonus}炊き ・ スコア {u.minScore.toLocaleString()}〜
-      {u.maxScore.toLocaleString()} × {u.count}回（1回 {u.pt.toLocaleString()} Pt）
+      {u.maxScore.toLocaleString()} × {u.count}回（1回 {u.pt.toLocaleString()} Pt・{formatPlayBadges(u.pt)}）
     </span>
   );
 }
@@ -68,7 +69,7 @@ export function AdoptedUnitLine({
         )}
         <span className="font-mono text-xs tabular-nums text-slate-500">
           {u.liveBonus}炊き ・ スコア {u.minScore.toLocaleString()}〜{u.maxScore.toLocaleString()}
-          {" "}× {u.count}回（1回 {u.pt.toLocaleString()} Pt）
+          {" "}× {u.count}回（1回 {u.pt.toLocaleString()} Pt・{formatPlayBadges(u.pt)}）
         </span>
         {isFinish ? <FinishBadge /> : <ScoreBandTag band={scoreBandBadge(u)} />}
         <NeuButton className="!px-2.5 !py-1 !text-[11px]" onClick={onPick}>
