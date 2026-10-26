@@ -16,7 +16,9 @@ import {
 import {
   CANDIDATES,
   GRID,
+  RANKS,
   candidateTable,
+  chooseTable,
   median,
   walkForward,
   type CandidateId,
@@ -197,7 +199,8 @@ describe('walkEarlyBlend', () => {
 
 describe('fitModel の序盤の差し替え', () => {
   // 開始からの時間で決まる伸び（1 − e^(−t/20h)）の回を、長さを変えて並べる。経過の割合でそろえると序盤がずれる
-  const DURATIONS = [150, 80, 220, 100, 190, 60, 250, 120, 170, 90, 210, 140, 70, 230, 110, 200, 130, 240, 160, 180, 85, 175, 95, 205, 115]
+  // 150h は3件（「同じ長さ」の表は標本3件以上の長さだけ作る）
+  const DURATIONS = [150, 80, 220, 100, 190, 60, 250, 120, 170, 90, 210, 140, 70, 230, 110, 200, 130, 240, 160, 180, 85, 150, 95, 150, 115]
   const byElapsed = (hours: number) => (p: number) => (1 - Math.exp((-p * hours) / 20)) / (1 - Math.exp(-hours / 20))
 
   function fitFrom(hist: readonly HistoryEvent[]) {
@@ -258,5 +261,32 @@ describe('fitModel の序盤の差し替え', () => {
     expect(rm.earlyBlendUntil).toBeUndefined()
     const base = candidateTable(rm.candidate, 150, hist, 1000)
     expect(rm.tables['150']).toEqual(base.map((v) => (v == null ? null : Math.round(v * 1e5) / 1e5)))
+  })
+})
+
+describe('fitModel の「同じ長さ」の表', () => {
+  const H = 3_600_000
+  /** 150h の回を8件、最後に 102h の回を1件（221 のような学習に1件しかない長さ） */
+  function fixture() {
+    const lengths = [150, 150, 150, 150, 150, 150, 150, 150, 102]
+    const events: EventMeta[] = lengths.map((h, i) => ({
+      id: 200 + i, name: `e${i}`, eventType: 'marathon', unit: 'none',
+      startAt: Date.UTC(2026, 0, 1) + i * 10 * 24 * H, aggregateAt: Date.UTC(2026, 0, 1) + i * 10 * 24 * H + h * H,
+    }))
+    const shapes: Shape[] = events.flatMap((e, i) =>
+      RANKS.map((rank) => ({ eventId: e.id, rank, final: 1e7 * (1 + i / 20), share: GRID.map((p) => p ** (1 + i / 50)) })),
+    )
+    return { events, shapes, now: events[events.length - 1].aggregateAt + 24 * H }
+  }
+
+  it('標本が3件未満の長さには表を作らず、Worker は過去に無い長さとして参考値にする', () => {
+    const { events, shapes, now } = fixture()
+    const { model } = fitModel(events, shapes, now)
+    expect(model.knownDurations).toEqual([150])
+    const rm = model.ranks['1000']
+    expect(rm.tables['150']).toBeDefined()
+    expect(rm.tables['102']).toBeUndefined()
+    expect(chooseTable(model, rm, 102)?.extrapolatedFrom).toBe(150)
+    expect(chooseTable(model, rm, 150)?.extrapolatedFrom).toBeNull()
   })
 })
