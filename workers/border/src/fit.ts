@@ -7,6 +7,8 @@
  *   3. 王者の誤差の実測分布から、経過率ごとの非対称な帯を作る。幅は「過去に実際8割以上入った中で
  *      いちばん狭い裾」を順位帯ごとに選ぶ（固定の10〜90%だと実際は73〜80%しか入らなかった。2026-09-30 実測）
  *   4. Worker が割り算1回で予測できる形（期間ごとのシェア表＋帯）に焼き込む
+ *   5. 序盤（経過率 20〜40% より前）は、伸び方を経過時間と残り時間でそろえて混ぜた表（blend）に差し替える。
+ *      差し替えるか・どこまで差し替えるかは順位ごとに前向き検証で選び、現行に勝てなければ差し替えない
  *
  * 人が方向の補正を足す枠は作らない（brain log 2026-09-02 §11.3）。偏りの補正は
  * 「補正つき候補」が前向き検証で勝ったときだけ自動で採用される。
@@ -16,12 +18,16 @@ import {
   CANDIDATES,
   GRID,
   MAX_ROUGH_WIDTH,
+  MIN_POOL,
+  PROMOTE_MARGIN,
   RANKS,
   SCORE_TO,
   bandSamplesAt,
   bandsFrom,
   candidateTable,
   durationHours,
+  errorsAgainst,
+  interpGrid,
   median,
   quantile,
   walkForward,
@@ -92,6 +98,8 @@ export interface RankSummary {
   coverageEarly: { p: number; covered: number; total: number }[]
   /** イベントごとの再現誤差（王者・代表の経過率） */
   replay: { eventId: number; champion: CandidateId; errors: { p: number; value: number | null }[] }[]
+  /** 序盤の差し替え（blend）の選択。この項目より前の版には無い */
+  earlyBlend?: EarlyBlendChoice
 }
 
 export interface ModelSummary {
@@ -170,6 +178,147 @@ export function chooseTail(
   return last as { tail: number; coverage: RankSummary['coverage'] }
 }
 
+// ---------------------------------------------------------------------------
+// 序盤の差し替え（blend）
+//
+// 長さの違う過去の回を経過の割合でそろえると、序盤の伸び方がずれる（221 = 102h で 150h の回の形を借りて大きく外した）。
+// そこで全マラソンを「開始からの経過時間」と「終了までの残り時間」の両方でそろえ、経過率 p で重みを付けて混ぜる:
+//   share(p) = (1 − p) × 中央値[経過時間でそろえた share] + p × 中央値[残り時間でそろえた share]
+// 実験（border-research/experiments/alignment-3.md、77回）では序盤（〜24%）は現行より当たり、50% 以降は現行が勝った。
+// そこで切り替え点より前だけを差し替える。221 の 1000位の外れ（4% で −37%）はどのそろえ方でも直らなかった
+// ---------------------------------------------------------------------------
+
+/** 切り替え点の候補（経過率）。この経過率より前を blend にする */
+export const BLEND_SWITCH_POINTS = [0.2, 0.3, 0.4] as const
+/** 差し替えの採点に使う経過率の範囲。表に出し始める時点から、いちばん遅い切り替え点の手前まで（どの候補も同じ範囲で比べる） */
+const BLEND_SCORE_FROM = MIN_VISIBLE_PROGRESS
+const BLEND_SCORE_TO = Math.max(...BLEND_SWITCH_POINTS)
+/** 比べる件数（直近）。序盤の誤差はばらつきが大きいので、王者を選ぶ 8 件より長く見る */
+export const BLEND_WINDOW = 20
+/** 採点できた回がこれより少ないうちは差し替えない */
+export const BLEND_MIN_EVENTS = 10
+
+/** 過去の形の、経過の割合 q でのシェア。0〜1 の外は null */
+function shareAtProgress(shape: Shape, q: number): number | null {
+  return q >= 0 && q <= 1 ? interpGrid(shape.share, q) : null
+}
+
+/**
+ * 長さ duration（時間）の回に当てる blend の表。history は対象の開始前に終わった回だけ（リーク防止は呼び出し側）。
+ * 期間を問わず全マラソンを使う。経過時間・残り時間のどちらかで MIN_POOL 件そろわない点は null（呼び出し側で現行の表に戻す）
+ */
+export function blendTable(duration: number, history: readonly HistoryEvent[], rank: number): (number | null)[] {
+  const pool = history.flatMap((h) => {
+    const shape = h.shapes.get(rank)
+    return shape ? [{ shape, ratio: duration / durationHours(h.meta) }] : []
+  })
+  return GRID.map((p) => {
+    const byElapsed: number[] = []
+    const byRemaining: number[] = []
+    for (const { shape, ratio } of pool) {
+      const a = shareAtProgress(shape, p * ratio)
+      if (a != null && a > 0) byElapsed.push(a)
+      const b = shareAtProgress(shape, 1 - (1 - p) * ratio)
+      if (b != null && b > 0) byRemaining.push(b)
+    }
+    if (byElapsed.length < MIN_POOL || byRemaining.length < MIN_POOL) return null
+    return (1 - p) * (median(byElapsed) as number) + p * (median(byRemaining) as number)
+  })
+}
+
+/**
+ * 前向き検証の各回（evals と同じ並び）について、blend で当てたときの誤差列。
+ * walkForward と同じく、対象の開始前に終わった回だけで表を作る
+ */
+export function blendErrors(history: readonly HistoryEvent[], rank: number, evals: readonly EventEval[]): (number | null)[][] {
+  const byId = new Map(history.map((h) => [h.meta.id, h]))
+  return evals.map((ev) => {
+    const target = byId.get(ev.eventId)
+    const shape = target?.shapes.get(rank)
+    if (!target || !shape) throw new Error(`前向き検証の回 ${ev.eventId} の ${rank}位の形が履歴に無い`)
+    const before = history.filter((h) => h.meta.aggregateAt < target.meta.startAt)
+    return errorsAgainst(shape, blendTable(ev.duration, before, rank))
+  })
+}
+
+/** 列 base の、経過率 switchAt より前を blend に差し替える（blend が null の点は base のまま）。表にも誤差列にも使う */
+export function earlyBlended(
+  base: readonly (number | null)[],
+  blend: readonly (number | null)[],
+  switchAt: number | null,
+): (number | null)[] {
+  if (switchAt == null) return [...base]
+  return base.map((v, i) => (GRID[i] < switchAt - 1e-9 ? (blend[i] ?? v) : v))
+}
+
+/** 1回の採点: 序盤（BLEND_SCORE_FROM〜BLEND_SCORE_TO の手前）の |誤差| の中央値 */
+function earlyScore(errs: readonly (number | null)[]): number | null {
+  const xs: number[] = []
+  GRID.forEach((p, i) => {
+    const e = errs[i]
+    if (p >= BLEND_SCORE_FROM - 1e-9 && p < BLEND_SCORE_TO - 1e-9 && e != null) xs.push(Math.abs(e))
+  })
+  return xs.length >= 5 ? median(xs) : null
+}
+
+export interface EarlyBlendChoice {
+  /** この経過率より前を blend にする。null なら差し替えない（現行のまま） */
+  switchAt: number | null
+  /** 切り替え点の候補ごとの、直近 BLEND_WINDOW 件の平均スコア（序盤の |誤差| の中央値の平均）。switchAt: null が現行 */
+  scores: { switchAt: number | null; score: number | null }[]
+  /** 平均に入った回の数 */
+  scoredEvents: number
+}
+
+const SWITCH_OPTIONS: readonly (number | null)[] = [null, ...BLEND_SWITCH_POINTS]
+
+/** 直近 BLEND_WINDOW 件で、切り替え点の候補ごとの平均スコア。現行は各回でその時点の王者が出していた誤差 */
+function switchScores(evals: readonly EventEval[], blend: readonly (number | null)[][]): Omit<EarlyBlendChoice, 'switchAt'> {
+  const from = Math.max(0, evals.length - BLEND_WINDOW)
+  const sums = SWITCH_OPTIONS.map(() => 0)
+  let scoredEvents = 0
+  for (let i = from; i < evals.length; i++) {
+    const current = evals[i].errors[evals[i].champion]
+    const scores = SWITCH_OPTIONS.map((s) => earlyScore(earlyBlended(current, blend[i], s)))
+    // どの候補も同じ回の集まりで比べる（blend が null の点は現行に戻るので、現行が採点できればどれも採点できる）
+    if (scores.some((v) => v == null)) continue
+    scores.forEach((v, k) => (sums[k] += v as number))
+    scoredEvents++
+  }
+  return {
+    scores: SWITCH_OPTIONS.map((s, k) => ({ switchAt: s, score: scoredEvents > 0 ? round5(sums[k] / scoredEvents) : null })),
+    scoredEvents,
+  }
+}
+
+/** いまの切り替え点 current より PROMOTE_MARGIN（5%）以上良い候補があれば入れ替える。王者の入れ替えと同じヒステリシス */
+function pickSwitch(current: number | null, evals: readonly EventEval[], blend: readonly (number | null)[][]): EarlyBlendChoice {
+  const { scores, scoredEvents } = switchScores(evals, blend)
+  if (scoredEvents < BLEND_MIN_EVENTS) return { switchAt: current, scores, scoredEvents }
+  const scoreOf = (s: number | null) => scores.find((x) => x.switchAt === s)?.score ?? Infinity
+  let best = current
+  for (const s of SWITCH_OPTIONS) if (scoreOf(s) < scoreOf(best)) best = s
+  const switchAt = best !== current && scoreOf(best) < scoreOf(current) * PROMOTE_MARGIN ? best : current
+  return { switchAt, scores, scoredEvents }
+}
+
+/**
+ * 切り替え点の前向き検証。各回を「その回より前の回だけで選んだ切り替え点」で当て（atTime）、最後に次の回に使う切り替え点を返す。
+ * 最初は差し替えなし（現行）から始める
+ */
+export function walkEarlyBlend(
+  evals: readonly EventEval[],
+  blend: readonly (number | null)[][],
+): EarlyBlendChoice & { atTime: (number | null)[] } {
+  let choice: EarlyBlendChoice = { switchAt: null, ...switchScores([], []) }
+  const atTime: (number | null)[] = []
+  for (let i = 0; i < evals.length; i++) {
+    atTime.push(choice.switchAt)
+    choice = pickSwitch(choice.switchAt, evals.slice(0, i + 1), blend.slice(0, i + 1))
+  }
+  return { ...choice, atTime }
+}
+
 function historyFrom(events: readonly EventMeta[], shapes: readonly Shape[], now: number): HistoryEvent[] {
   const byEvent = new Map<number, Map<number, Shape>>()
   for (const s of shapes) {
@@ -198,18 +347,37 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
   for (const rank of RANKS) {
     const walk = walkForward(history, rank)
     const champion = walk.champion
+    const blendErrs = blendErrors(history, rank, walk.evals)
+    const early = walkEarlyBlend(walk.evals, blendErrs)
+    const switchAt = early.switchAt
+    // 序盤を差し替えた後の誤差で、帯・当たり率・誤差の要約を作る。差し替えるのは切り替え点より前だけで、王者の採点（経過率 0.40〜）には触れない。
+    //   served … 各回を「その回の時点で選んでいた切り替え点」で差し替えた誤差。当たり率・誤差の要約・裾の選択に使う（前向きのまま）
+    //   latest … 全回を最後に選んだ切り替え点で差し替えた誤差。これから出す予測の帯の分位点に使う（出す予測と同じ作り方の誤差の分布）
+    const blended = (at: (i: number) => number | null): EventEval[] =>
+      walk.evals.map((ev, i) => ({
+        ...ev,
+        errors: Object.fromEntries(CANDIDATES.map((c) => [c, earlyBlended(ev.errors[c], blendErrs[i], at(i))])) as EventEval['errors'],
+      }))
+    const served = blended((i) => early.atTime[i])
+    const latest = blended(() => switchAt)
     // 帯の裾は序盤と中盤以降で別々に選び、境目（EARLY_UNTIL）でつなぐ
-    const calibrated = chooseTail(walk.evals)
-    const calibratedEarly = chooseTail(walk.evals, EARLY_CHECKPOINTS)
-    const bandMain = bandsFrom(walk.evals, champion, calibrated.tail)
-    const bandEarly = bandsFrom(walk.evals, champion, calibratedEarly.tail)
+    const calibrated = chooseTail(served)
+    const calibratedEarly = chooseTail(served, EARLY_CHECKPOINTS)
+    const bandMain = bandsFrom(latest, champion, calibrated.tail)
+    const bandEarly = bandsFrom(latest, champion, calibratedEarly.tail)
     const band = {
       lo: GRID.map((p, i) => (p < EARLY_UNTIL - 1e-9 ? bandEarly.lo[i] : bandMain.lo[i])),
       hi: GRID.map((p, i) => (p < EARLY_UNTIL - 1e-9 ? bandEarly.hi[i] : bandMain.hi[i])),
     }
     const sameAllErrs = walk.evals.map((e) => e.errors.same_all)
     const tables: Record<string, (number | null)[]> = {}
-    for (const d of durations) tables[String(d)] = candidateTable(champion, d, history, rank, sameAllErrs)
+    // 「同じ長さ」の表は標本3件以上の長さだけ。1〜2件の長さに表を作ると Worker が完全一致として使い、
+    // 参考値の札（extrapolatedFrom）も帯の広げも外れる（221 の 102h が学習に入ると 222 が確度を名乗る。2026-10-26）
+    for (const d of knownDurations) {
+      const base = candidateTable(champion, d, history, rank, sameAllErrs)
+      tables[String(d)] = switchAt == null ? base : earlyBlended(base, blendTable(d, history, rank), switchAt)
+    }
+    // 以下の all・far_long・far_short（学習に無い長さ用）は、当てる回の長さがわからないので blend に差し替えない
     // 期間 -1 は「同じ期間」が無いので全マラソンへフォールバックする
     tables.all = candidateTable(champion, -1, history, rank, sameAllErrs)
     // 過去に無い長さ用: いちばん長い／短い期間（標本3件以上）の表。候補によらず「その期間の全履歴」で作る
@@ -224,9 +392,10 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
       minProgress,
       tables: Object.fromEntries(Object.entries(tables).map(([d, t]) => [d, t.map(round5)])),
       band: { lo: band.lo.map(round5), hi: band.hi.map(round5) },
+      ...(switchAt == null ? {} : { earlyBlendUntil: switchAt }),
     }
 
-    const recent = walk.evals.slice(-20)
+    const recent = served.slice(-20)
     rankSummaries.push({
       rank,
       champion,
@@ -247,11 +416,12 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
       bandEarly: EARLY_CHECKPOINTS.map((p) => ({ p, lo: at(band.lo, p), hi: at(band.hi, p) })),
       bandTailEarly: calibratedEarly.tail,
       coverageEarly: calibratedEarly.coverage,
-      replay: walk.evals.slice(-12).map((e) => ({
+      replay: served.slice(-12).map((e) => ({
         eventId: e.eventId,
         champion: e.champion,
         errors: CHECKPOINTS.map((p) => ({ p, value: at(e.errors[e.champion], p) })),
       })),
+      earlyBlend: { switchAt, scores: early.scores, scoredEvents: early.scoredEvents },
     })
   }
 
