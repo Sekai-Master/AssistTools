@@ -63,6 +63,8 @@ sekaimaster-bot（NAS）──▶ /admin/posts?unsent=… ──▶ X / Discord 
 ### 2.1.1 投稿の節目
 
 開始24時間（序盤の目安）・経過50%・経過85% の3回と、終了後の答え合わせ。節目を経過率で 0.05 以上過ぎてから気づいた回（途中から動き出した等）は、その節目のポストを出さない。ポストには画像を作るためのデータ（`PostPayload`、D1 の kv に `post:{id}`）を添える。画像は sekaimaster-bot が作り、文字だけの `text` は画像の代替テキストと、画像が作れなかったときの控えに使う。
+
+答え合わせの後に積む一言解説（`<回>:insight`、`scripts/claude/border-insight-run.ts`）には `{ kind: 'insight', eventId, replyTo: '<回>:result' }` を添える（2026-10-26）。Bot はこれを見て、補足を答え合わせへの返信（X のツリー・Discord の返信）にし、推移のグラフ（`/api/border/events/{id}/history` から描く 6:5 の1枚）を付ける。返信先の投稿 ID は Bot が自分の DB に覚えるので、Worker は変わらない。古い Bot は知らない kind を文字だけ・単独で送り、新しい Bot は payload の無い insight も返信として扱うので、どちらを先に入れても壊れない。詳細は sekaimaster-bot の `docs/border-relay.md`。
 6. 版の名前は `share-median-v1@e{学習に入れた最後のイベント}-{表の中身のハッシュ}`。学習データが同じでもロジックを直せば別の版になって切り替わる。予測ログに版を必ず残す
 
 **人が方向の補正を足す枠は作らない**（215 で人の下方修正が精度を下げた。brain log §11.2②）。補正は「補正つき候補」が前向き検証で勝ったときだけ自動で入る。

@@ -103,6 +103,20 @@ export function insightPost(eventName: string, insight: string): string | null {
   return null
 }
 
+/**
+ * 一言解説の投稿に添えるデータ。Bot（sekaimaster-bot の src/border/thread.ts）は、これを見て
+ * その回の答え合わせ（`<回>:result`）への返信にし、推移のグラフ（trendCard.ts）を1枚付ける（2026-10-26 Nori「ツリーに」）。
+ * 古い Bot は知らない kind を文字だけ・単独で送るので、Bot とどちらを先に入れても壊れない
+ */
+export interface InsightPayload {
+  kind: 'insight'
+  eventId: number
+  /** 返信先の投稿キューの id */
+  replyTo: string
+}
+
+export const insightPayload = (eventId: number): InsightPayload => ({ kind: 'insight', eventId, replyTo: `${eventId}:result` })
+
 export const PROPOSAL_SYSTEM = `あなたはプロセカのイベントのボーダー予測モデルの研究係です。
 
 いまのモデル: 終値予測 = 現在の実測ボーダー ÷ シェア表(期間, 順位帯, 経過率)。シェアは「過去のイベントで、その経過率の時点に終値の何割まで積み上がっていたか」の中央値。候補モデルは前向き検証（その時点までのデータだけで作ったモデルで後のイベントを当てる）で採点し、王者より 5% 以上良いときだけ入れ替える。8割の幅は王者の直近の誤差の分位点。
