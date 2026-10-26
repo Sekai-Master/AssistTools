@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { xWeight } from '../../workers/border/src/posts.ts'
 import type { Report } from '../border/report.ts'
-import { checkInsight, insightPost, insightUser, reportFacts } from './insight.ts'
+import { checkInsight, insightPayload, insightPost, insightUser, reportFacts } from './insight.ts'
 import { sanitizeForIssue } from './diagnose.ts'
 import {
   CHANGELOG_URL,
@@ -273,5 +273,9 @@ describe('一言解説', () => {
     expect(xWeight(long ?? '')).toBeLessThanOrEqual(X_BUDGET)
     // 外しても収まらなければ積まない
     expect(insightPost('あ'.repeat(40), 'い'.repeat(120))).toBeNull()
+  })
+
+  it('投稿に添えるデータは、その回の答え合わせへの返信の印（Bot の client.ts の形）', () => {
+    expect(insightPayload(222)).toEqual({ kind: 'insight', eventId: 222, replyTo: '222:result' })
   })
 })

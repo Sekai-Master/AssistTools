@@ -3,7 +3,7 @@
  *
  * - ANTHROPIC_API_KEY が無ければ何もしない
  * - ここでの失敗は解析ジョブ全体を落とさない（呼ぶ側で受け止めてログに出すだけ）
- * - ③ は答え合わせの投稿を積んだイベントにだけ（終了から3日以内）。Discord と X の両方へ
+ * - ③ は答え合わせの投稿を積んだイベントにだけ（終了から3日以内）。Discord と X の両方へ。答え合わせへの返信（ツリー）として出る（payload の replyTo）
  * - ④ は GitHub の Issue（ラベル model-proposal）。GH_TOKEN・GITHUB_REPOSITORY が要る
  */
 import type { ModelSummary } from '../../workers/border/src/fit.ts'
@@ -11,14 +11,14 @@ import type { Report } from '../border/report.ts'
 import { askClaude, hasKey, MODEL } from './client.ts'
 import { sanitizeForIssue } from './diagnose.ts'
 import { upsertIssue } from './github.ts'
-import { INSIGHT_SYSTEM, PROPOSAL_SYSTEM, checkInsight, insightPost, insightUser, proposalUser } from './insight.ts'
+import { INSIGHT_SYSTEM, PROPOSAL_SYSTEM, checkInsight, insightPayload, insightPost, insightUser, proposalUser, type InsightPayload } from './insight.ts'
 
 export interface InsightDeps {
   report: Report
   summary: ModelSummary
   /** 答え合わせの投稿を積んだか（積んでいなければ一言解説も積まない） */
   posted: boolean
-  queue: (post: { id: string; eventId: number; kind: string; text: string }) => Promise<unknown>
+  queue: (post: { id: string; eventId: number; kind: string; text: string; payload?: InsightPayload }) => Promise<unknown>
   say: (line: string) => void
 }
 
@@ -34,7 +34,8 @@ export async function addInsights(d: InsightDeps): Promise<void> {
     const bad = checkInsight(text, facts)
     const post = bad ? null : insightPost(report.name, text)
     if (post) {
-      await d.queue({ id: `${report.eventId}:insight`, eventId: report.eventId, kind: 'insight', text: post })
+      // 答え合わせへの返信（ツリー）にし、推移のグラフを付ける印（Bot が読む）
+      await d.queue({ id: `${report.eventId}:insight`, eventId: report.eventId, kind: 'insight', text: post, payload: insightPayload(report.eventId) })
       d.say(`- 一言解説: 積んだ（${[...text].length}字）`)
     } else {
       // 弾いた文も残す（221 は文が残らず、何の数で弾かれたか推測するしかなかった）
