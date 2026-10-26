@@ -29,11 +29,18 @@ const LIST = [
 const FULL = JSON.stringify(LIST, null, 2)
 const tailOf = (s: string, n = MASTER_TAIL_BYTES) => Buffer.from(s).subarray(-n).toString('utf8')
 
-function fetcherOf(body: string, status = 206) {
-  const calls: { url: string; range: string | null }[] = []
+/** 末尾の切れ端に付く Content-Range（本物と同じ形） */
+const rangeOf = (body: string, total = Buffer.byteLength(FULL)) => {
+  const n = Buffer.byteLength(body)
+  return `bytes ${total - n}-${total - 1}/${total}`
+}
+
+function fetcherOf(body: string, status = 206, headers: Record<string, string> = status === 206 ? { 'Content-Range': rangeOf(body) } : {}) {
+  const calls: { url: string; range: string | null; encoding: string | null }[] = []
   let cancelled = false
   const f = (async (url: string | URL | Request, init?: RequestInit) => {
-    calls.push({ url: String(url), range: new Headers(init?.headers).get('Range') })
+    const h = new Headers(init?.headers)
+    calls.push({ url: String(url), range: h.get('Range'), encoding: h.get('Accept-Encoding') })
     const stream = new ReadableStream({
       start(c) {
         c.enqueue(new TextEncoder().encode(body))
@@ -43,7 +50,7 @@ function fetcherOf(body: string, status = 206) {
         cancelled = true
       },
     })
-    return new Response(stream, { status })
+    return new Response(stream, { status, headers })
   }) as typeof fetch
   return { f, calls, cancelled: () => cancelled }
 }
@@ -78,7 +85,8 @@ describe('マスタの末尾を events に入れる（runMasterTail）', () => {
     const env = await envOf()
     const net = fetcherOf(tailOf(FULL))
     const r = await runMasterTail(env, NOW, net.f)
-    expect(net.calls).toEqual([{ url: MASTER_EVENTS_URL, range: `bytes=-${MASTER_TAIL_BYTES}` }])
+    // 圧縮させない（圧縮後の切れ端は解凍できない）
+    expect(net.calls).toEqual([{ url: MASTER_EVENTS_URL, range: `bytes=-${MASTER_TAIL_BYTES}`, encoding: 'identity' }])
     // 3日より前に終わった回（200〜219）は parseSchedule が入れない
     expect(r).toEqual({ status: 'checked', events: 2, changed: 2, ids: [222, 223] })
     expect(await ids(env)).toEqual([222, 223])
@@ -119,8 +127,45 @@ describe('マスタの末尾を events に入れる（runMasterTail）', () => {
     }
   })
 
-  it('頼んだより大きく返ってきたら（206 でも）読まない', async () => {
+  it('206 でも、圧縮の切れ端・末尾でない範囲・頼んだより長い範囲・範囲の書かれていない応答は、本文を読まずに捨てる', async () => {
+    const tail = tailOf(FULL)
+    const total = Buffer.byteLength(FULL)
+    for (const [name, headers] of [
+      ['圧縮', { 'Content-Range': rangeOf(tail), 'Content-Encoding': 'gzip' }],
+      ['末尾でない', { 'Content-Range': `bytes 0-65535/${total}` }],
+      ['長すぎる', { 'Content-Range': `bytes ${total - 3 * MASTER_TAIL_BYTES}-${total - 1}/${total}` }],
+      ['範囲なし', {}],
+    ] as const) {
+      const env = await envOf()
+      const net = fetcherOf(tail, 206, headers)
+      expect(await runMasterTail(env, NOW, net.f), name).toMatchObject({ status: 'skip' })
+      expect(net.cancelled(), name).toBe(true)
+      expect(await ids(env), name).toEqual([])
+    }
+  })
+
+  it('本文を読み切れない（途中で切れた接続）ときも、例外にせず何も書かない', async () => {
     const env = await envOf()
-    expect(await runMasterTail(env, NOW, fetcherOf(tailOf(FULL, MASTER_TAIL_BYTES * 3)).f)).toMatchObject({ status: 'skip', reason: expect.stringContaining('大きすぎる') })
+    const f = (async () =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            c.error(new Error('connection reset'))
+          },
+        }),
+        { status: 206, headers: { 'Content-Range': rangeOf(tailOf(FULL)) } },
+      )) as unknown as typeof fetch
+    expect(await runMasterTail(env, NOW, f)).toMatchObject({ status: 'skip', reason: expect.stringContaining('読み切れなかった') })
+    expect(await ids(env)).toEqual([])
+  })
+
+  it('切れ端の先頭でマルチバイトの字が割れていても読める（割れるのは捨てる側の要素）', async () => {
+    const buf = Buffer.from(FULL)
+    // 219（222 の一つ前の要素）の名前の「イ」（3バイト）の2バイト目から始まる切れ端
+    const at = buf.indexOf(Buffer.from('"name": "イベント219"')) + Buffer.byteLength('"name": "') + 1
+    const tail = buf.subarray(at).toString('utf8')
+    expect(tail.startsWith('\uFFFD')).toBe(true)
+    const env = await envOf()
+    expect(await runMasterTail(env, NOW, fetcherOf(tail).f)).toMatchObject({ status: 'checked', ids: [222, 223] })
   })
 })

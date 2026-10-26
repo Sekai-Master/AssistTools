@@ -8,7 +8,9 @@
  * - events.json は全体 2.9MB（1件約13KB の報酬の表を含む）。全部を parse すると CPU 10ms を超えうるので、**Range で末尾 64KB だけ**取る
  *   （新しい回は id 順で末尾に足される。raw.githubusercontent.com は 206 で答える。2026-10-26 確認）
  * - 末尾の切れ目は「行頭2文字の空白＋{」（配列の要素の始まり。マスタは2文字の字下げで整形されている）。そこから後ろを [ ] でくるんで parse する
- * - **206 でない（Range が効かずに全体が返る）・切れ目が見つからない・JSON が壊れている／途中で切れている** ときは何もしない（本文は読まない／書かない）
+ * - **圧縮させない**（Accept-Encoding: identity）。圧縮された応答に Range が掛かると、圧縮後の末尾の切れ端が返って解凍できない（#175 レビュー H-1）
+ * - **206 でない（Range が効かずに全体が返る）・圧縮されている・末尾でない範囲・大きすぎる** ときは本文を読まずに捨てる。
+ *   切れ目が見つからない・JSON が壊れている／途中で切れている・本文を読み切れない ときも何もしない（書かない）
  * - 入れるのは解析ジョブの PUT /admin/events と同じ形（collect.ts の parseSchedule で検証）。upsertEvents は値の変わらない行を書かないので、
  *   ふだん（新しい回が無い）は D1 の書き込みは 0 行
  */
@@ -68,6 +70,20 @@ export function toScheduleRows(list: readonly unknown[]): Record<string, unknown
   }))
 }
 
+/** 本文を読む前に応答を確かめる。読んでよければ null、だめならその理由 */
+export function tailRefusal(res: Response): string | null {
+  if (res.status !== 206) return `マスタが ${res.status} を返した（末尾だけを返す 206 でない）`
+  const enc = res.headers.get('Content-Encoding')
+  if (enc && enc !== 'identity') return `圧縮された切れ端が返った（${enc}）`
+  // Content-Range: bytes 2848300-2913835/2913836 の形で、ファイルの末尾まで・頼んだ長さ以内であること
+  const m = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(res.headers.get('Content-Range') ?? '')
+  if (!m) return '範囲（Content-Range）が無い・読めない'
+  const [from, to, total] = [Number(m[1]), Number(m[2]), Number(m[3])]
+  if (to + 1 !== total) return `末尾でない範囲が返った（${from}-${to}/${total}）`
+  if (to - from + 1 > MASTER_TAIL_BYTES) return `頼んだより長い範囲が返った（${to - from + 1} バイト）`
+  return null
+}
+
 export async function runMasterTail(env: Env, now: number, fetcher: Fetcher = fetch): Promise<MasterTailResult> {
   // 1時間に1回（毎時 0〜4分の見回り）。ふだんの回はここで終わる（D1 も読まない）
   if (new Date(now).getUTCMinutes() >= RUN_MINUTES) return { status: 'idle' }
@@ -76,17 +92,25 @@ export async function runMasterTail(env: Env, now: number, fetcher: Fetcher = fe
 
   let res: Response
   try {
-    res = await fetcher(MASTER_EVENTS_URL, { headers: { Range: `bytes=-${MASTER_TAIL_BYTES}`, 'User-Agent': 'sekaimaster-border/1.0 (+https://sekaimaster.pages.dev)' } })
+    res = await fetcher(MASTER_EVENTS_URL, {
+      headers: { Range: `bytes=-${MASTER_TAIL_BYTES}`, 'Accept-Encoding': 'identity', 'User-Agent': 'sekaimaster-border/1.0 (+https://sekaimaster.pages.dev)' },
+    })
   } catch (err) {
     return { status: 'skip', reason: `マスタを読めなかった（${err instanceof Error ? err.message : String(err)}）` }
   }
-  if (res.status !== 206) {
-    // Range が効かずに全体（2.9MB）が返ってきたら、本文は読まずに捨てる（CPU の枠を守る）
+  const refuse = tailRefusal(res)
+  if (refuse) {
+    // 全体（2.9MB）・圧縮の切れ端・範囲の違う応答は、本文を読まずに捨てる（CPU の枠を守る）
     await res.body?.cancel().catch(() => undefined)
-    return { status: 'skip', reason: `マスタが ${res.status} を返した（末尾だけを返す 206 でない）` }
+    return { status: 'skip', reason: refuse }
   }
-  const text = await res.text()
-  // 頼んだより大きく返ってきたら読まない（Range の扱いが変わったなど）
+  let text: string
+  try {
+    text = await res.text()
+  } catch (err) {
+    return { status: 'skip', reason: `末尾を読み切れなかった（${err instanceof Error ? err.message : String(err)}）` }
+  }
+  // 頼んだより大きく返ってきたら読まない（Content-Length が無い応答の守り）
   if (text.length > MASTER_TAIL_BYTES * 2) return { status: 'skip', reason: `末尾が大きすぎる（${text.length} 文字）` }
   const list = parseMasterTail(text)
   if (!list) return { status: 'skip', reason: '末尾を JSON として読めなかった（切れ目が無い・壊れている・途中で切れている）' }
