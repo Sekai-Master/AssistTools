@@ -44,6 +44,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+          # ランナーに入っている 22 系は古いことがある（2026-10-25 時点で 22.23.3）。Brotli の修正（22.23.4）を確実に使うため最新を取る
+          check-latest: true
 
       - name: Analyze
         env:
