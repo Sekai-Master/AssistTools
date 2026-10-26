@@ -276,7 +276,8 @@ export function BorderCharts({
       {xEnd < endAt && (
         <p className="mt-1 text-[11px] text-slate-500">横軸は開始から最新の少し先まで（時間が経つと終了の {formatJst(endAt)} まで広がります）</p>
       )}
-      <div className="mt-3 grid gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+      {/* PC でも2列まで（ページの幅は 768px。3列だと1枚 215px で横軸の日付が間引かれる。2026-10-26 Nori） */}
+      <div className="mt-3 grid gap-x-6 gap-y-5 sm:grid-cols-2">
         {series.map(([rank, pts]) => (
           <RankChart key={rank} rank={rank} points={pts} startAt={startAt} endAt={xEnd} />
         ))}
