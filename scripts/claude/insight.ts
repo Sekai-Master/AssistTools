@@ -106,6 +106,7 @@ export function insightPost(eventName: string, insight: string): string | null {
 export const PROPOSAL_SYSTEM = `あなたはプロセカのイベントのボーダー予測モデルの研究係です。
 
 いまのモデル: 終値予測 = 現在の実測ボーダー ÷ シェア表(期間, 順位帯, 経過率)。シェアは「過去のイベントで、その経過率の時点に終値の何割まで積み上がっていたか」の中央値。候補モデルは前向き検証（その時点までのデータだけで作ったモデルで後のイベントを当てる）で採点し、王者より 5% 以上良いときだけ入れ替える。8割の幅は王者の直近の誤差の分位点。
+序盤（経過 20〜40% より前）は、過去の回を開始からの経過時間と終了までの残り時間でそろえて混ぜた表（blend）に差し替えることがある。差し替えるか・どこまでかは順位ごとに前向き検証で選ぶ（採用済み。要約の「序盤の差し替え」）。
 これまでに試して不採用: 属性で分ける・開始曜日で分ける（どちらも前向き検証で悪化）。
 
 終わったイベントの答え合わせと、いまのモデルの要約を渡すので、次の見出しで日本語の Markdown を書いてください。
@@ -121,7 +122,9 @@ export const PROPOSAL_SYSTEM = `あなたはプロセカのイベントのボー
 export function proposalUser(r: Report, summary: ModelSummary): string {
   const ranks = summary.ranks.map((x) => {
     const cov = x.coverage.map((c) => `${c.covered}/${c.total}`).join(' ')
-    return `- ${x.rank}位: 王者 ${x.champion}／表に出すのは経過 ${Math.round(x.minProgress * 100)}% から／帯の的中 ${cov}`
+    const until = x.earlyBlend?.switchAt
+    const blend = until == null ? 'なし' : `経過 ${Math.round(until * 100)}% まで`
+    return `- ${x.rank}位: 王者 ${x.champion}／序盤の差し替え ${blend}／表に出すのは経過 ${Math.round(x.minProgress * 100)}% から／帯の的中 ${cov}`
   })
   return [
     `イベント: ${r.name}（${r.durationHours}時間・予測に使った版 ${r.modelVersions.join(', ')}）`,

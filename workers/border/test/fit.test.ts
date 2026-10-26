@@ -1,6 +1,30 @@
 import { describe, expect, it } from 'vitest'
-import { BAND_TAILS, TARGET_COVERAGE, chooseTail, coverageOf, fnv1a } from '../src/fit.ts'
-import { CANDIDATES, GRID, type CandidateId, type EventEval } from '../src/model.ts'
+import {
+  BAND_TAILS,
+  BLEND_MIN_EVENTS,
+  BLEND_SWITCH_POINTS,
+  TARGET_COVERAGE,
+  blendErrors,
+  blendTable,
+  chooseTail,
+  coverageOf,
+  earlyBlended,
+  fitModel,
+  fnv1a,
+  walkEarlyBlend,
+} from '../src/fit.ts'
+import {
+  CANDIDATES,
+  GRID,
+  candidateTable,
+  median,
+  walkForward,
+  type CandidateId,
+  type EventEval,
+  type EventMeta,
+  type HistoryEvent,
+  type Shape,
+} from '../src/model.ts'
 
 /** 全格子で同じ誤差を持つ評価を並べる（王者は same_all） */
 function evalsFrom(errors: readonly number[]): EventEval[] {
@@ -55,5 +79,184 @@ describe('fnv1a', () => {
     expect(fnv1a('abc')).toMatch(/^[0-9a-f]{8}$/)
     expect(fnv1a('abc')).toBe(fnv1a('abc'))
     expect(fnv1a('abc')).not.toBe(fnv1a('abd'))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 序盤の差し替え（blend）
+// ---------------------------------------------------------------------------
+
+const H = 3_600_000
+
+function metaOf(id: number, startAt: number, hours: number): EventMeta {
+  return { id, name: `e${id}`, eventType: 'marathon', unit: 'none', startAt, aggregateAt: startAt + hours * H - 60_000 }
+}
+
+/** 長さ hours の回を、形 f(p) で時系列順に並べる（1000位だけ） */
+function historyOf(list: readonly { hours: number; f: (p: number) => number }[]): HistoryEvent[] {
+  let start = 0
+  return list.map(({ hours, f }, i) => {
+    const meta = metaOf(i + 1, start, hours)
+    start += (hours + 24) * H
+    const shape: Shape = { eventId: meta.id, rank: 1000, final: 1_000_000, share: GRID.map(f) }
+    return { meta, shapes: new Map([[1000, shape]]) }
+  })
+}
+
+/** 序盤（0.02〜0.38）の誤差が early、それ以降が 0.02 の評価を n 件（王者は same_all） */
+function earlyEvals(n: number, early: number): EventEval[] {
+  return Array.from({ length: n }, (_, i) => {
+    const errs = GRID.map((p) => (p < 0.02 ? null : p < 0.4 ? early : 0.02))
+    return {
+      eventId: i + 1,
+      duration: 150,
+      errors: Object.fromEntries(CANDIDATES.map((c) => [c, errs])) as Record<CandidateId, (number | null)[]>,
+      scores: Object.fromEntries(CANDIDATES.map((c) => [c, 0.02])) as Record<CandidateId, number | null>,
+      champion: 'same_all',
+    }
+  })
+}
+
+/** blend の誤差列を n 件（序盤だけ値がある） */
+function blendOf(n: number, early: number): (number | null)[][] {
+  return Array.from({ length: n }, () => GRID.map((p) => (p >= 0.02 && p < 0.4 ? early : null)))
+}
+
+describe('blendTable', () => {
+  it('同じ長さの回だけなら、経過時間でも残り時間でもそろえ方は経過の割合と同じになり、現行の表と一致する', () => {
+    const hist = historyOf([0, 1, 2].map((i) => ({ hours: 150, f: (p: number) => p ** (1.5 + i * 0.5) })))
+    const blend = blendTable(150, hist, 1000)
+    const base = candidateTable('same_all', 150, hist, 1000)
+    for (const i of [2, 10, 25, 40, 48]) expect(blend[i]).toBeCloseTo(base[i] as number, 3)
+  })
+
+  it('長さの違う回は、経過時間と残り時間でそろえた値を経過率で重み付けして混ぜる', () => {
+    // 200h の回（形 p^2）で 100h の回を当てる。p=0.5: 経過時間 → q=0.25 で 0.0625、残り時間 → q=0.75 で 0.5625
+    const hist = historyOf([0, 1, 2].map(() => ({ hours: 200, f: (p: number) => p * p })))
+    const blend = blendTable(100, hist, 1000)
+    expect(blend[GRID.indexOf(0.5)]).toBeCloseTo(0.5 * 0.0625 + 0.5 * 0.5625, 3)
+    // 重みが対称でない点でも確かめる。p=0.2: 経過時間 → q=0.1 で 0.01（重み 0.8）、残り時間 → q=0.6 で 0.36（重み 0.2）
+    expect(blend[GRID.indexOf(0.2)]).toBeCloseTo(0.8 * 0.01 + 0.2 * 0.36, 3)
+  })
+
+  it('そろえた先が 0〜1 の外になる回は使わず、3件そろわない点は null', () => {
+    // 100h の回で 300h の回を当てると、p=0.5 の経過時間は q=1.5、残り時間は q=−0.5 でどちらも外
+    const hist = historyOf([0, 1, 2].map(() => ({ hours: 100, f: (p: number) => p })))
+    expect(blendTable(300, hist, 1000)[GRID.indexOf(0.5)]).toBeNull()
+  })
+})
+
+describe('blendErrors', () => {
+  it('対象より後に終わった回を表に混ぜない（リーク防止）', () => {
+    const list = [80, 150, 220, 100, 190, 60].map((hours) => ({ hours, f: (p: number) => p * p }))
+    const hist = historyOf(list)
+    const evals = walkForward(hist, 1000).evals
+    const before = blendErrors(hist, 1000, evals)
+    // 最後の回の形だけを変えても、それより前の回の誤差は変わらない
+    const changed = historyOf([...list.slice(0, -1), { hours: 60, f: (p: number) => Math.sqrt(p) }])
+    const after = blendErrors(changed, 1000, walkForward(changed, 1000).evals)
+    for (let i = 0; i < evals.length - 1; i++) expect(after[i]).toEqual(before[i])
+    expect(after[evals.length - 1]).not.toEqual(before[evals.length - 1])
+  })
+})
+
+describe('earlyBlended', () => {
+  it('切り替え点より前だけ blend にし、blend が無い点は元のまま', () => {
+    const base = GRID.map(() => 1)
+    const blend = GRID.map((p) => (p === 0.1 ? null : 2))
+    const out = earlyBlended(base, blend, 0.3)
+    expect(out[GRID.indexOf(0.08)]).toBe(2)
+    expect(out[GRID.indexOf(0.1)]).toBe(1)
+    expect(out[GRID.indexOf(0.28)]).toBe(2)
+    expect(out[GRID.indexOf(0.3)]).toBe(1)
+    expect(earlyBlended(base, blend, null)).toEqual(base)
+  })
+})
+
+describe('walkEarlyBlend', () => {
+  it('序盤で blend が現行より十分に当たれば、切り替え点の候補のどれかで差し替える', () => {
+    const r = walkEarlyBlend(earlyEvals(20, 0.1), blendOf(20, 0.05))
+    expect(BLEND_SWITCH_POINTS).toContain(r.switchAt)
+    // その時点までの回で選ぶので、採点できた回が10件そろうまでは現行のまま
+    expect(BLEND_MIN_EVENTS).toBe(10)
+    expect(r.atTime.slice(0, 10)).toEqual(Array(10).fill(null))
+    expect(r.atTime[10]).toBe(r.switchAt)
+  })
+
+  it('blend が現行に負ければ差し替えない（現行のまま）', () => {
+    const r = walkEarlyBlend(earlyEvals(20, 0.05), blendOf(20, 0.1))
+    expect(r.switchAt).toBeNull()
+    expect(r.atTime.every((s) => s == null)).toBe(true)
+  })
+
+  it('勝ち幅が 5% に届かなければ差し替えない（王者の入れ替えと同じヒステリシス）', () => {
+    const r = walkEarlyBlend(earlyEvals(20, 0.1), blendOf(20, 0.098))
+    expect(r.switchAt).toBeNull()
+  })
+})
+
+describe('fitModel の序盤の差し替え', () => {
+  // 開始からの時間で決まる伸び（1 − e^(−t/20h)）の回を、長さを変えて並べる。経過の割合でそろえると序盤がずれる
+  const DURATIONS = [150, 80, 220, 100, 190, 60, 250, 120, 170, 90, 210, 140, 70, 230, 110, 200, 130, 240, 160, 180, 85, 175, 95, 205, 115]
+  const byElapsed = (hours: number) => (p: number) => (1 - Math.exp((-p * hours) / 20)) / (1 - Math.exp(-hours / 20))
+
+  function fitFrom(hist: readonly HistoryEvent[]) {
+    const events = hist.map((h) => h.meta)
+    const shapes = hist.map((h) => h.shapes.get(1000) as Shape)
+    const last = events[events.length - 1]
+    return { ...fitModel(events, shapes, last.aggregateAt + 2 * H), hist }
+  }
+
+  it('前向き検証で勝った順位は、期間ごとの表の切り替え点より前を blend で焼き込み、それ以降は現行の表のまま', () => {
+    const { model, summary, hist } = fitFrom(historyOf(DURATIONS.map((hours) => ({ hours, f: byElapsed(hours) }))))
+    const rm = model.ranks['1000']
+    const switchAt = summary.ranks.find((r) => r.rank === 1000)?.earlyBlend?.switchAt
+    expect(switchAt).toBeTypeOf('number')
+    expect(rm.earlyBlendUntil).toBe(switchAt)
+    const base = candidateTable(rm.candidate, 150, hist, 1000)
+    const blend = blendTable(150, hist, 1000)
+    const i = GRID.indexOf(0.1)
+    const j = GRID.indexOf(0.6)
+    expect(rm.tables['150'][i]).toBeCloseTo(blend[i] as number, 4)
+    expect(rm.tables['150'][i]).not.toBeCloseTo(base[i] as number, 3)
+    expect(rm.tables['150'][j]).toBeCloseTo(base[j] as number, 4)
+    // 学習に無い長さ用の表は、当てる回の長さがわからないので差し替えない
+    const round = (t: (number | null)[]) => t.map((v) => (v == null ? null : Math.round(v * 1e5) / 1e5))
+    expect(rm.tables.all).toEqual(round(candidateTable(rm.candidate, -1, hist, 1000)))
+  })
+
+  it('序盤の誤差の要約は、各回をその時点の切り替え点で差し替えた誤差で作る（最後の切り替え点を過去に遡って当てない）', () => {
+    const { summary, hist } = fitFrom(historyOf(DURATIONS.map((hours) => ({ hours, f: byElapsed(hours) }))))
+    const r = summary.ranks.find((x) => x.rank === 1000)
+    const walk = walkForward(hist, 1000)
+    const blend = blendErrors(hist, 1000, walk.evals)
+    const early = walkEarlyBlend(walk.evals, blend)
+    const i = GRID.indexOf(0.08)
+    const errsAt = (at: (k: number) => number | null) =>
+      walk.evals
+        .map((ev, k) => earlyBlended(ev.errors[ev.champion], blend[k], at(k))[i])
+        .slice(-20)
+        .filter((v): v is number => v != null)
+        .map(Math.abs)
+    // 王者が全期間 same_all のままの合成データなので、各回の王者の誤差列と要約の王者の誤差列は同じもの
+    expect(walk.evals.every((ev) => ev.champion === walk.champion)).toBe(true)
+    const served = median(errsAt((k) => early.atTime[k]))
+    const latest = median(errsAt(() => early.switchAt))
+    const none = median(errsAt(() => null))
+    // 前提: 差し替えで序盤が当たるようになり、遡って当てた値とは区別できる
+    expect(served as number).toBeLessThan(none as number)
+    expect(latest).not.toBeCloseTo(served as number, 6)
+    const value = r?.medianAbsErrorEarly.find((x) => Math.abs(x.p - 0.08) < 1e-9)?.value
+    expect(value).toBeCloseTo(served as number, 9)
+  })
+
+  it('勝てない順位は表を現行のまま焼き込み、earlyBlendUntil を付けない', () => {
+    // 全部同じ長さ・同じ形なら blend と現行は同じ値になり、5% 以上の差がつかない
+    const { model, summary, hist } = fitFrom(historyOf(DURATIONS.map(() => ({ hours: 150, f: byElapsed(150) }))))
+    const rm = model.ranks['1000']
+    expect(summary.ranks.find((r) => r.rank === 1000)?.earlyBlend?.switchAt).toBeNull()
+    expect(rm.earlyBlendUntil).toBeUndefined()
+    const base = candidateTable(rm.candidate, 150, hist, 1000)
+    expect(rm.tables['150']).toEqual(base.map((v) => (v == null ? null : Math.round(v * 1e5) / 1e5)))
   })
 })

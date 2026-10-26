@@ -140,7 +140,8 @@ export interface HistoryEvent {
   shapes: ReadonlyMap<number, Shape>
 }
 
-const MIN_POOL = 3
+/** シェア表の1点を中央値で出すのに要る標本数の下限 */
+export const MIN_POOL = 3
 
 function medianTable(pool: readonly Shape[]): (number | null)[] {
   return GRID.map((_, i) => {
@@ -355,6 +356,11 @@ export interface RankModel {
   /** 期間（時間）ごとのシェア表。"all" は該当期間が無いときのフォールバック */
   tables: Record<string, (number | null)[]>
   band: { lo: (number | null)[]; hi: (number | null)[] }
+  /**
+   * 期間ごとの表（tables["150"] など）の、この経過率より前を序盤の差し替え（blend）で作ったとき、その経過率。
+   * 表に焼き込み済みなので予測には使わない（記録用）。差し替えていない版・古い版には無い（fit.ts の walkEarlyBlend）
+   */
+  earlyBlendUntil?: number
 }
 
 export interface Model {
