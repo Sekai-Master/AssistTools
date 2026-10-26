@@ -37,7 +37,8 @@ export async function addInsights(d: InsightDeps): Promise<void> {
       await d.queue({ id: `${report.eventId}:insight`, eventId: report.eventId, kind: 'insight', text: post })
       d.say(`- 一言解説: 積んだ（${[...text].length}字）`)
     } else {
-      d.say(`- 一言解説: 型に合わないので積まない（${bad ?? '長すぎる'}）`)
+      // 弾いた文も残す（221 は文が残らず、何の数で弾かれたか推測するしかなかった）
+      d.say(`- 一言解説: 型に合わないので積まない（${bad ?? '長すぎる'}）: ${text.replace(/\s+/g, ' ')}`)
     }
   }
   if (process.env.GH_TOKEN && process.env.GITHUB_REPOSITORY) {

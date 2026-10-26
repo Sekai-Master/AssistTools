@@ -37,8 +37,17 @@ export const INSIGHT_SYSTEM = `あなたはプロセカのイベントのボー�
 - プレイヤー個人・運営への評価に触れない。URL・ハッシュタグ・絵文字は書かない
 - 解説の文だけを出す（前置き・引用符を付けない）`
 
+/**
+ * 順位の数と、8割の幅に入った順位の数（幅の無い予測は数えない）。
+ * 2026-10-25: 221 の一言が事実に無い「6」で弾かれた（6順位の数とみられる）。数えた数も事実として渡す
+ */
+function countFacts(r: Report): string {
+  const inBand = (c: number) => r.ranks.filter((x) => x.prospective.find((p) => p.checkpoint === c)?.inBand === true).length
+  return `全体: ${r.ranks.length}順位。8割の幅の中は、経過50%で${inBand(0.5)}順位・経過85%で${inBand(0.85)}順位`
+}
+
 export function insightUser(r: Report): string {
-  return [`イベント: ${r.name}（${r.durationHours}時間）`, '', ...reportFacts(r)].join('\n')
+  return [`イベント: ${r.name}（${r.durationHours}時間）`, '', ...reportFacts(r), countFacts(r)].join('\n')
 }
 
 interface NumberToken {
