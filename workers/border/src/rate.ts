@@ -131,7 +131,42 @@ interface Row {
   y: number
 }
 
+/** 1回ぶんの伸びの区間。e0・e1 は開始からの時間、d はその間に積み上がった量 ÷ 終値 */
+export interface RateEventIntervals {
+  eventId: number
+  startAt: number
+  /** 開始から終了までの時間 */
+  spanH: number
+  intervals: readonly { e0: number; e1: number; d: number }[]
+}
+
+/** 終わった回の形（51点の share）から区間を作る。隣り合う格子点のあいだを1区間にする */
+function shapeIntervals(history: readonly HistoryEvent[], rank: number): RateEventIntervals[] {
+  const out: RateEventIntervals[] = []
+  for (const h of history) {
+    const shape = h.shapes.get(rank)
+    if (!shape) continue
+    const spanH = (eventEndMs(h.meta) - h.meta.startAt) / HOUR_MS
+    const intervals: { e0: number; e1: number; d: number }[] = []
+    for (let j = 0; j < GRID.length - 1; j++) {
+      const s0 = shape.share[j]
+      const s1 = shape.share[j + 1]
+      if (s0 == null || s1 == null) continue
+      intervals.push({ e0: GRID[j] * spanH, e1: GRID[j + 1] * spanH, d: s1 - s0 })
+    }
+    out.push({ eventId: h.meta.id, startAt: h.meta.startAt, spanH, intervals })
+  }
+  return out
+}
+
 export function fitRate(history: readonly HistoryEvent[], rank: number, opts: RateOptions = {}): RateFit | null {
+  return fitRateIntervals(shapeIntervals(history, rank), rank, opts)
+}
+
+/**
+ * 区間の並びから当てはめる。形の格子（fitRate）でも、30分刻みの推移でも同じ式で当てはめられるように分けてある
+ */
+export function fitRateIntervals(events: readonly RateEventIntervals[], rank: number, opts: RateOptions = {}): RateFit | null {
   const options: Required<RateOptions> = {
     ridge: opts.ridge ?? DEFAULTS.ridge,
     smooth: opts.smooth ?? DEFAULTS.smooth,
@@ -142,26 +177,17 @@ export function fitRate(history: readonly HistoryEvent[], rank: number, opts: Ra
 
   // 1. 区間ごとの行を作る。行を1本も出さない回は切片の列を持たない（持つと特異になる）
   const perEvent: { eventId: number; rows: IntervalRow[] }[] = []
-  for (const h of history) {
-    const shape = h.shapes.get(rank)
-    if (!shape) continue
-    const spanH = (eventEndMs(h.meta) - h.meta.startAt) / HOUR_MS
-    const c0 = jstClock(h.meta.startAt)
+  for (const ev of events) {
+    const c0 = jstClock(ev.startAt)
     const rows: IntervalRow[] = []
-    for (let j = 0; j < GRID.length - 1; j++) {
-      const s0 = shape.share[j]
-      const s1 = shape.share[j + 1]
-      if (s0 == null || s1 == null) continue
-      const d = s1 - s0
-      if (!(d > 0)) continue
-      const e0 = GRID[j] * spanH
-      const e1 = GRID[j + 1] * spanH
+    for (const { e0, e1, d } of ev.intervals) {
+      if (!(d > 0) || !(e1 > e0)) continue
       const m = (e0 + e1) / 2
       const [bi, bt] = hatPos(Math.log1p(m))
-      const [gi, gt] = hatPos(Math.log1p(spanH - m))
+      const [gi, gt] = hatPos(Math.log1p(ev.spanH - m))
       rows.push({ y: Math.log(d / (e1 - e0)), bi, bt, gi, gt, cb: clockBin(mod(c0 + m, 24), B) })
     }
-    if (rows.length > 0) perEvent.push({ eventId: h.meta.id, rows })
+    if (rows.length > 0) perEvent.push({ eventId: ev.eventId, rows })
   }
   const nEv = perEvent.length
   if (nEv < MIN_EVENTS) return null

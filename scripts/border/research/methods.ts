@@ -85,6 +85,15 @@ export const METHODS: Record<string, Method> = {
   /** 採用案を、直近の K 回だけで学習（古い回を学習から外す） */
   recent30: { name: 'recent30', fit: (train, target) => fitX(train.slice(-30), { ...PROD, rate: 'mix', band: 'perEvent', bandWindow: 40, tailMode: 'bucket', tails: WIDE_TAILS }, target).model },
   recent45: { name: 'recent45', fit: (train, target) => fitX(train.slice(-45), { ...PROD, rate: 'mix', band: 'perEvent', bandWindow: 40, tailMode: 'bucket', tails: WIDE_TAILS }, target).model },
+  /** 採用案の率モデルを、30分刻みの推移で当てはめる（BORDER_DATA が要る） */
+  s30: x('s30', { ...PROD, rate: 'mix', rateData: 'series', band: 'perEvent', bandWindow: 40, tailMode: 'bucket', tails: WIDE_TAILS }),
+  /** s30 で時刻を1時間刻み（24ビン）に */
+  s30h: x('s30h', { ...PROD, rate: 'mix', rateData: 'series', rateClockBins: 24, band: 'perEvent', bandWindow: 40, tailMode: 'bucket', tails: WIDE_TAILS }),
+  /** 30分刻みの推移を2時間・3時間ごとにまとめてから当てはめる（30分の伸びのノイズを減らす） */
+  s2h: x('s2h', { ...PROD, rate: 'mix', rateData: 'series', rateMergeH: 2, band: 'perEvent', bandWindow: 40, tailMode: 'bucket', tails: WIDE_TAILS }),
+  s3h: x('s3h', { ...PROD, rate: 'mix', rateData: 'series', rateMergeH: 3, band: 'perEvent', bandWindow: 40, tailMode: 'bucket', tails: WIDE_TAILS }),
+  /** 形のまま、時刻だけ1時間刻みに（s30h との切り分け） */
+  shape24: x('shape24', { ...PROD, rate: 'mix', rateClockBins: 24, band: 'perEvent', bandWindow: 40, tailMode: 'bucket', tails: WIDE_TAILS }),
   /** 全部入り */
   combo: x('combo', { selection: 'ensemble', early: 'ramp', band: 'perEvent', bandWindow: 40, tailMode: 'bucket', tails: WIDE_TAILS }),
 }

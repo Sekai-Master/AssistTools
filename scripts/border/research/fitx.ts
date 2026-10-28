@@ -35,7 +35,8 @@ import {
   type Shape,
   type ThinDuration,
 } from '../../../workers/border/src/model.ts'
-import { fitRate, rateShareTable } from '../../../workers/border/src/rate.ts'
+import { fitRate, fitRateIntervals, rateShareTable, type RateEventIntervals, type RateFit } from '../../../workers/border/src/rate.ts'
+import { loadSeries } from './data.ts'
 import {
   ALGORITHM,
   BAND_TAILS,
@@ -62,6 +63,12 @@ export interface FitX {
   /** 裾の候補（片側）。本番は BAND_TAILS */
   tails: readonly number[]
   rate?: 'none' | 'mix'
+  /** 率モデルを当てはめるデータ: shape（51点の形。本番） / series（30分刻みの推移。無い回は形） */
+  rateData?: 'shape' | 'series'
+  /** 率モデルの時刻のビン数（本番 8 = 3時間刻み） */
+  rateClockBins?: number
+  /** series のとき、隣り合う点をこの時間以上になるまでまとめて1区間にする（30分の伸びはノイズが大きいので） */
+  rateMergeH?: number
   /** 表を焼いたあとに差し替える（rate モデルなど）。duration → 表 */
   tableHook?: (ctx: { history: readonly HistoryEvent[]; rank: number; tables: Record<string, (number | null)[]> }) => void
 }
@@ -74,12 +81,49 @@ const ENS = 'ensemble' as CandidateId
 // 率モデルとの混ぜ合わせ
 // ---------------------------------------------------------------------------
 
+/** 30分刻みの推移から区間を作る（開始時刻に 0 の点を置く。2時間を超える空白をまたぐ区間は捨てる）。推移の無い回は形の格子から */
+function seriesIntervals(history: readonly HistoryEvent[], rank: number, mergeH = 0): RateEventIntervals[] {
+  const out: RateEventIntervals[] = []
+  for (const h of history) {
+    const shape = h.shapes.get(rank)
+    if (!shape) continue
+    const end = h.meta.aggregateAt + 60_000
+    const spanH = (end - h.meta.startAt) / 3_600_000
+    const series = loadSeries(h.meta.id, rank)
+    const intervals: { e0: number; e1: number; d: number }[] = []
+    if (series) {
+      let prev: [number, number] = [h.meta.startAt, 0]
+      for (const [ts, v] of series) {
+        if (ts <= h.meta.startAt || ts > end) continue
+        if (ts - prev[0] > 2 * 3_600_000) {
+          prev = [ts, v]
+          continue
+        }
+        if (ts - prev[0] < mergeH * 3_600_000 && ts < end - 60_000) continue
+        intervals.push({ e0: (prev[0] - h.meta.startAt) / 3_600_000, e1: (ts - h.meta.startAt) / 3_600_000, d: (v - prev[1]) / shape.final })
+        prev = [ts, v]
+      }
+    } else {
+      for (let j = 0; j + 1 < GRID.length; j++) {
+        const a = shape.share[j]
+        const b = shape.share[j + 1]
+        if (a != null && b != null) intervals.push({ e0: GRID[j] * spanH, e1: GRID[j + 1] * spanH, d: b - a })
+      }
+    }
+    out.push({ eventId: h.meta.id, startAt: h.meta.startAt, spanH, intervals })
+  }
+  return out
+}
+
 const rateCache = new Map<string, (number | null)[] | null>()
+let rateOpt: Pick<FitX, 'rateData' | 'rateClockBins' | 'rateMergeH'> = {}
 /** history（target の開始前の回）で学習した率モデルの、target の長さ・開始時刻での表。同じ学習データは何度も使うので覚えておく */
 function rateTableFor(history: readonly HistoryEvent[], rank: number, target: Pick<EventMeta, 'startAt' | 'aggregateAt'>): (number | null)[] | null {
-  const key = `${rank}|${target.startAt}|${target.aggregateAt}|${history.map((h) => h.meta.id).join(',')}`
+  const tag = `${rateOpt.rateData ?? 'shape'}:${rateOpt.rateClockBins ?? 8}:${rateOpt.rateMergeH ?? 0}`
+  const key = `${tag}|${rank}|${target.startAt}|${target.aggregateAt}|${history.map((h) => h.meta.id).join(',')}`
   if (!rateCache.has(key)) {
-    const fit = fitRate(history, rank)
+    const opts = { clockBins: rateOpt.rateClockBins ?? 8 }
+    const fit: RateFit | null = rateOpt.rateData === 'series' ? fitRateIntervals(seriesIntervals(history, rank, rateOpt.rateMergeH), rank, opts) : fitRate(history, rank, opts)
     rateCache.set(key, fit ? rateShareTable(fit, target) : null)
   }
   return rateCache.get(key) ?? null
@@ -287,6 +331,7 @@ export interface FitXResult {
 }
 
 export function fitX(history: readonly HistoryEvent[], o: FitX, target?: EventMeta): FitXResult {
+  rateOpt = { rateData: o.rateData, rateClockBins: o.rateClockBins, rateMergeH: o.rateMergeH }
   if (history.length < 5) throw new Error(`学習に使えるマラソンが ${history.length} 件しかない`)
   const durationCount = new Map<number, number>()
   for (const h of history) durationCount.set(durationHours(h.meta), (durationCount.get(durationHours(h.meta)) ?? 0) + 1)
