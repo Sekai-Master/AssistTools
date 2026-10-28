@@ -1,0 +1,1472 @@
+{
+"source": "Sekai-World/sekai-master-db-diff events.json (2026-10-28 取得、マラソンだけ)",
+"events": [
+{
+"id": 1,
+"name": "雨上がりの一番星",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1602223200000,
+"aggregateAt": 1603022399000,
+"asset": "event_stella_2020"
+},
+{
+"id": 2,
+"name": "囚われのマリオネット",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1603173600000,
+"aggregateAt": 1603972799000,
+"asset": "event_jackpod_2020"
+},
+{
+"id": 3,
+"name": "全力！ワンダーハロウィン！",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1604124000000,
+"aggregateAt": 1604750399000,
+"asset": "event_potato_2020"
+},
+{
+"id": 4,
+"name": "走れ！体育祭！～実行委員は大忙し～",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1604901600000,
+"aggregateAt": 1605614399000,
+"asset": "event_sportsfestival_2020"
+},
+{
+"id": 5,
+"name": "ここからRE:START！",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1605765600000,
+"aggregateAt": 1606564799000,
+"asset": "event_restart_2020"
+},
+{
+"id": 6,
+"name": "いつか、背中あわせのリリックを",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1606716000000,
+"aggregateAt": 1607428799000,
+"asset": "event_forward_2020"
+},
+{
+"id": 7,
+"name": "KAMIKOU FESTIVAL！",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1607580000000,
+"aggregateAt": 1608292799000,
+"asset": "event_culturalfestival_2020"
+},
+{
+"id": 8,
+"name": "聖なる夜に、この歌声を",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1608444000000,
+"aggregateAt": 1609243199000,
+"asset": "event_nijiiro_2020"
+},
+{
+"id": 9,
+"name": "セカイのハッピーニューイヤー！",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1609394400000,
+"aggregateAt": 1610107199000,
+"asset": "event_newyear_2020"
+},
+{
+"id": 10,
+"name": "揺れるまま、でも君は前へ",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1610258400000,
+"aggregateAt": 1611057599000,
+"asset": "event_hareomatsu_2021"
+},
+{
+"id": 11,
+"name": "Color of Myself！",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1611208800000,
+"aggregateAt": 1611921599000,
+"asset": "event_color_2021"
+},
+{
+"id": 12,
+"name": "Period of NOCTURNE",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1612072800000,
+"aggregateAt": 1612699199000,
+"asset": "event_nocturne_2021"
+},
+{
+"id": 13,
+"name": "響くトワイライトパレード",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1612850400000,
+"aggregateAt": 1613476799000,
+"asset": "event_parade_2021"
+},
+{
+"id": 14,
+"name": "満たされないペイルカラー",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1613628000000,
+"aggregateAt": 1614340799000,
+"asset": "event_infinitelygray_2021"
+},
+{
+"id": 15,
+"name": "スマイルオブドリーマー",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1614492000000,
+"aggregateAt": 1615204799000,
+"asset": "event_dream_2021"
+},
+{
+"id": 16,
+"name": "天馬さんちのひな祭り",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1615356000000,
+"aggregateAt": 1616241599000,
+"asset": "event_hinamatsuri_2021"
+},
+{
+"id": 17,
+"name": "届け！HOPEFUL STAGE♪",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1616392800000,
+"aggregateAt": 1617105599000,
+"asset": "event_angelclover_2021"
+},
+{
+"id": 19,
+"name": "シークレット・ディスタンス",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1618120800000,
+"aggregateAt": 1618833599000,
+"asset": "event_secret_2021"
+},
+{
+"id": 20,
+"name": "Resonate with you",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1618984800000,
+"aggregateAt": 1619611199000,
+"asset": "event_resonate_2021"
+},
+{
+"id": 22,
+"name": "お悩み聞かせて！わくわくピクニック",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1620626400000,
+"aggregateAt": 1621425599000,
+"asset": "event_picnic_2021"
+},
+{
+"id": 23,
+"name": "頑張るあなたにBreak Time！",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1621576800000,
+"aggregateAt": 1622289599000,
+"asset": "event_breaktime_2021"
+},
+{
+"id": 25,
+"name": "ワンダーマジカルショウタイム！",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1623391200000,
+"aggregateAt": 1624103999000,
+"asset": "event_wonders_2021"
+},
+{
+"id": 26,
+"name": "カーネーション・リコレクション",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1624255200000,
+"aggregateAt": 1624881599000,
+"asset": "event_carnation_2021"
+},
+{
+"id": 28,
+"name": "Awakening Beat",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1625810400000,
+"aggregateAt": 1626609599000,
+"asset": "event_awakening_2021"
+},
+{
+"id": 29,
+"name": "夏祭り、鳴り響く音は",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1626760800000,
+"aggregateAt": 1627559999000,
+"asset": "event_natsumatsuri_2021"
+},
+{
+"id": 31,
+"name": "ハッピー・ラブリー・エブリデイ！",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1628575200000,
+"aggregateAt": 1629287999000,
+"asset": "event_everyday_2021"
+},
+{
+"id": 32,
+"name": "マーメイドにあこがれて",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1629439200000,
+"aggregateAt": 1630238399000,
+"asset": "event_mermaid_2021"
+},
+{
+"id": 34,
+"name": "Knock the Future!!",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1631253600000,
+"aggregateAt": 1632052799000,
+"asset": "event_future_2021"
+},
+{
+"id": 35,
+"name": "灯のミラージュ",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1632204000000,
+"aggregateAt": 1632916799000,
+"asset": "event_mirage_2021"
+},
+{
+"id": 37,
+"name": "Bout for Beside You",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1633932000000,
+"aggregateAt": 1634644799000,
+"asset": "event_besideyou_2021"
+},
+{
+"id": 38,
+"name": "Revival my dream",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1634796000000,
+"aggregateAt": 1635508799000,
+"asset": "event_revival_2021"
+},
+{
+"id": 40,
+"name": "揺るがぬ想い、今言葉にして",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1636610400000,
+"aggregateAt": 1637236799000,
+"asset": "event_stage_2021"
+},
+{
+"id": 41,
+"name": "バディ・ファニー・スペンドタイム♪",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1637388000000,
+"aggregateAt": 1638100799000,
+"asset": "event_buddy_2021"
+},
+{
+"id": 43,
+"name": "MOREMOREMakingXmas",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1639116000000,
+"aggregateAt": 1639828799000,
+"asset": "event_makingxmas_2021"
+},
+{
+"id": 44,
+"name": "Same Dreams,Same Colors",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1639980000000,
+"aggregateAt": 1640779199000,
+"asset": "event_camp_2021"
+},
+{
+"id": 46,
+"name": "POP IN MY HEART!!",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1641967200000,
+"aggregateAt": 1642593599000,
+"asset": "event_nikkori_2022"
+},
+{
+"id": 47,
+"name": "いつか、絶望の底から",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1642744800000,
+"aggregateAt": 1643457599000,
+"asset": "event_tricolo_2022"
+},
+{
+"id": 49,
+"name": "Legend still vivid",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1644386400000,
+"aggregateAt": 1645012799000,
+"asset": "event_legend_2022"
+},
+{
+"id": 50,
+"name": "あの日、空は遠かった",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1645164000000,
+"aggregateAt": 1645876799000,
+"asset": "event_peaky_2022"
+},
+{
+"id": 52,
+"name": "Cast Spell on You",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1646978400000,
+"aggregateAt": 1647604799000,
+"asset": "event_castspell_2022"
+},
+{
+"id": 53,
+"name": "空白のキャンバスに描く私は",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1647756000000,
+"aggregateAt": 1648468799000,
+"asset": "event_canvas_2022"
+},
+{
+"id": 55,
+"name": "まばゆい光のステージで",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1649656800000,
+"aggregateAt": 1650369599000,
+"asset": "event_star_2022"
+},
+{
+"id": 56,
+"name": "Live with memories",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1650520800000,
+"aggregateAt": 1651147199000,
+"asset": "event_memories_2022"
+},
+{
+"id": 58,
+"name": "白熱！神高応援団！",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1652162400000,
+"aggregateAt": 1652875199000,
+"asset": "event_cheerteam_2022"
+},
+{
+"id": 59,
+"name": "THE POWER OF UNITY",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1653026400000,
+"aggregateAt": 1653825599000,
+"asset": "event_unity_2022"
+},
+{
+"id": 61,
+"name": "迷い子の手を引く、そのさきは",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1654840800000,
+"aggregateAt": 1655553599000,
+"asset": "event_maigo_2022"
+},
+{
+"id": 62,
+"name": "絶体絶命！？アイランドパニック！",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1655704800000,
+"aggregateAt": 1656417599000,
+"asset": "event_island_2022"
+},
+{
+"id": 64,
+"name": "The Vivid Old Tale",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1657519200000,
+"aggregateAt": 1658231999000,
+"asset": "event_tale_2022"
+},
+{
+"id": 65,
+"name": "No seek No find",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1658383200000,
+"aggregateAt": 1659095999000,
+"asset": "event_noseek_2022"
+},
+{
+"id": 67,
+"name": "青空の先、輝きを追いかけて",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1660111200000,
+"aggregateAt": 1660823999000,
+"asset": "event_blue_2022"
+},
+{
+"id": 68,
+"name": "そしていま、リボンを結んで",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1660975200000,
+"aggregateAt": 1661774399000,
+"asset": "event_ribbon_2022"
+},
+{
+"id": 70,
+"name": "好きを描いて♪レインボーキャンバス",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1662703200000,
+"aggregateAt": 1663502399000,
+"asset": "event_rainbow_2022"
+},
+{
+"id": 71,
+"name": "Walk on and on",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1663653600000,
+"aggregateAt": 1664366399000,
+"asset": "event_walk_2022"
+},
+{
+"id": 73,
+"name": "拝啓、あの頃のわたしへ",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1665554400000,
+"aggregateAt": 1666180799000,
+"asset": "event_then_2022"
+},
+{
+"id": 74,
+"name": "カーテンコールに惜別を",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1666332000000,
+"aggregateAt": 1667044799000,
+"asset": "event_curtaincall_2022"
+},
+{
+"id": 76,
+"name": "Echo my melody",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1668146400000,
+"aggregateAt": 1668772799000,
+"asset": "event_echo_2022"
+},
+{
+"id": 77,
+"name": "願いは、いつか朝をこえて",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1668924000000,
+"aggregateAt": 1669636799000,
+"asset": "event_wish_2022"
+},
+{
+"id": 79,
+"name": "Find A Way Out",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1670738400000,
+"aggregateAt": 1671451199000,
+"asset": "event_way_2022"
+},
+{
+"id": 80,
+"name": "弓引け、白の世界で",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1671602400000,
+"aggregateAt": 1672315199000,
+"asset": "event_kyudo_2022"
+},
+{
+"id": 82,
+"name": "夢の途中、輝く星たちへ",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1673330400000,
+"aggregateAt": 1674129599000,
+"asset": "event_shining_2023"
+},
+{
+"id": 83,
+"name": "Little Bravers！",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1674280800000,
+"aggregateAt": 1674993599000,
+"asset": "event_bravers_2023"
+},
+{
+"id": 85,
+"name": "ほどかれた糸のその先に",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1676008800000,
+"aggregateAt": 1676635199000,
+"asset": "event_thread_2023"
+},
+{
+"id": 86,
+"name": "Kick it up a notch",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1676786400000,
+"aggregateAt": 1677412799000,
+"asset": "event_kick_2023"
+},
+{
+"id": 88,
+"name": "天の果てのフェニックスへ",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1678514400000,
+"aggregateAt": 1679227199000,
+"asset": "event_sky_2023"
+},
+{
+"id": 89,
+"name": "イミシブル・ディスコード",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1679378400000,
+"aggregateAt": 1680004799000,
+"asset": "event_immiscible_2023"
+},
+{
+"id": 91,
+"name": "Get over it.",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1681192800000,
+"aggregateAt": 1681905599000,
+"asset": "event_getover_2023"
+},
+{
+"id": 92,
+"name": "Re-tie Friendship",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1682056800000,
+"aggregateAt": 1682683199000,
+"asset": "event_retie_2023"
+},
+{
+"id": 94,
+"name": "船出の前のワンデイトリップ",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1683784800000,
+"aggregateAt": 1684411199000,
+"asset": "event_trip_2023"
+},
+{
+"id": 95,
+"name": "カナリアは窮境に歌う",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1684562400000,
+"aggregateAt": 1685361599000,
+"asset": "event_quagmire_2023"
+},
+{
+"id": 97,
+"name": "Light Up the Fire",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1686376800000,
+"aggregateAt": 1687089599000,
+"asset": "event_fire_2023"
+},
+{
+"id": 98,
+"name": "STEP by STEP！",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1687240800000,
+"aggregateAt": 1687953599000,
+"asset": "event_step_2023"
+},
+{
+"id": 100,
+"name": "仮面の私にさよならを",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1689055200000,
+"aggregateAt": 1689767999000,
+"asset": "event_persona_2023"
+},
+{
+"id": 101,
+"name": "つなぐ、星の歌",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1689919200000,
+"aggregateAt": 1690631999000,
+"asset": "event_connect_2023"
+},
+{
+"id": 103,
+"name": "On Your Feet",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1691647200000,
+"aggregateAt": 1692446399000,
+"asset": "event_onyourfeet_2023"
+},
+{
+"id": 104,
+"name": "あたしたちのハッピーエンド",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1692597600000,
+"aggregateAt": 1693310399000,
+"asset": "event_ourhappy_2023"
+},
+{
+"id": 106,
+"name": "君と紡ぐPrecious memories",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1694412000000,
+"aggregateAt": 1695038399000,
+"asset": "event_preciousmemories_2023"
+},
+{
+"id": 107,
+"name": "Let's study hard！",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1695189600000,
+"aggregateAt": 1695902399000,
+"asset": "event_study_2023"
+},
+{
+"id": 109,
+"name": "BURN MY SOUL",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1697090400000,
+"aggregateAt": 1697803199000,
+"asset": "event_burn_2023"
+},
+{
+"id": 110,
+"name": "Stick to your faith",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1697954400000,
+"aggregateAt": 1698580799000,
+"asset": "event_stickto_2023"
+},
+{
+"id": 113,
+"name": "君が主役の物語を",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1700632800000,
+"aggregateAt": 1701172799000,
+"asset": "event_supporting_2023"
+},
+{
+"id": 115,
+"name": "あっちこっち飼育員体験！",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1702188000000,
+"aggregateAt": 1702900799000,
+"asset": "event_keeper_2023"
+},
+{
+"id": 116,
+"name": "あの日、奏でた音色を",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1703052000000,
+"aggregateAt": 1703851199000,
+"asset": "event_tone_2023"
+},
+{
+"id": 119,
+"name": "逆光のレンズフレア",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1705989600000,
+"aggregateAt": 1706529599000,
+"asset": "event_lensflare_2024"
+},
+{
+"id": 121,
+"name": "導く勇気、優しさを胸に",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1707544800000,
+"aggregateAt": 1708257599000,
+"asset": "event_lead_2024"
+},
+{
+"id": 122,
+"name": "刻まれた傷は、やがて",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1708408800000,
+"aggregateAt": 1709035199000,
+"asset": "event_graven_2024"
+},
+{
+"id": 125,
+"name": "The first concerto",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1711087200000,
+"aggregateAt": 1711627199000,
+"asset": "event_concerto_2024"
+},
+{
+"id": 127,
+"name": "Knowing the Unseen",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1712728800000,
+"aggregateAt": 1713441599000,
+"asset": "event_unseen_2024"
+},
+{
+"id": 128,
+"name": "Parallel Harmonies",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1713592800000,
+"aggregateAt": 1714305599000,
+"asset": "event_parallel_2024"
+},
+{
+"id": 129,
+"name": "Whip the wimp girl!!",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1714456800000,
+"aggregateAt": 1715083199000,
+"asset": "event_whip_2024"
+},
+{
+"id": 131,
+"name": "perspective for smile",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1716444000000,
+"aggregateAt": 1716983999000,
+"asset": "event_smile_2024"
+},
+{
+"id": 133,
+"name": "Lead to shine more",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1717999200000,
+"aggregateAt": 1718711999000,
+"asset": "event_shine_2024"
+},
+{
+"id": 134,
+"name": "灯を手繰りよせて",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1718863200000,
+"aggregateAt": 1719575999000,
+"asset": "event_tomoshibi_2024"
+},
+{
+"id": 135,
+"name": "OVER RAD SQUAD!!",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1719727200000,
+"aggregateAt": 1720353599000,
+"asset": "event_overrad_2024"
+},
+{
+"id": 136,
+"name": "お縄を頂戴！？天馬捕物帳",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1720504800000,
+"aggregateAt": 1721044799000,
+"asset": "event_torimonothou_2024"
+},
+{
+"id": 138,
+"name": "Chase my IDEAL IDOL！",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1722405600000,
+"aggregateAt": 1723031999000,
+"asset": "event_chase_2024"
+},
+{
+"id": 139,
+"name": "鳴らせビューティフルサウンド！",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1723183200000,
+"aggregateAt": 1723723199000,
+"asset": "event_beautifulsound_2024"
+},
+{
+"id": 141,
+"name": "わんだほら～！？な肝だめし！",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1725084000000,
+"aggregateAt": 1725796799000,
+"asset": "event_horror_2024"
+},
+{
+"id": 142,
+"name": "鍛えてFLY！Muscle Training！",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1725948000000,
+"aggregateAt": 1726660799000,
+"asset": "event_muscle_2024"
+},
+{
+"id": 143,
+"name": "This moment with you！",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1726812000000,
+"aggregateAt": 1727524799000,
+"asset": "event_moment_2024"
+},
+{
+"id": 144,
+"name": "想いをのせて！Dream Stage",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1727676000000,
+"aggregateAt": 1728475199000,
+"asset": "event_dreamstage_2024"
+},
+{
+"id": 145,
+"name": "荊棘の道は何処へ",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1728723600000,
+"aggregateAt": 1729339199000,
+"asset": "event_thorns_2024"
+},
+{
+"id": 146,
+"name": "Rekindle the flame",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1729490400000,
+"aggregateAt": 1730203199000,
+"asset": "event_rekindle_2024"
+},
+{
+"id": 147,
+"name": "Happy Enjoy Music！",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1730354400000,
+"aggregateAt": 1731067199000,
+"asset": "event_enjoymusic_2024"
+},
+{
+"id": 148,
+"name": "また、木の葉の色づく頃に",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1731218400000,
+"aggregateAt": 1731931199000,
+"asset": "event_foliage_2024"
+},
+{
+"id": 149,
+"name": "The Power Of Regret",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1732082400000,
+"aggregateAt": 1732795199000,
+"asset": "event_regret_2024"
+},
+{
+"id": 150,
+"name": "傷だらけの手で、私達は",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1732946400000,
+"aggregateAt": 1733745599000,
+"asset": "event_scratch_2024"
+},
+{
+"id": 151,
+"name": "Grow glorious glow",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1733896800000,
+"aggregateAt": 1734609599000,
+"asset": "event_grow_2024"
+},
+{
+"id": 152,
+"name": "Special present for YOU！",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1734760800000,
+"aggregateAt": 1735473599000,
+"asset": "event_specialpresent_2024"
+},
+{
+"id": 153,
+"name": "Unfading wishing",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1735624800000,
+"aggregateAt": 1736423999000,
+"asset": "event_unfading_2024"
+},
+{
+"id": 154,
+"name": "Time to take off！",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1736575200000,
+"aggregateAt": 1737287999000,
+"asset": "event_takeoff_2025"
+},
+{
+"id": 155,
+"name": "Show your shine",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1737439200000,
+"aggregateAt": 1738151999000,
+"asset": "event_yourshine_2025"
+},
+{
+"id": 156,
+"name": "このひと針に想いを込めて",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1738303200000,
+"aggregateAt": 1739015999000,
+"asset": "event_needle_2025"
+},
+{
+"id": 157,
+"name": "Rise and Strive",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1739167200000,
+"aggregateAt": 1739879999000,
+"asset": "event_strive_2025"
+},
+{
+"id": 158,
+"name": "昔日のRead-aloud",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1740031200000,
+"aggregateAt": 1740571199000,
+"asset": "event_readaloud_2025"
+},
+{
+"id": 159,
+"name": "Connect hearts message",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1740722400000,
+"aggregateAt": 1741435199000,
+"asset": "event_heartsmessage_2025"
+},
+{
+"id": 160,
+"name": "You are my HERO!!",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1741586400000,
+"aggregateAt": 1742299199000,
+"asset": "event_myhero_2025"
+},
+{
+"id": 161,
+"name": "Unreliable Notes",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1742450400000,
+"aggregateAt": 1743163199000,
+"asset": "event_notes_2025"
+},
+{
+"id": 162,
+"name": "Find the dream view",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1743314400000,
+"aggregateAt": 1743940799000,
+"asset": "event_dreamview_2025"
+},
+{
+"id": 164,
+"name": "Choices for the future",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1745301600000,
+"aggregateAt": 1745841599000,
+"asset": "event_choicesfuture_2025"
+},
+{
+"id": 165,
+"name": "そして、針は動き出す",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1745992800000,
+"aggregateAt": 1746532799000,
+"asset": "event_needlemoving_2025"
+},
+{
+"id": 168,
+"name": "Cheer with my Heart!",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1747980000000,
+"aggregateAt": 1748519999000,
+"asset": "event_cheerheart_2025"
+},
+{
+"id": 169,
+"name": "Aim higher and higher！",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1748671200000,
+"aggregateAt": 1749297599000,
+"asset": "event_higher_2025"
+},
+{
+"id": 172,
+"name": "Deeper and deeper",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1751875200000,
+"aggregateAt": 1752407999000,
+"asset": "event_deeper_2025"
+},
+{
+"id": 173,
+"name": "Unsteady, still steady step",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1752559200000,
+"aggregateAt": 1753099199000,
+"asset": "event_unsteady_2025"
+},
+{
+"id": 174,
+"name": "start rolling! stars' crossing",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1753250400000,
+"aggregateAt": 1753790399000,
+"asset": "event_crossing_2025"
+},
+{
+"id": 175,
+"name": "Competitive fire！",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1753941600000,
+"aggregateAt": 1754481599000,
+"asset": "event_competitive_2025"
+},
+{
+"id": 177,
+"name": "ほどけぬ明日に手を伸ばして",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1755842400000,
+"aggregateAt": 1756382399000,
+"asset": "event_tomorrow_2025"
+},
+{
+"id": 178,
+"name": "Deep Dark For Light",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1756533600000,
+"aggregateAt": 1756987199000,
+"asset": "event_forlight_2025"
+},
+{
+"id": 181,
+"name": "Our Golden Days",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1759212000000,
+"aggregateAt": 1760011199000,
+"asset": "event_golden_2025"
+},
+{
+"id": 182,
+"name": "君と繋ぐHeart Beat",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1760162400000,
+"aggregateAt": 1760875199000,
+"asset": "event_heartbeat_2025"
+},
+{
+"id": 183,
+"name": "交わる色はあの日のままに",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1761026400000,
+"aggregateAt": 1761739199000,
+"asset": "event_colorcross_2025"
+},
+{
+"id": 184,
+"name": "Colors of Pure Sense",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1761890400000,
+"aggregateAt": 1762603199000,
+"asset": "event_colors_2025"
+},
+{
+"id": 185,
+"name": "超克のプロタゴニスタ",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1762754400000,
+"aggregateAt": 1763380799000,
+"asset": "event_protagonist_2025"
+},
+{
+"id": 187,
+"name": "Overcome one's limits",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1763618400000,
+"aggregateAt": 1764331199000,
+"asset": "event_overcome_2025"
+},
+{
+"id": 188,
+"name": "仰ぐ夜空に、星は紛れて",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1764482400000,
+"aggregateAt": 1765195199000,
+"asset": "event_lookup_2025"
+},
+{
+"id": 189,
+"name": "ともに、トゥルールートを目指して",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1765346400000,
+"aggregateAt": 1766145599000,
+"asset": "event_trueroute_2025"
+},
+{
+"id": 190,
+"name": "この物語は希望をのせて",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1766296800000,
+"aggregateAt": 1767009599000,
+"asset": "event_hope_2025"
+},
+{
+"id": 191,
+"name": "新年言祝ぐ、祈りの舞",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1767160800000,
+"aggregateAt": 1767959999000,
+"asset": "event_celebrate_2025"
+},
+{
+"id": 192,
+"name": "覚めない幻想をノックして",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1768111200000,
+"aggregateAt": 1768823999000,
+"asset": "event_knock_2026"
+},
+{
+"id": 193,
+"name": "GO ALL OUT",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1768975200000,
+"aggregateAt": 1769687999000,
+"asset": "event_allout_2026"
+},
+{
+"id": 194,
+"name": "粉砕せよ！アンヴァレンタインの復讐",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1769839200000,
+"aggregateAt": 1770551999000,
+"asset": "event_revenge_2026"
+},
+{
+"id": 195,
+"name": "Path made by faith",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1770703200000,
+"aggregateAt": 1771329599000,
+"asset": "event_path_2026"
+},
+{
+"id": 196,
+"name": "CHANGE！えむは王女さま！？",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1771480800000,
+"aggregateAt": 1772107199000,
+"asset": "event_princess_2026"
+},
+{
+"id": 197,
+"name": "悪夢の庭を歌い明かして",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1772258400000,
+"aggregateAt": 1772971199000,
+"asset": "event_nightmare_2026"
+},
+{
+"id": 198,
+"name": "Open up new horizons！",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1773122400000,
+"aggregateAt": 1773835199000,
+"asset": "event_horizons_2026"
+},
+{
+"id": 199,
+"name": "Amid the Wavering Light",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1773986400000,
+"aggregateAt": 1774699199000,
+"asset": "event_wavering_2026"
+},
+{
+"id": 200,
+"name": "残照のInside Direction",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1774850400000,
+"aggregateAt": 1775563199000,
+"asset": "event_direction_2026"
+},
+{
+"id": 201,
+"name": "Show 'em what's up！",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1775714400000,
+"aggregateAt": 1776340799000,
+"asset": "event_show_2026"
+},
+{
+"id": 203,
+"name": "あたたかな思い出を辿って",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1777528800000,
+"aggregateAt": 1778068799000,
+"asset": "event_tracingmemories_2026"
+},
+{
+"id": 204,
+"name": "Stay solid, No fold",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1778220000000,
+"aggregateAt": 1778846399000,
+"asset": "event_staysolid_2026"
+},
+{
+"id": 206,
+"name": "最果てへと飛ぶキミへ",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1780207200000,
+"aggregateAt": 1780747199000,
+"asset": "event_edge_2026"
+},
+{
+"id": 208,
+"name": "Phantom maze monster",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1781935200000,
+"aggregateAt": 1782647999000,
+"asset": "event_monster_2026"
+},
+{
+"id": 209,
+"name": "アイドル・花里みのり～夢の最前線～",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1782799200000,
+"aggregateAt": 1783425599000,
+"asset": "event_frontlines_2026"
+},
+{
+"id": 210,
+"name": "褪せない今を、彩って",
+"eventType": "marathon",
+"unit": "school_refusal",
+"startAt": 1783576800000,
+"aggregateAt": 1784289599000,
+"asset": "event_addcolor_2026"
+},
+{
+"id": 212,
+"name": "Echo of a Prayer",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1785477600000,
+"aggregateAt": 1786103999000,
+"asset": "event_ofprayer_2026"
+},
+{
+"id": 213,
+"name": "Leap Beyond The Limits！",
+"eventType": "marathon",
+"unit": "idol",
+"startAt": 1786255200000,
+"aggregateAt": 1786795199000,
+"asset": "event_limits_2026"
+},
+{
+"id": 215,
+"name": "Mix&Make Party Time!!",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1787983200000,
+"aggregateAt": 1788523199000,
+"asset": "event_partytime_2026"
+},
+{
+"id": 216,
+"name": "After the Fire",
+"eventType": "marathon",
+"unit": "street",
+"startAt": 1788674400000,
+"aggregateAt": 1789214399000,
+"asset": "event_afterfire_2026"
+},
+{
+"id": 217,
+"name": "Drive to Dream！",
+"eventType": "marathon",
+"unit": "theme_park",
+"startAt": 1789365600000,
+"aggregateAt": 1789905599000,
+"asset": "event_drive_2026"
+},
+{
+"id": 219,
+"name": "Side by Side, Our Ways！",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1790748000000,
+"aggregateAt": 1791633599000,
+"asset": "event_ourways_2026"
+},
+{
+"id": 220,
+"name": "Stars Off Orbit",
+"eventType": "marathon",
+"unit": "light_sound",
+"startAt": 1791784800000,
+"aggregateAt": 1792411199000,
+"asset": "event_orbit_2026"
+},
+{
+"id": 221,
+"name": "Vivid BAD SQUAD Memories",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1792562400000,
+"aggregateAt": 1792929599000,
+"asset": "event_memories_vbs_2026"
+},
+{
+"id": 222,
+"name": "MORE MORE JUMP！ Memories",
+"eventType": "marathon",
+"unit": "none",
+"startAt": 1792994400000,
+"aggregateAt": 1793361599000,
+"asset": "event_memories_mmj_2026"
+}
+]
+}
