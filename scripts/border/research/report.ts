@@ -152,8 +152,11 @@ export interface MetricSummary {
   better?: number
 }
 
-export function summarize(files: string[], baseName = 'prod'): { key: string; era: string; lodo: boolean; method: string; metrics: Record<string, MetricSummary> }[] {
-  const loaded = files.map((f) => JSON.parse(fs.readFileSync(f, 'utf8')) as { era: string; method: string; lodo: boolean; rows: Row[] })
+export function summarize(files: string[], baseName = 'prod', fromId = 0): { key: string; era: string; lodo: boolean; method: string; metrics: Record<string, MetricSummary> }[] {
+  // fromId: この id 以降の回だけを数える（学習の窓を絞る案は、学習データが窓より多い後半の回でしか違いが出ない）
+  const loaded = files
+    .map((f) => JSON.parse(fs.readFileSync(f, 'utf8')) as { era: string; method: string; lodo: boolean; rows: Row[] })
+    .map((L) => ({ ...L, rows: L.rows.filter((r) => r.eventId >= fromId) }))
   const out: ReturnType<typeof summarize> = []
   for (const L of loaded) {
     const base = loaded.find((b) => b.era === L.era && b.lodo === L.lodo && b.method === baseName)
@@ -188,8 +191,10 @@ if (isMain) {
   const jsonOut = ji >= 0 ? args[ji + 1] : null
   const bi = args.indexOf('--base')
   const baseName = bi >= 0 ? args[bi + 1] : 'prod'
+  const fi = args.indexOf('--from')
+  const fromId = fi >= 0 ? Number(args[fi + 1]) : 0
   const files = args.filter((a, i) => a.endsWith('.json') && !(ji >= 0 && i === ji + 1))
-  const sum = summarize(files, baseName)
+  const sum = summarize(files, baseName, fromId)
   const pct = (v: number | undefined, d = 2) => (v == null || !Number.isFinite(v) ? '–' : (v * 100).toFixed(d))
   const cell = (m: MetricSummary | undefined, d = 2) => {
     if (!m) return '–'

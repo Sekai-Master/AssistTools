@@ -82,6 +82,9 @@ export const METHODS: Record<string, Method> = {
   final: x('final', { ...PROD, rate: 'mix', selection: 'ensemble', band: 'perEvent', bandWindow: 40, tailMode: 'bucket', tails: WIDE_TAILS }),
   /** 4候補の平均 ＋ 帯（率モデルなし） */
   ens_band: x('ens_band', { ...PROD, selection: 'ensemble', band: 'perEvent', bandWindow: 40, tailMode: 'bucket', tails: WIDE_TAILS }),
+  /** 採用案を、直近の K 回だけで学習（古い回を学習から外す） */
+  recent30: { name: 'recent30', fit: (train, target) => fitX(train.slice(-30), { ...PROD, rate: 'mix', band: 'perEvent', bandWindow: 40, tailMode: 'bucket', tails: WIDE_TAILS }, target).model },
+  recent45: { name: 'recent45', fit: (train, target) => fitX(train.slice(-45), { ...PROD, rate: 'mix', band: 'perEvent', bandWindow: 40, tailMode: 'bucket', tails: WIDE_TAILS }, target).model },
   /** 全部入り */
   combo: x('combo', { selection: 'ensemble', early: 'ramp', band: 'perEvent', bandWindow: 40, tailMode: 'bucket', tails: WIDE_TAILS }),
 }
