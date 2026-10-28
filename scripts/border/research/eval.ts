@@ -4,7 +4,8 @@
  *
  *   node scripts/border/research/eval.ts --era new --method prod [--lodo] [--out results/new-prod.json]
  *
- * --lodo: 当てる回と同じ長さの回を学習から抜く（「初めての長さ」を作り出す。Worker は借り先の表＋帯1.5倍＋参考値で出す）
+ * --lodo: 当てる回と同じ長さの回を学習から抜く（「初めての長さ」を作り出す。Worker は借り先の表＋帯を広げて参考値で出す）
+ * --keep-same N: 当てる回と同じ長さの回を、直近の N 回だけ学習に残す（「その長さの N+1 回目」を作り出す。N<3 は thin、3 は自分の表）
  * 結果は (回, 順位) ごとに、経過 2% 刻みの 誤差・下限/終値・上限/終値・表に出したか を残す（集計は report.ts）
  */
 import fs from 'node:fs'
@@ -51,13 +52,19 @@ export interface Row {
 export const MIN_TRAIN = 10
 const r5 = (v: number | null) => (v == null ? null : Math.round(v * 1e5) / 1e5)
 
-export function evaluate(era: Era, method: Method, lodo: boolean): Row[] {
+export function evaluate(era: Era, method: Method, lodo: boolean, keepSame: number | null = null): Row[] {
   const all = loadHistory(era)
   const rows: Row[] = []
   for (const target of all) {
     const hours = durationHours(target.meta)
     let train = historyBefore(all, target.meta)
     if (lodo) train = train.filter((h) => durationHours(h.meta) !== hours)
+    if (keepSame != null) {
+      const same = train.filter((h) => durationHours(h.meta) === hours)
+      if (same.length < keepSame) continue
+      const kept = new Set(same.slice(-keepSame).map((h) => h.meta.id))
+      train = train.filter((h) => durationHours(h.meta) !== hours || kept.has(h.meta.id))
+    }
     if (train.length < MIN_TRAIN) continue
     const model = method.fit(train, target.meta)
     const span = eventEndMs(target.meta) - target.meta.startAt
@@ -94,13 +101,17 @@ if (isMain) {
   const era = (opt('--era') ?? 'new') as Era
   const name = opt('--method') ?? 'prod'
   const lodo = args.includes('--lodo')
+  const keep = opt('--keep-same')
+  const keepSame = keep == null ? null : Number(keep)
   const method = name === 'prod' ? prodMethod : METHODS[name]
   if (!method) throw new Error(`知らない方法 ${name}（${Object.keys(METHODS).join(', ')}）`)
   const t0 = Date.now()
-  const rows = evaluate(era, method, lodo)
+  const rows = evaluate(era, method, lodo, keepSame)
   const here = path.dirname(fileURLToPath(import.meta.url))
-  const out = opt('--out') ?? path.join(here, 'results', `${era}${lodo ? '-lodo' : ''}-${name}.json`)
+  const label = `${era}${lodo ? '-lodo' : ''}${keepSame != null ? `-k${keepSame}` : ''}`
+  const out = opt('--out') ?? path.join(here, 'results', `${label}-${name}.json`)
   fs.mkdirSync(path.dirname(out), { recursive: true })
-  fs.writeFileSync(out, JSON.stringify({ era, method: name, lodo, rows }))
+  // report.ts は era と lodo で組を分けるので、keep-same の組は era の名前に入れる
+  fs.writeFileSync(out, JSON.stringify({ era: keepSame != null ? `${era}-k${keepSame}` : era, method: name, lodo, rows }))
   console.log(`${era}${lodo ? ' lodo' : ''} ${name}: ${rows.length} 行 ${((Date.now() - t0) / 1000).toFixed(1)}s → ${path.relative(process.cwd(), out)}`)
 }
