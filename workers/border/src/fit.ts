@@ -5,26 +5,28 @@
  *   1. 終了済みマラソンの形（シェア列）を時系列順に並べ、候補モデルごとに前向き検証する
  *   2. 直近の成績で王者を決める（挑戦者が 5% 以上良ければ入れ替え）
  *   3. 王者の誤差の実測分布から、経過率ごとの非対称な帯を作る。幅は「過去に実際8割以上入った中で
- *      いちばん狭い裾」を順位帯ごとに選ぶ（固定の10〜90%だと実際は73〜80%しか入らなかった。2026-09-30 実測）
- *   4. Worker が割り算1回で予測できる形（期間ごとのシェア表＋帯）に焼き込む
+ *      いちばん狭い裾」を、経過率の6区間ごとに選ぶ（固定の10〜90%だと実際は73〜80%しか入らなかった。2026-09-30 実測）。
+ *      標本は1回につき1つ（経過 ±4% の誤差の平均）、直近40回
+ *   4. Worker が割り算1回で予測できる形（期間ごとのシェア表＋帯）に焼き込む。期間ごとの表は王者の表と
+ *      率モデル（rate.ts）の表の幾何平均で、誤差・帯・裾の選択もその混ぜた表で測り直す
  *   5. 序盤（経過率 20〜40% より前）は、伸び方を経過時間と残り時間でそろえて混ぜた表（blend）に差し替える。
  *      差し替えるか・どこまで差し替えるかは順位ごとに前向き検証で選び、現行に勝てなければ差し替えない
  *   6. 標本が1〜2件しかない長さには、その長さの直近の回を3割だけ混ぜた専用の表を焼く（thinTable。Worker は参考値として出す）
+ *   7. これから始まる回の長さに前例が足りなければ、その日程の率モデルの表を借り先に混ぜて焼く（rate:長さ / thin 表）
  *
  * 人が方向の補正を足す枠は作らない（brain log 2026-09-02 §11.3）。偏りの補正は
  * 「補正つき候補」が前向き検証で勝ったときだけ自動で採用される。
  */
 import {
-  BAND_MIN_SAMPLES,
   CANDIDATES,
+  EVAL_FROM,
+  EVAL_TO,
   GRID,
   MAX_ROUGH_WIDTH,
   MIN_POOL,
   PROMOTE_MARGIN,
   RANKS,
   SCORE_TO,
-  bandSamplesAt,
-  bandsFrom,
   candidateTable,
   durationHours,
   errorsAgainst,
@@ -32,6 +34,7 @@ import {
   median,
   quantile,
   THIN_WEIGHT,
+  rateKey,
   thinKey,
   walkForward,
   type CandidateId,
@@ -43,6 +46,7 @@ import {
   type Shape,
   type ThinDuration,
 } from './model.ts'
+import { fitRate, rateShareTable } from './rate.ts'
 
 export const ALGORITHM = 'share-median-v1' as const
 
@@ -57,14 +61,35 @@ export const CHECKPOINTS = [0.5, 0.6, 0.7, 0.8, 0.9, 0.96] as const
 /** 序盤の代表の経過率（150h で 6h / 12h / 24h / 36h） */
 export const EARLY_CHECKPOINTS = [0.04, 0.08, 0.16, 0.24] as const
 /**
- * 序盤と中盤以降の境目。帯の裾はそれぞれで選ぶ。
- * 序盤は外れ方がずっと大きいので、同じ裾で揃えると片方だけ当たり率が足りなくなる
+ * 序盤と中盤以降の境目（以前の帯は裾をこの前後の2つで選んでいた。いまの帯は BUCKETS の6区間で選ぶので使わない。
+ * scripts/border/research/fitx.ts の PROD（以前の本番）が読む）
  */
 export const EARLY_UNTIL = 0.3
 
-/** 「8割の幅」が実際に8割入るように、片側の裾をこの中から選ぶ（狭い順） */
+/** 以前の帯の裾の候補（片側・狭い順）。いまは WIDE_TAILS を使う。fitx.ts の PROD が読む */
 export const BAND_TAILS = [0.1, 0.075, 0.05, 0.035, 0.025, 0.015] as const
+/** 「8割の幅」が実際に8割入るように、片側の裾をこの中から選ぶ（狭い順）。15〜85% まで狭くした帯も候補に入れる */
+export const WIDE_TAILS = [0.15, 0.125, ...BAND_TAILS] as const
 export const TARGET_COVERAGE = 0.8
+
+/**
+ * 帯の裾を選ぶ経過率の区間（代表の経過率と、その区間に入る格子点）。外れ方は経過率で大きく変わるので、区間ごとに裾を選び、
+ * 区間の中心どうしを線形補間してつなぐ（2つの裾の段差だと、段差の前後で当たり率が片方だけ足りなくなる）
+ */
+export const BUCKETS: readonly { center: number; points: readonly number[] }[] = [
+  { center: 0.08, points: [0.04, 0.08, 0.12] },
+  { center: 0.22, points: [0.16, 0.2, 0.24, 0.28] },
+  { center: 0.4, points: [0.32, 0.36, 0.4, 0.44, 0.48] },
+  { center: 0.6, points: [0.52, 0.56, 0.6, 0.64, 0.68] },
+  { center: 0.8, points: [0.72, 0.76, 0.8, 0.84, 0.88] },
+  { center: 0.93, points: [0.9, 0.94, 0.96] },
+]
+/** 帯の標本に使う直近の回数 */
+export const BAND_EVENTS = 40
+/** 標本にする経過率の幅（p の ±これ）。1回の中のこの範囲の誤差は平均して1標本にする */
+const BAND_HALF = 0.04
+/** 帯を作るのに要る標本（回）の数の下限 */
+export const BAND_MIN_EVENTS = 10
 
 /** Worker が毎回読むので、表の桁を落として小さくする（予測への影響は 1e-5 未満） */
 const round5 = (v: number | null) => (v == null ? null : Math.round(v * 1e5) / 1e5)
@@ -91,19 +116,22 @@ export interface RankSummary {
   medianAbsError: { p: number; value: number | null }[]
   /** 代表の経過率ごとの帯（誤差の分位点） */
   band: { p: number; lo: number | null; hi: number | null }[]
-  /** 帯に使った片側の裾（0.1 なら 10〜90パーセンタイル） */
+  /** 経過率 0.6 の帯に使った片側の裾（0.1 なら 10〜90パーセンタイル）。裾は経過率ごとに違う（全体は bandTails） */
   bandTail: number
-  /** 帯の当たり率（前向き。その時点までのデータで作った帯に実測が入った割合）。選んだ裾のもの */
+  /** 帯の当たり率（前向き。その時点までのデータで作った帯に実測が入った割合）。各 p の裾で数えたもの */
   coverage: { p: number; covered: number; total: number }[]
   /** 序盤（EARLY_CHECKPOINTS）の同じもの */
   medianAbsErrorEarly: { p: number; value: number | null }[]
   bandEarly: { p: number; lo: number | null; hi: number | null }[]
+  /** 経過率 0.08 の帯に使った片側の裾 */
   bandTailEarly: number
   coverageEarly: { p: number; covered: number; total: number }[]
   /** イベントごとの再現誤差（王者・代表の経過率） */
   replay: { eventId: number; champion: CandidateId; errors: { p: number; value: number | null }[] }[]
   /** 序盤の差し替え（blend）の選択。この項目より前の版には無い */
   earlyBlend?: EarlyBlendChoice
+  /** 区間（BUCKETS）の中心の経過率ごとに選んだ片側の裾。帯はこの点どうしを線形補間してつなぐ。この項目より前の版には無い */
+  bandTails?: { p: number; tail: number }[]
 }
 
 export interface ModelSummary {
@@ -145,6 +173,24 @@ function minProgressFrom(band: { lo: (number | null)[]; hi: (number | null)[] })
   return shown ? MIN_VISIBLE_PROGRESS : 1.01
 }
 
+/**
+ * 帯の標本。候補 cand の直近 BAND_EVENTS 回について、1回につき1つ、経過率 p の近く（±BAND_HALF）の誤差の平均を集める。
+ * 近い格子点の誤差は同じ回の中で似ているので、全点を並べると1回の外れが何票にもなる。1回1標本にすると回の数がそのまま標本数になる
+ */
+export function bandSamples(evals: readonly EventEval[], cand: CandidateId, p: number): number[] {
+  const xs: number[] = []
+  for (const ev of evals.slice(-BAND_EVENTS)) {
+    const errs = ev.errors[cand]
+    const win: number[] = []
+    GRID.forEach((q, j) => {
+      const e = errs[j]
+      if (e != null && Math.abs(q - p) <= BAND_HALF + 1e-9) win.push(e)
+    })
+    if (win.length > 0) xs.push(win.reduce((a, b) => a + b, 0) / win.length)
+  }
+  return xs
+}
+
 /** 裾 tail の帯が、前向き（その時点までのデータで作った帯）で実測をどれだけ含んだか */
 export function coverageOf(
   evals: readonly EventEval[],
@@ -156,9 +202,9 @@ export function coverageOf(
     let total = 0
     for (let i = 10; i < evals.length; i++) {
       const cand = evals[i].champion
-      const xs = bandSamplesAt(evals.slice(0, i), cand, p)
+      const xs = bandSamples(evals.slice(0, i), cand, p)
       const e = at(evals[i].errors[cand], p)
-      if (e == null || xs.length < BAND_MIN_SAMPLES) continue
+      if (e == null || xs.length < BAND_MIN_EVENTS) continue
       const lo = quantile(xs, tail) as number
       const hi = quantile(xs, 1 - tail) as number
       total++
@@ -174,7 +220,7 @@ export function chooseTail(
   checkpoints: readonly number[] = CHECKPOINTS,
 ): { tail: number; coverage: RankSummary['coverage'] } {
   let last: { tail: number; coverage: RankSummary['coverage'] } | null = null
-  for (const tail of BAND_TAILS) {
+  for (const tail of WIDE_TAILS) {
     const coverage = coverageOf(evals, tail, checkpoints)
     const covered = coverage.reduce((a, c) => a + c.covered, 0)
     const total = coverage.reduce((a, c) => a + c.total, 0)
@@ -182,6 +228,38 @@ export function chooseTail(
     if (total > 0 && covered / total >= TARGET_COVERAGE) return last
   }
   return last as { tail: number; coverage: RankSummary['coverage'] }
+}
+
+/** 区間（BUCKETS）の中心どうしを線形補間して、格子の全点の裾にする。最初の中心より前・最後の中心より後は端の裾 */
+export function tailCurve(bucketTails: readonly number[]): number[] {
+  return GRID.map((p) => {
+    if (p <= BUCKETS[0].center) return bucketTails[0]
+    for (let k = 1; k < BUCKETS.length; k++) {
+      if (p <= BUCKETS[k].center) {
+        const a = BUCKETS[k - 1].center
+        const b = BUCKETS[k].center
+        return bucketTails[k - 1] + ((bucketTails[k] - bucketTails[k - 1]) * (p - a)) / (b - a)
+      }
+    }
+    return bucketTails[bucketTails.length - 1]
+  })
+}
+
+/** 候補 cand の直近 BAND_EVENTS 回の誤差から、格子ごとの非対称な帯（分位点）を作る。tails は格子ごとの片側の裾 */
+function bandFrom(evals: readonly EventEval[], cand: CandidateId, tails: readonly number[]): { lo: (number | null)[]; hi: (number | null)[] } {
+  const lo: (number | null)[] = []
+  const hi: (number | null)[] = []
+  GRID.forEach((p, i) => {
+    const xs = bandSamples(evals, cand, p)
+    if (xs.length < BAND_MIN_EVENTS) {
+      lo.push(null)
+      hi.push(null)
+    } else {
+      lo.push(quantile(xs, tails[i]))
+      hi.push(quantile(xs, 1 - tails[i]))
+    }
+  })
+  return { lo, hi }
 }
 
 // ---------------------------------------------------------------------------
@@ -354,6 +432,91 @@ export function thinTable(
   })
 }
 
+// ---------------------------------------------------------------------------
+// 率モデルとの混ぜ合わせ
+//
+// 期間ごとの表は、その長さの前例が少ないと偏る。率モデル（rate.ts）は全マラソンの「1時間あたりの伸び率」を
+// 経過時間・残り時間・時刻の関数として当てはめるので、どんな長さ・開始時刻の表も作れる。
+// 期間ごとの表（王者の表）とこの表を幾何平均する。前向き検証の誤差も混ぜた表で測り直すので、
+// 切り替え点・裾・帯はすべて混ぜた表に合わせて選ばれる。王者の選び方（walkForward の採点）は混ぜる前の誤差のまま
+// ---------------------------------------------------------------------------
+
+const rateCache = new Map<string, (number | null)[] | null>()
+const shapeIds = new WeakMap<Shape, number>()
+let shapeCount = 0
+/** 形の同一性（オブジェクト）で見分ける番号。同じ id でも作り直した形は別の学習データとして扱う（テストや再読込で古い表を引かない） */
+function shapeId(shape: Shape | undefined): string {
+  if (!shape) return '-'
+  let id = shapeIds.get(shape)
+  if (id == null) {
+    id = shapeCount++
+    shapeIds.set(shape, id)
+  }
+  return String(id)
+}
+
+/**
+ * history（target の開始前の回）で学習した率モデルの、target の長さ・開始時刻での表。
+ * 同じ学習データ・日程は何度も使う（前向き検証で同じ過去を回ごとに学習し直す）ので覚えておく。解析ジョブは1回で終わるので上限は設けない
+ */
+function rateTableFor(
+  history: readonly HistoryEvent[],
+  rank: number,
+  target: Pick<EventMeta, 'startAt' | 'aggregateAt'>,
+): (number | null)[] | null {
+  const key = `${rank}|${target.startAt}|${target.aggregateAt}|${history.map((h) => `${h.meta.id}.${shapeId(h.shapes.get(rank))}`).join(',')}`
+  if (!rateCache.has(key)) {
+    const fit = fitRate(history, rank)
+    rateCache.set(key, fit ? rateShareTable(fit, target) : null)
+  }
+  return rateCache.get(key) ?? null
+}
+
+/** 長さ d の回（15:00 JST 開始・20:59:59 終了の標準の日程）。表は長さで引くので、開始時刻はいちばん多いものに合わせる */
+function standardMeta(d: number): Pick<EventMeta, 'startAt' | 'aggregateAt'> {
+  const startAt = Date.UTC(2026, 0, 1, 6) // 15:00 JST
+  return { startAt, aggregateAt: startAt + d * 3_600_000 - 1000 }
+}
+
+const geo = (a: number | null, b: number | null) => (a != null && b != null && a > 0 && b > 0 ? Math.sqrt(a * b) : (a ?? b))
+/** 2つの表の幾何平均。b が無ければ a のまま、片方の点が欠けていればもう片方 */
+const geoTables = (a: readonly (number | null)[], b: readonly (number | null)[] | null) => (b ? a.map((v, i) => geo(v, b[i])) : [...a])
+/** 表 t と率モデルの表を幾何平均したときの誤差: s/√(t·r) − 1 = √((1+e)(1+er)) − 1 */
+const geoErr = (e: number | null, er: number | null) =>
+  e == null ? null : er == null || 1 + er <= 0 || 1 + e <= 0 ? e : Math.sqrt((1 + e) * (1 + er)) - 1
+
+/** 前向き検証の各回の誤差を、「その回の開始前の回で学習した率モデル（その回自身の日程）との幾何平均」で当てたときの誤差に直す */
+export function rateMixed(history: readonly HistoryEvent[], rank: number, evals: readonly EventEval[]): EventEval[] {
+  const byId = new Map(history.map((h) => [h.meta.id, h]))
+  return evals.map((ev) => {
+    const h = byId.get(ev.eventId) as HistoryEvent
+    const shape = h.shapes.get(rank) as Shape
+    const rt = rateTableFor(
+      history.filter((x) => x.meta.aggregateAt < h.meta.startAt),
+      rank,
+      h.meta,
+    )
+    const er = GRID.map((p, j) => {
+      const sv = shape.share[j]
+      const t = rt?.[j]
+      return p < EVAL_FROM || p > EVAL_TO || sv == null || t == null || !(t > 0) ? null : sv / t - 1
+    })
+    return { ...ev, errors: Object.fromEntries(CANDIDATES.map((c) => [c, ev.errors[c].map((e, j) => geoErr(e, er[j]))])) as EventEval['errors'] }
+  })
+}
+
+/** これから終わる（aggregateAt が now 以降の）マラソンを、長さごとに開始がいちばん早い回で */
+function upcomingByDuration(events: readonly EventMeta[], now: number): Map<number, EventMeta> {
+  const out = new Map<number, EventMeta>()
+  for (const e of events) {
+    if (e.eventType !== 'marathon' || e.aggregateAt < now) continue
+    const d = durationHours(e)
+    const cur = out.get(d)
+    if (!cur || e.startAt < cur.startAt) out.set(d, e)
+  }
+  return out
+}
+
 function historyFrom(events: readonly EventMeta[], shapes: readonly Shape[], now: number): HistoryEvent[] {
   const byEvent = new Map<number, Map<number, Shape>>()
   for (const s of shapes) {
@@ -382,43 +545,43 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
       return { duration: d, samples: same.length, latestEventId: same[same.length - 1].meta.id, weight: THIN_WEIGHT }
     })
   const createdAt = new Date(now).toISOString()
+  const upcoming = upcomingByDuration(events, now)
 
   const ranks: Record<string, RankModel> = {}
   const rankSummaries: RankSummary[] = []
   for (const rank of RANKS) {
     const walk = walkForward(history, rank)
     const champion = walk.champion
-    const blendErrs = blendErrors(history, rank, walk.evals)
-    const early = walkEarlyBlend(walk.evals, blendErrs)
+    // 前向き検証の誤差は率モデルと混ぜた表のもの。王者（walk.champion）と各回の王者の記録は混ぜる前の採点で決まったまま
+    const evals = rateMixed(history, rank, walk.evals)
+    const blendErrs = blendErrors(history, rank, evals)
+    const early = walkEarlyBlend(evals, blendErrs)
     const switchAt = early.switchAt
     // 序盤を差し替えた後の誤差で、帯・当たり率・誤差の要約を作る。差し替えるのは切り替え点より前だけで、王者の採点（経過率 0.40〜）には触れない。
     //   served … 各回を「その回の時点で選んでいた切り替え点」で差し替えた誤差。当たり率・誤差の要約・裾の選択に使う（前向きのまま）
     //   latest … 全回を最後に選んだ切り替え点で差し替えた誤差。これから出す予測の帯の分位点に使う（出す予測と同じ作り方の誤差の分布）
     const blended = (at: (i: number) => number | null): EventEval[] =>
-      walk.evals.map((ev, i) => ({
+      evals.map((ev, i) => ({
         ...ev,
         errors: Object.fromEntries(CANDIDATES.map((c) => [c, earlyBlended(ev.errors[c], blendErrs[i], at(i))])) as EventEval['errors'],
       }))
     const served = blended((i) => early.atTime[i])
     const latest = blended(() => switchAt)
-    // 帯の裾は序盤と中盤以降で別々に選び、境目（EARLY_UNTIL）でつなぐ
-    const calibrated = chooseTail(served)
-    const calibratedEarly = chooseTail(served, EARLY_CHECKPOINTS)
-    const bandMain = bandsFrom(latest, champion, calibrated.tail)
-    const bandEarly = bandsFrom(latest, champion, calibratedEarly.tail)
-    const band = {
-      lo: GRID.map((p, i) => (p < EARLY_UNTIL - 1e-9 ? bandEarly.lo[i] : bandMain.lo[i])),
-      hi: GRID.map((p, i) => (p < EARLY_UNTIL - 1e-9 ? bandEarly.hi[i] : bandMain.hi[i])),
-    }
-    const sameAllErrs = walk.evals.map((e) => e.errors.same_all)
+    // 帯の裾は経過率の6区間ごとに選び、区間の中心どうしを線形補間でつなぐ（段差が無い）
+    const bucketTails = BUCKETS.map((b) => chooseTail(served, b.points).tail)
+    const tails = tailCurve(bucketTails)
+    const band = bandFrom(latest, champion, tails)
+    const sameAllErrs = evals.map((e) => e.errors.same_all)
     const tables: Record<string, (number | null)[]> = {}
     // 「同じ長さ」の表は標本3件以上の長さだけ。1〜2件の長さに表を作ると Worker が完全一致として使い、
     // 参考値の札（extrapolatedFrom）も帯の広げも外れる（221 の 102h が学習に入ると 222 が確度を名乗る。2026-10-26）
+    // 長さがわかっているので、王者の表と、その長さ（標準の日程）の率モデルの表を幾何平均してから、序盤を blend に差し替える
     for (const d of knownDurations) {
-      const base = candidateTable(champion, d, history, rank, sameAllErrs)
+      const base = geoTables(candidateTable(champion, d, history, rank, sameAllErrs), rateTableFor(history, rank, standardMeta(d)))
       tables[String(d)] = switchAt == null ? base : earlyBlended(base, blendTable(d, history, rank), switchAt)
     }
-    // 以下の all・far_long・far_short（学習に無い長さ用）は、当てる回の長さがわからないので blend に差し替えない
+    // 以下の all・far_long・far_short（学習に無い長さ用）は、当てる回の長さがわからないので blend にも率モデルにも差し替えない
+    // （日程のわかっている回の分は、この後で rate:長さ に別に焼く）
     // 期間 -1 は「同じ期間」が無いので全マラソンへフォールバックする
     tables.all = candidateTable(champion, -1, history, rank, sameAllErrs)
     // 過去に無い長さ用: いちばん長い／短い期間（標本3件以上）の表。候補によらず「その期間の全履歴」で作る
@@ -438,6 +601,25 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
         min != null && t.duration < min ? tables.far_short : max != null && t.duration > max ? tables.far_long : tables.all
       const early = switchAt == null ? base : earlyBlended(base, blendTable(t.duration, history, rank), switchAt)
       tables[thinKey(t.duration)] = thinTable(latest.share, early, t.weight)
+    }
+    // これから始まる回で、長さに前例が足りないもの: 日程（長さと開始時刻）がわかっているので、その日程の率モデルの表を混ぜて焼く。
+    //   標本1〜2件の長さ … thin の表（直近の回を混ぜたもの）を、率モデルの表に直近の回を混ぜたものと幾何平均する
+    //   過去に無い長さ     … 借り先（far_* / all）を率モデルの表と幾何平均した表を rate:長さ に焼く。
+    //                        借り先そのものは、日程のわからない回のためにそのまま残す。Worker は rate:長さ があればそれを借り先の代わりに使う（chooseTable）
+    for (const [d, upcomingMeta] of upcoming) {
+      if (tables[String(d)]) continue
+      const rt = rateTableFor(history, rank, upcomingMeta)
+      if (!rt) continue
+      const thin = thinDurations.find((t) => t.duration === d)
+      if (thin && tables[thinKey(d)]) {
+        const latest = history.find((h) => h.meta.id === thin.latestEventId)?.shapes.get(rank)
+        if (latest) tables[thinKey(d)] = geoTables(tables[thinKey(d)], thinTable(latest.share, rt, thin.weight))
+      } else {
+        const min = knownDurations.length > 0 ? Math.min(...knownDurations) : null
+        const max = knownDurations.length > 0 ? Math.max(...knownDurations) : null
+        const fallback = min != null && d < min ? tables.far_short : max != null && d > max ? tables.far_long : tables.all
+        tables[rateKey(d)] = geoTables(fallback, rt)
+      }
     }
     const minProgress = minProgressFrom(band)
     ranks[String(rank)] = {
@@ -460,21 +642,22 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
         return { p, value: median(xs.map(Math.abs)) }
       }),
       band: CHECKPOINTS.map((p) => ({ p, lo: at(band.lo, p), hi: at(band.hi, p) })),
-      bandTail: calibrated.tail,
-      coverage: calibrated.coverage,
+      bandTail: at(tails, 0.6) as number,
+      coverage: CHECKPOINTS.map((p) => coverageOf(served, at(tails, p) as number, [p])[0]),
       medianAbsErrorEarly: EARLY_CHECKPOINTS.map((p) => {
         const xs = recent.map((e) => at(e.errors[champion], p)).filter((v): v is number => v != null)
         return { p, value: median(xs.map(Math.abs)) }
       }),
       bandEarly: EARLY_CHECKPOINTS.map((p) => ({ p, lo: at(band.lo, p), hi: at(band.hi, p) })),
-      bandTailEarly: calibratedEarly.tail,
-      coverageEarly: calibratedEarly.coverage,
+      bandTailEarly: at(tails, 0.08) as number,
+      coverageEarly: EARLY_CHECKPOINTS.map((p) => coverageOf(served, at(tails, p) as number, [p])[0]),
       replay: served.slice(-12).map((e) => ({
         eventId: e.eventId,
         champion: e.champion,
         errors: CHECKPOINTS.map((p) => ({ p, value: at(e.errors[e.champion], p) })),
       })),
       earlyBlend: { switchAt, scores: early.scores, scoredEvents: early.scoredEvents },
+      bandTails: BUCKETS.map((b, k) => ({ p: b.center, tail: bucketTails[k] })),
     })
   }
 

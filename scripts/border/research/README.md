@@ -17,7 +17,7 @@ cd scripts/border/research
 node eval.ts --era new --method prod            # 本番（workers/border/src/fit.ts）
 node eval.ts --era new --method x_prod          # 旧本番の写し
 node eval.ts --era old --method rmix_band --lodo
-node report.ts results/new-*.json               # 表（markdown）
+node report.ts results/new-*.json --base x_prod # 表（markdown）。改善を入れたあとの prod は新本番なので、旧本番の写しと比べる
 node factor.ts results/new-lodo-prod.json       # 前例の無い長さの帯の倍率を振る
 ./run-all.sh                                    # RESULTS.md の表を全部作り直す（4並列で数分）
 ```

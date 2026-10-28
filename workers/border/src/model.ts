@@ -405,11 +405,21 @@ export const THIN_WEIGHT = 0.3
 export const thinKey = (duration: number): string => `thin:${duration}`
 
 /**
+ * 過去に無い長さ（far_* / all を借りる長さ）の表の鍵。日程のわかっている予定の回に、fit.ts が借り先の表と率モデルの表
+ * （rate.ts）の幾何平均を焼く。数字だけの鍵・thin: と分けてあり、古い Worker はこの鍵を引かないので、
+ * 入っていても無視して far_* / all のまま動く（モデル JSON は後方互換）
+ */
+export const rateKey = (duration: number): string => `rate:${duration}`
+
+/**
  * 過去に無い長さのイベントで帯を広げる倍率。
  * 222h を「見たことのない長さ」として当てると、全マラソンの表では中盤に +6〜8% 高く外した（2026-09-30 実測・n=5）。
- * いちばん近い長さを使うと偏りは少し減るが、長さの違いそのものの読めなさは帯に乗せる
+ * いちばん近い長さを使うと偏りは少し減るが、長さの違いそのものの読めなさは帯に乗せる。
+ * 倍率は「当てる回と同じ長さの回を学習から抜く」前向き検証（scripts/border/research/factor.ts）で振って決めた:
+ * 1.5 だと帯の当たり率が 88〜94% で、目標の 80% より広すぎた。1.2 は 2026 年のデータで 80〜82%、
+ * 本物の「初めての長さ」7回では 80%
  */
-export const FAR_BAND_FACTOR = 1.5
+export const FAR_BAND_FACTOR = 1.2
 
 /** 帯の上限を計算するとき、1 + 下側の誤差 がこれ以下なら上限を出さない（予測の 20 倍を超える上限は意味が無い） */
 const MIN_DIVISOR = 0.05
@@ -442,13 +452,16 @@ export function chooseTable(model: Model, rm: RankModel, duration: number): Tabl
   const thin = model.thinDurations?.find((t) => t.duration === duration) ?? null
   const thinTable = rm.tables[thinKey(duration)]
   if (thin && thinTable) return { table: thinTable, extrapolatedFrom: nearestKnown(known, duration), thin }
+  // 過去に無い長さ: 率モデルの表を混ぜた専用の表（rate:長さ）があれば、借り先の代わりにそれを使う。札の数字と帯の広げは借り先と同じ
+  const rate = rm.tables[rateKey(duration)]
   if (known.length > 0) {
     const max = Math.max(...known)
     const min = Math.min(...known)
-    if (duration > max && rm.tables.far_long) return { table: rm.tables.far_long, extrapolatedFrom: max, thin: null }
-    if (duration < min && rm.tables.far_short) return { table: rm.tables.far_short, extrapolatedFrom: min, thin: null }
+    if (duration > max && rm.tables.far_long) return { table: rate ?? rm.tables.far_long, extrapolatedFrom: max, thin: null }
+    if (duration < min && rm.tables.far_short) return { table: rate ?? rm.tables.far_short, extrapolatedFrom: min, thin: null }
   }
-  return rm.tables.all ? { table: rm.tables.all, extrapolatedFrom: null, thin: null } : null
+  const all = rate ?? rm.tables.all
+  return all ? { table: all, extrapolatedFrom: null, thin: null } : null
 }
 
 /**

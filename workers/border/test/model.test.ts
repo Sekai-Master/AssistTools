@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  FAR_BAND_FACTOR,
   GRID,
   MAX_GAP_MS,
   buildShape,
   candidateTable,
+  chooseTable,
   confidenceOf,
   interpGrid,
   predict,
   quantile,
+  rateKey,
   valueAt,
   walkForward,
   type EventMeta,
@@ -179,10 +182,10 @@ describe('predict', () => {
     const p = predict(m, e246, 1000, 600, t)
     expect(p?.extrapolatedFrom).toBe(222)
     expect(p?.predicted).toBeCloseTo(600 / 0.6, 0) // far_long の 0.5×1.2
-    // 帯は 1.5 倍: 上側 0.02 → 0.03、下側 −0.05 → −0.075
-    expect(p?.low).toBeCloseTo(1000 / 1.03, 0)
-    expect(p?.high).toBeCloseTo(1000 / 0.925, 0)
-    // 帯は幅 10.5 ポイントで本来は「中」だが、外挿なので「高」「中」を名乗らない（2026-10-25、221）
+    // 帯は 1.2 倍: 上側 0.02 → 0.024、下側 −0.05 → −0.06
+    expect(p?.low).toBeCloseTo(1000 / 1.024, 0)
+    expect(p?.high).toBeCloseTo(1000 / 0.94, 0)
+    // 帯は幅 8.4 ポイントで本来は「高」だが、外挿なので「高」「中」を名乗らない（2026-10-25、221）
     expect(p?.confidence).toBe('rough')
     expect(p?.visible).toBe(true)
     const e198 = meta(13, 0, 198)
@@ -210,13 +213,51 @@ describe('predict', () => {
     expect(p?.thin).toEqual(thin)
     expect(p?.extrapolatedFrom).toBe(150)
     expect(p?.predicted).toBeCloseTo(400 / 0.4, 0) // thin:102 の 0.5×0.8
-    // 帯は 1.5 倍: 上側 0.02 → 0.03、下側 −0.05 → −0.075
-    expect(p?.low).toBeCloseTo(1000 / 1.03, 0)
-    expect(p?.high).toBeCloseTo(1000 / 0.925, 0)
+    // 帯は 1.2 倍: 上側 0.02 → 0.024、下側 −0.05 → −0.06
+    expect(p?.low).toBeCloseTo(1000 / 1.024, 0)
+    expect(p?.high).toBeCloseTo(1000 / 0.94, 0)
     expect(p?.confidence).toBe('rough')
     // 同じ長さの表がある 150h は thin を使わない
     const e150 = meta(15, 0, 150)
     expect(predict(m, e150, 1000, 500, e150.startAt + 75 * H)?.thin).toBeNull()
+  })
+
+  it('過去に無い長さの帯は FAR_BAND_FACTOR（1.2）倍に広がり、完全一致の長さは広がらない', () => {
+    expect(FAR_BAND_FACTOR).toBe(1.2)
+    const m: Model = {
+      ...model,
+      knownDurations: [150],
+      ranks: { '1000': { ...model.ranks['1000'], minProgress: 0.04, tables: { '150': flat, all: flat, far_long: flat, far_short: flat } } },
+    }
+    const exact = predict(m, e, 1000, 500, e.startAt + 75 * H)
+    const e246 = meta(16, 0, 246)
+    const far = predict(m, e246, 1000, 500, e246.startAt + 123 * H)
+    expect(exact?.extrapolatedFrom).toBeNull()
+    expect(exact?.low).toBeCloseTo(1000 / (1 + 0.02), 6)
+    expect(far?.extrapolatedFrom).toBe(150)
+    expect(far?.low).toBeCloseTo(1000 / (1 + 0.02 * FAR_BAND_FACTOR), 6)
+    expect(far?.high).toBeCloseTo(1000 / (1 - 0.05 * FAR_BAND_FACTOR), 6)
+  })
+
+  it('rate:長さ の表は借り先の代わりに割り、帯の広げと参考値の札は借り先と同じ', () => {
+    const half = GRID.map((p) => Math.min(1, p * 1.2))
+    const m: Model = {
+      ...model,
+      knownDurations: [150, 222],
+      ranks: {
+        '1000': {
+          ...model.ranks['1000'],
+          minProgress: 0.04,
+          tables: { '150': flat, '222': flat, all: flat, far_long: flat, far_short: flat, [rateKey(246)]: half },
+        },
+      },
+    }
+    const e246 = meta(17, 0, 246)
+    const p = predict(m, e246, 1000, 600, e246.startAt + 123 * H) // 経過 0.5
+    expect(p?.predicted).toBeCloseTo(600 / 0.6, 0) // rate:246 の 0.5×1.2（far_long の 0.5 ではない）
+    expect(p?.extrapolatedFrom).toBe(222)
+    expect(p?.low).toBeCloseTo(1000 / 1.024, 0)
+    expect(p?.confidence).toBe('rough')
   })
 
   it('下側の誤差が −1 に近い帯は、上限が負や無限大になるので幅も確度も出さない', () => {
@@ -233,5 +274,81 @@ describe('predict', () => {
   it('期間の表が無ければ all にフォールバックする', () => {
     const e198 = meta(11, 0, 198)
     expect(predict(model, e198, 1000, 500, e198.startAt + 99 * H)?.predicted).toBeCloseTo(1000, 0)
+  })
+})
+
+describe('chooseTable と rate:長さ の表', () => {
+  const flat = GRID.map((p) => p)
+  const far = GRID.map((p) => Math.min(1, p * 1.1))
+  const rate = GRID.map((p) => Math.min(1, p * 1.3))
+  const thin = { duration: 102, samples: 1, latestEventId: 221, weight: 0.3 }
+  const base: Model = {
+    version: 't',
+    createdAt: '',
+    algorithm: 'share-median-v1',
+    grid: [...GRID],
+    knownDurations: [150, 222],
+    ranks: {},
+  }
+  const rm = (tables: Record<string, (number | null)[]>) => ({
+    candidate: 'same_all' as const,
+    minProgress: 0.04,
+    tables: { '150': flat, '222': flat, all: flat, far_long: far, far_short: far, ...tables },
+    band: { lo: GRID.map(() => -0.05), hi: GRID.map(() => 0.02) },
+  })
+
+  it('鍵は数字だけ・thin: と区別できる', () => {
+    expect(rateKey(246)).toBe('rate:246')
+    expect(/^[0-9]+$/.test(rateKey(246))).toBe(false)
+  })
+
+  it('いちばん長い期間より長い回: rate の表を使い、借り先（far_long）と同じ札の数字（最長の期間）を返す', () => {
+    const r = rm({ [rateKey(246)]: rate })
+    const c = chooseTable(base, r, 246)
+    expect(c?.table).toBe(rate)
+    expect(c?.extrapolatedFrom).toBe(222)
+    expect(c?.thin).toBeNull()
+  })
+
+  it('いちばん短い期間より短い回: rate の表を使い、札の数字は最短の期間', () => {
+    const r = rm({ [rateKey(102)]: rate })
+    const c = chooseTable(base, r, 102)
+    expect(c?.table).toBe(rate)
+    expect(c?.extrapolatedFrom).toBe(150)
+  })
+
+  it('範囲の内側で表の無い長さ: rate の表を使い、札は付かない（all と同じ）', () => {
+    const r = rm({ [rateKey(174)]: rate })
+    const c = chooseTable(base, r, 174)
+    expect(c?.table).toBe(rate)
+    expect(c?.extrapolatedFrom).toBeNull()
+  })
+
+  it('rate の表が無ければ借り先のまま（古い版のモデルと同じ）', () => {
+    const r = rm({})
+    expect(chooseTable(base, r, 246)?.table).toBe(far)
+    expect(chooseTable(base, r, 102)?.table).toBe(far)
+    expect(chooseTable(base, r, 174)?.table).toBe(flat)
+  })
+
+  it('他の長さの rate の表は使わない', () => {
+    const r = rm({ [rateKey(246)]: rate })
+    expect(chooseTable(base, r, 240)?.table).toBe(far)
+  })
+
+  it('同じ長さの表（完全一致）があれば rate の表は無視する', () => {
+    const r = rm({ [rateKey(150)]: rate })
+    const c = chooseTable(base, r, 150)
+    expect(c?.table).toBe(flat)
+    expect(c?.extrapolatedFrom).toBeNull()
+  })
+
+  it('標本1〜2件の長さの専用の表（thin:）があれば、rate の表より優先する（thin の経路は変えない）', () => {
+    const thinTable = GRID.map((p) => Math.min(1, p * 0.8))
+    const r = rm({ 'thin:102': thinTable, [rateKey(102)]: rate })
+    const c = chooseTable({ ...base, thinDurations: [thin] }, r, 102)
+    expect(c?.table).toBe(thinTable)
+    expect(c?.thin).toEqual(thin)
+    expect(c?.extrapolatedFrom).toBe(150)
   })
 })

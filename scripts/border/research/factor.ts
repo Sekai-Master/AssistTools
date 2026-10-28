@@ -1,5 +1,5 @@
 /**
- * 前例の無い長さで帯を広げる倍率（model.ts の FAR_BAND_FACTOR = 1.5）を振る。
+ * 前例の無い長さで帯を広げる倍率（model.ts の FAR_BAND_FACTOR。この検証で 1.5 → 1.2 にした）を振る。
  * eval.ts --lodo の結果（学習から同じ長さを抜いて「初めての長さ」にした回）の、広げる前の帯（blo・bhi）から作り直す。
  *
  *   node scripts/border/research/factor.ts results/new-lodo-prod.json [...]
