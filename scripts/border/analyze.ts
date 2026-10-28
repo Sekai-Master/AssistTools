@@ -1,23 +1,25 @@
 /**
  * ボーダー予測の自己改善ジョブ（GitHub Actions から1日2回。手で回してもよい）。
  *
- *   node scripts/border/analyze.ts [--dry-run] [--series-cache <dir>] [--backfill] [--now <ms>]
+ *   node scripts/border/analyze.ts [--dry-run] [--series-cache <dir>] [--backfill] [--now <ms>] [--force-model]
  *
  * 1. 終わったイベントの時系列を sekai.best から取り、形（シェア列）にして D1 へ入れる
- * 2. 全履歴で前向き検証をやり直し、候補モデルの王者と帯を決めて新しい版を有効にする
- * 3. 終わったマラソンの予測ログを実測で採点してレポートにし、答え合わせのポストを積む
+ * 2. 全履歴で前向き検証をやり直し、候補モデルの王者と帯を決める。関所（guard.ts）を通れば新しい版を有効にする
+ * 3. 終わったマラソンの予測ログを実測で採点してレポートにし、答え合わせのポストを積む。本番の成績も見張る
  *
- * 環境変数: BORDER_API（Worker の URL）, BORDER_ADMIN_TOKEN（管理トークン）
+ * 環境変数: BORDER_API（Worker の URL）, BORDER_ADMIN_TOKEN（管理トークン）,
+ *   BORDER_MODEL_PIN（版の名前。入れると新しい版を有効にしない）, BORDER_MODEL_FORCE=1（関所で止まった版も有効にする。--force-model と同じ）
  * 設計の正本: docs/border-prediction.md
  */
 import fs from 'node:fs'
 import path from 'node:path'
-import { fitModel } from '../../workers/border/src/fit.ts'
+import { fitModel, type ModelSummary } from '../../workers/border/src/fit.ts'
 import { RANKS, buildShape, durationHours, eventEndMs, type EventMeta, type Sample, type Shape } from '../../workers/border/src/model.ts'
 import { pacePoints } from '../../workers/border/src/pace.ts'
 import { resultText, type ResultRank } from '../../workers/border/src/posts.ts'
 import type { PostPayload, ResultPostRank } from '../../workers/border/src/snapshot.ts'
 import { buildReport, type PredictionLog, type Report } from './report.ts'
+import { checkModel, scoreboard, scoreboardLines } from './guard.ts'
 import { FINAL_RANKS, announceAt, confirmedFinal, historyMeta, historyPostText, mergeSeed, parseHistory, unknownMemories, type HistoryEvent, type MasterEvent } from './history.ts'
 import { addInsights } from '../claude/border-insight-run.ts'
 
@@ -41,6 +43,10 @@ const opt = (name: string) => {
 }
 const DRY = flag('--dry-run')
 const BACKFILL = flag('--backfill')
+/** 関所で止まった版を、中身を確かめたうえで有効にする */
+const FORCE_MODEL = flag('--force-model') || process.env.BORDER_MODEL_FORCE === '1'
+/** 版の固定。入っていれば、新しい版ができても有効にしない（旧版に戻して様子を見るとき） */
+const MODEL_PIN = (process.env.BORDER_MODEL_PIN ?? '').trim()
 const CACHE = opt('--series-cache')
 const NOW = Number(opt('--now') ?? Date.now())
 const API = process.env.BORDER_API ?? ''
@@ -70,6 +76,28 @@ async function write<T>(method: string, p: string, body: unknown): Promise<T | n
     return null
   }
   return admin<T>(method, p, body)
+}
+
+/** GitHub Actions の注釈（ログと実行画面に出る）。メッセージの改行と % は決められた形に直す */
+function annotate(level: 'error' | 'warning', title: string, message: string) {
+  console.log(`::${level} title=${title}::${message.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')}`)
+}
+
+/**
+ * サイトに出している成績（有効な版の要約と、答え合わせ全件）。公開 API なので鍵は要らない。
+ * 取れなくても解析ジョブは止めない（関所は有効な版との比べだけ飛ばし、見張りは出さない）
+ */
+async function fetchTrackRecord(): Promise<{ model: ModelSummary | null; reports: Report[] } | null> {
+  try {
+    if (!API) throw new Error('BORDER_API が無い')
+    const res = await fetch(`${API}/v1/border/track-record`)
+    if (!res.ok) throw new Error(`track-record → ${res.status}`)
+    const body = (await res.json()) as { model?: ModelSummary | null; reports?: Report[] }
+    return { model: body.model ?? null, reports: Array.isArray(body.reports) ? body.reports : [] }
+  } catch (err) {
+    say(`- 成績の取得: 失敗（${err instanceof Error ? err.message : String(err)}）`)
+    return null
+  }
 }
 
 /** マスタ（sekai-master-db-diff）の events.json。サイトの bonuses.json より早く新しいイベントが載る */
@@ -294,6 +322,8 @@ async function updatePace(events: readonly EventMeta[], shapes: readonly Shape[]
 }
 
 async function main() {
+  // 関所で版を止めたら true。ほかの処理を全部終えたあと、最後にジョブを失敗にして気づかせる
+  let blocked = false
   say(`# ボーダー予測 解析ジョブ ${new Date(NOW).toISOString()}${DRY ? '（dry-run）' : ''}`)
   const { events, source } = await loadEvents()
 
@@ -327,8 +357,25 @@ async function main() {
     const blend = until == null ? 'なし' : `経過 ${Math.round(until * 100)}% まで`
     say(`  - ${r.rank}位: 王者 ${r.champion}／序盤の差し替え ${blend}／表に出すのは経過 ${Math.round(r.minProgress * 100)}% から／|誤差|中央 ${mae}／帯の的中 ${cov}`)
   }
-  const put = await write<{ changed: boolean }>('PUT', '/admin/model', { model, summary })
-  if (put) say(`- 版の切り替え: ${put.changed ? 'した' : '同じ版なので無し'}`)
+
+  // 2.5 関所。有効な版の要約と比べ、壊れた版・悪くなった版は有効にしない（取れなければ構造と要約だけ見る）
+  const active = (await fetchTrackRecord())?.model ?? null
+  const guard = checkModel(model, summary, active)
+  say(`- 関所: ${guard.ok ? '通った' : `止める理由 ${guard.problems.length} 件`}（有効な版 ${active?.version ?? '不明'} → 新しい版 ${summary.version}）`)
+  for (const p of guard.problems) say(`  - 問題: ${p}`)
+  for (const n of guard.notes) say(`  - ${n}`)
+
+  if (MODEL_PIN) {
+    say(`- 版の切り替え: しない（版を ${MODEL_PIN} に固定している〈BORDER_MODEL_PIN〉。有効にするはずだった版 ${summary.version} は関所を${guard.ok ? '通っていた' : '通らなかった'}）`)
+  } else if (!guard.ok && !FORCE_MODEL) {
+    say(`- 版の切り替え: しない（関所で止めた。中身を確かめて有効にするなら --force-model か BORDER_MODEL_FORCE=1）`)
+    for (const p of guard.problems) annotate('error', 'ボーダー予測の版を止めた', `${summary.version}: ${p}`)
+    blocked = true
+  } else {
+    if (!guard.ok) say('- 関所を通らなかったが、--force-model（BORDER_MODEL_FORCE）なので有効にする')
+    const put = await write<{ changed: boolean }>('PUT', '/admin/model', { model, summary })
+    if (put) say(`- 版の切り替え: ${put.changed ? 'した' : '同じ版なので無し'}`)
+  }
   if (DRY) fs.writeFileSync('border-model.dry.json', JSON.stringify({ model, summary }, null, 1))
 
   // 3. 答え合わせ
@@ -366,11 +413,26 @@ async function main() {
   }
   if (targets.length === 0) say('- 答え合わせ: 対象なし')
 
+  // 3.5 本番の成績の見張り（いま積んだレポートも入る）。警告だけでジョブは止めない
+  try {
+    const record = await fetchTrackRecord()
+    if (record) {
+      const sb = scoreboard(record.reports)
+      say('- 本番の成績（直近の答え合わせ）')
+      for (const line of scoreboardLines(sb)) say(line)
+      for (const a of sb.alarms) annotate('warning', 'ボーダー予測の見張り', a)
+    }
+  } catch (err) {
+    say(`- 本番の成績: 失敗（${err instanceof Error ? err.message : String(err)}）`)
+  }
+
   // 4. 歴代ボーダー（終値の表）に、終わった回を書き足す。失敗しても解析ジョブは止めない
   await updateFinals().catch((err) => say(`- 歴代ボーダー: 失敗（${err instanceof Error ? err.message : String(err)}）`))
 
   const summaryFile = process.env.GITHUB_STEP_SUMMARY
   if (summaryFile) fs.appendFileSync(summaryFile, log.join('\n') + '\n')
+  // 関所で版を止めた。ステップサマリーを書いたあとに失敗にする（途中で落とすと答え合わせなどが止まる）
+  if (blocked) process.exitCode = 1
 }
 
 main().catch((err) => {

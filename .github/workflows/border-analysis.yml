@@ -23,6 +23,10 @@ on:
         description: "D1 に書かずに結果だけ見る"
         type: boolean
         default: false
+      force_model:
+        description: "関所で止まった版を、中身を確かめたうえで有効にする"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -56,4 +60,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           BACKFILL: ${{ inputs.backfill && '--backfill' || '' }}
           DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
-        run: node scripts/border/analyze.ts $BACKFILL $DRY_RUN
+          FORCE_MODEL: ${{ inputs.force_model && '--force-model' || '' }}
+          # 版の固定（リポジトリ変数）。名前を入れると、新しい版ができても有効にしない。空なら固定しない
+          BORDER_MODEL_PIN: ${{ vars.BORDER_MODEL_PIN }}
+        run: node scripts/border/analyze.ts $BACKFILL $DRY_RUN $FORCE_MODEL
