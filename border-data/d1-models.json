@@ -1,0 +1,54 @@
+[
+  {
+    "results": [
+      {
+        "version": "share-median-v1@e217-a4fefca6",
+        "created_at": 1790726870812,
+        "active": 0
+      },
+      {
+        "version": "share-median-v1@e219-5225a723",
+        "created_at": 1791640566706,
+        "active": 0
+      },
+      {
+        "version": "share-median-v1@e220-c60bf101",
+        "created_at": 1792438173778,
+        "active": 0
+      },
+      {
+        "version": "share-median-v1@e221-435d7d2b",
+        "created_at": 1792936123351,
+        "active": 0
+      },
+      {
+        "version": "share-median-v1@e221-02cd0bae",
+        "created_at": 1792993669889,
+        "active": 0
+      },
+      {
+        "version": "share-median-v1@e221-f3d6809b",
+        "created_at": 1792994510486,
+        "active": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "NRT",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.2137
+      },
+      "duration": 0.2137,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 2502656,
+      "rows_read": 12,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
