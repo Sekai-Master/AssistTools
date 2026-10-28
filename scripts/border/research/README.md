@@ -22,4 +22,6 @@ node factor.ts results/new-lodo-prod.json       # 前例の無い長さの帯の
 ./run-all.sh                                    # RESULTS.md の表を全部作り直す（4並列で数分）
 ```
 
+手元で次の検証用のデータをまとめるときは `node scripts/border/research/export-data.ts`（本番 D1 の予測ログ・形・版・実測と、sekai.best の30分刻みの推移。wrangler のログインと sekai.best への接続が要る）。
+
 `results/*.json` はコミットしない（数十MB）。データは `scripts/border/data/pace-seed.json`（形）と `data/events-meta.json`（マスタの日程）だけを使い、外には取りに行かない。
