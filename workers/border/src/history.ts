@@ -71,10 +71,21 @@ export function unknownMemories(e: MasterEvent): boolean {
   return m != null && !Object.hasOwn(MEMORIES_UNIT, m[1])
 }
 
+/**
+ * テストの回（チアフルの安定化などのためのテストイベント）か。名前に「テストイベント」、または素材名の区切りに test・cheerfutest（数字付きも）。
+ * 名前だけだと、名前を付け替えた回（素材名は event_cheerfutest2_2025 のまま）を取りこぼすので、素材名も見る。
+ * 素材名を「test を含む」で見ると event_contest_… のような本番の回まで外れるので、区切り（_）の中の語で見る。
+ * 歴代の表・開始の告知・日報・追い込み・歴代ペースが、同じ判定を使う
+ */
+const TEST_ASSET = /(^|_)(cheerfu)?test\d*(_|$)/i
+export function isTestEvent(e: { name: string; asset?: string | null; assetbundleName?: string | null }): boolean {
+  return e.name.includes('テストイベント') || TEST_ASSET.test(e.asset ?? '') || TEST_ASSET.test(e.assetbundleName ?? '')
+}
+
 /** マスタの1行を歴代の表の行（終値はまだ空）にする。対象外の回と、知らない Memories の回は null */
 export function historyMeta(e: MasterEvent): Omit<HistoryEvent, 'finals' | 'sources'> | null {
   if (e.eventType !== 'marathon' && e.eventType !== 'cheerful_carnival' && e.eventType !== 'world_bloom') return null
-  if (e.name.includes('テストイベント')) return null
+  if (isTestEvent(e)) return null
   if (unknownMemories(e)) return null
   let type: HistoryType = e.eventType
   let unit = e.unit ?? 'none'

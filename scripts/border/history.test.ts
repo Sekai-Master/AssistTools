@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { announceAt, confirmedFinal, historyMeta, mergeSeed, parseHistory, unknownMemories, type HistoryEvent, type MasterEvent } from './history.ts'
+import { announceAt, confirmedFinal, historyMeta, isTestEvent, mergeSeed, parseHistory, unknownMemories, type HistoryEvent, type MasterEvent } from './history.ts'
 
 const H = 3_600_000
 // 221 Vivid BAD SQUAD Memories（マスタの値そのまま）
@@ -45,6 +45,27 @@ describe('歴代ボーダーの行', () => {
     expect(historyMeta({ ...e221, assetbundleName: 'event_memories_constructor_2026' })).toBeNull()
     expect(unknownMemories({ ...e221, assetbundleName: 'event_memories_xyz_2027' })).toBe(true)
     expect(unknownMemories(e221)).toBe(false)
+  })
+
+  it('テストの回は名前（テストイベント）か素材名（test）で見分ける。historyMeta も対象外にする', () => {
+    // マスタの実際の名前（166・186）
+    expect(isTestEvent({ name: 'チアフルカーニバルイベントテストイベント' })).toBe(true)
+    expect(isTestEvent({ name: '第2回チアフルカーニバルイベントテストイベント', asset: 'event_cheerfutest2_2025' })).toBe(true)
+    // 名前に「テストイベント」が無くても、素材名に test が入っていればテストの回（asset も assetbundleName も見る）
+    expect(isTestEvent({ name: '第3回チアフルカーニバル', asset: 'event_cheerfutest3_2026' })).toBe(true)
+    expect(isTestEvent({ name: '第3回チアフルカーニバル', assetbundleName: 'event_cheerfutest3_2026' })).toBe(true)
+    expect(isTestEvent({ name: '第3回チアフルカーニバル', asset: null, assetbundleName: 'event_CheerfuTest3_2026' })).toBe(true)
+    // 通常のマラソン・素材名が無い回は違う
+    expect(isTestEvent({ name: e221.name, asset: e221.assetbundleName })).toBe(false)
+    expect(isTestEvent({ name: e221.name, asset: null })).toBe(false)
+    // 素材名に test を含んでも、区切りの中の語でなければ本番の回（event_contest_… など）
+    expect(isTestEvent({ name: 'コンテスト', asset: 'event_contest_2026' })).toBe(false)
+    expect(isTestEvent({ name: 'グレイテスト', asset: 'event_greatest_2026' })).toBe(false)
+    expect(isTestEvent({ name: 'テスト', asset: 'event_test_2026' })).toBe(true)
+    expect(isTestEvent({ name: e221.name })).toBe(false)
+    const t3: MasterEvent = { ...e221, id: 250, eventType: 'cheerful_carnival', name: '第3回チアフルカーニバル', assetbundleName: 'event_cheerfutest3_2026' }
+    expect(historyMeta(t3)).toBeNull()
+    expect(historyMeta({ ...t3, assetbundleName: 'event_cheerful3_2026' })).not.toBeNull()
   })
 
   it('確定値は順位発表より後の点だけ（199 は 20:57 で止まっていた）', () => {

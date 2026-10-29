@@ -125,6 +125,15 @@ describe('日報を積む（runDaily）', () => {
     expect(await runDaily(await setup(snapAt(T, 1, 'world_bloom')), T + 2 * M)).toEqual({ status: 'idle' })
   })
 
+  it('テストイベントは日報の時刻でも出さない（日程が21時開始の24時間でなくても）', async () => {
+    const test = { ...EV, type: 'cheerful_carnival', name: '第2回チアフルカーニバルイベントテストイベント' }
+    const env = await setup({ ...snapAt(T), event: test })
+    expect(await runDaily(env, T + 2 * M)).toEqual({ status: 'idle' })
+    expect(await unsentPosts(env.DB, 'x')).toHaveLength(0)
+    // 同じ日程・同じ時刻で名前が普通の回は積む
+    expect(await runDaily(await setup({ ...snapAt(T), event: { ...test, name: 'チアフルカーニバル' } }), T + 2 * M)).toEqual({ status: 'queued', id: '222:daily:2' })
+  })
+
   it('解析ジョブが置いた歴代ペースを使う（管理 API で受け取る）', async () => {
     const env = await setup(snapAt(T))
     const res = await handleRequest(

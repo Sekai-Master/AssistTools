@@ -6,7 +6,7 @@
  *   日程（288KB）の parse は開催中には行わない（開催中でない回にだけ読み直す）。
  */
 import {
-  activeEvent,
+  activeEvents,
   activeModel,
   insertPredictions,
   insertSamples,
@@ -149,11 +149,11 @@ function snapshotOf(event: EventMeta, now: number, samples: LiveSample[], preds:
 }
 
 export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): Promise<CronResult> {
-  let event = await activeEvent(env.DB, now)
-  if (!event) {
+  let actives = await activeEvents(env.DB, now)
+  if (actives.length === 0) {
     const changed = await refreshSchedule(env, now, fetcher)
-    event = await activeEvent(env.DB, now)
-    if (!event) return { status: 'idle', scheduleChanged: changed }
+    actives = await activeEvents(env.DB, now)
+    if (actives.length === 0) return { status: 'idle', scheduleChanged: changed }
   }
 
   let live: { eventId: number | null; samples: LiveSample[] }
@@ -164,7 +164,9 @@ export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): 
   } catch (err) {
     return { status: 'source_error', message: err instanceof Error ? err.message : String(err) }
   }
-  if (live.eventId !== event.id) return { status: 'event_mismatch', expected: event.id, got: live.eventId }
+  // 回が重なっているときは、sekai.best の live が見せている回を集める（後から始まった回に決め打ちすると、live がまだ前の回のあいだ止まる）
+  const event = actives.find((a) => a.id === live.eventId)
+  if (!event) return { status: 'event_mismatch', expected: actives[0].id, got: live.eventId }
   if (live.samples.length === 0) return { status: 'source_error', message: 'live に目的の順位が無い' }
 
   const prevRaw = await kvGet(env.DB, 'current')

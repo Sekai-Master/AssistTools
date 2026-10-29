@@ -20,7 +20,7 @@ import { resultText, type ResultRank } from '../../workers/border/src/posts.ts'
 import type { PostPayload, ResultPostRank } from '../../workers/border/src/snapshot.ts'
 import { buildReport, type PredictionLog, type Report } from './report.ts'
 import { checkModel, scoreboard, scoreboardLines } from './guard.ts'
-import { FINAL_RANKS, announceAt, confirmedFinal, historyMeta, historyPostText, mergeSeed, parseHistory, unknownMemories, type HistoryEvent, type MasterEvent } from './history.ts'
+import { FINAL_RANKS, announceAt, confirmedFinal, historyMeta, historyPostText, isTestEvent, mergeSeed, parseHistory, unknownMemories, type HistoryEvent, type MasterEvent } from './history.ts'
 import { addInsights } from '../claude/border-insight-run.ts'
 
 const SITE = 'https://sekaimaster.pages.dev'
@@ -302,7 +302,7 @@ async function updateFinals(retried = false): Promise<void> {
  * Worker の kv `pace:{id}` に置く（pace.ts）。過去の回の伸び方は、本番の形（D1 の shapes）を正にして、無い回（1〜85 など）は種で補う
  */
 async function updatePace(events: readonly EventMeta[], shapes: readonly Shape[]) {
-  const daily = (e: EventMeta) => (e.eventType === 'marathon' || e.eventType === 'cheerful_carnival') && !e.name.includes('テストイベント')
+  const daily = (e: EventMeta) => (e.eventType === 'marathon' || e.eventType === 'cheerful_carnival') && !isTestEvent(e)
   const targets = events.filter((e) => daily(e) && e.startAt - 2 * 86_400_000 <= NOW && NOW < e.aggregateAt)
   if (targets.length === 0) {
     say('- 日報の歴代ペース: 対象の回なし')

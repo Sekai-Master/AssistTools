@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleRequest } from '../src/api.ts'
 import { parseLive, parseSchedule, runCron } from '../src/collect.ts'
-import { putModel } from '../src/db.ts'
+import { kvGet, putModel, upsertEvents } from '../src/db.ts'
 import type { Env } from '../src/env.ts'
 import { GRID, type Model } from '../src/model.ts'
 import { createD1 } from './d1shim.ts'
@@ -135,6 +135,43 @@ describe('runCron', () => {
     await runCron(env, START - 10 * H, fakeFetch(() => ({})))
     const r = await runCron(env, START + H, fakeFetch(() => liveBody(218, START + H, 1)))
     expect(r).toEqual({ status: 'event_mismatch', expected: 219, got: 218 })
+  })
+
+  // マラソン 219 が終わった直後（最終サンプルを拾う1時間のあいだ）に、24時間のチアフル 230 が始まった
+  describe('開催中の回が重なっているとき', () => {
+    const END = EVENT.aggregateAt
+    const TEST_START = END - 5 * 60_000
+    const NOW = END + 20 * 60_000
+    const seed = async () => {
+      await upsertEvents(env.DB, [
+        { id: EVENT.id, name: EVENT.name, eventType: EVENT.type, unit: EVENT.unit, startAt: EVENT.startAt, aggregateAt: EVENT.aggregateAt },
+        { id: 230, name: '第3回チアフルカーニバルイベントテストイベント', eventType: 'cheerful_carnival', unit: 'none', startAt: TEST_START, aggregateAt: TEST_START + 24 * H - 60_000, asset: 'event_cheerfutest3_2026' },
+      ])
+    }
+
+    it('live が先に始まった回（マラソン）を見せているあいだは、そちらを集める', async () => {
+      await seed()
+      const r = await runCron(env, NOW, fakeFetch(() => liveBody(219, END + 16 * 60_000, 1)))
+      expect(r).toMatchObject({ status: 'collected', eventId: 219, samples: 6 })
+      expect((JSON.parse((await kvGet(env.DB, 'current')) as string) as { event: { id: number } }).event.id).toBe(219)
+      expect(await kvGet(env.DB, 'history:219')).not.toBeNull()
+      expect(await kvGet(env.DB, 'history:230')).toBeNull()
+    })
+
+    it('live が後から始まった回を見せたら、そちらを集める', async () => {
+      await seed()
+      const r = await runCron(env, NOW, fakeFetch(() => liveBody(230, NOW - 60_000, 0.01)))
+      expect(r).toMatchObject({ status: 'collected', eventId: 230, samples: 6 })
+      expect(await kvGet(env.DB, 'history:230')).not.toBeNull()
+      expect(await kvGet(env.DB, 'history:219')).toBeNull()
+    })
+
+    it('live がどちらでもない回なら、いちばん最近始まった回を期待して event_mismatch（何も書かない）', async () => {
+      await seed()
+      const r = await runCron(env, NOW, fakeFetch(() => liveBody(218, NOW, 1)))
+      expect(r).toEqual({ status: 'event_mismatch', expected: 230, got: 218 })
+      expect(await kvGet(env.DB, 'current')).toBeNull()
+    })
   })
 })
 
