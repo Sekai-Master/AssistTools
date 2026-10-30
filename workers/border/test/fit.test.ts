@@ -511,6 +511,8 @@ describe('標本1〜2件の長さの表（thin）', () => {
     expect(choice?.table).toBe(rm.tables.far_short)
     expect(choice?.extrapolatedFrom).toBe(150)
     expect(choice?.thin).toBeNull()
+    // thin の表が無いので「同じ長さの回が少ない」とは書かず、借り先の文面（#175）
+    expect(choice?.source).toBe('borrow')
   })
 
   it('thin の鍵は完全一致（数字だけの鍵）にならず、thinDurations の無い古い版のモデルでは借り先のまま', () => {
@@ -586,11 +588,17 @@ describe('fitModel の予定の回（rate:長さ）', () => {
     const long = chooseTable(model, rm, 246)
     expect(long?.table).toBe(rm.tables[rateKey(246)])
     expect(long?.extrapolatedFrom).toBe(198)
+    // 出どころは率モデルを混ぜた表（文面は「借りて」でなく「全イベントの伸び方から作った形を混ぜて」。#175）
+    expect(long?.source).toBe('rate')
     expect(chooseTable(model, rm, 80)?.extrapolatedFrom).toBe(150)
+    expect(chooseTable(model, rm, 80)?.source).toBe('rate')
     expect(chooseTable(model, rm, 174)?.table).toBe(rm.tables[rateKey(174)])
     expect(chooseTable(model, rm, 174)?.extrapolatedFrom).toBeNull()
+    // 範囲の内側（all の回）は参考値でないので、出どころも付けない
+    expect(chooseTable(model, rm, 174)?.source).toBeNull()
     // 別の長さの予定は混ざらない
     expect(chooseTable(model, rm, 240)?.table).toBe(rm.tables.far_long)
+    expect(chooseTable(model, rm, 240)?.source).toBe('borrow')
   })
 
   it('同じ長さの表がある長さ（150h）の予定の回には焼かない', () => {
@@ -621,6 +629,8 @@ describe('fitModel の予定の回（rate:長さ）', () => {
     const choice = chooseTable(model, model.ranks['1000'], 102)
     expect(choice?.table).toBe(model.ranks['1000'].tables['thin:102'])
     expect(choice?.thin?.duration).toBe(102)
+    // 率モデルが混ざっても、文面は「同じ長さの回が少ない」（#175）
+    expect(choice?.source).toBe('thin')
   })
 
   it('同じ長さの予定の回が複数あれば、いちばん早く始まる回の日程を使う', () => {

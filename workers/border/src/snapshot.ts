@@ -3,7 +3,7 @@
  * ★ ここには Workers ランタイムの型を持ち込まない（サイト側の tsconfig でも通すため）。
  * ★ sekaimaster-bot（別リポジトリ）の src/border/client.ts が同じ形を読む。フィールドを変えたらそちらも直す。
  */
-import type { Confidence, ThinDuration } from './model.ts'
+import type { Confidence, ReferenceSource, ThinDuration } from './model.ts'
 
 export interface SnapshotEvent {
   id: number
@@ -42,8 +42,26 @@ export interface Snapshot {
    * 古い版の Worker の出力には無い
    */
   thin?: ThinDuration | null
+  /**
+   * 参考値の表の出どころ（thin＝同じ長さの回が少ない / rate＝率モデルを混ぜた / borrow＝近い長さの表をそのまま借りた）。
+   * 文面の書き分けに使う（#175）。古い版の Worker の出力には無いので、読む側は referenceOf を通す
+   */
+  referenceSource?: ReferenceSource | null
   predicted: boolean
   ranks: SnapshotRank[]
+}
+
+/**
+ * 参考値の出どころ。参考値でなければ null。
+ * referenceSource の無い古い出力は、thin があれば thin、extrapolatedFrom だけなら borrow とみなす
+ * （率モデルを入れる前の Worker は、過去に無い長さで近い長さの表をそのまま借りていた）。
+ * thin と言っているのに thin の中身が無い・知らない値のときも borrow（「過去に無い長さ」の文面）に倒す
+ */
+export function referenceOf(s: Pick<Snapshot, 'extrapolatedFrom' | 'thin' | 'referenceSource'>): ReferenceSource | null {
+  if (s.extrapolatedFrom == null) return null
+  const src = s.referenceSource
+  if (src === 'thin' || (src == null && s.thin != null)) return s.thin != null ? 'thin' : 'borrow'
+  return src === 'rate' ? 'rate' : 'borrow'
 }
 
 /** /api/border/events/{id}/history の1行: [sampleAt, progress, [[rank, current, predicted, low, high, visible], ...]] */

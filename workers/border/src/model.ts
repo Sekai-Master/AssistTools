@@ -424,6 +424,15 @@ export const FAR_BAND_FACTOR = 1.2
 /** 帯の上限を計算するとき、1 + 下側の誤差 がこれ以下なら上限を出さない（予測の 20 倍を超える上限は意味が無い） */
 const MIN_DIVISOR = 0.05
 
+/**
+ * 参考値の表の出どころ。表示（サイト・投稿文・Bot の本文と画像）が文面を書き分けるために使う（#175、2026-10-30）。
+ *   thin   … 標本1〜2件の長さの表（thin:長さ）。日程のわかっている回なら率モデルの表も混ざっている
+ *   rate   … 過去に無い長さで、借り先（far_*）と率モデルの表を幾何平均した表（rate:長さ）
+ *   borrow … 過去に無い長さで、近い端の長さの表（far_*）をそのまま借りた
+ * 参考値でない（extrapolatedFrom が null の）ときは null
+ */
+export type ReferenceSource = 'thin' | 'rate' | 'borrow'
+
 export interface TableChoice {
   table: (number | null)[]
   /**
@@ -433,6 +442,8 @@ export interface TableChoice {
   extrapolatedFrom: number | null
   /** 標本1〜2件の長さの表を使ったとき、その長さの情報 */
   thin: ThinDuration | null
+  /** 参考値の表の出どころ。参考値でなければ null */
+  source: ReferenceSource | null
 }
 
 /** 標本3件以上の長さのうち、duration にいちばん近いもの（同じ近さなら短いほう）。無ければ duration */
@@ -446,22 +457,23 @@ function nearestKnown(known: readonly number[], duration: number): number {
 
 export function chooseTable(model: Model, rm: RankModel, duration: number): TableChoice | null {
   const exact = rm.tables[String(duration)]
-  if (exact) return { table: exact, extrapolatedFrom: null, thin: null }
+  if (exact) return { table: exact, extrapolatedFrom: null, thin: null, source: null }
   const known = model.knownDurations ?? []
   // 標本1〜2件の長さ: 専用の表を使うが、確度は名乗らない（参考値の札と広い帯は過去に無い長さと同じ）
   const thin = model.thinDurations?.find((t) => t.duration === duration) ?? null
   const thinTable = rm.tables[thinKey(duration)]
-  if (thin && thinTable) return { table: thinTable, extrapolatedFrom: nearestKnown(known, duration), thin }
+  if (thin && thinTable) return { table: thinTable, extrapolatedFrom: nearestKnown(known, duration), thin, source: 'thin' }
   // 過去に無い長さ: 率モデルの表を混ぜた専用の表（rate:長さ）があれば、借り先の代わりにそれを使う。札の数字と帯の広げは借り先と同じ
   const rate = rm.tables[rateKey(duration)]
   if (known.length > 0) {
     const max = Math.max(...known)
     const min = Math.min(...known)
-    if (duration > max && rm.tables.far_long) return { table: rate ?? rm.tables.far_long, extrapolatedFrom: max, thin: null }
-    if (duration < min && rm.tables.far_short) return { table: rate ?? rm.tables.far_short, extrapolatedFrom: min, thin: null }
+    const source: ReferenceSource = rate ? 'rate' : 'borrow'
+    if (duration > max && rm.tables.far_long) return { table: rate ?? rm.tables.far_long, extrapolatedFrom: max, thin: null, source }
+    if (duration < min && rm.tables.far_short) return { table: rate ?? rm.tables.far_short, extrapolatedFrom: min, thin: null, source }
   }
   const all = rate ?? rm.tables.all
-  return all ? { table: all, extrapolatedFrom: null, thin: null } : null
+  return all ? { table: all, extrapolatedFrom: null, thin: null, source: null } : null
 }
 
 /**
@@ -502,6 +514,8 @@ export interface Prediction {
   extrapolatedFrom: number | null
   /** 標本1〜2件の長さの表を使ったとき、その長さの情報（extrapolatedFrom も付き、帯は広げてある） */
   thin: ThinDuration | null
+  /** 参考値の表の出どころ（thin / rate / borrow）。参考値でなければ null */
+  referenceSource: ReferenceSource | null
   visible: boolean
 }
 
@@ -540,6 +554,7 @@ export function predict(model: Model, meta: EventMeta, rank: number, current: nu
     confidence,
     extrapolatedFrom: choice.extrapolatedFrom,
     thin: choice.thin,
+    referenceSource: choice.source,
     // 帯が無い・広すぎる予測は、確度を名乗れないので出さない（記録はする）
     visible: p >= rm.minProgress && confidence != null,
   }

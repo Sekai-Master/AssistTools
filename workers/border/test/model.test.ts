@@ -181,6 +181,8 @@ describe('predict', () => {
     const t = e246.startAt + 123 * H // 経過 0.5
     const p = predict(m, e246, 1000, 600, t)
     expect(p?.extrapolatedFrom).toBe(222)
+    // rate:246 が無いので近い端の表をそのまま借りた（文面は「借りて」のまま。#175）
+    expect(p?.referenceSource).toBe('borrow')
     expect(p?.predicted).toBeCloseTo(600 / 0.6, 0) // far_long の 0.5×1.2
     // 帯は 1.2 倍: 上側 0.02 → 0.024、下側 −0.05 → −0.06
     expect(p?.low).toBeCloseTo(1000 / 1.024, 0)
@@ -191,6 +193,7 @@ describe('predict', () => {
     const e198 = meta(13, 0, 198)
     expect(predict(m, e198, 1000, 500, e198.startAt + 99 * H)?.confidence).not.toBe(null)
     expect(predict(m, e198, 1000, 500, e198.startAt + 99 * H)?.extrapolatedFrom).toBeNull()
+    expect(predict(m, e198, 1000, 500, e198.startAt + 99 * H)?.referenceSource).toBeNull()
   })
 
   it('標本1〜2件の長さ: 専用の表（thin:102）で割り、過去に無い長さと同じく帯を広げて確度は名乗らない', () => {
@@ -212,6 +215,7 @@ describe('predict', () => {
     const p = predict(m, e102, 1000, 400, e102.startAt + 51 * H) // 経過 0.5
     expect(p?.thin).toEqual(thin)
     expect(p?.extrapolatedFrom).toBe(150)
+    expect(p?.referenceSource).toBe('thin')
     expect(p?.predicted).toBeCloseTo(400 / 0.4, 0) // thin:102 の 0.5×0.8
     // 帯は 1.2 倍: 上側 0.02 → 0.024、下側 −0.05 → −0.06
     expect(p?.low).toBeCloseTo(1000 / 1.024, 0)
