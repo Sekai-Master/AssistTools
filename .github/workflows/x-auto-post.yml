@@ -3,7 +3,6 @@ name: X auto post
 # 公式 X の投稿の自動作成（毎日 12:17 JST）。72時間前からの新しい版（MINOR 以上）と新しく公開された曲を知らせる（id は版・曲ごとなので二重にならない）。
 # 中身は scripts/claude/x-auto-post.ts。承認なしで出してよい（2026-09-30 Nori）。
 # 版の告知の言い回しは Claude（ANTHROPIC_API_KEY が無ければ型の文面）。曲名・版番号はデータのまま。
-# 版の告知を手で出したいときは、CHANGELOG.md のその版の見出しのすぐ下に <!-- x-auto-post: skip --> と書く。その版は積まず、ログに出す（2026-10-30。docs/versioning.md の 9）。
 
 on:
   schedule:

@@ -4,8 +4,7 @@
  *   node scripts/claude/x-auto-post.ts [--dry-run]
  *
  * 72時間前の main と今の main を比べて、
- *   - 新しい版（MINOR 以上・更新履歴の日付が7日以内）があれば、更新履歴を Claude に要約させて告知。
- *     その版の節に `<!-- x-auto-post: skip -->` があれば積まない（Nori が手で告知するとき。2026-10-30）
+ *   - 新しい版（MINOR 以上・更新履歴の日付が7日以内）があれば、更新履歴を Claude に要約させて告知
  *   - 新しく公開された曲があれば、1曲1本で告知（型で書く。曲名はデータのまま）
  * を投稿キューに積む（X にだけ出す）。承認なしで出してよい（2026-09-30 Nori）。
  * id は版・曲ごとに決まっているので、窓が重なっても二重には出ない（Worker が INSERT OR IGNORE）。
@@ -20,7 +19,6 @@ import fs from 'node:fs'
 import { askClaude, hasKey } from './client.ts'
 import { queuePost } from './queue.ts'
 import {
-  AUTO_POST_SKIP_MARK,
   MAX_RELEASES_PER_RUN,
   MAX_SONGS_PER_RUN,
   RELEASE_SYSTEM,
@@ -37,7 +35,6 @@ import {
   songPayload,
   songPost,
   songPostId,
-  splitAutoPostSkips,
   type AnnouncePayload,
   type ChangelogEntry,
   type Song,
@@ -111,11 +108,8 @@ async function releases(baseSha: string, now: number) {
     return
   }
   const fresh = recentReleases(newAnnounceable(before, after), now)
-  // 上限は注記で止めた版も含めて数える（比べる元が壊れたときの見張りなので、止めた版で緩めない）
   if (fresh.length > MAX_RELEASES_PER_RUN) throw new Error(`新しい版が ${fresh.length} 本ある（上限 ${MAX_RELEASES_PER_RUN}）。比べる元を疑って何も出さない`)
-  const { post: toPost, skipped } = splitAutoPostSkips(fresh)
-  for (const e of skipped) console.log(`v${e.version} は更新履歴に ${AUTO_POST_SKIP_MARK} があるので積まない（手で告知する）`)
-  for (const e of toPost) {
+  for (const e of fresh) {
     const text = await releaseText(e)
     if (text) await post(releasePostId(e.version), text, releasePayload(e, READY_TOOLS))
   }

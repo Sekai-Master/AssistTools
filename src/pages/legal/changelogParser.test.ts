@@ -43,29 +43,6 @@ describe("parseChangelog", () => {
     expect(JSON.stringify(releases)).not.toContain("注意書き");
   });
 
-  // 2026-10-30: 自動の X 告知を止める注記（scripts/claude/xposts.ts）。ページには出さず、版も消さない
-  it("版の節の <!-- x-auto-post: skip --> はページに出ない（見出しの下の行でも、見出しの行の末尾でも）", () => {
-    const md = `## [2.1.0] - 2026-10-30
-<!-- x-auto-post: skip -->
-
-手で告知する版。
-
-### 追加
-
-- 項目
-
-## [2.0.1] - 2026-10-29 <!-- x-auto-post: skip -->
-
-- 修正
-`;
-    const r = parseChangelog(md);
-    expect(r.map((x) => x.version)).toEqual(["2.1.0", "2.0.1"]);
-    expect(r[0].summary).toBe("手で告知する版。");
-    expect(r[0].groups).toEqual([{ label: "追加", items: ["項目"] }]);
-    expect(r[1].date).toBe("2026-10-29");
-    expect(JSON.stringify(r)).not.toContain("x-auto-post");
-  });
-
   it("見出しごとに項目をまとめ、強調記法は落とす", () => {
     expect(releases[0].groups.map((g) => g.label)).toEqual(["追加", "修正"]);
     expect(releases[0].groups[0].items).toEqual(["強調は落として素のテキストにする", "2つめ"]);

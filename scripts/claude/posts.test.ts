@@ -4,7 +4,6 @@ import type { Report } from '../border/report.ts'
 import { checkInsight, insightPayload, insightPost, insightUser, reportFacts } from './insight.ts'
 import { sanitizeForIssue } from './diagnose.ts'
 import {
-  AUTO_POST_SKIP_MARK,
   CHANGELOG_URL,
   MAX_RELEASES_PER_RUN,
   MAX_SONGS_PER_RUN,
@@ -20,7 +19,6 @@ import {
   songPayload,
   songPost,
   songPostId,
-  splitAutoPostSkips,
 } from './xposts.ts'
 
 const CL = `# 更新履歴
@@ -59,40 +57,6 @@ describe('更新履歴の読み取り', () => {
     const before = after.slice(2)
     expect(newAnnounceable(before, after).map((e) => e.version)).toEqual(['1.23.0'])
     expect(newAnnounceable(after, after)).toEqual([])
-  })
-
-  // 2026-10-30: Nori が版の告知を手で出したいとき用
-  it('版の節に <!-- x-auto-post: skip --> があれば、その版だけ自動の告知から外す。注記は本文に残さない', () => {
-    const md = `# 更新履歴
-
-<!-- 書式の注意書き（版の外なので効かない）: x-auto-post: skip -->
-
-## [1.25.0] - 2026-10-26
-${AUTO_POST_SKIP_MARK}
-
-手で告知する版です。
-
-## [1.24.0] - 2026-10-20 <!--x-auto-post:skip-->
-
-見出しの行の末尾でも効く。
-
-## [1.23.0] - 2026-10-01
-
-自動で告知する版です。
-`
-    const e = parseChangelog(md)
-    expect(e.map((x) => [x.version, x.skipAutoPost === true])).toEqual([
-      ['1.25.0', true],
-      ['1.24.0', true],
-      ['1.23.0', false],
-    ])
-    expect(e[0].body).toBe('手で告知する版です。')
-    expect(e[0].body).not.toContain('x-auto-post')
-    const { post, skipped } = splitAutoPostSkips(newAnnounceable([], e))
-    expect(post.map((x) => x.version)).toEqual(['1.23.0'])
-    expect(skipped.map((x) => x.version)).toEqual(['1.25.0', '1.24.0'])
-    // 注記の無い更新履歴（いまの CHANGELOG.md の形）は全部告知する
-    expect(splitAutoPostSkips(parseChangelog(CL)).skipped).toEqual([])
   })
 })
 

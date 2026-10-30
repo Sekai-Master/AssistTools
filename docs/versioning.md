@@ -117,8 +117,6 @@ gh release create v1.9.0 --title "v1.9.0" --notes "..."
 
 公式 X（[@pj_Sekai_master](https://x.com/pj_Sekai_master)）で告知する。**文面のテンプレと運用の約束は [x-operations.md](x-operations.md)。** PATCH だけのリリースは告知しなくてよい（更新履歴に残れば足りる）。
 
-MINOR 以上の版は、X auto post（`.github/workflows/x-auto-post.yml`、毎日 12:17 JST）が「【更新 vX.Y.Z】」の告知を自動で積む。**手で告知したい版は、手順2で CHANGELOG.md のその版の見出しのすぐ下の行に `<!-- x-auto-post: skip -->` と書く。** その版は自動では積まれず、ワークフローのログに「積まない」と出る。HTML コメントなので更新履歴ページには出ない（`src/pages/legal/changelogParser.ts` が落とす）。書き忘れて push すると次の 12:17 に自動の告知が出るので、手で出すと決めた版はリリースのコミットに含めておく（2026-10-30）。
-
 ## 規約・ポリシーを改訂するとき
 
 1. `src/pages/legal/TermsPage.tsx` / `PrivacyPage.tsx` を直す
