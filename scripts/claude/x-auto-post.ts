@@ -3,43 +3,22 @@
  *
  *   node scripts/claude/x-auto-post.ts [--dry-run]
  *
- * 72時間前の main と今の main を比べて、
- *   - 新しい版（MINOR 以上・更新履歴の日付が7日以内）があれば、更新履歴を Claude に要約させて告知
- *   - 新しく公開された曲があれば、1曲1本で告知（型で書く。曲名はデータのまま）
+ * 72時間前の main と今の main を比べて、新しく公開された曲があれば1曲1本で告知（型で書く。曲名はデータのまま）
  * を投稿キューに積む（X にだけ出す）。承認なしで出してよい（2026-09-30 Nori）。
- * id は版・曲ごとに決まっているので、窓が重なっても二重には出ない（Worker が INSERT OR IGNORE）。
+ * id は曲ごとに決まっているので、窓が重なっても二重には出ない（Worker が INSERT OR IGNORE）。
+ *
+ * 版の告知はやめた（2026-10-31 Nori「アプデのときはどうせ手が入るので自動投稿の仕組みごと削除」）。
+ * 版を上げたら、告知の画像を作って Nori が手で予約する（docs/x-operations.md 第7節）。
  *
  * ★ 比べる元が読めない・空のときは何も出さない。1回の本数にも上限を置く
- *   （全部を「新しい」とみなして過去の版や全曲を流す事故を止める。レビュー H1）
+ *   （全部を「新しい」とみなして全曲を流す事故を止める。レビュー H1）
  *
- * 環境変数: BORDER_API・BORDER_ADMIN_TOKEN（投稿キュー）、ANTHROPIC_API_KEY（無ければ版の告知は型で書く）
+ * 環境変数: BORDER_API・BORDER_ADMIN_TOKEN（投稿キュー）
  */
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
-import { askClaude, hasKey } from './client.ts'
 import { queuePost } from './queue.ts'
-import {
-  MAX_RELEASES_PER_RUN,
-  MAX_SONGS_PER_RUN,
-  RELEASE_SYSTEM,
-  checkReleasePost,
-  fallbackReleasePost,
-  newAnnounceable,
-  newSongs,
-  parseChangelog,
-  recentReleases,
-  releasePostId,
-  releasePayload,
-  releaseUser,
-  safeForX,
-  songPayload,
-  songPost,
-  songPostId,
-  type AnnouncePayload,
-  type ChangelogEntry,
-  type Song,
-} from './xposts.ts'
-import { READY_TOOLS } from '../../src/tools.ts'
+import { MAX_SONGS_PER_RUN, newSongs, songPayload, songPost, songPostId, type AnnouncePayload, type Song } from './xposts.ts'
 
 const DRY = process.argv.includes('--dry-run')
 const WINDOW_HOURS = 72
@@ -73,46 +52,11 @@ const parseSongs = (s: string | null): Song[] => {
   }
 }
 
-async function releaseText(e: ChangelogEntry): Promise<string | null> {
-  if (hasKey()) {
-    try {
-      const text = await askClaude({ label: `版の告知 v${e.version}`, system: RELEASE_SYSTEM, user: releaseUser(e), maxTokens: 4_000 })
-      const bad = checkReleasePost(text, e.version)
-      if (!bad) return text
-      console.log(`Claude の文面が型に合わない（${bad}）。型の文面にする`)
-    } catch (err) {
-      console.log(`Claude を呼べなかった（${err instanceof Error ? err.message : String(err)}）。型の文面にする`)
-    }
-  }
-  const fallback = fallbackReleasePost(e)
-  const bad = safeForX(fallback)
-  if (bad) {
-    console.log(`型の文面も出せない（${bad}）。v${e.version} は知らせない`)
-    return null
-  }
-  return fallback
-}
-
 async function post(id: string, text: string, payload: AnnouncePayload | null) {
   console.log(`---- ${id}\n${text}\n（画像: ${payload ? (payload.kind === 'song' ? `新曲カード ${payload.jacketUrl}` : `ページ ${payload.path}`) : 'なし'}）`)
   if (DRY) return
   const queued = await queuePost({ id, eventId: 0, kind: 'announce', text, xOnly: true, payload })
   console.log(queued ? '→ 投稿キューに入れた' : '→ 入れ済み（二重にはしない）')
-}
-
-async function releases(baseSha: string, now: number) {
-  const before = parseChangelog(fileAt(baseSha, 'CHANGELOG.md') ?? '')
-  const after = parseChangelog(fs.readFileSync('CHANGELOG.md', 'utf8'))
-  if (before.length === 0 || after.length === 0) {
-    console.log('更新履歴を読めない（比べる元か今のどちらかが空）ので、版の告知は飛ばす')
-    return
-  }
-  const fresh = recentReleases(newAnnounceable(before, after), now)
-  if (fresh.length > MAX_RELEASES_PER_RUN) throw new Error(`新しい版が ${fresh.length} 本ある（上限 ${MAX_RELEASES_PER_RUN}）。比べる元を疑って何も出さない`)
-  for (const e of fresh) {
-    const text = await releaseText(e)
-    if (text) await post(releasePostId(e.version), text, releasePayload(e, READY_TOOLS))
-  }
 }
 
 async function songs(base: { sha: string; at: number }, now: number) {
@@ -132,32 +76,13 @@ async function songs(base: { sha: string; at: number }, now: number) {
   }
 }
 
-/**
- * 投稿しない試し（--dry-run）のときだけ、直近の MINOR 以上の版で告知文を Claude に1本書かせる。
- * 新しい版が無い日でも、鍵・モデル名・型の確かめが通るかをここで確かめられる（積まない）
- */
-async function smoke() {
-  const latest = parseChangelog(fs.readFileSync('CHANGELOG.md', 'utf8')).find((e) => e.version.endsWith('.0'))
-  if (!latest) return
-  if (!hasKey()) {
-    console.log('（試し）鍵が無いので Claude は呼ばない')
-    return
-  }
-  const text = await askClaude({ label: `試し v${latest.version}`, system: RELEASE_SYSTEM, user: releaseUser(latest), maxTokens: 4_000 })
-  const bad = checkReleasePost(text, latest.version)
-  console.log(`---- （試し・積まない）v${latest.version}・型の確かめ: ${bad ?? '通った'}\n${text}`)
-}
-
 async function main() {
   const base = baseCommit()
   if (!base) {
     console.log(`${WINDOW_HOURS}時間前の main が無い（履歴が浅い）ので飛ばす`)
     return
   }
-  const now = Date.now()
-  await releases(base.sha, now)
-  if (DRY) await smoke()
-  await songs(base, now)
+  await songs(base, Date.now())
 }
 
 main().catch((err) => {

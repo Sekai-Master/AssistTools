@@ -1,11 +1,11 @@
 # Claude API による自動化（2026-10-08〜）
 
-Max プランの毎月の API クレジット（Max 5x で月 $100・繰り越し無し・Claude Code には使えない）を、席にいなくても動く仕組みに回す。4つとも GitHub Actions で動き、**鍵（`ANTHROPIC_API_KEY`）が無いあいだは何もしない**。
+Max プランの毎月の API クレジット（Max 5x で月 $100・繰り越し無し・Claude Code には使えない）を、席にいなくても動く仕組みに回す。4つとも GitHub Actions で動き、①③④は**鍵（`ANTHROPIC_API_KEY`）が無いあいだは何もしない**（②は Claude を使わない）。
 
 | | いつ | 何をする | 出す先 | 中身 |
 |---|---|---|---|---|
 | ① 一次診断 | データ更新（カード・楽曲・マイセカイ）の Actions が失敗したとき | 失敗のログ・ワークフロー・動かしているスクリプト・データ元の直近のコミットから、原因の見立てと直し方の案を書く | Issue（ラベル `auto-diagnosis`。同じワークフローの件が開いていれば追記） | `.github/workflows/diagnose-refresh.yml`・`scripts/claude/diagnose*.ts` |
-| ② X の自動投稿 | 毎日 12:17 JST（GitHub の混雑で数時間遅れることが多い） | 72時間前の main と比べ、新しい版（MINOR 以上・更新履歴の日付が7日以内）と新しく公開された曲（1曲1本）を知らせる。id が版・曲ごとなので二重にならない。**画像つき**（2026-10-10〜）: 新曲は Bot が描く新曲カード（ジャケ写・曲名・作者・ユニット色）、版は更新履歴の「追加」でいちばん先に名前が出るツールの画面（無ければ更新履歴のページ）を Bot が本番で撮る（`xposts.ts` の `songPayload`・`releasePayload`。描き方は sekaimaster-bot の `docs/border-relay.md`） | X（投稿キュー経由・X だけ） | `.github/workflows/x-auto-post.yml`・`scripts/claude/x-auto-post.ts`・`xposts.ts` |
+| ② X の自動投稿 | 毎日 12:17 JST（GitHub の混雑で数時間遅れることが多い） | 72時間前の main と比べ、新しく公開された曲（1曲1本）を知らせる。id が曲ごとなので二重にならない。**画像つき**: Bot が描く新曲カード（ジャケ写・曲名・作者・ユニット色。`xposts.ts` の `songPayload`。描き方は sekaimaster-bot の `docs/border-relay.md`）。Claude は使わない。版の告知は 2026-10-31 にやめた（手で予約する。x-operations.md 第7節） | X（投稿キュー経由・X だけ） | `.github/workflows/x-auto-post.yml`・`scripts/claude/x-auto-post.ts`・`xposts.ts` |
 | ③ 一言解説 | 答え合わせを書いたとき（解析ジョブ） | 答え合わせの数字だけを使って、外れ方の要点を 90 字ほどで | Discord と X（答え合わせの投稿を積んだイベントだけ） | `scripts/claude/border-insight-run.ts`・`insight.ts` |
 | ④ モデルの改善案 | ③と同じとき | 外れ方を読み、次に試す候補を3つまで | Issue（ラベル `model-proposal`） | 同上 |
 
@@ -19,7 +19,7 @@ Max プランの毎月の API クレジット（Max 5x で月 $100・繰り越�
 - **Sonnet 5 は thinking が既定で動き、考えたトークンも `max_tokens` に数える**。上限が小さいと考えるだけで使い切って本文が空になる（2026-10-10 の 219 の改善案が 2500 で空だった）。上限は ③ 4,000・④ 16,000・② 4,000・① 8,000 にし、待ち時間は 6 分。上限で止まったときはログに「考える段階で上限」「本文の途中で上限」と出る（途中で切れた文は使わない）。thinking を切らないのは、切ると提案や診断の質が落ちうるため
 - ④だけ失敗したら、Actions の **「Border model proposal (rerun)」**（`border-proposal.yml`）をイベントの id を入れて手で起動すると作り直せる（解析ジョブは答え合わせ済みのイベントを二度と扱わない）。答え合わせと一言解説は積み直さない
 - **承認なしで出してよい**（2026-09-30 Nori）。まずい投稿は Nori が消す
-- **版の告知は②が出す**ので、セッションで版を上げたときに手で告知しなくてよい（二重になる。②の id は `x-release-v<版>`）
+- **版の告知は手で出す**（2026-10-31 から。②は新曲だけ）。版を上げたら、更新内容を知らせる画像と本文を作って Nori に渡す（x-operations.md 第7節）
 - 鍵とプロンプトの中身はログに出さない（Actions のログは公開）。出すのは使ったトークン数だけ
 - ①の診断は推測を含む。直すときは実物で確かめる
 
@@ -27,9 +27,9 @@ Max プランの毎月の API クレジット（Max 5x で月 $100・繰り越�
 
 - 鍵は Console で作り、Vaultwarden と GitHub の Secrets（`ANTHROPIC_API_KEY`）にだけ置く
 - 毎月の API クレジットを使い切ると、買ったクレジットに流れる。**Console で自動チャージを切り、使える額の上限を置く**
-- 見込み: ①は 1 回数十円（失敗したときだけ）、②は版があった日だけ数円、③④はイベントごとに数十円。月 $100 にはまず届かない
+- 見込み: ①は 1 回数十円（失敗したときだけ）、②は 0 円（Claude を使わない）、③④はイベントごとに数十円。月 $100 にはまず届かない
 - モデルは `scripts/claude/client.ts` の `MODEL`（Sonnet 5）
 
 ## 止めたいとき
 
-GitHub の Secrets から `ANTHROPIC_API_KEY` を消せば、4つとも何もしなくなる（②の新曲の告知は Claude を使わないので動き続ける。止めるなら `x-auto-post.yml` を無効にする）。
+GitHub の Secrets から `ANTHROPIC_API_KEY` を消せば、①③④は何もしなくなる（②の新曲の告知は Claude を使わないので動き続ける。止めるなら `x-auto-post.yml` を無効にする）。
