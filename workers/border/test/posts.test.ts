@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { X_LIMIT, formatMan, formatRange, milestoneText, resultText, xWeight } from '../src/posts.ts'
+import { X_LIMIT, formatMan, formatRange, milestoneText, postReferenceOf, resultText, xWeight } from '../src/posts.ts'
+import { referenceOf } from '../src/snapshot.ts'
 
 describe('formatRange', () => {
   it('両端が万なら前の万を省く', () => {
@@ -29,6 +30,29 @@ describe('formatMan', () => {
 
 const ranks = [50, 100, 200, 500, 1000, 2000].map((rank) => ({ rank, predicted: 123_456_789 / rank, low: 120_000_000 / rank, high: 130_000_000 / rank }))
 
+describe('referenceOf / postReferenceOf（参考値の出どころ。#175）', () => {
+  const thin = { duration: 102, samples: 1, latestEventId: 221, weight: 0.3 }
+  it('新しい Worker の referenceSource をそのまま使う', () => {
+    expect(referenceOf({ extrapolatedFrom: 150, thin, referenceSource: 'thin' })).toBe('thin')
+    expect(referenceOf({ extrapolatedFrom: 198, thin: null, referenceSource: 'rate' })).toBe('rate')
+    expect(referenceOf({ extrapolatedFrom: 198, thin: null, referenceSource: 'borrow' })).toBe('borrow')
+    expect(postReferenceOf({ extrapolatedFrom: 150, thin: { ...thin, samples: 2 }, referenceSource: 'thin' })).toEqual({ source: 'thin', samples: 2 })
+    expect(postReferenceOf({ extrapolatedFrom: 198, thin: null, referenceSource: 'rate' })).toEqual({ source: 'rate' })
+  })
+  it('referenceSource の無い古い出力: thin があれば thin、extrapolatedFrom だけなら borrow（いまの文面のまま）', () => {
+    expect(referenceOf({ extrapolatedFrom: 150, thin })).toBe('thin')
+    expect(referenceOf({ extrapolatedFrom: 150 })).toBe('borrow')
+    expect(referenceOf({ extrapolatedFrom: 150, thin: null, referenceSource: null })).toBe('borrow')
+  })
+  it('参考値でなければ null。thin と言っているのに中身が無い・知らない値は borrow に倒す', () => {
+    expect(referenceOf({ extrapolatedFrom: null, thin, referenceSource: 'thin' })).toBeNull()
+    expect(referenceOf({})).toBeNull()
+    expect(referenceOf({ extrapolatedFrom: 150, thin: null, referenceSource: 'thin' })).toBe('borrow')
+    expect(referenceOf({ extrapolatedFrom: 150, referenceSource: 'other' as never })).toBe('borrow')
+    expect(postReferenceOf({ extrapolatedFrom: null })).toBeNull()
+  })
+})
+
 describe('milestoneText', () => {
   it('280 カウントに収まるよう順位の行を後ろから落とす', () => {
     const t = milestoneText('とても長いイベント名がここに入ってもはみ出さないことを確かめるための名前', '経過50%', ranks) as string
@@ -51,14 +75,26 @@ describe('milestoneText', () => {
       'Vivid BAD SQUAD Memories',
       '開始24時間',
       [{ rank: 1000, predicted: 16_400_000, low: 12_280_000, high: 19_870_000, confidence: 'rough' }],
-      true,
+      { source: 'borrow' },
     ) as string
     expect(t).toContain('【ボーダー予測・参考値】Vivid BAD SQUAD Memories（開始24時間）')
     expect(t).toContain('1000位 1,640万（1,228〜1,987万）')
     expect(t).not.toContain('確度')
-    expect(t).toContain('外れやすい参考値')
+    expect(t).toContain('過去に無い長さのイベントで、外れやすい参考値です。')
     // 長い名前でも 280 に収まる
-    expect(xWeight(milestoneText('とても長いイベント名がここに入ってもはみ出さないことを確かめるための名前', '経過50%', ranks, true) as string)).toBeLessThanOrEqual(X_LIMIT)
+    expect(xWeight(milestoneText('とても長いイベント名がここに入ってもはみ出さないことを確かめるための名前', '経過50%', ranks, { source: 'borrow' }) as string)).toBeLessThanOrEqual(X_LIMIT)
+  })
+
+  it('参考値（同じ長さの回が少ない）: 「過去に無い長さ」と書かず、同じ長さの回の数を書く（#175、222 = 102h の前例は 221）', () => {
+    const r = [{ rank: 1000, predicted: 16_400_000, low: 12_280_000, high: 19_870_000, confidence: 'rough' as const }]
+    const t = milestoneText('Vivid BAD SQUAD Memories', '開始24時間', r, { source: 'thin', samples: 1 }) as string
+    expect(t).toContain('【ボーダー予測・参考値】Vivid BAD SQUAD Memories（開始24時間）')
+    expect(t).toContain('同じ長さの回が少ない（1回）イベントで、外れやすい参考値です。')
+    expect(t).not.toContain('過去に無い長さ')
+    expect(t).not.toContain('確度')
+    // 率モデルを混ぜた過去に無い長さは、借り方に触れない同じ文面
+    expect(milestoneText('x', '経過50%', r, { source: 'rate' })).toContain('過去に無い長さのイベントで、外れやすい参考値です。')
+    expect(xWeight(milestoneText('とても長いイベント名がここに入ってもはみ出さないことを確かめるための名前', '経過50%', ranks, { source: 'thin', samples: 2 }) as string)).toBeLessThanOrEqual(X_LIMIT)
   })
 
   it('表に出せる順位が無ければ投稿しない', () => {

@@ -13,6 +13,7 @@
 import { nearest, valueIn, type HistoryRowLite } from './daily.ts'
 import { kvGet, queuePost } from './db.ts'
 import type { Env } from './env.ts'
+import { isTestEvent } from './history.ts'
 import { formatMan } from './posts.ts'
 import type { PostPayload, Snapshot } from './snapshot.ts'
 
@@ -57,11 +58,13 @@ export function spurtText(name: string, ranks: readonly { rank: number; current:
 
 export async function runSpurt(env: Env, now: number): Promise<SpurtResult> {
   // いまが終了3時間前〜2時間前のあいだにある回だけ。種別も WHERE で絞る（対象外の回が同じ時間帯に終わっても取りこぼさない。レビュー LOW-2）
-  const ev = await env.DB.prepare(
-    "SELECT id, type FROM events WHERE aggregate_at > ?1 AND aggregate_at <= ?2 AND type IN ('marathon', 'cheerful_carnival') ORDER BY aggregate_at LIMIT 1",
+  // テストの回（24時間のチアフルなど）が同じ時間帯に終わる本番の回と重なっても取りこぼさないよう、数行を引いて最初の本番の回を使う
+  const cands = await env.DB.prepare(
+    "SELECT id, type, name, asset FROM events WHERE aggregate_at > ?1 AND aggregate_at <= ?2 AND type IN ('marathon', 'cheerful_carnival') ORDER BY aggregate_at LIMIT 5",
   )
     .bind(now - endOf(0) + SPURT_BEFORE_MS - SPURT_WINDOW_MS, now - endOf(0) + SPURT_BEFORE_MS)
-    .first<{ id: number; type: string }>()
+    .all<{ id: number; type: string; name: string; asset: string | null }>()
+  const ev = cands.results.find((r) => !isTestEvent(r))
   if (!ev) return { status: 'idle' }
   const id = `${ev.id}:spurt`
   if (await env.DB.prepare('SELECT 1 AS x FROM posts WHERE id = ?1').bind(id).first()) return { status: 'exists', id }

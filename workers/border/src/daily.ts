@@ -11,6 +11,7 @@
  */
 import { kvGet, queuePost } from './db.ts'
 import type { Env } from './env.ts'
+import { isTestEvent } from './history.ts'
 import { formatMan } from './posts.ts'
 import { DAILY_UTC_HOUR, dailyTimes, paceRank, type PacePoint } from './pace.ts'
 import type { PostPayload, Snapshot } from './snapshot.ts'
@@ -81,6 +82,8 @@ export async function runDaily(env: Env, now: number): Promise<DailyResult> {
   const snap = JSON.parse(raw) as Snapshot
   const e = snap.event
   if (e.type !== 'marathon' && e.type !== 'cheerful_carnival') return { status: 'idle' }
+  // テストの回は日報を出さない（スナップショットに素材名は無いので名前で見る。日程が21時開始の24時間でなくても出さない）
+  if (isTestEvent(e)) return { status: 'idle' }
   // 今日の21時（日報を出す時刻）。終了の日の21時は dailyTimes に入っていない
   const times = dailyTimes(e)
   const index = times.findIndex((t) => t <= now && now - t < H)

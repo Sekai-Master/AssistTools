@@ -52,7 +52,7 @@ export async function addInsights(d: InsightDeps): Promise<void> {
         sanitizeForIssue(body),
         '',
         '---',
-        `Claude（${MODEL}）による改善案です。採るかどうかは前向き検証（workers/border/src/fit.ts）で決めます。試すときは候補として足し、解析ジョブの採点を見てください。`,
+        `Claude（${MODEL}）による改善案です。採るかどうかは scripts/border/research の入れ子の前向き検証で旧本番と比べて決めます（手順は docs/border-prediction.md の「改善の入れ方」）。1〜2回の外れだけを根拠に調整値を足さないでください。`,
       ].join('\n'),
     })
     d.say(`- 改善案: ${url}`)

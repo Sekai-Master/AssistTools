@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleRequest } from '../src/api.ts'
 import { parseLive, parseSchedule, runCron } from '../src/collect.ts'
-import { putModel } from '../src/db.ts'
+import { kvGet, putModel, upsertEvents } from '../src/db.ts'
 import type { Env } from '../src/env.ts'
 import { GRID, type Model } from '../src/model.ts'
 import { createD1 } from './d1shim.ts'
@@ -124,6 +124,36 @@ describe('runCron', () => {
     expect(payload.snapshot.ranks.find((x) => x.rank === 1000)?.confidence).toBe('high')
   })
 
+  it('参考値の回: 投稿文を表の出どころで書き分け、payload の snapshot に referenceSource と thin を載せる（#175）', async () => {
+    // 150h の回を「同じ長さの回が2回」（thin:150）と「過去に無い長さで率モデルを混ぜた」（rate:150）の2通りで当てる
+    const withTables = (version: string, extra: Partial<Model>, tables: (t: (number | null)[]) => Record<string, (number | null)[]>): Model => ({
+      ...linear,
+      ...extra,
+      version,
+      ranks: Object.fromEntries(Object.entries(linear.ranks).map(([r, rm]) => [r, { ...rm, tables: tables(rm.tables.all) }])),
+    })
+    const queued = async (m: Model) => {
+      env = { DB: createD1(), ADMIN_TOKEN: 'secret-token', SITE_ORIGIN: 'https://sekaimaster.pages.dev' }
+      await putModel(env.DB, m, { version: m.version }, 0)
+      const t = START + 25 * H
+      await runCron(env, t + 5 * 60_000, fakeFetch(() => liveBody(219, t, 25 / 150)))
+      const req = new Request('https://w/admin/posts?unsent=x', { headers: { Authorization: 'Bearer secret-token' } })
+      const body = (await (await handleRequest(req, env)).json()) as { posts: { text: string; payload: string }[] }
+      const payload = JSON.parse(body.posts[0].payload) as { snapshot: { extrapolatedFrom: number | null; referenceSource: string | null; thin: { samples: number } | null } }
+      return { text: body.posts[0].text, snap: payload.snapshot }
+    }
+    const thin = await queued(
+      withTables('thin@e1', { knownDurations: [198], thinDurations: [{ duration: 150, samples: 2, latestEventId: 200, weight: 0.3 }] }, (all) => ({ all, far_short: all, 'thin:150': all })),
+    )
+    expect(thin.text).toContain('【ボーダー予測・参考値】')
+    expect(thin.text).toContain('同じ長さの回が少ない（2回）イベントで、外れやすい参考値です。')
+    expect(thin.text).not.toContain('過去に無い長さ')
+    expect(thin.snap).toMatchObject({ extrapolatedFrom: 198, referenceSource: 'thin', thin: { samples: 2 } })
+    const rate = await queued(withTables('rate@e1', { knownDurations: [198] }, (all) => ({ all, far_short: all, 'rate:150': all })))
+    expect(rate.text).toContain('過去に無い長さのイベントで、外れやすい参考値です。')
+    expect(rate.snap).toMatchObject({ extrapolatedFrom: 198, referenceSource: 'rate', thin: null })
+  })
+
   it('節目を大きく過ぎてから動き出したときは、その節目のポストを出さない', async () => {
     await putModel(env.DB, linear, { version: 'test@e1' }, 0)
     const t = START + 40 * H // 24h の節目（0.16）から 0.1 以上過ぎている
@@ -135,6 +165,43 @@ describe('runCron', () => {
     await runCron(env, START - 10 * H, fakeFetch(() => ({})))
     const r = await runCron(env, START + H, fakeFetch(() => liveBody(218, START + H, 1)))
     expect(r).toEqual({ status: 'event_mismatch', expected: 219, got: 218 })
+  })
+
+  // マラソン 219 が終わった直後（最終サンプルを拾う1時間のあいだ）に、24時間のチアフル 230 が始まった
+  describe('開催中の回が重なっているとき', () => {
+    const END = EVENT.aggregateAt
+    const TEST_START = END - 5 * 60_000
+    const NOW = END + 20 * 60_000
+    const seed = async () => {
+      await upsertEvents(env.DB, [
+        { id: EVENT.id, name: EVENT.name, eventType: EVENT.type, unit: EVENT.unit, startAt: EVENT.startAt, aggregateAt: EVENT.aggregateAt },
+        { id: 230, name: '第3回チアフルカーニバルイベントテストイベント', eventType: 'cheerful_carnival', unit: 'none', startAt: TEST_START, aggregateAt: TEST_START + 24 * H - 60_000, asset: 'event_cheerfutest3_2026' },
+      ])
+    }
+
+    it('live が先に始まった回（マラソン）を見せているあいだは、そちらを集める', async () => {
+      await seed()
+      const r = await runCron(env, NOW, fakeFetch(() => liveBody(219, END + 16 * 60_000, 1)))
+      expect(r).toMatchObject({ status: 'collected', eventId: 219, samples: 6 })
+      expect((JSON.parse((await kvGet(env.DB, 'current')) as string) as { event: { id: number } }).event.id).toBe(219)
+      expect(await kvGet(env.DB, 'history:219')).not.toBeNull()
+      expect(await kvGet(env.DB, 'history:230')).toBeNull()
+    })
+
+    it('live が後から始まった回を見せたら、そちらを集める', async () => {
+      await seed()
+      const r = await runCron(env, NOW, fakeFetch(() => liveBody(230, NOW - 60_000, 0.01)))
+      expect(r).toMatchObject({ status: 'collected', eventId: 230, samples: 6 })
+      expect(await kvGet(env.DB, 'history:230')).not.toBeNull()
+      expect(await kvGet(env.DB, 'history:219')).toBeNull()
+    })
+
+    it('live がどちらでもない回なら、いちばん最近始まった回を期待して event_mismatch（何も書かない）', async () => {
+      await seed()
+      const r = await runCron(env, NOW, fakeFetch(() => liveBody(218, NOW, 1)))
+      expect(r).toEqual({ status: 'event_mismatch', expected: 230, got: 218 })
+      expect(await kvGet(env.DB, 'current')).toBeNull()
+    })
   })
 })
 

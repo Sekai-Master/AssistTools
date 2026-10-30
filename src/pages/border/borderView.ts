@@ -3,7 +3,7 @@
  */
 import type { ModelSummary } from "../../../workers/border/src/fit";
 import { CANDIDATE_LABEL, eventEndMs, type Confidence } from "../../../workers/border/src/model";
-import type { Snapshot } from "../../../workers/border/src/snapshot";
+import { referenceOf, type Snapshot } from "../../../workers/border/src/snapshot";
 import type { Report } from "../../../scripts/border/report";
 
 export type { ModelSummary, Report, Snapshot };
@@ -23,6 +23,29 @@ export function formatJst(ms: number): string {
   const d = new Date(ms + 9 * 3_600_000);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+
+/**
+ * 参考値の説明（「この回の予測は参考値です。」の後ろの文）。参考値でなければ null。
+ * 表の出どころ（referenceOf）で書き分ける（#175、2026-10-30）:
+ *   thin   … 同じ長さの回が少ない。直近の回とほかの回の伸び方を混ぜた比率を、版の weight から書く
+ *            （日程のわかっている回は率モデルの表も混ざるので「ほかの長さの回」でなく「ほかの回」）
+ *   rate   … 過去に無い長さ。いちばん近い長さの回の伸び方と、全イベントから作った形（率モデル）を混ぜている
+ *   borrow … 過去に無い長さ。いちばん近い長さの回の伸び方をそのまま借りている（率モデルの無い版・日程のわからない回）
+ */
+export function referenceDetail(s: Pick<Snapshot, "event" | "extrapolatedFrom" | "thin" | "referenceSource">): string | null {
+  const source = referenceOf(s);
+  if (source == null) return null;
+  const hours = s.event.durationHours;
+  if (source === "thin" && s.thin) {
+    const same = Math.round(s.thin.weight * 10);
+    return `このイベントは ${hours} 時間で、過去に同じ長さの回が ${s.thin.samples} 回しかありません。同じ長さの直近の回（第${s.thin.latestEventId}回）の伸び方を${same}割、ほかの回の伸び方を${10 - same}割で混ぜて出しているので、大きく外れることがあります`;
+  }
+  const how =
+    source === "rate"
+      ? `いちばん近い ${s.extrapolatedFrom} 時間の回の伸び方と、これまでの全イベントの伸び方から作った形を混ぜて出しているので`
+      : `いちばん近い ${s.extrapolatedFrom} 時間の回の伸び方を借りて出しているので`;
+  return `このイベントは ${hours} 時間で、過去に同じ長さの回がありません。${how}、大きく外れることがあります`;
 }
 
 export function formatPercent(x: number, digits = 0): string {

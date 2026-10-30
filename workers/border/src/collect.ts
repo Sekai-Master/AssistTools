@@ -6,7 +6,7 @@
  *   日程（288KB）の parse は開催中には行わない（開催中でない回にだけ読み直す）。
  */
 import {
-  activeEvent,
+  activeEvents,
   activeModel,
   insertPredictions,
   insertSamples,
@@ -19,7 +19,7 @@ import {
 } from './db.ts'
 import type { Env } from './env.ts'
 import { RANKS, durationHours, predict, type EventMeta, type Prediction } from './model.ts'
-import { milestoneText } from './posts.ts'
+import { milestoneText, postReferenceOf } from './posts.ts'
 import type { PostPayload, Snapshot } from './snapshot.ts'
 
 export const LIVE_URL = 'https://api.sekai.best/event/live'
@@ -130,6 +130,7 @@ function snapshotOf(event: EventMeta, now: number, samples: LiveSample[], preds:
     modelVersion,
     extrapolatedFrom: [...preds.values()].find((p) => p.extrapolatedFrom != null)?.extrapolatedFrom ?? null,
     thin: [...preds.values()].find((p) => p.thin != null)?.thin ?? null,
+    referenceSource: [...preds.values()].find((p) => p.referenceSource != null)?.referenceSource ?? null,
     predicted: preds.size > 0,
     ranks: [...samples]
       .sort((a, b) => a.rank - b.rank)
@@ -149,11 +150,11 @@ function snapshotOf(event: EventMeta, now: number, samples: LiveSample[], preds:
 }
 
 export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): Promise<CronResult> {
-  let event = await activeEvent(env.DB, now)
-  if (!event) {
+  let actives = await activeEvents(env.DB, now)
+  if (actives.length === 0) {
     const changed = await refreshSchedule(env, now, fetcher)
-    event = await activeEvent(env.DB, now)
-    if (!event) return { status: 'idle', scheduleChanged: changed }
+    actives = await activeEvents(env.DB, now)
+    if (actives.length === 0) return { status: 'idle', scheduleChanged: changed }
   }
 
   let live: { eventId: number | null; samples: LiveSample[] }
@@ -164,7 +165,9 @@ export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): 
   } catch (err) {
     return { status: 'source_error', message: err instanceof Error ? err.message : String(err) }
   }
-  if (live.eventId !== event.id) return { status: 'event_mismatch', expected: event.id, got: live.eventId }
+  // 回が重なっているときは、sekai.best の live が見せている回を集める（後から始まった回に決め打ちすると、live がまだ前の回のあいだ止まる）
+  const event = actives.find((a) => a.id === live.eventId)
+  if (!event) return { status: 'event_mismatch', expected: actives[0].id, got: live.eventId }
   if (live.samples.length === 0) return { status: 'source_error', message: 'live に目的の順位が無い' }
 
   const prevRaw = await kvGet(env.DB, 'current')
@@ -221,7 +224,7 @@ export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): 
         snap.ranks
           .filter((r) => r.visible && r.predicted != null)
           .map((r) => ({ rank: r.rank, predicted: r.predicted as number, low: r.low, high: r.high, confidence: r.confidence })),
-        snap.extrapolatedFrom != null,
+        postReferenceOf(snap),
       )
       const id = `${event.id}:${m.key}`
       const payload: PostPayload = { kind: 'milestone', key: m.key, label, snapshot: snap }

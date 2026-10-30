@@ -28,9 +28,11 @@ function snapAt(t: number, type = 'marathon'): Snapshot {
   }
 }
 
-async function setup(snap: Snapshot, type = 'marathon') {
+async function setup(snap: Snapshot, type = 'marathon', over: { name?: string; asset?: string } = {}) {
   const env: Env = { DB: createD1(), SITE_ORIGIN: 'https://site.example', ADMIN_TOKEN: 'tok' }
-  await upsertEvents(env.DB, [{ id: 222, name: EV.name, eventType: type, unit: 'none', startAt: START, aggregateAt: AGG, asset: 'event_memories_mmj_2026' }])
+  await upsertEvents(env.DB, [
+    { id: 222, name: over.name ?? EV.name, eventType: type, unit: 'none', startAt: START, aggregateAt: AGG, asset: over.asset ?? 'event_memories_mmj_2026' },
+  ])
   await kvSet(env.DB, 'current', snap, snap.sampleAt)
   return env
 }
@@ -82,6 +84,26 @@ describe('追い込みを積む（runSpurt）', () => {
   it('チアフルも積む（日報と同じ対象）', async () => {
     const t = AT18 + 3 * M
     expect(await runSpurt(await setup(snapAt(t, 'cheerful_carnival'), 'cheerful_carnival'), t + 2 * M)).toEqual({ status: 'queued', id: '222:spurt' })
+  })
+
+  // 24時間のテストイベント（チアフル）も終了3時間前を通る。「残り3時間」の投稿は本番の回だけ
+  it('テストイベント（名前か素材名で判定）は積まない。本番の回と同じ時間帯に終わっても、本番の回は積む', async () => {
+    const t = AT18 + 3 * M
+    const snap = snapAt(t, 'cheerful_carnival')
+    const byName = await setup(snap, 'cheerful_carnival', { name: '第2回チアフルカーニバルイベントテストイベント', asset: 'event_cheerfutest2_2025' })
+    expect(await runSpurt(byName, t + 2 * M)).toEqual({ status: 'idle' })
+    expect(await unsentPosts(byName.DB, 'x')).toHaveLength(0)
+    // 名前は普通でも素材名に test が入っている回
+    const byAsset = await setup(snap, 'cheerful_carnival', { name: '第3回チアフルカーニバル', asset: 'event_cheerfutest3_2026' })
+    expect(await runSpurt(byAsset, t + 2 * M)).toEqual({ status: 'idle' })
+    expect(await unsentPosts(byAsset.DB, 'x')).toHaveLength(0)
+    // テストの回のほうが先に終わる（aggregate_at の順で先に来る）が、そのあとの本番の回を取りこぼさない
+    const both = await setup(snap)
+    await upsertEvents(both.DB, [
+      { id: 223, name: 'チアフルカーニバルイベントテストイベント', eventType: 'cheerful_carnival', unit: 'none', startAt: AGG - 24 * H, aggregateAt: AGG - 30 * M, asset: 'event_cheerfutest_2025' },
+    ])
+    expect(await runSpurt(both, t + 2 * M)).toEqual({ status: 'queued', id: '222:spurt' })
+    expect(await unsentPosts(both.DB, 'x')).toHaveLength(1)
   })
 
   it('ワールドリンクなど日報の対象でない種別・いまの値が別の回なら積まない', async () => {

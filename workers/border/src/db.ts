@@ -30,6 +30,18 @@ export async function activeEvent(db: D1Database, now: number): Promise<EventMet
 }
 
 /**
+ * 開催中の回すべて（新しく始まった順・最大5件）。回が重なる（テストイベントがマラソンの終了直後の1時間や開催中に始まる）と、
+ * 最後に始まった1件だけでは sekai.best が見せている回と食い違うので、収集（collect.ts）は live の回に合うものを選ぶ
+ */
+export async function activeEvents(db: D1Database, now: number): Promise<EventMeta[]> {
+  const r = await db
+    .prepare('SELECT * FROM events WHERE start_at <= ?1 AND aggregate_at + ?2 >= ?1 ORDER BY start_at DESC LIMIT 5')
+    .bind(now, FINAL_CAPTURE_MS)
+    .all<EventRow>()
+  return r.results.map(toMeta)
+}
+
+/**
  * 終わってから from〜until（ミリ秒）のあいだのイベントのうち、いちばん最近終わったもの。歴代の表へ足す見回り（finals.ts）用
  */
 export async function justEndedEvent(db: D1Database, now: number, from: number, until: number): Promise<EventMeta | null> {

@@ -4,6 +4,7 @@
  * 口調は docs/x-operations.md に合わせる: 【見出し】で始める・事実だけを平叙で・URL は独立行・絵文字なし。
  */
 import { CONFIDENCE_LABEL, type Confidence } from './model.ts'
+import { referenceOf, type Snapshot } from './snapshot.ts'
 
 export const BORDER_PAGE_URL = 'https://sekaimaster.pages.dev/border'
 
@@ -75,22 +76,40 @@ function fitLines(head: string[], body: string[], tail: string[]): string {
 }
 
 /**
+ * 参考値の出し方（文面の書き分け用。#175、2026-10-30）。
+ *   thin … 同じ長さの回が少ない（samples 回）。「過去に無い長さ」と書くと、前例のある 222（102h、前例 221）で事実と食い違う
+ *   rate / borrow … 過去に無い長さ。本文は借り方に触れないので同じ文面
+ */
+export type PostReference = { source: 'thin'; samples: number } | { source: 'rate' | 'borrow' }
+
+export function postReferenceOf(s: Pick<Snapshot, 'extrapolatedFrom' | 'thin' | 'referenceSource'>): PostReference | null {
+  const source = referenceOf(s)
+  if (source == null) return null
+  return source === 'thin' && s.thin ? { source, samples: s.thin.samples } : { source: source === 'rate' ? 'rate' : 'borrow' }
+}
+
+/** 参考値の注記（投稿の末尾の1文目） */
+function referenceNote(ref: PostReference): string {
+  return ref.source === 'thin'
+    ? `同じ長さの回が少ない（${ref.samples}回）イベントで、外れやすい参考値です。括弧は8割の幅の目安です。`
+    : '過去に無い長さのイベントで、外れやすい参考値です。括弧は8割の幅の目安です。'
+}
+
+/**
  * 開催中のマイルストーン（開始24時間・経過50%・85%）の予測ポスト。label は「開始24時間」「経過51%」など。
  * 画像つきで送るときは、この文面が画像の代替テキストと、画像が作れなかったときの控えになる。
  */
-export function milestoneText(eventName: string, label: string, ranks: readonly PostRank[], reference = false): string | null {
+export function milestoneText(eventName: string, label: string, ranks: readonly PostRank[], reference: PostReference | null = null): string | null {
   const ordered = POST_ORDER.map((r) => ranks.find((x) => x.rank === r)).filter((x): x is PostRank => x != null)
   if (ordered.length === 0) return null
   const body = ordered.map((r) => {
-    // 参考値（過去に無い長さ）のときは確度を名乗らない
+    // 参考値（同じ長さの回が少ない・過去に無い長さ）のときは確度を名乗らない
     const conf = reference ? '' : r.confidence ? `・確度${CONFIDENCE_LABEL[r.confidence]}` : ''
     const range = r.low != null && r.high != null ? `（${formatRange(r.low, r.high)}${conf}）` : ''
     return `${r.rank}位 ${formatMan(r.predicted)}${range}`
   })
   const head = [`【ボーダー予測${reference ? '・参考値' : ''}】${eventName}（${label}）`, '']
-  const note = reference
-    ? '過去に無い長さのイベントで、外れやすい参考値です。括弧は8割の幅の目安です。'
-    : '括弧は8割の確率で収まる幅です。過去イベントの伸び方から自動で出しています。'
+  const note = reference ? referenceNote(reference) : '括弧は8割の確率で収まる幅です。過去イベントの伸び方から自動で出しています。'
   const tail = ['', note, BORDER_PAGE_URL]
   return fitLines(head, body, tail)
 }
