@@ -68,7 +68,7 @@ describe('開始の告知の本文（startText）', () => {
       ].join('\n'),
     )
     // Bot が足すハッシュタグ（重み28）込みでも 280 未満
-    expect(xWeight(`${post.text}\n#プロセカボーダー #プロセカ`)).toBeLessThan(280)
+    expect(xWeight(`${post.text}\n#プロセカボーダー`)).toBeLessThan(280)
   })
 
   it('前例が無ければそう書く（マラソンは予測が参考値になると添える）。チアフルは予測に触れない', () => {

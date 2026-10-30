@@ -97,7 +97,7 @@ export function checkInsight(text: string, facts: string): string | null {
 export function insightPost(eventName: string, insight: string): string | null {
   if (safeForX(eventName) != null) return null
   const build = (tags: boolean) =>
-    [`【ボーダー予測・答え合わせの補足】${eventName}`, '', insight, '', BORDER_PAGE_URL, ...(tags ? ['#プロセカボーダー #プロセカ'] : [])].join('\n')
+    [`【ボーダー予測・答え合わせの補足】${eventName}`, '', insight, '', BORDER_PAGE_URL, ...(tags ? ['#プロセカボーダー'] : [])].join('\n')
   if (xWeight(build(true)) <= X_BUDGET) return build(true)
   if (xWeight(build(false)) <= X_BUDGET) return build(false)
   return null
