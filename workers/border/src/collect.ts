@@ -19,7 +19,7 @@ import {
 } from './db.ts'
 import type { Env } from './env.ts'
 import { RANKS, durationHours, predict, type EventMeta, type Prediction } from './model.ts'
-import { milestoneText } from './posts.ts'
+import { milestoneText, postReferenceOf } from './posts.ts'
 import type { PostPayload, Snapshot } from './snapshot.ts'
 
 export const LIVE_URL = 'https://api.sekai.best/event/live'
@@ -130,6 +130,7 @@ function snapshotOf(event: EventMeta, now: number, samples: LiveSample[], preds:
     modelVersion,
     extrapolatedFrom: [...preds.values()].find((p) => p.extrapolatedFrom != null)?.extrapolatedFrom ?? null,
     thin: [...preds.values()].find((p) => p.thin != null)?.thin ?? null,
+    referenceSource: [...preds.values()].find((p) => p.referenceSource != null)?.referenceSource ?? null,
     predicted: preds.size > 0,
     ranks: [...samples]
       .sort((a, b) => a.rank - b.rank)
@@ -223,7 +224,7 @@ export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): 
         snap.ranks
           .filter((r) => r.visible && r.predicted != null)
           .map((r) => ({ rank: r.rank, predicted: r.predicted as number, low: r.low, high: r.high, confidence: r.confidence })),
-        snap.extrapolatedFrom != null,
+        postReferenceOf(snap),
       )
       const id = `${event.id}:${m.key}`
       const payload: PostPayload = { kind: 'milestone', key: m.key, label, snapshot: snap }

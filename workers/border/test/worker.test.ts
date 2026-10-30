@@ -124,6 +124,36 @@ describe('runCron', () => {
     expect(payload.snapshot.ranks.find((x) => x.rank === 1000)?.confidence).toBe('high')
   })
 
+  it('参考値の回: 投稿文を表の出どころで書き分け、payload の snapshot に referenceSource と thin を載せる（#175）', async () => {
+    // 150h の回を「同じ長さの回が2回」（thin:150）と「過去に無い長さで率モデルを混ぜた」（rate:150）の2通りで当てる
+    const withTables = (version: string, extra: Partial<Model>, tables: (t: (number | null)[]) => Record<string, (number | null)[]>): Model => ({
+      ...linear,
+      ...extra,
+      version,
+      ranks: Object.fromEntries(Object.entries(linear.ranks).map(([r, rm]) => [r, { ...rm, tables: tables(rm.tables.all) }])),
+    })
+    const queued = async (m: Model) => {
+      env = { DB: createD1(), ADMIN_TOKEN: 'secret-token', SITE_ORIGIN: 'https://sekaimaster.pages.dev' }
+      await putModel(env.DB, m, { version: m.version }, 0)
+      const t = START + 25 * H
+      await runCron(env, t + 5 * 60_000, fakeFetch(() => liveBody(219, t, 25 / 150)))
+      const req = new Request('https://w/admin/posts?unsent=x', { headers: { Authorization: 'Bearer secret-token' } })
+      const body = (await (await handleRequest(req, env)).json()) as { posts: { text: string; payload: string }[] }
+      const payload = JSON.parse(body.posts[0].payload) as { snapshot: { extrapolatedFrom: number | null; referenceSource: string | null; thin: { samples: number } | null } }
+      return { text: body.posts[0].text, snap: payload.snapshot }
+    }
+    const thin = await queued(
+      withTables('thin@e1', { knownDurations: [198], thinDurations: [{ duration: 150, samples: 2, latestEventId: 200, weight: 0.3 }] }, (all) => ({ all, far_short: all, 'thin:150': all })),
+    )
+    expect(thin.text).toContain('【ボーダー予測・参考値】')
+    expect(thin.text).toContain('同じ長さの回が少ない（2回）イベントで、外れやすい参考値です。')
+    expect(thin.text).not.toContain('過去に無い長さ')
+    expect(thin.snap).toMatchObject({ extrapolatedFrom: 198, referenceSource: 'thin', thin: { samples: 2 } })
+    const rate = await queued(withTables('rate@e1', { knownDurations: [198] }, (all) => ({ all, far_short: all, 'rate:150': all })))
+    expect(rate.text).toContain('過去に無い長さのイベントで、外れやすい参考値です。')
+    expect(rate.snap).toMatchObject({ extrapolatedFrom: 198, referenceSource: 'rate', thin: null })
+  })
+
   it('節目を大きく過ぎてから動き出したときは、その節目のポストを出さない', async () => {
     await putModel(env.DB, linear, { version: 'test@e1' }, 0)
     const t = START + 40 * H // 24h の節目（0.16）から 0.1 以上過ぎている
