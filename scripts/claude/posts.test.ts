@@ -4,86 +4,14 @@ import type { Report } from '../border/report.ts'
 import { checkInsight, insightPayload, insightPost, insightUser, reportFacts } from './insight.ts'
 import { sanitizeForIssue } from './diagnose.ts'
 import {
-  CHANGELOG_URL,
-  MAX_RELEASES_PER_RUN,
   MAX_SONGS_PER_RUN,
   X_BUDGET,
-  checkReleasePost,
-  fallbackReleasePost,
-  newAnnounceable,
   newSongs,
-  parseChangelog,
-  recentReleases,
-  releasePayload,
   safeForX,
   songPayload,
   songPost,
   songPostId,
 } from './xposts.ts'
-
-const CL = `# 更新履歴
-
-前書き
-
-## [1.23.0] - 2026-10-01
-
-数字を入れるだけで編成どうしを比べられるツールを足しました。
-
-### 追加
-
-- **編成かんたん比較を追加しました。**
-
-## [1.22.2] - 2026-09-30
-
-修正です。
-
-## [1.22.0] - 2026-08-27
-
-途中から開いても計画できるようにしました。
-`
-
-describe('更新履歴の読み取り', () => {
-  it('版ごとに分け、本文は次の版の見出しの手前まで', () => {
-    const e = parseChangelog(CL)
-    expect(e.map((x) => x.version)).toEqual(['1.23.0', '1.22.2', '1.22.0'])
-    expect(e[0].date).toBe('2026-10-01')
-    expect(e[0].body).toContain('編成かんたん比較')
-    expect(e[0].body).not.toContain('1.22.2')
-  })
-
-  // ★ PATCH は知らせない（docs/x-operations.md 第7節）
-  it('新しく足された MINOR 以上の版だけを知らせる', () => {
-    const after = parseChangelog(CL)
-    const before = after.slice(2)
-    expect(newAnnounceable(before, after).map((e) => e.version)).toEqual(['1.23.0'])
-    expect(newAnnounceable(after, after)).toEqual([])
-  })
-})
-
-describe('版の告知', () => {
-  const ok = `【更新 v1.23.0】数字を入れるだけで編成どうしを比べられます。\n\n${CHANGELOG_URL}`
-
-  it('型に合った文面は通す', () => {
-    expect(checkReleasePost(ok, '1.23.0')).toBeNull()
-  })
-
-  it('頭の版・URL・ハッシュタグ・長さが合わなければ通さない', () => {
-    expect(checkReleasePost(ok.replace('1.23.0', '1.22.0'), '1.23.0')).toContain('【更新')
-    expect(checkReleasePost(`${ok}\nhttps://example.com`, '1.23.0')).toContain('URL')
-    expect(checkReleasePost(`${ok} #プロセカ`, '1.23.0')).toContain('ハッシュタグ')
-    expect(checkReleasePost(ok.replace('比べられます。', 'あ'.repeat(200)), '1.23.0')).toContain('長すぎる')
-  })
-
-  it('型に合わなかったときの文面は、最初の段落を入るところまで', () => {
-    const e = parseChangelog(CL)[0]
-    const t = fallbackReleasePost(e)
-    expect(t.startsWith('【更新 v1.23.0】数字を入れるだけで')).toBe(true)
-    expect(checkReleasePost(t, '1.23.0')).toBeNull()
-    const long = fallbackReleasePost({ ...e, body: 'あ'.repeat(400) })
-    expect(xWeight(long)).toBeLessThanOrEqual(X_BUDGET)
-    expect(long).toContain('…')
-  })
-})
 
 describe('新曲の告知', () => {
   const NOW = Date.UTC(2026, 9, 8)
@@ -140,31 +68,11 @@ describe('告知に添える画像の指示', () => {
     expect(songPayload({ ...doomer, artistName: 5, Unit: null })).toMatchObject({ artist: null, unit: null })
   })
 
-  const tools = [
-    { path: '/deck', name: '編成ビルダー' },
-    { path: '/compare', name: '編成かんたん比較' },
-    { path: '/ranking', name: '効率曲ランキング' },
-  ]
-  const entry = (body: string) => ({ version: '1.23.0', date: '2026-10-01', body })
-
-  it('版: 「追加」の節でいちばん先に名前が出てくるツールの画面を撮る', () => {
-    const body = 'まえがき。効率曲ランキングの話。\n\n### 追加\n\n- **編成かんたん比較を追加しました。** 計算は編成ビルダーと同じ式です。\n\n### 修正\n\n- 効率曲ランキングを直しました。'
-    expect(releasePayload(entry(body), tools)).toMatchObject({ kind: 'page', path: '/compare', width: 1600, height: 900 })
-  })
-
-  it('版: 「追加」が無ければ本文でいちばん先のツール、どれも無ければ更新履歴のページ', () => {
-    expect(releasePayload(entry('### 修正\n\n- 効率曲ランキングと編成ビルダーを直しました。'), tools)).toMatchObject({ path: '/ranking' })
-    expect(releasePayload(entry('### 修正\n\n- 表示を直しました。'), tools)).toMatchObject({ path: '/changelog' })
-  })
-
-  it('版: Bot が撮れない形のパス（サイトの外など）は選ばない', () => {
-    expect(releasePayload(entry('### 追加\n\n- 外のツール'), [{ path: '//evil.example', name: '外のツール' }])).toMatchObject({ path: '/changelog' })
-  })
 })
 
 describe('承認なしで出す文面の安全の確かめ', () => {
   it('自分のサイトのリンクは通し、メンション・山かっこ・ほかのリンクやドメインは止める', () => {
-    expect(safeForX(`【更新】x\n${CHANGELOG_URL}`)).toBeNull()
+    expect(safeForX('【更新】x\nhttps://sekaimaster.pages.dev/changelog')).toBeNull()
     expect(safeForX('連絡は @someone')).toContain('メンション')
     expect(safeForX('＠everyone')).toContain('メンション')
     expect(safeForX('<@&123>')).toContain('メンション')
@@ -173,23 +81,10 @@ describe('承認なしで出す文面の安全の確かめ', () => {
     expect(safeForX('www.example を見て')).toContain('ドメイン')
   })
 
-  it('版の告知の確かめにも効く', () => {
-    expect(checkReleasePost(`【更新 v1.23.0】@all 見て\n\n${CHANGELOG_URL}`, '1.23.0')).toContain('メンション')
-  })
 })
 
-describe('知らせる版の日付', () => {
-  const NOW = Date.parse('2026-10-08T12:00:00+09:00')
-  it('7日以内で、未来ではないものだけ', () => {
-    const e = (date: string) => ({ version: '1.0.0', date, body: '' })
-    expect(recentReleases([e('2026-10-08'), e('2026-10-02'), e('2026-09-30'), e('2026-10-09')], NOW).map((x) => x.date)).toEqual([
-      '2026-10-08',
-      '2026-10-02',
-    ])
-  })
-
-  it('1回の本数の上限がある（比べる元が壊れたときに全部を流さない）', () => {
-    expect(MAX_RELEASES_PER_RUN).toBeLessThanOrEqual(3)
+describe('1回の本数の上限', () => {
+  it('新曲の告知に上限がある（比べる元が壊れたときに全部を流さない）', () => {
     expect(MAX_SONGS_PER_RUN).toBeLessThanOrEqual(5)
   })
 })

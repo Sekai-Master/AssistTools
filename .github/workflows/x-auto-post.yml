@@ -1,8 +1,8 @@
 name: X auto post
 
-# 公式 X の投稿の自動作成（毎日 12:17 JST）。72時間前からの新しい版（MINOR 以上）と新しく公開された曲を知らせる（id は版・曲ごとなので二重にならない）。
-# 中身は scripts/claude/x-auto-post.ts。承認なしで出してよい（2026-09-30 Nori）。
-# 版の告知の言い回しは Claude（ANTHROPIC_API_KEY が無ければ型の文面）。曲名・版番号はデータのまま。
+# 公式 X の投稿の自動作成（毎日 12:17 JST）。72時間前から新しく公開された曲を知らせる（id は曲ごとなので二重にならない）。
+# 中身は scripts/claude/x-auto-post.ts。承認なしで出してよい（2026-09-30 Nori）。曲名はデータのまま。
+# 版の告知はやめた（2026-10-31 Nori。版を上げるときは手が入るので、告知も手で予約する）。
 
 on:
   schedule:
@@ -41,7 +41,6 @@ jobs:
 
       - name: Post
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BORDER_API: ${{ vars.BORDER_API }}
           BORDER_ADMIN_TOKEN: ${{ secrets.BORDER_ADMIN_TOKEN }}
           DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}

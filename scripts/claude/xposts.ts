@@ -1,78 +1,16 @@
 /**
  * ② 公式 X の投稿の自動作成（純粋関数）。実行は x-auto-post.ts（毎日 12:17 JST）。
  *
- * ★ 事実（曲名・版番号）はデータから埋める。Claude に任せるのは更新履歴の要約の言い回しだけ。
- *   承認なしで出すので（2026-09-30 Nori）、Claude の答えが型に合わなければ決まった型の文面に落とす。
- * ★ 文面の型は docs/x-operations.md 第7節。PATCH の版は出さない（同節）。
+ * ★ 曲名はデータから埋める（型で書く。Claude は使わない）。承認なしで出す（2026-09-30 Nori）。
+ * ★ 版の告知は出さない。版を上げるときは Nori の手が入るので、告知も手で予約する（2026-10-31 Nori。
+ *   以前の自動の版の告知は git の履歴にある）。文面の型は docs/x-operations.md 第7節。
  */
 import { xWeight } from '../../workers/border/src/posts.ts'
 
 const SITE = 'https://sekaimaster.pages.dev'
-export const CHANGELOG_URL = `${SITE}/changelog`
 export const RANKING_URL = `${SITE}/ranking`
 /** Bot が末尾のハッシュタグの候補の窓を閉じるために空白を1つ足すことがあるので、280 から余裕を取る */
 export const X_BUDGET = 276
-
-export interface ChangelogEntry {
-  version: string
-  date: string
-  body: string
-}
-
-/** CHANGELOG.md の「## [x.y.z] - YYYY-MM-DD」ごとに分ける */
-export function parseChangelog(md: string): ChangelogEntry[] {
-  const out: ChangelogEntry[] = []
-  const parts = md.split(/^## \[/m).slice(1)
-  for (const part of parts) {
-    const head = part.match(/^(\d+\.\d+\.\d+)\]\s*-\s*(\d{4}-\d{2}-\d{2})/)
-    if (!head) continue
-    const body = part.slice(part.indexOf('\n') + 1).split(/^## /m)[0].trim()
-    out.push({ version: head[1], date: head[2], body })
-  }
-  return out
-}
-
-/** 新しく足された版のうち、知らせるもの（MINOR 以上＝PATCH が 0） */
-export function newAnnounceable(before: readonly ChangelogEntry[], after: readonly ChangelogEntry[]): ChangelogEntry[] {
-  const known = new Set(before.map((e) => e.version))
-  return after.filter((e) => !known.has(e.version) && e.version.split('.')[2] === '0')
-}
-
-export const RELEASE_SYSTEM = `あなたはプロセカのツールサイト「Sekai-Master」の公式 X の中の人です。更新履歴の1つの版の本文を渡すので、告知の投稿を1本書いてください。
-
-決まり:
-- 1行目は「【更新 vX.Y.Z】」で始め、続けて使う人から見て何ができるようになったかを1〜2文。版番号や内部の話から始めない
-- 最後の行は ${CHANGELOG_URL} だけ（前に空行を1つ）
-- 全体で日本語 140 字くらいまで。絵文字・ハッシュタグは使わない
-- 本文に無いことは書かない。数字・機能名は本文の書き方のまま
-- 投稿の文面だけを出す（前置き・説明・引用符を付けない）`
-
-export function releaseUser(e: ChangelogEntry): string {
-  return `版: ${e.version}（${e.date}）\n\n${e.body}`
-}
-
-/** Claude の答えが型に合っているか。合っていなければ理由を返す */
-export function checkReleasePost(text: string, version: string): string | null {
-  if (!text.startsWith(`【更新 v${version}】`)) return '1行目が【更新 vX】で始まっていない'
-  const urls = text.match(/https?:\/\/\S+/g) ?? []
-  if (urls.length !== 1 || urls[0] !== CHANGELOG_URL) return 'URL が更新履歴の1本だけになっていない'
-  if (/[#＃]/.test(text)) return 'ハッシュタグが入っている'
-  if (xWeight(text) > X_BUDGET) return `長すぎる（${xWeight(text)}）`
-  return safeForX(text)
-}
-
-/** 型に合わなかったときの文面: 本文の最初の段落を、入るところまで */
-export function fallbackReleasePost(e: ChangelogEntry): string {
-  const lead = e.body.split(/\n\s*\n/)[0].replace(/\s+/g, ' ').trim()
-  const build = (s: string) => `【更新 v${e.version}】${s}\n\n${CHANGELOG_URL}`
-  if (xWeight(build(lead)) <= X_BUDGET) return build(lead)
-  const chars = [...lead]
-  for (let n = chars.length - 1; n > 0; n -= 1) {
-    const t = build(`${chars.slice(0, n).join('')}…`)
-    if (xWeight(t) <= X_BUDGET) return t
-  }
-  return build('')
-}
 
 export interface Song {
   id: string
@@ -136,28 +74,6 @@ export function songPayload(song: Song): AnnouncePayload | null {
   }
 }
 
-export interface ToolRef {
-  path: string
-  name: string
-}
-
-/**
- * 版の告知に添えるページ。更新履歴の本文でいちばん先に名前が出てくるツールの画面を撮る
- * （「追加」の節を先に見る。ついでに名前が出るだけのツールより、足したツールを選ぶため）。
- * どのツールの名前も無ければ、更新履歴のページ（いちばん上がその版）
- */
-export function releasePayload(e: ChangelogEntry, tools: readonly ToolRef[]): AnnouncePayload {
-  const added = e.body.match(/^### 追加\s*\n([\s\S]*?)(?=^### |(?![\s\S]))/m)?.[1] ?? ''
-  const first = (text: string) =>
-    tools
-      .map((t) => ({ t, at: text.indexOf(t.name) }))
-      .filter((x) => x.at >= 0 && /^\/[A-Za-z0-9_-]+$/.test(x.t.path))
-      .sort((a, b) => a.at - b.at)[0]?.t
-  const tool = first(added) ?? first(e.body)
-  if (tool) return { kind: 'page', path: tool.path, alt: `${tool.name}の画面（Sekai-Master v${e.version}）`, width: 1600, height: 900 }
-  return { kind: 'page', path: '/changelog', alt: `Sekai-Master の更新履歴のページ（いちばん上が v${e.version}）`, width: 1600, height: 900 }
-}
-
 /**
  * 承認なしで出す文面の安全の確かめ。問題があれば理由を返す（レビュー M3）。
  * - メンション（@ ＠）・山かっこ（Discord の <@…>）を通さない
@@ -172,19 +88,6 @@ export function safeForX(text: string): string | null {
 }
 
 /** 1回に出す本数の上限（比べる元が壊れていて全部を「新しい」とみなす事故を止める。レビュー H1） */
-export const MAX_RELEASES_PER_RUN = 2
 export const MAX_SONGS_PER_RUN = 3
-/** 版の告知は、更新履歴の日付がこの日数以内のものだけ */
-export const RELEASE_MAX_AGE_DAYS = 7
-
-/** 知らせる版を、日付で絞る（未来の日付と古い版は出さない） */
-export function recentReleases(entries: readonly ChangelogEntry[], now: number): ChangelogEntry[] {
-  return entries.filter((e) => {
-    const t = Date.parse(`${e.date}T00:00:00+09:00`)
-    return Number.isFinite(t) && t <= now && now - t <= RELEASE_MAX_AGE_DAYS * 86_400_000
-  })
-}
-
 /** 投稿の id。中身から決める（入れ直しても Worker が二重にしない） */
-export const releasePostId = (version: string) => `x-release-v${version}`
 export const songPostId = (song: Song) => `x-song-${song.id}`
