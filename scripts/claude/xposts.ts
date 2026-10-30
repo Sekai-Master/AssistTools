@@ -16,8 +16,19 @@ export const X_BUDGET = 276
 export interface ChangelogEntry {
   version: string
   date: string
+  /** 版の本文（自動告知を止める注記は除いたもの） */
   body: string
+  /** 版の節に自動告知を止める注記（AUTO_POST_SKIP）がある。無ければ告知する */
+  skipAutoPost?: boolean
 }
+
+/**
+ * 更新履歴の版の節にこの注記があれば、その版は自動で告知しない。Nori が版の告知を手で出したいとき用（2026-10-30）。
+ * 版の見出しのすぐ下の行に `<!-- x-auto-post: skip -->` と書く（見出しの行の末尾でも効く）。
+ * サイトの更新履歴ページ（src/pages/legal/changelogParser.ts）は HTML コメントを落とすので、ページには出ない
+ */
+export const AUTO_POST_SKIP_MARK = '<!-- x-auto-post: skip -->'
+const AUTO_POST_SKIP = /<!--\s*x-auto-post:\s*skip\s*-->/gi
 
 /** CHANGELOG.md の「## [x.y.z] - YYYY-MM-DD」ごとに分ける */
 export function parseChangelog(md: string): ChangelogEntry[] {
@@ -26,10 +37,17 @@ export function parseChangelog(md: string): ChangelogEntry[] {
   for (const part of parts) {
     const head = part.match(/^(\d+\.\d+\.\d+)\]\s*-\s*(\d{4}-\d{2}-\d{2})/)
     if (!head) continue
-    const body = part.slice(part.indexOf('\n') + 1).split(/^## /m)[0].trim()
-    out.push({ version: head[1], date: head[2], body })
+    const section = part.split(/^## /m)[0]
+    const body = part.slice(part.indexOf('\n') + 1).split(/^## /m)[0].replace(AUTO_POST_SKIP, '').trim()
+    const skip = section.match(AUTO_POST_SKIP) != null
+    out.push({ version: head[1], date: head[2], body, ...(skip ? { skipAutoPost: true } : {}) })
   }
   return out
+}
+
+/** 知らせる版を、自動で告知するものと、注記で止めたもの（Nori が手で告知する）に分ける */
+export function splitAutoPostSkips(entries: readonly ChangelogEntry[]): { post: ChangelogEntry[]; skipped: ChangelogEntry[] } {
+  return { post: entries.filter((e) => e.skipAutoPost !== true), skipped: entries.filter((e) => e.skipAutoPost === true) }
 }
 
 /** 新しく足された版のうち、知らせるもの（MINOR 以上＝PATCH が 0） */
