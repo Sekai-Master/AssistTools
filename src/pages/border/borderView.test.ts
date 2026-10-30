@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatJst, hiddenReason, isStale, phaseOf, recordRows, type Report, type Snapshot } from "./borderView";
+import { formatJst, hiddenReason, isStale, phaseOf, recordRows, referenceDetail, type Report, type Snapshot } from "./borderView";
 
 const H = 3_600_000;
 const START = Date.UTC(2026, 9, 1, 6, 0); // 10/1 15:00 JST
@@ -13,6 +13,40 @@ const snap: Snapshot = {
   predicted: true,
   ranks: [],
 };
+
+describe("referenceDetail（参考値の説明。#175）", () => {
+  const e102 = { ...snap.event, durationHours: 102 };
+  const e246 = { ...snap.event, durationHours: 246 };
+  const thin = { duration: 102, samples: 1, latestEventId: 221, weight: 0.3 };
+
+  it("同じ長さの回が少ない（thin）: 回数と、直近の回・ほかの回を混ぜた比率を書く", () => {
+    const t = referenceDetail({ event: e102, extrapolatedFrom: 150, thin, referenceSource: "thin" });
+    expect(t).toBe(
+      "このイベントは 102 時間で、過去に同じ長さの回が 1 回しかありません。同じ長さの直近の回（第221回）の伸び方を3割、ほかの回の伸び方を7割で混ぜて出しているので、大きく外れることがあります",
+    );
+    expect(t).not.toContain("借り");
+  });
+
+  it("過去に無い長さで率モデルを混ぜた（rate）: 「借りて」と書かず、全イベントの伸び方から作った形を混ぜたと書く", () => {
+    const t = referenceDetail({ event: e246, extrapolatedFrom: 198, thin: null, referenceSource: "rate" });
+    expect(t).toBe(
+      "このイベントは 246 時間で、過去に同じ長さの回がありません。いちばん近い 198 時間の回の伸び方と、これまでの全イベントの伸び方から作った形を混ぜて出しているので、大きく外れることがあります",
+    );
+  });
+
+  it("近い長さの表をそのまま借りた（borrow）・referenceSource の無い古い出力: いまの文面のまま", () => {
+    const borrow = "このイベントは 246 時間で、過去に同じ長さの回がありません。いちばん近い 198 時間の回の伸び方を借りて出しているので、大きく外れることがあります";
+    expect(referenceDetail({ event: e246, extrapolatedFrom: 198, thin: null, referenceSource: "borrow" })).toBe(borrow);
+    expect(referenceDetail({ event: e246, extrapolatedFrom: 198 })).toBe(borrow);
+    // 古い出力でも thin があれば thin の文面
+    expect(referenceDetail({ event: e102, extrapolatedFrom: 150, thin })).toContain("1 回しかありません");
+  });
+
+  it("参考値でなければ null", () => {
+    expect(referenceDetail({ event: e246, extrapolatedFrom: null, thin: null, referenceSource: null })).toBeNull();
+    expect(referenceDetail(snap)).toBeNull();
+  });
+});
 
 describe("formatJst", () => {
   it("日本時間で月/日 時:分", () => {
