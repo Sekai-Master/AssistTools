@@ -7,12 +7,12 @@ import { handleRequest } from './api.ts'
 import { runCron } from './collect.ts'
 import type { Env } from './env.ts'
 import { runDaily } from './daily.ts'
+import { runAnalysisDispatch, runScheduleDispatch } from './dispatch.ts'
 import { runFinals } from './finals.ts'
-import { runMasterTail } from './masterTail.ts'
 import { runSpurt } from './spurt.ts'
 import { runStart } from './start.ts'
 
-/** 5分ごとの見回り: 終わった直後の回を歴代の表へ足す（finals.ts）と、21時の日報（daily.ts）、終了3時間前の追い込み（spurt.ts）、開始15分前の告知（start.ts）、開催していない間に1時間に1回マスタの末尾を読む（masterTail.ts）。wrangler.jsonc の crons と同じ文字列 */
+/** 5分ごとの見回り: 終わった直後の回を歴代の表へ足す（finals.ts）と、21時の日報（daily.ts）、終了3時間前の追い込み（spurt.ts）、開始15分前の告知（start.ts）、GitHub Actions の起動（解析ジョブを22:45・10:45、次の回が未登録のあいだ日程の取り込みを1時間に1回。dispatch.ts）。wrangler.jsonc の crons と同じ文字列 */
 export const FINALS_CRON = '*/5 * * * *'
 
 export default {
@@ -56,12 +56,20 @@ export default {
         ),
       )
       ctx.waitUntil(
-        runMasterTail(env, now).then(
+        runAnalysisDispatch(env, now).then(
           (r) => {
-            // 新しい回が入ったときと、読めなかったときだけ残す（ふだんの1時間に1回は残さない）
-            if (r.status === 'skip' || (r.status === 'checked' && r.changed > 0)) console.log('master-tail', JSON.stringify(r))
+            // 起動したときと、起動できなかったときだけ残す（ふだんの見回りは残さない）
+            if (r.status !== 'idle') console.log('dispatch-analysis', JSON.stringify(r))
           },
-          (err) => console.error('master-tail failed', err),
+          (err) => console.error('dispatch-analysis failed', err),
+        ),
+      )
+      ctx.waitUntil(
+        runScheduleDispatch(env, now).then(
+          (r) => {
+            if (r.status !== 'idle') console.log('dispatch-schedule', JSON.stringify(r))
+          },
+          (err) => console.error('dispatch-schedule failed', err),
         ),
       )
       return

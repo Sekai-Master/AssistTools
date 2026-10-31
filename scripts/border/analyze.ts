@@ -43,6 +43,8 @@ const opt = (name: string) => {
 }
 const DRY = flag('--dry-run')
 const BACKFILL = flag('--backfill')
+/** 日程だけを Worker へ入れて終わる（border-schedule.yml。Worker の dispatch.ts が、次の回が未登録のあいだ1時間に1回起動する） */
+const SCHEDULE_ONLY = flag('--schedule-only')
 /** 関所で止まった版を、中身を確かめたうえで有効にする */
 const FORCE_MODEL = flag('--force-model') || process.env.BORDER_MODEL_FORCE === '1'
 /** 版の固定。入っていれば、新しい版ができても有効にしない（旧版に戻して様子を見るとき） */
@@ -321,6 +323,11 @@ async function updatePace(events: readonly EventMeta[], shapes: readonly Shape[]
   }
 }
 
+function writeSummary() {
+  const summaryFile = process.env.GITHUB_STEP_SUMMARY
+  if (summaryFile) fs.appendFileSync(summaryFile, log.join('\n') + '\n')
+}
+
 async function main() {
   // 関所で版を止めたら true。ほかの処理を全部終えたあと、最後にジョブを失敗にして気づかせる
   let blocked = false
@@ -334,6 +341,10 @@ async function main() {
     events: upcoming.map((e) => ({ id: e.id, name: e.name, type: e.eventType, unit: e.unit, startAt: e.startAt, aggregateAt: e.aggregateAt, asset: e.asset ?? null })),
   })
   say(`- 日程: ${source} から ${upcoming.length} 件（${upcoming.map((e) => e.id).join(', ')}）${sched ? `・変更 ${sched.changed} 行` : ''}`)
+  if (SCHEDULE_ONLY) {
+    writeSummary()
+    return
+  }
 
   // 1. 形
   const have = DRY && !TOKEN ? [] : (await admin<{ shapes: Shape[] }>('GET', '/admin/shapes')).shapes
@@ -429,8 +440,7 @@ async function main() {
   // 4. 歴代ボーダー（終値の表）に、終わった回を書き足す。失敗しても解析ジョブは止めない
   await updateFinals().catch((err) => say(`- 歴代ボーダー: 失敗（${err instanceof Error ? err.message : String(err)}）`))
 
-  const summaryFile = process.env.GITHUB_STEP_SUMMARY
-  if (summaryFile) fs.appendFileSync(summaryFile, log.join('\n') + '\n')
+  writeSummary()
   // 関所で版を止めた。ステップサマリーを書いたあとに失敗にする（途中で落とすと答え合わせなどが止まる）
   if (blocked) process.exitCode = 1
 }
