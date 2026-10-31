@@ -13754,6 +13754,25 @@
     "event_rate": 113
   },
   {
+    "id": "783",
+    "title": "ULTIM@TE☆BE∀M!!",
+    "pronunciation": "あるてぃめっとびーむ",
+    "creatorArtistId": 324,
+    "artistName": "xi",
+    "default": 2170801,
+    "Unit": "0_VS",
+    "categories": [
+      "original"
+    ],
+    "publishedAt": 1793426400000,
+    "published": true,
+    "isNewlyWrittenMusic": true,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_783.webp",
+    "music_time": 121.8,
+    "event_rate": 113
+  },
+  {
     "id": "784",
     "title": "オブソミート",
     "pronunciation": "おぶそみーと",
