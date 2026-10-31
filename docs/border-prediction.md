@@ -14,7 +14,7 @@ sekai.best /event/live ──(30分ごと)──▶ Worker sekaimaster-border �
                                          │       → 開始24時間・経過50%・85%で投稿キューに積む（画像用のデータつき）
                                          └ /admin/*（解析ジョブ・Bot 用、Bearer トークン）
 
-GitHub Actions「Border prediction analysis」(1日2回)
+GitHub Actions「Border prediction analysis」(1日2回、22:45・10:45 に Worker が起動。dispatch.ts)
   bonuses.json（日程）＋ sekai.best graph（終わったイベント）
   → 形（シェア列）を D1 へ → 全履歴で前向き検証 → 王者と帯を決めて、関所を通れば新しい版を有効化（§5）
   → 終わったマラソンを予測ログで採点 → レポート → 直近8回の見張り → 答え合わせの投稿をキューへ
@@ -111,7 +111,8 @@ Cron（`*/5 * * * *`）が、時刻で決まる投稿を積む。どれも画像
 
 - マラソン・チアフルだけ（ワールドリンクは出さない）。テストイベントも出さない（§2.2）。同じ回に2回は積まない（id が `{id}:daily:{日}`・`{id}:spurt`・`{id}:start`）
 - **開始の告知は公開前の情報を出さない**: 使うのはマスタの名前・期間・素材名と歴代の表だけ。出るのは開始15分前で、ゲーム内の告知（マスタの `eventOnlyComponentDisplayStartAt`。219〜222 は開始3時間前）より後。積むのも開始75分前から
-- **開始の告知は、その回が開始75分前までに events に入っていることが前提**。events に入る道は3つ: 解析ジョブ（1日2回、10:47・22:47 ごろ）がマスタ（sekai-master-db-diff の events.json）を `PUT /admin/events` で入れる／Worker が開催していない間に6時間に1回サイトの bonuses.json を読む／**Worker が開催していない間に1時間に1回、マスタの末尾 64KB だけを Range で読む**（`src/masterTail.ts`。2026-10-26 追加。GitHub Actions に頼らない道）。マスタに新しい回が載るのは開始の14〜72時間前（216〜222 の実測。222 は前日 21:00・221 と 220 は前日 15:00・217 は当日 0:00 で開始の15時間前）で、解析ジョブの次の回で入るので、7回とも開始の4時間以上前に入る計算。当日0時ごろに載る回（217・216）は、解析ジョブだけだと 10:47 の1回が止まるだけで落ちていた。マスタの末尾を読む道で、載ってから1時間以内（毎時0〜4分の見回り）に入る
+- **開始の告知は、その回が開始75分前までに events に入っていることが前提**。events に入る道は3つ: 解析ジョブ（1日2回）がマスタ（sekai-master-db-diff の events.json）を `PUT /admin/events` で入れる／**日程の取り込み（`border-schedule.yml`＝`analyze.ts --schedule-only`）を、これから始まる回が events に無いあいだ Worker が1時間に1回起動する**（`src/dispatch.ts`。開催中は終了まで24時間を切ってから）／Worker が開催していない間に6時間に1回サイトの bonuses.json を読む。マスタに新しい回が載るのは開始の14〜72時間前（216〜222 の実測。222 は前日 21:00・221 と 220 は前日 15:00・217 は当日 0:00 で開始の15時間前）なので、載ってから1時間ほどで入る。
+  - **2026-10-31 の事故（#183）**: 223 が events に入らず、開始の告知・収集・予測が 16:35 まで止まった。それまでの道は、Worker が開催していない間に1時間に1回「マスタの末尾 64KB だけを Range で読む」もの（旧 `masterTail.ts`、10/26 追加）だったが、**Workers の fetch は Accept-Encoding を上書きし、GitHub は gzip の版の末尾を `Content-Encoding` なしで返す**（`Content-Range: …/151091`＝圧縮後の大きさ）ので、一度も読めていなかった（手元の curl では identity が効くので、テストも手元の確認も通っていた）。Actions の schedule は毎回6時間前後遅れて当てにならず、手で起動した実行はすぐ始まるので、Worker から workflow_dispatch で起動する形に置き換えた
 - **入れる順番は Bot（sekaimaster-bot）が先**。古い Bot は `start` を読めず時刻付きにもならないので、Worker を先に入れると開始の約1時間前に画像なしの「まもなく」が出る
 - 222（10/26〜10/30）の最終日は「18時台 追い込み → 21:20 歴代ボーダー → 深夜〜朝 答え合わせ」の順。X は前の投稿から10分以上空けて出す（Bot の `X_MIN_GAP_MS`）
 
@@ -164,11 +165,12 @@ Claude の改善案（Issue、ラベル `model-proposal`）も、この手順を
 
 | 項目 | 上限（無料） | ボーダー側の使用量 |
 |---|---|---|
-| D1 書き込み | 10万行/日 | マスタの末尾: 値の変わらない行は書かない（`upsertEvents` の WHERE）ので、ふだんは **0行**。新しい回が載った・日程が変わったときだけ1回につき1行。終了前の追い込み・開始の告知: それぞれ1イベントに2行（投稿1＋画像用のデータ1）。開催中: 1回あたり 実測6＋予測6＋kv 2 ＝14行 × 48回 ＝ **約670行/日**。開催外: 日程の差分のみ（0〜数行）。解析ジョブ: 1イベントあたり形6＋版1＋レポート1＋投稿1 |
+| D1 書き込み | 10万行/日 | 日程の取り込み: 値の変わらない行は書かない（`upsertEvents` の WHERE）ので、ふだんは **0行**。新しい回が載った・日程が変わったときだけ1回につき1行。Actions の起動: 解析ジョブの起動を kv に残す **2行/日**（日程の取り込みは状態を持たない）。終了前の追い込み・開始の告知: それぞれ1イベントに2行（投稿1＋画像用のデータ1）。開催中: 1回あたり 実測6＋予測6＋kv 2 ＝14行 × 48回 ＝ **約670行/日**。開催外: 日程の差分のみ（0〜数行）。解析ジョブ: 1イベントあたり形6＋版1＋レポート1＋投稿1 |
 | D1 読み取り | 500万行/日 | Cron 1回で数行。5分ごとの見回りの追い込みは events（直近ぶん・索引なし）を1回引く（288回/日 × 数十行）。画面は1リクエスト1〜2行（事前に組んだ kv を返す）。表示1回で3リクエスト（いまの値・答え合わせ・推移） |
 | Workers リクエスト | 10万/日 | Cron 48回/日＋画面の表示1回につき3回、開いている間は10分ごとに3回（`/api/border/*` だけが Functions を起動する）。1人が1日じゅう開きっぱなしでも約430回 |
 | Cron Trigger | 5本/アカウント | 1本（SAWAYAKA が3本） |
-| Worker CPU（マスタの末尾） | 10ms/回 | 開催していない間の毎時0〜4分の1回だけ。末尾 64KB の切れ目探し＋parse＋検証で手元 0.07ms（全体 2.8MB を parse すると 3.7ms で、Workers では枠に近いので読まない）。206 でなければ本文を読まずに捨てる |
+| Worker CPU（Actions の起動） | 10ms/回 | ふだんの見回りは時刻の計算だけ（D1 も読まない）。起動の時間帯（22:45・10:45 から15分）と毎時0〜4分だけ D1 を1〜2回引き、GitHub の API を1回呼ぶ。events.json（2.9MB）は Worker では読まない（Actions 側で読む） |
+| GitHub Actions | 公開リポジトリは無料 | 解析ジョブ 1日2回（Worker の起動＋予備の schedule。重なっても同じ結果）。日程の取り込みは、次の回が未登録のあいだ1時間に1回・1回20秒ほど（前の回の終了24時間前から、次の回がマスタに載るまで） |
 | Worker CPU（開始の告知） | 10ms/回 | ふだんは events を1回引くだけ。積む回だけ歴代の表（約83KB）を parse（手元で 0.2ms） |
 | Worker CPU | 10ms/回（Cron も同じ） | 実測1回の parse（約90KB）＋割り算6回。日程（288KB）は開催外の回にしか読まない。5分ごとの見回りの追い込みは、ふだんは events を1回引くだけ。積む回だけ current・推移（約60KB）を parse（手元で 0.1ms。`Documents\border-research\ops-scripts\bench-worker-cpu.mts`） |
 | Pages ビルド | 500回/月 | **増えない**（解析ジョブはコミットしない） |
@@ -192,6 +194,7 @@ openssl rand -hex 32 | tr -d '
 - 実際の値（2026-09-30 作成）: D1 `f55cadf7-314a-400f-a92d-d71e39a5eafe`、Worker `https://sekaimaster-border.norec-receipt-ai.workers.dev`
 
 - GitHub: `secrets.BORDER_ADMIN_TOKEN`（上と同じ値）と `vars.BORDER_API`（Worker の URL）
+- Worker の `GITHUB_DISPATCH_TOKEN`（2026-10-31 追加）: GitHub の fine-grained PAT（Repository access は AssistTools だけ、Permissions は **Actions: Read and write** だけ）を `npx wrangler secret put GITHUB_DISPATCH_TOKEN` で入れる。無いあいだ Worker は Actions を起動しない（解析ジョブは Actions の schedule だけで動く）。期限が切れたら作り直して入れ直す
 - Pages プロジェクト `sekaimaster` の設定 → バインディングに D1 `BORDER_DB` = `sekaimaster-border`（本番・プレビュー両方）
 - 形の初回投入: Actions の「Border prediction analysis」を `backfill: true` で手動実行
 
@@ -205,7 +208,7 @@ openssl rand -hex 32 | tr -d '
 - **モデルを手で戻したい**: `BORDER_MODEL_PIN` に戻したい版を入れてから、`models` 表の `active` を付け替える（版は消さない）。`npx wrangler d1 execute sekaimaster-border --remote --command "UPDATE models SET active = CASE WHEN version = '<版>' THEN 1 ELSE 0 END"`。帯の倍率（`FAR_BAND_FACTOR`）は Worker のコードにあるので、版を戻しても変わらない
 - **見張り**（`scoreboard`。答え合わせのあとに毎回）: 直近8回の答え合わせ（本番で実際に出した予測）の当たり率・外れ幅を要約に表で出す。直近8回の当たり率が 65% を割る、直近3回がそろって 50% を割る、本番で出した予測の外れが前向き検証の当て直しの1.5倍を超える（過学習のサイン。モデルを変えた直後は、古い版が悪かっただけのこともある）ときは警告を出す（ジョブは失敗にしない）。警告が続いたら §2.1.6 の手順で原因を調べ、必要なら版を固定して戻す
 - **表の定義を変えたとき（migrations/ に足したとき）**: デプロイの前に `npx wrangler d1 migrations apply sekaimaster-border --remote`。0002（イベントの素材名の列）は 2026-10-25 に追加。先にデプロイすると、日程の取り込みが「asset という列が無い」で失敗する
-- **マスタの末尾のログ**: `master-tail {"status":"checked","changed":1,...}`（新しい回が入った）・`skip`（206 でない・読めない）。変わらない回はログを出さない
+- **Actions の起動のログ**: `dispatch-analysis {"status":"dispatched",...}`・`dispatch-schedule {"status":"dispatched",...}`（起動した）・`skip`（鍵が無い・GitHub が断った。理由つき）。何もしない見回りはログを出さない
 - **歴代の表の見回りのログ**: `npx wrangler tail sekaimaster-border` で `finals {"status":"added",...}`（足した）・`waiting`（確定後の点を待っている）。ふだんの回はログを出さない
 
 ## 6. 公開（2026-10-25 に済み）

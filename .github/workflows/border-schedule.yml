@@ -1,0 +1,38 @@
+name: Border schedule sync
+
+# ボーダー予測の日程の取り込み（scripts/border/analyze.ts --schedule-only）。設計は docs/border-prediction.md。
+#
+# マスタ（sekai-master-db-diff の events.json、2.9MB）を読み、直近とこれからの回を Worker の events へ入れるだけ。
+# 起動するのは Worker（workers/border/src/dispatch.ts）。次の回が events に無いあいだ、1時間に1回 workflow_dispatch で起動する。
+# Actions の schedule は使わない（毎回6時間前後遅れる。2026-10-31 に 223 の開始の告知が出なかった。#183）。
+# リポジトリには何もコミットしない（Pages のビルドを走らせない）。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: border-schedule
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      # 依存パッケージは使わない（Node の型除去で .ts をそのまま動かす）ので npm ci は要らない
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          # ランナーに入っている 22 系は古いことがある。マスタは Brotli で返るので、その修正（22.23.4）を確実に使う（border-analysis.yml と同じ）
+          check-latest: true
+
+      - name: Sync schedule
+        env:
+          BORDER_API: ${{ vars.BORDER_API }}
+          BORDER_ADMIN_TOKEN: ${{ secrets.BORDER_ADMIN_TOKEN }}
+        run: node scripts/border/analyze.ts --schedule-only

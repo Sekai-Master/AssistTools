@@ -7,6 +7,8 @@ name: Border prediction analysis
 # ＝ Pages のビルドを走らせない。ビルドは無料枠で月500回しかない。
 
 on:
+  # 主に Worker（workers/border/src/dispatch.ts）が 22:45・10:45 JST に workflow_dispatch で起動する（2026-10-31。#183）。
+  # 下の schedule は予備（Worker の鍵が切れたとき用）。重なって2回走っても結果は同じ（答え合わせは済んだ回を飛ばす）
   schedule:
     # 毎時の 0分・30分は GitHub が混んで遅れるので分をずらす（2026-10-13。9/29〜10/10 の実測で遅れの中央値は約6時間）
     # 22:47 JST（マラソンは 20:59 終了、sekai.best の最終サンプルは 21:15 ごろ）
