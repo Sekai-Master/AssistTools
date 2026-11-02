@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Menu, Settings2, X } from "lucide-react";
 import { READY_TOOLS } from "../tools";
+import { NOT_FOUND, PAGES, docTitle } from "../seo";
 import { resolveTheme, usePrefersDark, useTheme } from "../lib/theme";
 import { SiteFooter } from "./SiteFooter";
 
@@ -44,6 +45,15 @@ export function Layout({ children }: { children: ReactNode }) {
       document.removeEventListener("pointerdown", onDown);
     };
   }, [menuOpen]);
+
+  // タブの名前を画面に合わせる。最初に開いたページの名前はビルドで書き出した HTML が持っている
+  // （src/seo.ts）。ここは画面を移ったとき用。知見ノートの記事は記事側が付けるので触らない。
+  useEffect(() => {
+    // React Router は大文字小文字と末尾の / を区別せずに照合するので、引く側も揃える
+    const path = pathname.length > 1 ? pathname.replace(/\/+$/, "").toLowerCase() : pathname;
+    if (path.startsWith("/knowledge/")) return;
+    document.title = docTitle(path, PAGES[path] ?? NOT_FOUND);
+  }, [pathname]);
 
   const close = () => setMenuOpen(false);
 

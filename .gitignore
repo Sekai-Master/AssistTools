@@ -32,3 +32,6 @@ __pycache__/
 *.pyc
 
 # wl214 のイベラン支援ツールは Sekai-Master-Private へ移した（2026-08-28）
+
+# wrangler の手元の状態（wrangler pages dev などが作る）
+.wrangler
