@@ -119,6 +119,11 @@ export type PostPayload =
       dailyAt: number | null
     }
   /**
+   * 機能紹介（週1回。intro.ts）。画像はサイトの /intro/<slug>/ に置いた PNG（images の url）。Bot は取ってきて付けるだけで描かない。
+   * postAt ちょうどに X にだけ出す。本文（posts.text）は intros.json のまま（末尾の #プロセカ も含む）
+   */
+  | { kind: 'intro'; postAt: number; slug: string; images: { url: string; alt: string }[] }
+  /**
    * 終了前の追い込み（終了3時間前に1本。spurt.ts）。Bot が日報と同じ形の表で描く（sekaimaster-bot の dailyCard.ts）。
    * snapshot は終了3時間前を過ぎた最初の値と予測。h3 は直近3時間（残りと同じ長さ）の伸び
    */
