@@ -193,3 +193,13 @@ describe("public/_redirects", () => {
     expect(rules).toEqual([]);
   });
 });
+
+describe("Google Search Console の所有権の確認", () => {
+  it("index.html にあり、ページごとの head を作っても消えない（消すと確認が外れる）", () => {
+    const html = fs.readFileSync(path.join(process.cwd(), "index.html"), "utf8");
+    const tag = /<meta name="google-site-verification" content="[^"]+" \/>/;
+    expect(html).toMatch(tag);
+    expect(renderHead(html, "/deck", PAGES["/deck"])).toMatch(tag);
+    expect(renderHead(html, "/nope", NOT_FOUND)).toMatch(tag);
+  });
+});
