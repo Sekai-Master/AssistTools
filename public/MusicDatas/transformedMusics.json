@@ -14151,5 +14151,24 @@
     "jacketLink": "jacket_s_825.webp",
     "music_time": 124.1,
     "event_rate": 114
+  },
+  {
+    "id": "828",
+    "title": "プレデター",
+    "pronunciation": "ぷれでたー",
+    "creatorArtistId": 140,
+    "artistName": "遼遼",
+    "default": 1470901,
+    "Unit": "3_VBS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1793599200000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_828.webp",
+    "music_time": 125,
+    "event_rate": 114
   }
 ]
