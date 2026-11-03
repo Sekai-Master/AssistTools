@@ -63,6 +63,11 @@ npm run data:refresh-mysekai  # public/MysekaiDatas/（家具とキャラの反�
 test / build / lint を回し、**全部通ったときだけ** `wrangler pages deploy` する。
 旧 URL `sekaimaster.netlify.app` は 301 リダイレクタとして生かしてある（`netlify.toml` はその名残）。
 
+**検索エンジン向けに、ビルドの最後でページごとの HTML を書き出している**（`scripts/seo/write-pages.ts`。タイトル・説明文の正本は `src/seo.ts`）。
+`deck.html` のような「パス.html」・`404.html`・`sitemap.xml`・`robots.txt` が `dist` に出る。
+**ルートを足したら `src/seo.ts` にも足す**（`src/seo.test.ts` が `App.tsx` と突き合わせて落ちる）。
+`public/_redirects` に SPA のフォールバックを戻すと全部が index.html に化けるので戻さない（理由は同ファイル）。
+
 アクセス解析（Cloudflare Web Analytics）は Cloudflare Pages 側の設定で有効にしてあり、
 **配信時にビーコンが自動挿入される**。リポジトリのコードには入っていないので、手元のビルドには付かない。
 

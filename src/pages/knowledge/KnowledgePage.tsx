@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { SITE_NAME, SITE_URL } from "../../lib/site";
+import { NOT_FOUND } from "../../seo";
 import { parseEntry, sortEntries, STATUS_TONE, type Entry } from "./lib/entry";
 import type { Block, Inline } from "./lib/md";
 
@@ -186,16 +187,15 @@ function Blocks({ blocks }: { blocks: Block[] }) {
 /**
  * タブとブックマークの名前を記事名にする。
  * ★ **引用される前提の文書**なので、全部が「Sekai-Master」だと、開いたタブも
- *   ブックマークも共有リンクも見分けが付かない。ページを離れたら元に戻す。
- * ★ OGP（SNS のカード）はサーバ側で描く必要があるので、ここでは直せない。宿題。
+ *   ブックマークも共有リンクも見分けが付かない。
+ * ★ 一覧と他の画面のタブ名は Layout が付ける（src/seo.ts）。記事の名前は Layout が知らないので、ここで付ける。
+ * ★ **離れるときに元の名前へ戻さない。** 遷移の演出で画面の差し替えが遅れるので、戻すと
+ *   Layout が付けた次の画面の名前を、この記事を開く前の名前で上書きしてしまう（2026-11-03 のレビューで判明）。
+ * ★ OGP（SNS のカード）はビルドで書き出す HTML が持つ（scripts/seo/write-pages.ts）。
  */
-function useDocTitle(title: string): void {
+function useDocTitle(title: string | null): void {
   useEffect(() => {
-    const before = document.title;
-    document.title = `${title}｜${SITE_NAME}`;
-    return () => {
-      document.title = before;
-    };
+    if (title != null) document.title = `${title}｜${SITE_NAME}`;
   }, [title]);
 }
 
@@ -215,7 +215,6 @@ const INTRO =
   "プロセカの計算式・仕様・通例のうち、公式にもゲーム内にも書かれていないものを置いています。このサイトのツールが立っている根拠でもあります。";
 
 function Index() {
-  useDocTitle("知見ノート");
   return (
     <ToolPage unit="vs" title="知見ノート" icon="menu_book">
       <p className="text-sm leading-relaxed text-slate-600">
@@ -277,7 +276,6 @@ function Index() {
 }
 
 function Article({ entry }: { entry: Entry }) {
-  useDocTitle(entry.title);
   const url = `${SITE_URL}/knowledge/${entry.slug}`;
   return (
     <ToolPage unit="vs" title={entry.title} icon="menu_book">
@@ -334,8 +332,9 @@ function Article({ entry }: { entry: Entry }) {
 
 export default function KnowledgePage() {
   const { slug } = useParams();
+  const entry = slug ? ENTRIES.find((e) => e.slug === slug) : undefined;
+  useDocTitle(slug ? (entry?.title ?? NOT_FOUND.title) : null);
   if (!slug) return <Index />;
-  const entry = ENTRIES.find((e) => e.slug === slug);
   if (!entry) {
     return (
       <ToolPage unit="vs" title="知見ノート" icon="menu_book">
