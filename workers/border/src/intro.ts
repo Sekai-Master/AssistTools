@@ -21,8 +21,13 @@ export const INTRO_WEEKDAY = 3
 export const INTRO_HOUR = 12
 /** 出す時刻のこの時間前から積む */
 const QUEUE_AHEAD_MS = H
-/** X の本文の上限（Bot は機能紹介の本文に何も足さない） */
-export const INTRO_TEXT_MAX_WEIGHT = 280
+/**
+ * X の本文の上限（Bot は機能紹介の本文に何も足さない）。ちょうど 280 は避ける（数え方が X と少しずれると投稿ボタンが押せない。
+ * 開始の告知の 244＋ハッシュタグ＝275 と同じ余裕）
+ */
+export const INTRO_TEXT_MAX_WEIGHT = 275
+/** 代替テキストの上限（字。Bot の parseIntroPayload と同じ。ずれると Bot が payload ごと捨てる） */
+export const INTRO_ALT_MAX = 1000
 /** 1本に付ける画像の上限（X の上限） */
 const MAX_IMAGES = 4
 /** 直近の機能紹介をこの本数まで見て、出した順を決める（紹介の数より多ければよい） */
@@ -42,6 +47,8 @@ const SLUG = /^[a-z0-9-]+$/
 const FILE = /^[a-z0-9-]+\.png$/
 
 const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null
+/** Bot の shortText と同じ（前後の空白を除いて空でなく、INTRO_ALT_MAX 字以内） */
+const isAlt = (x: unknown): x is string => typeof x === 'string' && x.trim() !== '' && [...x].length <= INTRO_ALT_MAX
 
 /** 日本時間のその日の0時（UTC の ms） */
 const jstDay = (ms: number) => Math.floor((ms + 9 * H) / 86_400_000) * 86_400_000 - 9 * H
@@ -65,7 +72,7 @@ export function parseIntros(raw: unknown, site: string): IntroEntry[] {
   for (const e of raw.intros) {
     if (!isRecord(e) || typeof e.slug !== 'string' || !SLUG.test(e.slug) || typeof e.text !== 'string' || !Array.isArray(e.images)) continue
     if (!e.text.trim() || xWeight(e.text) > INTRO_TEXT_MAX_WEIGHT) continue
-    const images = e.images.filter((i): i is { file: string; alt: string } => isRecord(i) && typeof i.file === 'string' && FILE.test(i.file) && typeof i.alt === 'string')
+    const images = e.images.filter((i): i is { file: string; alt: string } => isRecord(i) && typeof i.file === 'string' && FILE.test(i.file) && isAlt(i.alt))
     if (images.length === 0 || images.length !== e.images.length || images.length > MAX_IMAGES) continue
     if (out.some((o) => o.slug === e.slug)) continue
     out.push({ slug: e.slug, text: e.text, images: images.map((i) => ({ url: `${site}/intro/${e.slug}/${i.file}`, alt: i.alt })) })
@@ -90,10 +97,13 @@ export async function runIntro(env: Env, now: number, fetcher: typeof fetch = fe
   const postAt = introSlotOf(now)
   if (postAt == null) return { status: 'idle' }
   const prefix = introIdPrefix(postAt)
+  // その週の分を積んだかは主キーの範囲で引く（積んだ後の見回りは posts を読まずに済む。頭は ':' で終わるので次の文字 ';' までが範囲）
+  const done = await env.DB.prepare('SELECT id FROM posts WHERE id >= ?1 AND id < ?2 LIMIT 1')
+    .bind(prefix, `${prefix.slice(0, -1)};`)
+    .first<{ id: string }>()
+  if (done) return { status: 'exists', id: done.id }
   const recent = await env.DB.prepare("SELECT id FROM posts WHERE kind = 'intro' ORDER BY created_at DESC LIMIT ?1").bind(RECENT_LIMIT).all<{ id: string }>()
   const recentIds = recent.results.map((r) => r.id)
-  const done = recentIds.find((id) => id.startsWith(prefix))
-  if (done) return { status: 'exists', id: done }
 
   // 読めなければ次の見回り（5分後）にまた読む。出す時刻を過ぎたらその週は出さない
   let raw: unknown

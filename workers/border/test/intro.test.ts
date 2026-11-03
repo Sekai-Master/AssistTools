@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { PAGES } from '../../../src/seo.ts'
 import { unsentPosts } from '../src/db.ts'
 import type { Env } from '../src/env.ts'
-import { INTRO_TEXT_MAX_WEIGHT, introIdPrefix, introSlotOf, parseIntros, pickIntro, runIntro } from '../src/intro.ts'
+import { INTRO_ALT_MAX, INTRO_TEXT_MAX_WEIGHT, introIdPrefix, introSlotOf, parseIntros, pickIntro, runIntro } from '../src/intro.ts'
 import { createD1 } from './d1shim.ts'
 
 const H = 3_600_000
@@ -63,6 +63,10 @@ describe('intros.json の読み取り（parseIntros）', () => {
           entry('five', ['a.png', 'b.png', 'c.png', 'd.png', 'e.png']),
           entry('none', []),
           { ...entry('alt'), images: [{ file: 'p1.png' }] },
+          // 代替テキストは Bot の parseIntroPayload と同じ制約（ずれると Bot が payload ごと捨て、画像なしで出る。レビュー HIGH-1）
+          { ...entry('alt-empty'), images: [{ file: 'p1.png', alt: '' }] },
+          { ...entry('alt-blank'), images: [{ file: 'p1.png', alt: '  ' }] },
+          { ...entry('alt-long'), images: [{ file: 'p1.png', alt: 'あ'.repeat(INTRO_ALT_MAX + 1) }] },
           long,
           null,
           entry('deck'),
@@ -72,6 +76,9 @@ describe('intros.json の読み取り（parseIntros）', () => {
       SITE,
     )
     expect(out.map((e) => e.slug)).toEqual(['deck'])
+  })
+  it('代替テキストはちょうど上限の字数まで通す', () => {
+    expect(parseIntros({ intros: [{ ...entry('a'), images: [{ file: 'p1.png', alt: 'あ'.repeat(INTRO_ALT_MAX) }] }] }, SITE)).toHaveLength(1)
   })
   it('一覧が無い・形が違えば空', () => {
     expect(parseIntros(null, SITE)).toEqual([])
