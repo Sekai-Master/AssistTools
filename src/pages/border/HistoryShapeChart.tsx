@@ -73,8 +73,10 @@ type Range = { top: number; xEnd: number };
  * 最初の目標はそのまま使う（0 から伸ばす演出はしない）
  */
 function useTween(target: Range | null): Range | null {
-  const [cur, setCur] = useState<Range | null>(null);
+  const [cur, setCur] = useState<Range | null>(target);
   const curRef = useRef<Range | null>(null);
+  // 最初の目標は描きながら入れる（描いたあとの effect で入れると、2回目の変更の最初の1コマが行き先の値に跳ぶ。#189 レビュー M2）
+  if (cur == null && target != null) setCur(target);
   const top = target?.top;
   const xEnd = target?.xEnd;
   useEffect(() => {
@@ -100,7 +102,6 @@ function useTween(target: Range | null): Range | null {
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [top, xEnd]);
-  // 最初の目標は、動かし始める前（cur がまだ無い）でもそのまま描く
   return cur ?? target;
 }
 
@@ -113,13 +114,16 @@ export function HistoryShapeChart({ eventId, hours }: { eventId: number; hours: 
   // 外した順位（回を選び直しても覚えておく）
   const [hidden, setHidden] = useState<readonly HistoryRank[]>([]);
   const available = useMemo(() => (series ?? []).map((s) => s.rank), [series]);
-  const shown = useMemo(() => (series ?? []).filter((s) => !hidden.includes(s.rank)), [series, hidden]);
+  // 外した順位しか無い回（別の回で外したまま選び直した）では、外したのを無視して出せる順位を出す（#189 レビュー M1）
+  const allHidden = available.length > 0 && available.every((r) => hidden.includes(r));
+  const shown = useMemo(() => (series ?? []).filter((s) => allHidden || !hidden.includes(s.rank)), [series, hidden, allHidden]);
   // 軸の動きはここで持つ（回を選び直して読み込み中にグラフが消えても、前の回の範囲から次の回の範囲へ動かす）
   const extent = useMemo(() => (shown.length > 0 ? extentOf(shown, hours) : null), [shown, hours]);
   const target = useMemo(() => (extent ? { top: valueAxis(extent.maxValue).top, xEnd: Math.max(1, extent.xEnd) } : null), [extent]);
   const view = useTween(target);
   const toggle = (rank: HistoryRank) => {
-    const next = hidden.includes(rank) ? hidden.filter((r) => r !== rank) : [...hidden, rank];
+    const base = allHidden ? hidden.filter((r) => !available.includes(r)) : hidden;
+    const next = base.includes(rank) ? base.filter((r) => r !== rank) : [...base, rank];
     // この回で出せる順位を全部外すと何も描けないので、最後の1つは外させない
     if (available.some((r) => !next.includes(r))) setHidden(next);
   };
@@ -129,7 +133,7 @@ export function HistoryShapeChart({ eventId, hours }: { eventId: number; hours: 
       <div role="group" aria-label="出す順位" className="flex flex-wrap gap-2">
         {HISTORY_RANKS.map((rank) => {
           const has = available.includes(rank);
-          const on = has && !hidden.includes(rank);
+          const on = has && (allHidden || !hidden.includes(rank));
           return (
             <button
               key={rank}
@@ -186,7 +190,8 @@ function Plot({ series, hours, lastHour, target, view }: { series: ShapeSeries[]
     e.preventDefault();
     setActive(Math.min(lastI, Math.max(0, next)));
   };
-  const a = active;
+  // 順位を外して右端が縮んだとき、選んでいた点が範囲の外に残らないように（#189 レビュー L2）
+  const a = active != null ? Math.min(active, lastI) : null;
   const summary = `ボーダーの推移。${series.map((s) => `${s.rank}位 終値 ${formatMan(s.final)}`).join("、")}`;
   // useId の «» や : は url(#…) で読めないので、英数字だけにする
   const clipId = `shape-clip-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
@@ -264,6 +269,11 @@ function Plot({ series, hours, lastHour, target, view }: { series: ShapeSeries[]
         </svg>
       )}
       {a != null && width > 0 && <Tooltip series={series} i={a} hours={hours} left={x(hourAt(a, hours))} width={width} />}
+      {/* 矢印キーで点を動かしたとき、吹き出しの中身を読み上げる（吹き出しは目で見る人向け。#189 レビュー M3） */}
+      <p className="sr-only" aria-live="polite">
+        {a != null &&
+          `${elapsedLabel(a, hours)}。${series.map((s) => `${s.rank}位 ${s.values[a] != null ? formatMan(s.values[a]) : "記録なし"}`).join("、")}`}
+      </p>
     </div>
   );
 }

@@ -20,7 +20,7 @@ export interface ShapeSeries {
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
-/** 公開 API の応答を読む。知らない順位・形の合わない行は捨てる。順位は HISTORY_RANKS の順 */
+/** 公開 API の応答を読む。知らない順位・形の合わない行・全部が欠測の行は捨てる。順位は HISTORY_RANKS の順 */
 export function parseShape(raw: unknown): ShapeSeries[] {
   const ranks = raw && typeof raw === "object" ? (raw as { ranks?: unknown }).ranks : undefined;
   if (!Array.isArray(ranks)) return [];
@@ -31,6 +31,8 @@ export function parseShape(raw: unknown): ShapeSeries[] {
     const key = HISTORY_RANKS.find((k) => Number(k) === rank);
     if (!key || !finite(final) || !(final > 0) || !Array.isArray(share) || share.length !== SHAPE_POINTS) continue;
     if (!share.every((v) => v === null || finite(v))) continue;
+    // 全部が欠測の順位は、つけても線が出ないので無いものとして扱う（#189 レビュー M1）
+    if (share.every((v) => v === null)) continue;
     byRank.set(key, { rank: key, final, values: share.map((v) => (v === null ? null : Math.round(v * final))) });
   }
   return HISTORY_RANKS.flatMap((k) => byRank.get(k) ?? []);

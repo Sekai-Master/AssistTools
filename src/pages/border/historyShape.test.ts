@@ -19,6 +19,7 @@ describe("推移の形の読み取り", () => {
         { rank: 200, final: 1, share: share(() => Number.NaN) },
         { rank: 500, final: 0, share: share(() => 1) },
         { rank: 2000, final: 1, share: share((i) => (i === 0 ? ("1" as unknown as number) : 1)) },
+        { rank: 100, final: 5, share: share(() => null) },
         null,
       ],
     });

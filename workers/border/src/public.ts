@@ -8,6 +8,9 @@
  */
 import { activeModelSummary, allReports, kvGet, shapesOf } from './db.ts'
 
+/** 形の順位の数（50・100・200・500・1000・2000） */
+const SHAPE_RANKS = 6
+
 function rawJson(body: string, maxAge: number): Response {
   return new Response(body, {
     headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': `public, max-age=${maxAge}` },
@@ -38,7 +41,9 @@ export async function publicBorderResponse(db: D1Database, path: string): Promis
   if (shape) {
     const id = Number(shape[1])
     const ranks = (await shapesOf(db, id)).map((s) => ({ rank: s.rank, final: s.final, share: s.share }))
-    return rawJson(JSON.stringify({ eventId: id, ranks }), ranks.length > 0 ? 86_400 : 300)
+    // 1日キャッシュするのは6順位そろったときだけ。形の投入（upsertShapes）は50行ずつの batch に分けて書くので、
+    // 書いている途中に読むと回の一部の順位だけが返りうる（#189 レビュー L4）。順位の欠けた古い回は5分のまま（6行読むだけ）
+    return rawJson(JSON.stringify({ eventId: id, ranks }), ranks.length >= SHAPE_RANKS ? 86_400 : 300)
   }
 
   // 歴代ボーダー（終値の表）。Worker の見回り（終了15分後）と解析ジョブが終わった回を書き足す kv の1行（約90KB）。

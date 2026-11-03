@@ -230,24 +230,36 @@ describe('API', () => {
     expect(pub.events).toEqual([row])
   })
 
-  it('歴代ボーダーの推移: /v1/border/events/{id}/shape はその回の形だけを順位順に返す。無い回は空で短いキャッシュ', async () => {
+  it('歴代ボーダーの推移: /v1/border/events/{id}/shape はその回の形だけを順位順に返す。6順位そろえば1日、欠けていれば・無ければ短いキャッシュ', async () => {
     const share = GRID.map((p, i) => (i === 3 ? null : p))
     const shapes = [
-      { eventId: 220, rank: 1000, final: 9_000_000, share },
-      { eventId: 220, rank: 50, final: 59_100_000, share },
-      { eventId: 221, rank: 50, final: 1, share },
+      ...[2000, 1000, 500, 200, 100, 50].map((rank) => ({ eventId: 220, rank, final: 59_100_000 / rank, share })),
+      { eventId: 221, rank: 1000, final: 9_000_000, share },
+      { eventId: 221, rank: 50, final: 59_100_000, share },
     ]
     await handleRequest(adminReq('/admin/shapes', { method: 'PUT', body: JSON.stringify({ shapes }) }), env)
-    const res = await handleRequest(new Request('https://w/v1/border/events/220/shape'), env)
-    expect(res.headers.get('Cache-Control')).toBe('public, max-age=86400')
+    const full = await handleRequest(new Request('https://w/v1/border/events/220/shape'), env)
+    expect(full.headers.get('Cache-Control')).toBe('public, max-age=86400')
+    expect(((await full.json()) as { ranks: { rank: number }[] }).ranks.map((r) => r.rank)).toEqual([50, 100, 200, 500, 1000, 2000])
+    const res = await handleRequest(new Request('https://w/v1/border/events/221/shape'), env)
+    expect(res.headers.get('Cache-Control')).toBe('public, max-age=300')
     const body = (await res.json()) as { eventId: number; ranks: { rank: number; final: number; share: (number | null)[] }[] }
-    expect(body.eventId).toBe(220)
+    expect(body.eventId).toBe(221)
     expect(body.ranks.map((r) => r.rank)).toEqual([50, 1000])
     expect(body.ranks[0]).toEqual({ rank: 50, final: 59_100_000, share })
     const none = await handleRequest(new Request('https://w/v1/border/events/9/shape'), env)
     expect(none.headers.get('Cache-Control')).toBe('public, max-age=300')
     expect(await none.json()).toEqual({ eventId: 9, ranks: [] })
     expect((await handleRequest(new Request('https://w/v1/border/events/1x/shape'), env)).status).toBe(404)
+  })
+
+  it('歴代ボーダーの推移: 壊れた行（share が JSON でない）は捨て、ほかの順位は返す', async () => {
+    const share = GRID.map((p) => p)
+    await handleRequest(adminReq('/admin/shapes', { method: 'PUT', body: JSON.stringify({ shapes: [{ eventId: 222, rank: 50, final: 10, share }] }) }), env)
+    await env.DB.prepare('INSERT INTO shapes (event_id, rank, final, share, updated_at) VALUES (222, 100, 5, ?1, 0)').bind('{broken').run()
+    const res = await handleRequest(new Request('https://w/v1/border/events/222/shape'), env)
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as { ranks: { rank: number }[] }).ranks.map((r) => r.rank)).toEqual([50])
   })
 
   it('形の投入は型を確かめ、壊れていれば 400', async () => {
