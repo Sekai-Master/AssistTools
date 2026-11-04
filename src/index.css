@@ -430,6 +430,11 @@ body {
       rgba(255, 255, 255, 0) 32%
     );
   }
+  /* 見出しのアイコンは文字でなく CSS で出す。h1 の中に合字の元の文字（insights など）があると、
+     Google が検索結果のタイトルを「insightsボーダー予測」にした（2026-11-04） */
+  .unit-title .material-icons[data-icon]::before {
+    content: attr(data-icon);
+  }
   .unit-title > * {
     position: relative;
     z-index: 1;
