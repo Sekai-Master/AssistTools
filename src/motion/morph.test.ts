@@ -276,4 +276,116 @@ describe("飛行", () => {
     sized(stage.querySelector("#t")!, 24, 16, 700, 48);
     expect(flyMorph(stage, TIMING)).toBe(false);
   });
+
+  // 行き先が見つからない経路でも、隠した元を戻す。元のページが差し替わらずに
+  // 残る遷移（沈みの途中で同じページへ戻る）では、戻さないとそのまま消えて見える。
+  it("行き先に対応が無いとき、画面に残っている元を見せ直す", () => {
+    const stage = setup();
+    const c1 = stage.querySelector("#c1") as HTMLElement;
+    expect(c1.style.visibility).toBe("hidden");
+
+    const other = document.createElement("div");
+    other.innerHTML = `<h1 id="other"></h1>`;
+    document.body.appendChild(other);
+    expect(flyMorph(other, TIMING)).toBe(false);
+    expect(c1.style.visibility).toBe("");
+  });
+});
+
+/**
+ * ★ 2026-11-05 に報告された「ツールと TOP を素早く行き来すると真っ白になる」の再発防止。
+ *   遷移中の目印を html に data-morph で付けていたため、着地待ちでカードが隠れている
+ *   あいだに押すと（押下はカードを素通りしてリンクに当たる）、印を探す closest が
+ *   html まで遡って**ページ全体を出発点として隠していた**。戻る・進むでも戻らない。
+ */
+describe("ページ全体を隠さない", () => {
+  it("遷移中の目印は、ページ側の印と別の名前で付ける", () => {
+    setupCard();
+    expect(document.documentElement.hasAttribute(MORPH_ATTR)).toBe(false);
+  });
+
+  it("着地前にもう一度押しても、html を持ち上げない", () => {
+    const stage = setupCard();
+    const c1 = stage.querySelector("#c1") as HTMLElement;
+    // 沈みの途中で同じページへ戻った: 木は差し替わらず、カード自身が着地点になる
+    expect(flyMorph(stage, TIMING)).toBe(true);
+    expect(c1.style.visibility).toBe("hidden");
+
+    // 隠れたカードは押下を受けないので、target はリンクになる
+    aimMorph(stage.querySelector("#a1"), stage);
+    expect(document.documentElement.style.visibility).toBe("");
+    // 持ち上がったのはカードの複製1枚だけ
+    expect(boxes().length).toBe(1);
+    expect(c1.style.visibility).toBe("hidden");
+
+    // 次のページに同じ印があれば、ふつうに飛んで着地する
+    stage.innerHTML = `<h1 ${MORPH_ATTR}="tool:x" id="t"></h1>`;
+    sized(stage.querySelector("#t")!, 24, 16, 700, 48);
+    expect(flyMorph(stage, TIMING)).toBe(true);
+    expect(document.documentElement.style.visibility).toBe("");
+  });
+
+  it("ステージの外にある印は拾わない", () => {
+    document.body.innerHTML = `<div ${MORPH_ATTR}="tool:x" id="outer"><div class="stage"><a id="a1"></a></div></div>`;
+    const outer = sized(document.getElementById("outer")!, 0, 0, 800, 600);
+    const stage = document.querySelector(".stage") as HTMLElement;
+
+    aimMorph(stage.querySelector("#a1"), stage);
+    expect(boxes().length).toBe(0);
+    expect(outer.style.visibility).toBe("");
+  });
+
+  function setupCard() {
+    const stage = mount(`<a id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>`);
+    sized(stage.querySelector("#c1")!, 400, 100, 200, 120);
+    aimMorph(stage.querySelector("#c1"), stage);
+    return stage;
+  }
+});
+
+/**
+ * ★ 複製は fixed のレイヤーで動くので、飛行中に読み手がスクロールすると、
+ *   ページだけが動いて複製は画面上の元の位置へ着地していた（2026-11-05 報告、実測で
+ *   500px のずれ）。スクロールしたぶんだけレイヤーを動かし、行き先と一緒に動かす。
+ */
+describe("飛行中のスクロール", () => {
+  const scrollTo = (x: number, y: number) => {
+    Object.defineProperty(window, "scrollX", { value: x, configurable: true });
+    Object.defineProperty(window, "scrollY", { value: y, configurable: true });
+    window.dispatchEvent(new Event("scroll"));
+  };
+  afterEach(() => scrollTo(0, 0));
+
+  function flying() {
+    const stage = mount(`<a id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>`);
+    sized(stage.querySelector("#c1")!, 400, 100, 200, 120);
+    aimMorph(stage.querySelector("#c1"), stage);
+    stage.innerHTML = `<h1 ${MORPH_ATTR}="tool:x" id="t"></h1>`;
+    sized(stage.querySelector("#t")!, 24, 16, 700, 48);
+    expect(flyMorph(stage, TIMING)).toBe(true);
+    return document.getElementById("morph-layer")!;
+  }
+
+  it("スクロールしたぶんだけレイヤーを逆向きに動かす", () => {
+    const layer = flying();
+    scrollTo(0, 500);
+    expect(layer.style.transform).toBe("translate(0px, -500px)");
+  });
+
+  it("飛び始める前のスクロール（復元）は打ち消さない", () => {
+    scrollTo(0, 300); // 戻る遷移でスクロールを復元した後に飛び始める
+    const layer = flying();
+    expect(layer.style.transform).toBe("");
+    scrollTo(0, 340);
+    expect(layer.style.transform).toBe("translate(0px, -40px)");
+  });
+
+  it("片付けたら元に戻し、それ以降のスクロールには付いていかない", () => {
+    const layer = flying();
+    scrollTo(0, 500);
+    cancelMorph();
+    expect(layer.style.transform).toBe("");
+    scrollTo(0, 800);
+    expect(layer.style.transform).toBe("");
+  });
 });
