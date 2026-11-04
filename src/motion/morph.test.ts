@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DIV_ATTR, DIV_T } from "./divisions";
 import { aimMorph, cancelMorph, captureMorph, flyMorph, MORPH_ATTR } from "./morph";
 
@@ -277,8 +277,8 @@ describe("飛行", () => {
     expect(flyMorph(stage, TIMING)).toBe(false);
   });
 
-  // 行き先が見つからない経路でも、隠した元を戻す。元のページが差し替わらずに
-  // 残る遷移（沈みの途中で同じページへ戻る）では、戻さないとそのまま消えて見える。
+  // 行き先が見つからない経路でも、隠した元を戻す。元が画面に残っているのに
+  // 戻さないと、その要素だけ消えたままになる（実際に起きたのは html を持ち上げたとき）。
   it("行き先に対応が無いとき、画面に残っている元を見せ直す", () => {
     const stage = setup();
     const c1 = stage.querySelector("#c1") as HTMLElement;
@@ -299,12 +299,18 @@ describe("飛行", () => {
  *   html まで遡って**ページ全体を出発点として隠していた**。戻る・進むでも戻らない。
  */
 describe("ページ全体を隠さない", () => {
+  afterEach(() => {
+    Reflect.deleteProperty(document.documentElement, "getBoundingClientRect");
+  });
+
   it("遷移中の目印は、ページ側の印と別の名前で付ける", () => {
     setupCard();
     expect(document.documentElement.hasAttribute(MORPH_ATTR)).toBe(false);
   });
 
   it("着地前にもう一度押しても、html を持ち上げない", () => {
+    // jsdom の html は寸法 0 で、そのままだと持ち上げの手前で抜けてしまい、壊れ方を再現できない
+    sized(document.documentElement, 0, 0, 800, 600);
     const stage = setupCard();
     const c1 = stage.querySelector("#c1") as HTMLElement;
     // 沈みの途中で同じページへ戻った: 木は差し替わらず、カード自身が着地点になる
@@ -318,10 +324,10 @@ describe("ページ全体を隠さない", () => {
     expect(boxes().length).toBe(1);
     expect(c1.style.visibility).toBe("hidden");
 
-    // 次のページに同じ印があれば、ふつうに飛んで着地する
-    stage.innerHTML = `<h1 ${MORPH_ATTR}="tool:x" id="t"></h1>`;
+    // 行き先が別の印しか持たなくても、html は見えたまま
+    stage.innerHTML = `<h1 ${MORPH_ATTR}="tool:y" id="t"></h1>`;
     sized(stage.querySelector("#t")!, 24, 16, 700, 48);
-    expect(flyMorph(stage, TIMING)).toBe(true);
+    expect(flyMorph(stage, TIMING)).toBe(false);
     expect(document.documentElement.style.visibility).toBe("");
   });
 
@@ -372,12 +378,28 @@ describe("飛行中のスクロール", () => {
     expect(layer.style.transform).toBe("translate(0px, -500px)");
   });
 
+  // 実際の順序: 復元の scrollTo で scrollY は同期で変わり、scroll イベントは
+  // 飛び始めた（購読を始めた）後のフレームで届く
   it("飛び始める前のスクロール（復元）は打ち消さない", () => {
-    scrollTo(0, 300); // 戻る遷移でスクロールを復元した後に飛び始める
+    Object.defineProperty(window, "scrollY", { value: 300, configurable: true });
     const layer = flying();
-    expect(layer.style.transform).toBe("");
+    window.dispatchEvent(new Event("scroll"));
+    expect(layer.style.transform).toBe("translate(0px, 0px)");
     scrollTo(0, 340);
     expect(layer.style.transform).toBe("translate(0px, -40px)");
+  });
+
+  it("着地して片付いた後のスクロールには付いていかない", () => {
+    vi.useFakeTimers();
+    try {
+      const layer = flying();
+      vi.advanceTimersByTime(TIMING.flyMs + 61);
+      expect(boxes().length).toBe(0);
+      scrollTo(0, 500);
+      expect(layer.style.transform).toBe("");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("片付けたら元に戻し、それ以降のスクロールには付いていかない", () => {
