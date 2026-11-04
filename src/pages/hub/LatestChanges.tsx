@@ -38,7 +38,7 @@ export function LatestChanges() {
           更新履歴
         </h2>
         <Link to="/changelog" className="text-sm text-slate-500 underline-offset-2 hover:underline">
-          すべて見る →
+          すべて見る <span aria-hidden>→</span>
         </Link>
       </div>
       <ul className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -49,7 +49,8 @@ export function LatestChanges() {
                 <span className="text-sm font-medium text-slate-700">v{r.version}</span>
                 <span>{shortDate(r.date)}</span>
               </span>
-              <span className="mt-1 line-clamp-2 block text-sm leading-relaxed text-slate-600">{summaryOf(r)}</span>
+              {/* line-clamp に block を足さない（display が上書きされて2行で切れなくなる） */}
+              <span className="mt-1 line-clamp-2 text-sm leading-relaxed text-slate-600">{summaryOf(r)}</span>
             </Link>
           </li>
         ))}

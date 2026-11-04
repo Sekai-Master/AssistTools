@@ -67,7 +67,8 @@ describe("ツールの一覧", () => {
     const box = screen.getByRole("searchbox", { name: "ツールを探す" });
     fireEvent.change(box, { target: { value: "家具" } });
     fireEvent.change(box, { target: { value: "" } });
-    expect(screen.queryByRole("status")).toBeNull();
+    // 件数の欄は読み上げのために常に置いてある（中身が空になる）
+    expect(screen.getByRole("status").textContent).toBe("");
     expect(screen.getAllByRole("link")).toHaveLength(ready.length);
   });
 });

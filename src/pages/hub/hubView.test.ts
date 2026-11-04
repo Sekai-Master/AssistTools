@@ -1,6 +1,38 @@
 import { describe, expect, it } from "vitest";
 import { TOOLS } from "../../tools";
-import { elapsedRatio, formatCountdown, logoSrc, rankBar, searchTools, shortDate, summaryOf, tickMs } from "./hubView";
+import {
+  captionKind,
+  elapsedRatio,
+  endAt,
+  formatCountdown,
+  logoSrc,
+  nameParts,
+  rankBar,
+  sanitizeSnapshot,
+  searchTools,
+  shortDate,
+  summaryOf,
+  tickMs,
+} from "./hubView";
+
+// ★ 「ついぼジェネレータ／ー」「ポイント調整アナラ／イザー」と語の途中で折れた（2026-11-05 の撮影）
+describe("ツールの名前の折り目", () => {
+  it("決まった語尾の前で切る", () => {
+    expect(nameParts("ついぼジェネレーター")).toEqual(["ついぼ", "ジェネレーター"]);
+    expect(nameParts("ポイント調整アナライザー")).toEqual(["ポイント調整", "アナライザー"]);
+    expect(nameParts("リフレッシュゲージ計算機")).toEqual(["リフレッシュゲージ", "計算機"]);
+    expect(nameParts("BINGOカードジェネレーター")).toEqual(["BINGOカード", "ジェネレーター"]);
+  });
+
+  it("語尾だけの名前・語尾の無い名前は切らない", () => {
+    expect(nameParts("計算機")).toEqual(["計算機"]);
+    expect(nameParts("周回プラン")).toEqual(["周回プラン"]);
+  });
+
+  it("全部の名前で、つなぐと元の名前に戻る", () => {
+    for (const t of TOOLS) expect(nameParts(t.name).join("")).toBe(t.name);
+  });
+});
 
 const S = 1000;
 const M = 60 * S;
@@ -137,5 +169,61 @@ describe("更新履歴のカード", () => {
   it("説明の無い版は最初の項目で代える", () => {
     expect(summaryOf({ version: "1.0.0", date: "", summary: "", groups: [{ label: "追加", items: ["最初の項目"] }] })).toBe("最初の項目");
     expect(summaryOf({ version: "1.0.0", date: "", summary: "版の説明", groups: [] })).toBe("版の説明");
+  });
+});
+
+describe("応答を整える", () => {
+  const ev = { id: 223, name: "x", type: "marathon", unit: "school_refusal", startAt: 0, aggregateAt: 10, durationHours: 1 };
+  const rank = { rank: 50, current: 1, predicted: 2, low: 1, high: 3, confidence: "mid", visible: true };
+
+  it("形の崩れた順位だけ捨てる", () => {
+    const s = sanitizeSnapshot({ event: ev, sampleAt: 5, ranks: [null, 3, { rank: "x", current: 1 }, rank] })!;
+    expect(s.ranks).toHaveLength(1);
+    expect(s.ranks[0].rank).toBe(50);
+  });
+
+  it("予測・幅が数でなければ null にする", () => {
+    const s = sanitizeSnapshot({ event: ev, sampleAt: 5, ranks: [{ ...rank, predicted: "2", low: undefined }] })!;
+    expect(s.ranks[0].predicted).toBeNull();
+    expect(s.ranks[0].low).toBeNull();
+  });
+
+  it("イベントが無い・順位が1つも残らないなら null", () => {
+    expect(sanitizeSnapshot(null)).toBeNull();
+    expect(sanitizeSnapshot({ event: null, ranks: [rank] })).toBeNull();
+    expect(sanitizeSnapshot({ event: ev, ranks: [null] })).toBeNull();
+    expect(sanitizeSnapshot({ event: { ...ev, startAt: "0" }, ranks: [rank] })).toBeNull();
+  });
+
+  it("時刻が無ければ NaN（呼ぶ側が出さない）", () => {
+    expect(Number.isNaN(sanitizeSnapshot({ event: ev, ranks: [rank] })!.sampleAt)).toBe(true);
+  });
+});
+
+describe("下の行の書き方", () => {
+  const base = sanitizeSnapshot({
+    event: { id: 1, name: "x", type: "marathon", unit: "", startAt: 0, aggregateAt: 10, durationHours: 1 },
+    sampleAt: 1,
+    ranks: [{ rank: 50, current: 1, predicted: 2, low: 1, high: 3, confidence: "mid", visible: true }],
+  })!;
+
+  it("開催中で予測があれば「予測」", () => {
+    expect(captionKind(base, true)).toBe("predicted");
+  });
+
+  it("開催中で予測が無い（隠している順位だけ）なら「いまの値」", () => {
+    expect(captionKind({ ...base, ranks: base.ranks.map((r) => ({ ...r, visible: false })) }, true)).toBe("current");
+  });
+
+  it("終わった回は「最後に集めた値」", () => {
+    expect(captionKind(base, false)).toBe("final");
+  });
+
+  it("終わりの時刻は集計の1分後（ボーダー予測のページと同じ）", () => {
+    expect(endAt({ aggregateAt: 1000 })).toBe(61_000);
+  });
+
+  it("終わった後の描き直しは1分ごと", () => {
+    expect(tickMs(-2 * M)).toBe(60_000);
   });
 });

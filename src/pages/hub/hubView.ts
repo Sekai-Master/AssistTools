@@ -4,6 +4,54 @@
  */
 import { TOOL_CATEGORIES, TOOLS, type ToolDef } from "../../tools";
 import type { Release } from "../legal/changelogParser";
+import type { Snapshot } from "../border/borderView";
+
+type Rank = Snapshot["ranks"][number];
+
+const num = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const numOrNull = (v: unknown): number | null => (num(v) ? v : null);
+
+/**
+ * /api/border/current の応答を、トップで使える形に整える。使えなければ null。
+ * ★ 形の崩れた順位（null・数でない値）は捨てて残りで出す。1つの崩れでトップ全体
+ *   （ツールの一覧ごと）を失敗の表示にしない（#194 のレビュー M1）。
+ */
+export function sanitizeSnapshot(v: unknown): Snapshot | null {
+  if (!v || typeof v !== "object") return null;
+  const s = v as Partial<Snapshot>;
+  const e = s.event as Partial<Snapshot["event"]> | undefined;
+  if (!e || !num(e.id) || !num(e.startAt) || !num(e.aggregateAt) || typeof e.name !== "string" || !Array.isArray(s.ranks)) return null;
+  const ranks: Rank[] = [];
+  for (const r of s.ranks as unknown[]) {
+    if (!r || typeof r !== "object") continue;
+    const x = r as Partial<Rank>;
+    if (!num(x.rank) || !num(x.current)) continue;
+    ranks.push({
+      ...(x as Rank),
+      predicted: numOrNull(x.predicted),
+      low: numOrNull(x.low),
+      high: numOrNull(x.high),
+      visible: x.visible === true,
+    });
+  }
+  if (ranks.length === 0) return null;
+  return { ...(s as Snapshot), event: { ...(e as Snapshot["event"]), unit: typeof e.unit === "string" ? e.unit : "" }, ranks, sampleAt: num(s.sampleAt) ? s.sampleAt : NaN };
+}
+
+/** 終わりの時刻（集計の 20:59:59 の次の分）。ボーダー予測のページと同じく aggregateAt + 1分で書く。 */
+export const endAt = (ev: { aggregateAt: number }) => ev.aggregateAt + 60_000;
+
+/**
+ * 下の行の書き方。
+ * - predicted: 予測を出している順位がある
+ * - current: 開催中で予測がまだ無い（予測を出す前・マラソン以外）。出しているのはいまの値
+ * - final: 終わった回。出しているのは最後に集めた値
+ * ★ 予測を出していないのに「予測」と書かない（#194 のレビュー M4）
+ */
+export function captionKind(snap: Snapshot, running: boolean): "predicted" | "current" | "final" {
+  if (!running) return "final";
+  return snap.ranks.some((r) => r.visible && r.predicted != null) ? "predicted" : "current";
+}
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
@@ -20,8 +68,12 @@ export function formatCountdown(ms: number): string {
   return d > 0 ? `${d}日 ${hm}` : `${hm}:${pad2(s % 60)}`;
 }
 
-/** 秒を出すあいだは1秒ごと、出さないあいだは15秒ごとに描き直せば足りる。 */
+/**
+ * 秒を出すあいだは1秒ごと、出さないあいだは15秒ごとに描き直せば足りる。
+ * 終わった後は「終了」のままなので、1分ごとで足りる（次の回まで1秒ごとに描き直さない）。
+ */
 export function tickMs(msLeft: number): number {
+  if (msLeft <= -60_000) return 60_000;
   return msLeft < 86_400_000 ? 1000 : 15_000;
 }
 
@@ -70,6 +122,22 @@ export function rankBar(r: { current: number; predicted: number | null; low: num
     band: at(r.high) - at(r.low),
     predicted: at(r.predicted),
   };
+}
+
+/** この語尾の前でだけ折る（ツールの名前）。 */
+const NAME_SUFFIXES = ["ジェネレーター", "アナライザー", "ランキング", "計算機"];
+
+/**
+ * ツールの名前を、折ってよい所で区切る。表示は区切りの間に <wbr> を入れ、ほかでは折らない。
+ * ★ ブラウザに任せると「ついぼジェネレータ／ー」「ポイント調整アナラ／イザー」と語の途中で折れた
+ *   （2026-11-05 の撮影。文節で折る auto-phrase もカタカナの続きを1つの文節と見て効かなかった）。
+ */
+export function nameParts(name: string): string[] {
+  for (const s of NAME_SUFFIXES) {
+    const i = name.lastIndexOf(s);
+    if (i > 0 && i + s.length === name.length) return [name.slice(0, i), s];
+  }
+  return [name];
 }
 
 /** 全角・半角と大文字・小文字の違いを無くす。 */

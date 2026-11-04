@@ -1,8 +1,8 @@
-import { useId, useMemo, useState, type CSSProperties } from "react";
+import { Fragment, useId, useMemo, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { UNIT_COLOR_VAR } from "../../lib/units";
 import { TOOL_CATEGORIES, toolsByCategory, type ToolDef } from "../../tools";
-import { searchTools } from "./hubView";
+import { nameParts, searchTools } from "./hubView";
 
 /**
  * トップのツールの一覧。分類ごとの列に、アイコンと名前だけを並べる。
@@ -26,7 +26,11 @@ export function ToolDirectory() {
         <h1 id={`${inputId}-head`} className="text-lg font-bold text-slate-700">
           プロセカをより楽しむためのツール集
         </h1>
-        <label htmlFor={inputId} className="flex h-11 w-full items-center gap-2 rounded-full px-3.5 shadow-neu-inset sm:w-80">
+        {/* ★ 入力欄は outline-none なので、包む側でフォーカスを見せる（キーボードで来た人にキャレットしか見えなかった。#194 のレビュー M6） */}
+        <label
+          htmlFor={inputId}
+          className="flex h-11 w-full items-center gap-2 rounded-full px-3.5 shadow-neu-inset focus-within:ring-2 focus-within:ring-slate-400 sm:w-80"
+        >
           <span className="material-icons text-xl text-slate-500" aria-hidden data-icon="search" />
           <span className="sr-only">ツールを探す</span>
           <input
@@ -40,11 +44,12 @@ export function ToolDirectory() {
         </label>
       </div>
 
+      {/* ★ 件数の読み上げ: 検索を始めた瞬間に要素ごと差し込むと、最初の件数を読まない読み上げソフトがある。常に置いておく */}
+      <p className={hits ? "mt-4 text-xs text-slate-500" : "sr-only"} role="status">
+        {hits ? (hits.length > 0 ? `${hits.length}件` : "見つかりませんでした") : ""}
+      </p>
       {hits ? (
-        <div className="mt-4">
-          <p className="text-xs text-slate-500" role="status">
-            {hits.length > 0 ? `${hits.length}件` : "見つかりませんでした"}
-          </p>
+        <div>
           <ul className="mt-1 grid gap-x-4 sm:grid-cols-2">
             {hits.map((t) => (
               <li key={t.id}>
@@ -86,16 +91,24 @@ function ToolRow({ tool, detail = false }: { tool: ToolDef; detail?: boolean }) 
     <span data-morph={ready ? `tool:${tool.id}` : undefined} className="flex min-h-11 items-center gap-2 rounded-lg px-1 py-1 sm:gap-2.5 sm:px-1.5">
       <span className="material-icons shrink-0 text-xl text-slate-500" aria-hidden data-icon={tool.icon} />
       <span className="min-w-0">
-        {/* ★ 長い名前が「ついぼジェネレータ／ー」のように切れた（2026-11-05 の撮影）。文節で折る（auto-phrase は Chrome。ほかは無視される）。
-              ただし文節の切れ目が無い名前（リフレッシュゲージ計算機）は隣の列へはみ出したので、最後はどこでも折る */}
-        <span className="flex items-center gap-1.5 text-[0.8125rem] leading-snug text-slate-700 [overflow-wrap:anywhere] [word-break:auto-phrase] sm:text-sm">
+        <span className="flex items-center gap-1.5 text-[0.8125rem] leading-snug text-slate-700 sm:text-sm">
           {detail && (
             <span aria-hidden className="inline-block size-2 shrink-0 rounded-full" style={{ background: color } as CSSProperties} />
           )}
-          {tool.name}
+          {/* ★ 名前は決まった語尾の前（<wbr>）でだけ折る（nameParts）。語の途中で折れていた（2026-11-05 の撮影）。
+                それでも入らない幅のときだけ、どこでも折る（隣の列へはみ出さない） */}
+          <span className="min-w-0 [overflow-wrap:anywhere] [word-break:keep-all]">
+            {nameParts(tool.name).map((part, i) => (
+              <Fragment key={i}>
+                {i > 0 && <wbr />}
+                {part}
+              </Fragment>
+            ))}
+          </span>
           {!ready && <span className="shrink-0 text-xs text-slate-500">準備中</span>}
         </span>
-        {detail && <span className="mt-0.5 line-clamp-1 block text-xs text-slate-500">{tool.description}</span>}
+        {/* ★ line-clamp に block を足すと display が上書きされて切り詰めが効かない（#194 のレビュー M2） */}
+        {detail && <span className="mt-0.5 line-clamp-1 text-xs text-slate-500">{tool.description}</span>}
       </span>
     </span>
   );
