@@ -225,6 +225,12 @@ export async function upsertShapes(db: D1Database, shapes: readonly Shape[], now
   }
 }
 
+/** その回のロゴの素材名（/CardDatas/logo/<asset>.webp）。主キーで1行だけ読む。 */
+export async function eventAsset(db: D1Database, id: number): Promise<string | null> {
+  const r = await db.prepare('SELECT asset FROM events WHERE id = ?1').bind(id).first<{ asset: string | null }>()
+  return r?.asset ?? null
+}
+
 export async function kvGet(db: D1Database, k: string): Promise<string | null> {
   const r = await db.prepare('SELECT v FROM kv WHERE k = ?1').bind(k).first<{ v: string }>()
   return r?.v ?? null

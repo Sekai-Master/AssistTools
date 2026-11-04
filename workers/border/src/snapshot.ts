@@ -13,6 +13,11 @@ export interface SnapshotEvent {
   startAt: number
   aggregateAt: number
   durationHours: number
+  /**
+   * ロゴの素材名（サイトの /CardDatas/logo/<asset>.webp）。kv の行には入っておらず、
+   * 読み出し（public.ts）が events から足す。素材名がまだ無い回は null
+   */
+  asset?: string | null
 }
 
 export interface SnapshotRank {
