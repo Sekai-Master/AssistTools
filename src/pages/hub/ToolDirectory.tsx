@@ -1,0 +1,113 @@
+import { useId, useMemo, useState, type CSSProperties } from "react";
+import { Link } from "react-router-dom";
+import { UNIT_COLOR_VAR } from "../../lib/units";
+import { TOOL_CATEGORIES, toolsByCategory, type ToolDef } from "../../tools";
+import { searchTools } from "./hubView";
+
+/**
+ * トップのツールの一覧。分類ごとの列に、アイコンと名前だけを並べる。
+ *
+ * ★ 説明文は一覧に出さない（2026-11-05、Nori「画面に文字が多すぎると『うっ』ってなる」）。
+ *   以前のカードは14枚ぶんの説明（約900字）と分類の説明（約140字）を常に出していた。
+ *   説明は検索の照合に使い、検索しているあいだだけ1行添える（名前に無い語「ライボ」「家具」でも辿り着ける）。
+ * ★ 色は分類の印（見出しの下線）だけ。アイコンは文字と同じ灰色。
+ * ★ スマホは分類を全幅にして、中を2列にする（分類ごとの縦積みで長くならないように）。
+ *
+ * data-morph は以前のカードと同じキーを行に付ける。押した行がツールの見出しへ飛ぶ（motion/morph.ts）。
+ */
+export function ToolDirectory() {
+  const [query, setQuery] = useState("");
+  const inputId = useId();
+  const hits = useMemo(() => searchTools(query), [query]);
+
+  return (
+    <section aria-labelledby={`${inputId}-head`} className="mt-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 id={`${inputId}-head`} className="text-lg font-bold text-slate-700">
+          プロセカをより楽しむためのツール集
+        </h1>
+        <label htmlFor={inputId} className="flex h-11 w-full items-center gap-2 rounded-full px-3.5 shadow-neu-inset sm:w-80">
+          <span className="material-icons text-xl text-slate-500" aria-hidden data-icon="search" />
+          <span className="sr-only">ツールを探す</span>
+          <input
+            id={inputId}
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="ツールを探す（例: ボーダー）"
+            className="min-w-0 flex-1 bg-transparent text-base text-slate-700 outline-none placeholder:text-slate-400"
+          />
+        </label>
+      </div>
+
+      {hits ? (
+        <div className="mt-4">
+          <p className="text-xs text-slate-500" role="status">
+            {hits.length > 0 ? `${hits.length}件` : "見つかりませんでした"}
+          </p>
+          <ul className="mt-1 grid gap-x-4 sm:grid-cols-2">
+            {hits.map((t) => (
+              <li key={t.id}>
+                <ToolRow tool={t} detail />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-y-5 lg:grid-cols-5 lg:gap-x-4">
+          {toolsByCategory().map(({ category, tools }) => (
+            <section key={category.id} aria-labelledby={`${inputId}-${category.id}`}>
+              <h2
+                id={`${inputId}-${category.id}`}
+                className="border-b-[3px] pb-1.5 text-sm font-bold text-slate-700"
+                style={{ borderColor: UNIT_COLOR_VAR[category.unit] }}
+              >
+                {category.label}
+              </h2>
+              <ul className="mt-1.5 grid grid-cols-2 gap-x-2 lg:grid-cols-1">
+                {tools.map((t) => (
+                  <li key={t.id}>
+                    <ToolRow tool={t} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ToolRow({ tool, detail = false }: { tool: ToolDef; detail?: boolean }) {
+  const ready = tool.status === "ready";
+  const color = UNIT_COLOR_VAR[categoryUnit(tool)];
+  const body = (
+    <span data-morph={ready ? `tool:${tool.id}` : undefined} className="flex min-h-11 items-center gap-2 rounded-lg px-1 py-1 sm:gap-2.5 sm:px-1.5">
+      <span className="material-icons shrink-0 text-xl text-slate-500" aria-hidden data-icon={tool.icon} />
+      <span className="min-w-0">
+        {/* ★ 長い名前が「ついぼジェネレータ／ー」のように切れた（2026-11-05 の撮影）。文節で折る（auto-phrase は Chrome。ほかは無視される）。
+              ただし文節の切れ目が無い名前（リフレッシュゲージ計算機）は隣の列へはみ出したので、最後はどこでも折る */}
+        <span className="flex items-center gap-1.5 text-[0.8125rem] leading-snug text-slate-700 [overflow-wrap:anywhere] [word-break:auto-phrase] sm:text-sm">
+          {detail && (
+            <span aria-hidden className="inline-block size-2 shrink-0 rounded-full" style={{ background: color } as CSSProperties} />
+          )}
+          {tool.name}
+          {!ready && <span className="shrink-0 text-xs text-slate-500">準備中</span>}
+        </span>
+        {detail && <span className="mt-0.5 line-clamp-1 block text-xs text-slate-500">{tool.description}</span>}
+      </span>
+    </span>
+  );
+  return ready ? (
+    <Link to={tool.path} className="block rounded-lg hover:bg-slate-200/50 focus-visible:bg-slate-200/50">
+      {body}
+    </Link>
+  ) : (
+    <div className="opacity-60">{body}</div>
+  );
+}
+
+function categoryUnit(tool: ToolDef) {
+  return TOOL_CATEGORIES.find((c) => c.id === tool.category)?.unit ?? "vs";
+}
