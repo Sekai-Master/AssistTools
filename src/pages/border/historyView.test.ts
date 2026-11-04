@@ -2,13 +2,18 @@ import fs from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_TYPES,
+  HISTORY_TYPES,
+  filterLabel,
   hourGroups,
   idList,
   missingOf,
+  parseBonusChars,
   parseFinals,
   perDay,
+  pickChars,
   pickEvent,
   pickTypes,
+  pickUnit,
   poolOf,
   rankRows,
   standings,
@@ -107,6 +112,69 @@ describe("比べる回と URL", () => {
   it("選んだ種別の回に、選んでいる回を必ず加える", () => {
     expect(poolOf(all, ["marathon"], all[3]).map((e) => e.id)).toEqual([1, 4]);
     expect(poolOf(all, DEFAULT_TYPES, null).map((e) => e.id)).toEqual([1, 2, 4]);
+  });
+
+  it("箱／混合で絞る（unit が none なら混合）。選んでいる回は外さない", () => {
+    const mixed = [{ ...all[0], unit: "idol" }, all[1], { ...all[2], unit: "street" }, all[3]];
+    expect(poolOf(mixed, DEFAULT_TYPES, null, { unit: "box" }).map((e) => e.id)).toEqual([1]);
+    expect(poolOf(mixed, DEFAULT_TYPES, null, { unit: "mixed" }).map((e) => e.id)).toEqual([2, 4]);
+    expect(poolOf(mixed, DEFAULT_TYPES, mixed[2], { unit: "mixed" }).map((e) => e.id)).toEqual([2, 3, 4]);
+    expect(poolOf(mixed, DEFAULT_TYPES, null, { unit: "all" }).map((e) => e.id)).toEqual([1, 2, 4]);
+  });
+
+  it("キャラで絞るのは、選んだ全員がボーナスキャラの回だけ。ボーナスの表がまだ無ければキャラでは絞らない", () => {
+    const bonus = new Map([
+      [1, new Set([17, 18, 21])],
+      [2, new Set([17, 21])],
+      [4, new Set([18])],
+    ]);
+    expect(poolOf(all, DEFAULT_TYPES, null, { chars: [17], bonus }).map((e) => e.id)).toEqual([1, 2]);
+    expect(poolOf(all, DEFAULT_TYPES, null, { chars: [17, 18], bonus }).map((e) => e.id)).toEqual([1]);
+    expect(poolOf(all, DEFAULT_TYPES, all[3], { chars: [17, 18], bonus }).map((e) => e.id)).toEqual([1, 4]);
+    expect(poolOf(all, DEFAULT_TYPES, null, { chars: [17], bonus: null }).map((e) => e.id)).toEqual([1, 2, 4]);
+  });
+
+  it("bonuses.json からボーナスキャラを作る。VS のユニット違いは同じキャラに。壊れた行は捨てる", () => {
+    const got = parseBonusChars({
+      unitCharacters: [{ id: 17, ch: 17 }, { id: 21, ch: 21 }, { id: 46, ch: 21 }, null, { id: "x", ch: 1 }],
+      deckBonuses: [
+        { eventId: 5, unitCharacterId: 17, attr: "cool", rate: 50 },
+        { eventId: 5, unitCharacterId: 46, rate: 20 },
+        { eventId: 5, attr: "cool", rate: 25 },
+        { eventId: 6, unitCharacterId: 21 },
+        { eventId: 6, unitCharacterId: 999 },
+        null,
+      ],
+    });
+    expect([...(got.get(5) ?? [])].sort((a, b) => a - b)).toEqual([17, 21]);
+    expect([...(got.get(6) ?? [])]).toEqual([21]);
+    expect(parseBonusChars(null).size).toBe(0);
+    expect(parseBonusChars({ unitCharacters: 1, deckBonuses: [] }).size).toBe(0);
+  });
+
+  it("配信中の bonuses.json で、歴代の表の回にボーナスキャラが付く（221回は ビビバスの4人）", () => {
+    const raw = JSON.parse(fs.readFileSync(new URL("../../../public/CardDatas/bonuses.json", import.meta.url), "utf8")) as unknown;
+    const got = parseBonusChars(raw);
+    expect([...(got.get(221) ?? [])].sort((a, b) => a - b)).toEqual([9, 10, 11, 12]);
+    const seed = parseFinals(JSON.parse(fs.readFileSync(new URL("../../../scripts/border/data/finals-seed.json", import.meta.url), "utf8")));
+    const missing = seed.filter((e) => !(got.get(e.id)?.size)).map((e) => e.id);
+    expect(missing).toEqual([]);
+  });
+
+  it("?unit= と ?chars= を読む。知らない値は捨てる", () => {
+    expect(pickUnit("box")).toBe("box");
+    expect(pickUnit("mixed")).toBe("mixed");
+    expect(pickUnit("x")).toBe("all");
+    expect(pickUnit(null)).toBe("all");
+    expect(pickChars("21,3,21,0,27,x,1e1")).toEqual([3, 21]);
+    expect(pickChars(null)).toEqual([]);
+  });
+
+  it("条件を1行で書く", () => {
+    const name = (ch: number) => `c${ch}`;
+    expect(filterLabel(["marathon"], "mixed", [21], name)).toBe("マラソン・混合・c21");
+    expect(filterLabel(HISTORY_TYPES.map((t) => t.value), "all", [], name)).toBe("全種別");
+    expect(filterLabel(DEFAULT_TYPES, "box", [1, 2], name)).toBe("マラソン・チアフル・Memories・箱・c1・c2");
   });
 
   it("?types= は知っている種別だけ。無い・全部知らなければ既定（ワールドリンク抜き）", () => {

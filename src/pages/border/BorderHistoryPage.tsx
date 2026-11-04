@@ -7,22 +7,31 @@ import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { UNIT_COLOR_VAR, type UnitKey } from "../../lib/units";
 import { formatMan } from "../../../workers/border/src/posts";
+import { CHARACTERS, UNIT_ORDER, UNIT_SHORT, characterShort } from "../deck/lib/characters";
+import { HistoryShapeChart } from "./HistoryShapeChart";
 import {
   HISTORY_RANKS,
   HISTORY_TYPES,
+  UNIT_FILTERS,
+  filterLabel,
   hourGroups,
   idList,
   missingOf,
+  parseBonusChars,
   parseFinals,
+  pickChars,
   pickEvent,
   pickTypes,
+  pickUnit,
   poolOf,
   rankRows,
   standings,
+  type BonusChars,
   type HistoryEvent,
   type HistoryMode,
   type HistoryRank,
   type Place,
+  type UnitFilter,
 } from "./historyView";
 
 /*
@@ -31,6 +40,10 @@ import {
  * 並べ方は Bot の歴代ボーダーの画像と同じ（historyView.ts）。表は1回読むだけ（D1 の読み取りは1行）。
  * 200・500・2000位とワールドリンク、種別の出し入れは 2026-10-25 Nori「一部のイベントのデータがないことを明記しつつ参照可能に」
  * 「WLも入れる・チアフルを抜く、みたいな調整」。
+ * 絞り込み（箱／混合・参加キャラ）を歴代ランキングの中に畳んで置き、推移のグラフを足したのは 2026-11-03 Nori
+ *「比べる回の選択は歴代ランキングのソート入れ替えとかと並ぶように（間に選択中のイベントの子細が挟まるの操作しずらい）」
+ *「箱イベと混合イベのフィルタ」「参加キャラでフィルタリング」「各ボーダーの遷移グラフ」。
+ * キャラを複数選んだら全員そろう回、VS はユニットを問わず同じキャラ（同日 Nori）。
  */
 
 /** events の unit → サイトのユニットのキー（混合・バーチャル・シンガーはバーチャル・シンガーの色） */
@@ -81,28 +94,104 @@ function useFinals(): { events: HistoryEvent[]; loading: boolean; failed: boolea
   return state;
 }
 
+/**
+ * 回ごとのボーナスキャラ（編成ビルダーの配信データ bonuses.json・約300KB）。キャラで絞るとき・絞り込みを開いたときだけ読む。
+ * 失敗したら null のまま（キャラでは絞らず、その旨を出す）
+ */
+function useBonusChars(enabled: boolean): { bonus: BonusChars | null; failed: boolean } {
+  const [state, setState] = useState<{ bonus: BonusChars | null; failed: boolean }>({ bonus: null, failed: false });
+  const done = state.bonus != null || state.failed;
+  useEffect(() => {
+    if (!enabled || done) return;
+    const ctrl = new AbortController();
+    fetch(`${import.meta.env.BASE_URL}CardDatas/bonuses.json`, { signal: ctrl.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        setState({ bonus: parseBonusChars(await res.json()), failed: false });
+      })
+      .catch(() => {
+        if (!ctrl.signal.aborted) setState({ bonus: null, failed: true });
+      });
+    return () => ctrl.abort();
+  }, [enabled, done]);
+  return state;
+}
+
 export default function BorderHistoryPage() {
   const { events, loading, failed } = useFinals();
   const [params, setParams] = useSearchParams();
   const target = useMemo(() => pickEvent(events, params.get("event")), [events, params]);
   const typesParam = params.get("types");
   const types = useMemo(() => pickTypes(typesParam), [typesParam]);
-  const pool = useMemo(() => poolOf(events, types, target), [events, types, target]);
+  const unit = pickUnit(params.get("unit"));
+  const charsParam = params.get("chars");
+  const chars = useMemo(() => pickChars(charsParam), [charsParam]);
+  const [filterOpen, setFilterOpen] = useState(false);
+  // キャラで絞っている・絞り込みを開いたときだけ読む（ふだんは 300KB を読ませない）
+  const { bonus, failed: bonusFailed } = useBonusChars(chars.length > 0 || filterOpen);
+  const pool = useMemo(() => poolOf(events, types, target, { unit, chars, bonus }), [events, types, target, unit, chars, bonus]);
+  const label = filterLabel(types, unit, chars, characterShort);
+  // キャラの条件は読み終わるまで効かない（読めなければ効かない）。位置づけと絞り込みにその旨を添える
+  const charsFailed = chars.length > 0 && bonusFailed;
+  const charsPending = chars.length > 0 && bonus == null && !bonusFailed;
+  const charsNote = charsFailed ? "・キャラの条件は読み込めず外しています" : charsPending ? "・キャラの条件は読み込み中" : "";
   const standingRef = useRef<HTMLElement>(null);
 
-  const update = (next: Record<string, string>) => setParams({ ...Object.fromEntries(params), ...next }, { replace: true });
+  /**
+   * URL の条件を書き換える。いまのアドレスバーの URL から作る。
+   * ★ 描いたときの params からだと、続けて押したとき（「混合」→「ミク」）に描き直しが間に合わず、前の押下が消えた
+   *   （2026-11-03 の画面の確認で実測。bonuses.json の読み込みと重なると起きた）。setParams に関数を渡す形も、
+   *   react-router では描いたときの params が渡るので同じだった。URL の書き換え自体は押した時点で済んでいる。
+   * 空の値は URL から消す（キャラを全部外した・箱／混合を「すべて」に戻した）
+   */
+  const update = (next: (prev: URLSearchParams) => Record<string, string> | null) => {
+    const prev = new URLSearchParams(window.location.search);
+    const n = next(prev);
+    if (!n) return;
+    setParams(Object.fromEntries(Object.entries({ ...Object.fromEntries(prev), ...n }).filter(([, v]) => v !== "")), { replace: true });
+  };
   const select = (id: number, scroll = false) => {
-    update({ event: String(id) });
+    update(() => ({ event: String(id) }));
     // 表の行から選んだときは、結果の出る「位置づけ」まで戻す（表の下の方で押すと、上で変わったのが見えない。レビュー M2）
     if (scroll) {
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       standingRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
     }
   };
-  const toggleType = (t: string) => {
-    const next = types.includes(t) ? types.filter((x) => x !== t) : [...types, t];
-    // 全部外すと何も比べられないので、最後の1つは外させない
-    if (next.length > 0) update({ types: next.join(",") });
+  const toggleType = (t: string) =>
+    update((prev) => {
+      const cur = pickTypes(prev.get("types"));
+      const next = cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t];
+      // 全部外すと何も比べられないので、最後の1つは外させない
+      return next.length > 0 ? { types: next.join(",") } : null;
+    });
+  const toggleChar = (ch: number) =>
+    update((prev) => {
+      const cur = pickChars(prev.get("chars"));
+      const next = cur.includes(ch) ? cur.filter((c) => c !== ch) : [...cur, ch].sort((a, b) => a - b);
+      return { chars: next.join(",") };
+    });
+  const openFilter = () => {
+    setFilterOpen(true);
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // 開いて描き直してから動かす（畳んだままの高さで止まらないように）
+    requestAnimationFrame(() => document.getElementById(FILTER_ID)?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }));
+  };
+  const resetFilter = () =>
+    setParams(Object.fromEntries([...new URLSearchParams(window.location.search)].filter(([k]) => k !== "types" && k !== "unit" && k !== "chars")), { replace: true });
+  const filter: FilterProps = {
+    label,
+    types,
+    unit,
+    chars,
+    pending: charsPending,
+    bonusFailed: charsFailed,
+    open: filterOpen,
+    onOpen: setFilterOpen,
+    onType: toggleType,
+    onUnit: (u) => update(() => ({ unit: u === "all" ? "" : u })),
+    onChar: toggleChar,
+    onReset: resetFilter,
   };
 
   return (
@@ -135,21 +224,20 @@ export default function BorderHistoryPage() {
       )}
       {!loading && !failed && target && (
         <>
-          <Panel title="比べる回">
-            <div role="group" aria-label="比べる種別" className="flex flex-wrap gap-2">
-              {HISTORY_TYPES.map((t) => (
-                <NeuButton key={t.value} active={types.includes(t.value)} onClick={() => toggleType(t.value)}>
-                  {t.label}
-                </NeuButton>
-              ))}
-            </div>
-            <p className="mt-3 text-xs leading-6 text-slate-500">
-              押すと出し入れできます（最初はワールドリンクを外しています。X の歴代ボーダーの画像と同じ数え方です）。
-              選んでいる回は、種別を外しても比べる回に入れます。
-            </p>
+          <StandingPanel
+            ref={standingRef}
+            all={events}
+            pool={pool}
+            target={target}
+            filterLabel={label}
+            note={charsNote}
+            onSelect={(id) => select(id)}
+            onOpenFilter={openFilter}
+          />
+          <Panel title="ボーダーの推移">
+            <HistoryShapeChart eventId={target.id} hours={target.hours} />
           </Panel>
-          <StandingPanel ref={standingRef} all={events} pool={pool} target={target} onSelect={(id) => select(id)} />
-          <RankingPanel pool={pool} target={target} onSelect={(id) => select(id, true)} />
+          <RankingPanel pool={pool} target={target} filter={filter} onSelect={(id) => select(id, true)} />
           <NotePanel />
         </>
       )}
@@ -182,13 +270,22 @@ function StandingPanel({
   all,
   pool,
   target,
+  filterLabel,
+  note,
   onSelect,
+  onOpenFilter,
 }: {
   ref: Ref<HTMLElement>;
   all: HistoryEvent[];
   pool: HistoryEvent[];
   target: HistoryEvent;
+  /** 比べる回の条件（歴代ランキングの「絞り込み」で変える） */
+  filterLabel: string;
+  /** 「・キャラの条件は読み込み中」など、条件に添える断り（無ければ空） */
+  note: string;
   onSelect: (id: number) => void;
+  /** 歴代ランキングの「絞り込み」を開いて、そこまで動かす */
+  onOpenFilter: () => void;
 }) {
   // 読めなかったロゴの素材名（回を選び直せば、別の素材名なので出し直す）
   const [failedLogo, setFailedLogo] = useState<string | null>(null);
@@ -226,7 +323,14 @@ function StandingPanel({
             </p>
           </div>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+        <p className="mt-4 text-xs leading-6 text-slate-500">
+          比べる回: <span className="font-bold text-slate-600">{filterLabel}</span>（{pool.length}回
+          {note}）
+          <button type="button" className="ml-2 underline underline-offset-4" onClick={onOpenFilter}>
+            絞り込みを変える
+          </button>
+        </p>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
           {rows.map((s) => (
             <div key={s.rank} className="neu-inset rounded-xl p-4">
               <p className="text-xs font-bold text-slate-500">{s.rank}位</p>
@@ -267,7 +371,17 @@ function StandingPanel({
   );
 }
 
-function RankingPanel({ pool, target, onSelect }: { pool: HistoryEvent[]; target: HistoryEvent; onSelect: (id: number) => void }) {
+function RankingPanel({
+  pool,
+  target,
+  filter,
+  onSelect,
+}: {
+  pool: HistoryEvent[];
+  target: HistoryEvent;
+  filter: FilterProps;
+  onSelect: (id: number) => void;
+}) {
   const [rank, setRank] = useState<HistoryRank>("50");
   const [mode, setMode] = useState<HistoryMode>("final");
   const groups = useMemo(() => hourGroups(pool), [pool]);
@@ -300,6 +414,7 @@ function RankingPanel({ pool, target, onSelect }: { pool: HistoryEvent[]; target
       <div role="group" aria-label="並べ方">
         <SegmentedControl options={MODE_OPTIONS} value={mode} onChange={setMode} />
       </div>
+      <FilterBox {...filter} />
       {mode === "same" && (
         <label className="mt-3 flex items-center gap-2 text-sm text-slate-600">
           <span className="font-bold">長さ</span>
@@ -398,6 +513,99 @@ function RankingPanel({ pool, target, onSelect }: { pool: HistoryEvent[]; target
       </div>
     </Panel>
     </section>
+  );
+}
+
+interface FilterProps {
+  label: string;
+  types: readonly string[];
+  unit: UnitFilter;
+  chars: readonly number[];
+  pending: boolean;
+  bonusFailed: boolean;
+  open: boolean;
+  onOpen: (open: boolean) => void;
+  onType: (t: string) => void;
+  onUnit: (u: UnitFilter) => void;
+  onChar: (ch: number) => void;
+  onReset: () => void;
+}
+
+const FILTER_ID = "history-filter";
+
+const chip = (active: boolean) =>
+  "rounded-full px-2.5 py-1 text-xs font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)] " +
+  (active ? "neu-selected" : "bg-neu text-slate-500 shadow-neu-sm");
+
+/** 比べる回の絞り込み。ふだんは畳んでおき、見出しに今の条件を1行で出す */
+function FilterBox({ label, types, unit, chars, pending, bonusFailed, open, onOpen, onType, onUnit, onChar, onReset }: FilterProps) {
+  return (
+    <details
+      id={FILTER_ID}
+      className="neu-inset mt-3 scroll-mt-20 rounded-xl px-4 py-3"
+      open={open}
+      onToggle={(e) => onOpen(e.currentTarget.open)}
+    >
+      <summary className="cursor-pointer text-sm">
+        <span className="font-bold text-slate-600">絞り込み</span>
+        <span className="ml-2 text-xs text-slate-500">{label}</span>
+      </summary>
+      <div className="mt-3 space-y-4">
+        <div>
+          <p className="mb-2 text-xs font-bold text-slate-500">種別</p>
+          <div role="group" aria-label="比べる種別" className="flex flex-wrap gap-2">
+            {HISTORY_TYPES.map((t) => (
+              <button key={t.value} type="button" aria-pressed={types.includes(t.value)} className={chip(types.includes(t.value))} onClick={() => onType(t.value)}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[11px] leading-5 text-slate-500">最初はワールドリンクを外しています（X の歴代ボーダーの画像と同じ数え方）。</p>
+        </div>
+        <div>
+          <p className="mb-2 text-xs font-bold text-slate-500">箱／混合</p>
+          <div role="group" aria-label="箱イベと混合イベ" className="flex flex-wrap gap-2">
+            {UNIT_FILTERS.map((u) => (
+              <button key={u.value} type="button" aria-pressed={unit === u.value} className={chip(unit === u.value)} onClick={() => onUnit(u.value)}>
+                {u.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="mb-2 text-xs font-bold text-slate-500">参加キャラ（選んだキャラが全員ボーナスキャラの回）</p>
+          <div role="group" aria-label="参加キャラ" className="space-y-1">
+            {UNIT_ORDER.map((u) => (
+              <div key={u} className="flex items-center gap-1">
+                <span className="w-16 shrink-0 whitespace-nowrap text-[10px] font-bold text-slate-400">{UNIT_SHORT[u]}</span>
+                <span className="flex min-w-0 flex-1 flex-wrap gap-1">
+                  {CHARACTERS.filter((c) => c.unit === u).map((c) => (
+                    <button
+                      key={c.ch}
+                      type="button"
+                      aria-pressed={chars.includes(c.ch)}
+                      title={c.name}
+                      className={`${chip(chars.includes(c.ch))} !px-2 !text-[11px]`}
+                      onClick={() => onChar(c.ch)}
+                    >
+                      {characterShort(c.ch)}
+                    </button>
+                  ))}
+                </span>
+              </div>
+            ))}
+          </div>
+          {pending && !bonusFailed && <p className="mt-1.5 text-[11px] text-slate-500">キャラのデータを読み込み中…</p>}
+          {bonusFailed && <p className="mt-1.5 text-[11px] text-amber-700">キャラのデータを読み込めなかったので、キャラでは絞っていません。</p>}
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <NeuButton className="!px-3 !py-1.5 !text-xs" onClick={onReset}>
+            条件を戻す
+          </NeuButton>
+          <p className="text-[11px] leading-5 text-slate-500">選んでいる回は、条件から外れても比べる回に入れます。</p>
+        </div>
+      </div>
+    </details>
   );
 }
 

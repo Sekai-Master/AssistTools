@@ -141,6 +141,21 @@ export const RARITY_LABEL: Record<string, string> = {
   birthday: "Birthday",
 };
 
+/** 下の名前だけの短い呼び名。絞り込みの札や条件の1行など、幅が無い場所で使う（歴代ボーダー） */
+export const CHARACTER_SHORT: Record<number, string> = {
+  1: "一歌", 2: "咲希", 3: "穂波", 4: "志歩",
+  5: "みのり", 6: "遥", 7: "愛莉", 8: "雫",
+  9: "こはね", 10: "杏", 11: "彰人", 12: "冬弥",
+  13: "司", 14: "えむ", 15: "寧々", 16: "類",
+  17: "奏", 18: "まふゆ", 19: "絵名", 20: "瑞希",
+  21: "ミク", 22: "リン", 23: "レン", 24: "ルカ", 25: "MEIKO", 26: "KAITO",
+};
+
+/** 短い呼び名。知らない ch は characterName と同じく「キャラ27」 */
+export function characterShort(ch: number): string {
+  return Object.hasOwn(CHARACTER_SHORT, ch) ? CHARACTER_SHORT[ch] : `キャラ${ch}`;
+}
+
 const BY_CH = new Map(CHARACTERS.map((c) => [c.ch, c]));
 
 /**
