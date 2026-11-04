@@ -59,9 +59,7 @@ export function ToolPage({
     >
       <h1 className="unit-title text-xl font-bold" data-morph={morphKey}>
         {icon && (
-          <span className="material-icons" aria-hidden>
-            {icon}
-          </span>
+          <span className="material-icons" aria-hidden data-icon={icon} />
         )}
         <span>{title}</span>
       </h1>

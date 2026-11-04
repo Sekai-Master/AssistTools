@@ -13,7 +13,7 @@
  * ★ 検索語（2026-11-03 Nori 指定）: プロセカ ボーダー予測／編成／ついぼ／ポ調／
  *   ポイント調整／基礎点／ボーダー。言葉を詰め込まず、説明として自然に入る所にだけ入れる。
  */
-import { SITE_NAME, SITE_URL } from "./lib/site.ts";
+import { SITE_ALT_NAMES, SITE_NAME, SITE_NAME_KANA, SITE_URL } from "./lib/site.ts";
 
 export interface PageMeta {
   /** <title>。サイト名は付けない（renderHead が付ける）。 */
@@ -131,7 +131,7 @@ export const NOT_FOUND: PageMeta = {
 
 /** ブラウザのタブに出す文字列。トップだけはサイト名を先に出す。 */
 export function docTitle(path: string, meta: PageMeta): string {
-  return path === "/" ? `${SITE_NAME}｜${meta.title}` : `${meta.title}｜${SITE_NAME}`;
+  return path === "/" ? `${SITE_NAME}（${SITE_NAME_KANA}）｜${meta.title}` : `${meta.title}｜${SITE_NAME}`;
 }
 
 const escapeHtml = (s: string) =>
@@ -157,6 +157,9 @@ export function renderHead(html: string, path: string, meta: PageMeta): string {
     // X のカードは相対パスの画像を読まない
     `<meta property="og:image" content="${SITE_URL}/images/icon.png" />`,
     `<meta name="twitter:card" content="summary" />`,
+    // サイト名。無いと Google は pages.dev のサイト名（Cloudflare）を代わりに出す（2026-11-04 の検索結果）。
+    // Google はトップの WebSite 構造化データをいちばん重く見る（developers.google.com/search/docs/appearance/site-names）
+    ...(path === "/" ? [`<script type="application/ld+json">${websiteJsonLd()}</script>`] : []),
   ].join("\n    ");
   if (!/<title>/.test(html) || !/<meta name="description"/.test(html) || !/<meta name="viewport"/.test(html)) {
     throw new Error("index.html の <head> を読めない（title・description・viewport が無い）");
@@ -166,9 +169,21 @@ export function renderHead(html: string, path: string, meta: PageMeta): string {
     .replace(/\s*<title>[\s\S]*?<\/title>/, "")
     .replace(/\s*<meta name="(description|robots|twitter:[^"]+)"[^>]*>/g, "")
     .replace(/\s*<meta property="og:[^"]+"[^>]*>/g, "")
-    .replace(/\s*<link rel="canonical"[^>]*>/g, "");
+    .replace(/\s*<link rel="canonical"[^>]*>/g, "")
+    .replace(/\s*<script type="application\/ld\+json">[\s\S]*?<\/script>/g, "");
   // 関数で渡す（文字列だと説明文の「$&」などが置換の記号として化ける）
   return stripped.replace(/<meta name="viewport"[^>]*>/, (m) => `${m}\n    ${tags}`);
+}
+
+/** トップに置く WebSite の構造化データ。値に「<」は入らないので、JSON のまま埋めてよい */
+export function websiteJsonLd(): string {
+  return JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: SITE_NAME,
+    alternateName: [...SITE_ALT_NAMES],
+    url: `${SITE_URL}/`,
+  });
 }
 
 /** 知見ノート1本の、検索向けの情報。 */
