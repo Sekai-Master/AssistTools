@@ -29,6 +29,16 @@ import { DIV_ATTR, DIV_T } from "./divisions";
 /** ページ側が置く印。値が対応づけのキー。 */
 export const MORPH_ATTR = "data-morph";
 
+/**
+ * 変形の最中であることを html に示す目印（html[data-morphing]）。
+ *
+ * ★ ページ側の印（MORPH_ATTR）と同じ名前にしない。以前は html に data-morph="on" を
+ *   付けていたので、出発点を探す closest が html まで遡って当たり、**ページ全体を
+ *   出発点として隠していた**（ツールと TOP を素早く行き来すると真っ白になり、
+ *   戻る・進むでも戻らない。2026-11-05 報告）。
+ */
+const BUSY_FLAG = "morphing";
+
 const LAYER_ID = "morph-layer";
 /** 押下で指名された内容を次の遷移まで持ち越さないための賞味期限。 */
 const AIM_TTL_MS = 1000;
@@ -178,16 +188,56 @@ function clone(el: HTMLElement, content: Rect, boxRect: Rect = content): HTMLEle
 let captured: Captured | null = null;
 let aimedAt = -Infinity;
 let boxes: HTMLElement[] = [];
-let landing: HTMLElement | null = null;
+/**
+ * 隠した本物（出発点と到着点）。後片付けで必ず全部見せ直す。
+ *
+ * ★ 出発点は「遷移で消えるから戻さなくてよい」とは限らない。沈みの途中で同じページへ
+ *   戻ると木が差し替わらずに残るので、戻さないとその要素だけ消えたままになる。
+ */
+let concealed: HTMLElement[] = [];
+let unfollow: (() => void) | null = null;
 let timer = 0;
+
+function conceal(el: HTMLElement): void {
+  el.style.visibility = "hidden";
+  concealed.push(el);
+}
 
 function cleanup(): void {
   clearTimeout(timer);
   timer = 0;
+  unfollow?.();
+  unfollow = null;
   boxes.forEach((b) => b.remove());
   boxes = [];
-  if (landing) landing.style.visibility = "";
-  landing = null;
+  concealed.forEach((el) => (el.style.visibility = ""));
+  concealed = [];
+}
+
+/**
+ * 飛んでいるあいだ、読み手のスクロールにレイヤーごと付いていく。
+ *
+ * 複製は fixed で画面に貼り付いているので、何もしないとページだけが動き、
+ * 複製は画面上の元の位置へ着地してしまう（実測で 500px ずれた）。行き先は
+ * 飛び始めた時点のスクロールで採寸しているので、そこからの差だけ逆に動かせば
+ * 軌道ごとページに乗る。レイヤーの子は全部 fixed の複製なので、レイヤーに
+ * transform を掛けると包含ブロックがレイヤーになり、まとめて動く。
+ *
+ * ★ 基準は飛び始めの時点で取る。戻る遷移のスクロール復元はその前に済んでいるので、
+ *   復元のぶんを打ち消してしまうことは無い。
+ */
+function followScroll(): void {
+  const el = layer();
+  const x0 = window.scrollX;
+  const y0 = window.scrollY;
+  const onScroll = () => {
+    el.style.transform = `translate(${x0 - window.scrollX}px, ${y0 - window.scrollY}px)`;
+  };
+  window.addEventListener("scroll", onScroll, { passive: true });
+  unfollow = () => {
+    window.removeEventListener("scroll", onScroll);
+    el.style.transform = "";
+  };
 }
 
 /** 出発点を浮かせる。元の要素は場所を残したまま隠す（下のレイアウトを動かさない）。 */
@@ -211,8 +261,8 @@ function lift(el: HTMLElement): Captured | null {
   // 行き先が分かるまで、素材が溶けるあいだ宙で待つ。完全に静止させると
   // 「固まった」ように見えるので、摘まみ上げたぶんだけ浮かせておく。
   box.style.transform = `scale(${LIFT_SCALE})`;
-  el.style.visibility = "hidden";
-  document.documentElement.dataset.morph = "on";
+  conceal(el);
+  document.documentElement.dataset[BUSY_FLAG] = "on";
   boxes.push(box);
   return { key, rect, box, origin: el };
 }
@@ -222,14 +272,18 @@ function lift(el: HTMLElement): Captured | null {
  *
  * 一覧には同じ印のカードが何枚もあるので、採寸だけでは「どれ」か決まらない。
  * 押下でここに手を挙げてもらう（キーボードの Enter も click になる）。
+ *
+ * @param within 探してよい範囲（ステージ）。closest がこの外まで遡って拾わないように。
  */
-export function aimMorph(target: EventTarget | null): void {
+export function aimMorph(target: EventTarget | null, within?: Element | null): void {
   if (!(target instanceof Element)) return;
   // ★ 上下どちらも見る。押された点が印の内側とは限らない ──
   //   ハブのカードはリンクの**子**なので、キーボードの Enter や
   //   リンク自体をクリックした場合は target がリンクになり、closest では届かない。
+  //   着地待ちで隠れているカードも押下を受けず、target はリンクになる。
+  const up = target.closest<HTMLElement>(`[${MORPH_ATTR}]`);
   const el =
-    target.closest<HTMLElement>(`[${MORPH_ATTR}]`) ??
+    (up && (!within || within.contains(up)) ? up : null) ??
     target.querySelector<HTMLElement>(`[${MORPH_ATTR}]`);
   if (!el || captured) return;
   const next = lift(el);
@@ -315,8 +369,7 @@ export function flyMorph(stage: Element | null, timing: FlightTiming): boolean {
 
   // 本物は着地するまで隠す。visibility なら場所は確保されたままなので、
   // 下に続く中身のレイアウトが動かない。
-  target.style.visibility = "hidden";
-  landing = target;
+  conceal(target);
 
   // 開始値を確定させてから終了値を置く。同じタスク内の2回の変更はまとめて
   // 1回しか計算されないので、これが無いと一瞬で終点に飛ぶ。
@@ -342,19 +395,19 @@ export function flyMorph(stage: Element | null, timing: FlightTiming): boolean {
   }
   from.box.style.opacity = "0";
   toBox.style.opacity = "1";
+  followScroll();
 
   timer = window.setTimeout(() => {
     cleanup();
-    delete document.documentElement.dataset.morph;
+    delete document.documentElement.dataset[BUSY_FLAG];
   }, timing.flyMs + 60);
   return true;
 }
 
 /** 遷移が中断された・対応が見つからなかったときの後片付け。 */
 export function cancelMorph(): void {
-  if (captured) captured.origin.style.visibility = "";
   captured = null;
   aimedAt = -Infinity;
   cleanup();
-  delete document.documentElement.dataset.morph;
+  delete document.documentElement.dataset[BUSY_FLAG];
 }
