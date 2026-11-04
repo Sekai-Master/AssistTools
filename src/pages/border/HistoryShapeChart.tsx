@@ -161,7 +161,7 @@ export function HistoryShapeChart({ eventId, hours }: { eventId: number; hours: 
       )}
       {!loading && failed && <p className="mt-4 text-sm text-slate-600">推移を読み込めませんでした。時間をおいて開き直してください。</p>}
       {!loading && !failed && available.length === 0 && (
-        <p className="mt-4 text-sm leading-7 text-slate-500">この回は推移の記録がありません（記録の欠けている時間が長い回は、推移を作っていません）。</p>
+        <p className="mt-4 text-sm leading-7 text-slate-500">この回は推移の記録がありません。</p>
       )}
       {!loading && !failed && extent && target && <Plot series={shown} hours={hours} lastHour={extent.xEnd} target={target} view={view ?? target} />}
     </div>

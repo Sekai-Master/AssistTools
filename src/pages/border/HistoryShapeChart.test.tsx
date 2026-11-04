@@ -54,7 +54,7 @@ describe("歴代ボーダーの推移のグラフ", () => {
 
   it("記録の無い回は説明を出す", async () => {
     render(<HistoryShapeChart eventId={9} hours={198} />);
-    await screen.findByText(/この回は推移の記録がありません/);
+    await screen.findByText("この回は推移の記録がありません。");
   });
 
   it("矢印キーで動かした点の値を読み上げ用の領域に出す", async () => {
