@@ -205,7 +205,7 @@ export default function LapTimer() {
               </span>
             </span>
             <span
-              className="material-icons shrink-0 text-slate-400"
+              className="material-icons shrink-0 text-slate-500"
               aria-hidden
             >
               search

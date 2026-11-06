@@ -319,10 +319,10 @@ function FixtureRow({
         className={cn(
           "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
-          owned ? "neu-selected" : "bg-neu text-slate-400 shadow-neu-sm neu-tactile"
+          owned ? "neu-selected" : "bg-neu text-slate-500 shadow-neu-sm neu-tactile"
         )}
       >
-        <span aria-hidden className="material-icons text-[20px] leading-none">
+        <span aria-hidden className="material-icons text-xl leading-none">
           {owned ? "inventory_2" : "add"}
         </span>
         <span className="sr-only">{fixture.name} を持っている</span>
@@ -338,10 +338,10 @@ function FixtureRow({
         className={cn(
           "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
-          wished ? "neu-selected" : "bg-neu text-slate-400 shadow-neu-sm neu-tactile"
+          wished ? "neu-selected" : "bg-neu text-slate-500 shadow-neu-sm neu-tactile"
         )}
       >
-        <span aria-hidden className="material-icons text-[20px] leading-none">
+        <span aria-hidden className="material-icons text-xl leading-none">
           {wished ? "favorite" : "favorite_border"}
         </span>
         <span className="sr-only">{fixture.name} をほしいものリストに入れる</span>

@@ -527,8 +527,7 @@ export function PlanTimeline({
                     {seg.kind === "play" ? (
                       <div className="flex flex-wrap items-center gap-2 text-sm">
                         <span
-                          className="material-icons text-base"
-                          style={{ color: "var(--unit-color)" }}
+                          className="material-icons text-base text-slate-500"
                           aria-hidden
                         >
                           music_note
@@ -615,7 +614,7 @@ export function PlanTimeline({
                     ) : (
                       <div className="flex flex-wrap items-center gap-2 text-sm">
                         <span
-                          className="material-icons text-base text-slate-400"
+                          className="material-icons text-base text-slate-500"
                           aria-hidden
                         >
                           bedtime

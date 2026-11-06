@@ -15,8 +15,6 @@ import "@fontsource/m-plus-rounded-1c/700.css";
 // 数字だけの書体（トップの残り時間・ボーダー）。等幅なので桁が縦に揃う。日本語は持たない。
 import "@fontsource/geist-mono/latin-400.css";
 import "@fontsource/geist-mono/latin-500.css";
-// filled のみ。material-icons.css は outlined/round/sharp/two-tone まで抱き込む。
-import "material-icons/iconfont/filled.css";
 import "./index.css";
 import { App } from "./App";
 import { bootstrapMotion } from "./motion/bootstrap";

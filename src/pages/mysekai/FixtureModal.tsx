@@ -138,7 +138,7 @@ export function FixtureModal({
           <span
             aria-hidden
             className={cn(
-              "material-icons shrink-0 text-[20px] leading-none",
+              "material-icons shrink-0 text-xl leading-none",
               done ? "text-white" : "text-slate-400"
             )}
           >
@@ -246,7 +246,7 @@ export function FixtureModal({
               owned ? "neu-selected" : "bg-neu text-slate-600 shadow-neu-sm neu-tactile"
             )}
           >
-            <span aria-hidden className="material-icons text-[18px] leading-none">
+            <span aria-hidden className="material-icons text-xl leading-none">
               {owned ? "check_circle" : "radio_button_unchecked"}
             </span>
             持っている
@@ -263,7 +263,7 @@ export function FixtureModal({
               wished ? "neu-selected" : "bg-neu text-slate-600 shadow-neu-sm neu-tactile"
             )}
           >
-            <span aria-hidden className="material-icons text-[18px] leading-none">
+            <span aria-hidden className="material-icons text-xl leading-none">
               {wished ? "favorite" : "favorite_border"}
             </span>
             ほしい
@@ -331,7 +331,7 @@ export function FixtureModal({
                   "bg-neu shadow-neu-sm neu-tactile"
                 )}
               >
-                <span aria-hidden className="material-icons text-[20px] leading-none text-slate-400">
+                <span aria-hidden className="material-icons text-xl leading-none text-slate-500">
                   {showOthers ? "expand_less" : "expand_more"}
                 </span>
                 <span className="text-xs font-bold text-slate-600">
@@ -372,7 +372,7 @@ export function FixtureModal({
             <>
               <h3 className="mt-4 mb-1 text-xs font-bold text-slate-500">この家具を使う人</h3>
               <p className="mb-2 flex items-start gap-1.5 text-xs leading-relaxed text-slate-500">
-                <span aria-hidden className="material-icons mt-px text-[14px] leading-none">
+                <span aria-hidden className="material-icons mt-px text-base leading-none">
                   info
                 </span>
                 <span>
@@ -391,7 +391,7 @@ export function FixtureModal({
             <>
               <h3 className="mt-4 mb-1 text-xs font-bold text-slate-500">この家具を気に入っている人</h3>
               <p className="mb-2 flex items-start gap-1.5 text-xs leading-relaxed text-slate-500">
-                <span aria-hidden className="material-icons mt-px text-[14px] leading-none">
+                <span aria-hidden className="material-icons mt-px text-base leading-none">
                   info
                 </span>
                 <span>

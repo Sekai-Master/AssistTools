@@ -72,7 +72,7 @@ function Where({ path }: { path: string }) {
       className="ml-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-normal text-slate-500 shadow-neu-sm"
       title={`ゲーム内の ${path} で見られます`}
     >
-      <span className="material-icons !text-[12px]" aria-hidden>
+      <span className="material-icons text-base" aria-hidden>
         info
       </span>
       {path}
