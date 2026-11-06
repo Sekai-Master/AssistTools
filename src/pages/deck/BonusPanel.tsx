@@ -157,7 +157,7 @@ export function BonusPanel({
           <div className="space-y-1.5">
             {UNIT_ORDER.map((unit) => (
               <div key={unit} className="flex flex-wrap items-center gap-1">
-                <span className="w-16 shrink-0 text-[10px] font-bold text-slate-400">
+                <span className="w-16 shrink-0 text-xs font-bold text-slate-400">
                   {UNIT_SHORT[unit]}
                 </span>
                 {CHARACTERS.filter((c) => c.unit === unit).map((c) => {
@@ -186,7 +186,7 @@ export function BonusPanel({
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-1">
-            <span className="w-16 shrink-0 text-[10px] font-bold text-slate-400">タイプ</span>
+            <span className="w-16 shrink-0 text-xs font-bold text-slate-400">タイプ</span>
             {ATTR_ORDER.map((a) => {
               const on = custom.attr === a;
               return (
@@ -233,7 +233,7 @@ export function BonusPanel({
                 </label>
               ))}
             </div>
-            <p className="mt-1 text-[11px] text-slate-400">
+            <p className="mt-1 text-xs text-slate-400">
               既定は近年のイベントの標準（25 / 25 / 50）。「両方」は合算済みの値で、
               メンバーとタイプの両方が当たったカードにはこれだけが乗ります。
             </p>

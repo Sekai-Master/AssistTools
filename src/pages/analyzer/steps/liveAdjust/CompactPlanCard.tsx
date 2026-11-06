@@ -39,10 +39,10 @@ export function CompactPlanCard({
         </span>
         <FormationUnchangedBadge />
         {singleSong && (
-          <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600">同一曲</span>
+          <span className="rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-600">同一曲</span>
         )}
         <NeuButton
-          className="ml-auto !px-2.5 !py-1 !text-[11px]"
+          className="ml-auto !px-2.5 !py-1 !text-xs"
           active={adopted}
           disabled={adopted}
           onClick={onAdopt}

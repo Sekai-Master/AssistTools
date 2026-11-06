@@ -150,7 +150,7 @@ export default function BorderHistoryPage() {
 function TypeChip({ e }: { e: HistoryEvent }) {
   return (
     <span
-      className="inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold leading-4"
+      className="inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-bold leading-4"
       style={own(TYPE_CHIP, e.type) ?? TYPE_CHIP.marathon}
     >
       {e.typeLabel}
@@ -366,7 +366,7 @@ function RankingPanel({ pool, target, onSelect }: { pool: HistoryEvent[]; target
                     >
                       {r.event.name}
                     </button>
-                    <span className="mt-0.5 flex items-center gap-1.5 text-[11px] font-normal tabular-nums text-slate-500 sm:hidden">
+                    <span className="mt-0.5 flex items-center gap-1.5 text-xs font-normal tabular-nums text-slate-500 sm:hidden">
                       <TypeChip e={r.event} />
                       {r.event.days}日・{r.event.hours}h
                     </span>

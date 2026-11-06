@@ -153,12 +153,12 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
         </p>
       )}
       {snap.predicted && (
-        <p className="mt-3 text-[11px] leading-5 text-slate-500">
+        <p className="mt-3 text-xs leading-5 text-slate-500">
           確度は8割の幅の広さです。高＝±5%くらい、中＝±15%くらい、目安＝それより広い（序盤）。
           序盤の目安は、全体の熱さを読むためのものとして見てください。
         </p>
       )}
-      {snap.modelVersion && <p className="mt-2 text-[11px] text-slate-400">モデル {snap.modelVersion}</p>}
+      {snap.modelVersion && <p className="mt-2 text-xs text-slate-400">モデル {snap.modelVersion}</p>}
     </Panel>
   );
 }
@@ -172,10 +172,10 @@ const CONFIDENCE_TONE: Record<Confidence, string> = {
 function ConfidenceChip({ value, reference }: { value: Confidence; reference: boolean }) {
   // 過去に無い長さ（外挿）のときは確度を名乗らず「参考値」と書く（2026-10-25、221 の 1000位が大きく外れた）
   if (reference) {
-    return <span className="rounded-full border border-dashed border-amber-600 px-2 py-0.5 text-[11px] font-bold text-amber-700">参考値</span>;
+    return <span className="rounded-full border border-dashed border-amber-600 px-2 py-0.5 text-xs font-bold text-amber-700">参考値</span>;
   }
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${CONFIDENCE_TONE[value]}`}>
+    <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${CONFIDENCE_TONE[value]}`}>
       確度 {CONFIDENCE_LABEL[value]}
     </span>
   );

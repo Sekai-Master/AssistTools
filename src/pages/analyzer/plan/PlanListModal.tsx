@@ -102,17 +102,17 @@ export function PlanListModal({
             >
               <div className="grid grid-cols-3 items-center gap-2 text-center">
                 <div>
-                  <div className="text-[10px] font-bold text-slate-500">ボーナス</div>
+                  <div className="text-xs font-bold text-slate-500">ボーナス</div>
                   <div className="text-lg font-bold" style={{ color: "var(--unit-color)" }}>
                     {plan.bonus}%
                   </div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold text-slate-500">消費</div>
+                  <div className="text-xs font-bold text-slate-500">消費</div>
                   <div className="font-mono text-lg text-slate-700">{plan.liveBonus}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold text-slate-500">スコア</div>
+                  <div className="text-xs font-bold text-slate-500">スコア</div>
                   <div className="font-mono text-xs leading-tight text-slate-700">
                     {plan.minScore.toLocaleString()}
                     <br />〜{plan.maxScore.toLocaleString()}
@@ -120,7 +120,7 @@ export function PlanListModal({
                 </div>
               </div>
               {annotate?.(plan) && (
-                <div className="mt-1 text-center text-[10px] tabular-nums text-slate-500">
+                <div className="mt-1 text-center text-xs tabular-nums text-slate-500">
                   {annotate(plan)}
                 </div>
               )}

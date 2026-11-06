@@ -89,7 +89,7 @@ export function PrimaryPlanPanel({
             {isPrimary ? "▸ 主役" : "▸ 採択中"}
           </span>
           {isSingleSong(chosen) && (
-            <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600">同一曲</span>
+            <span className="rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-600">同一曲</span>
           )}
           <span className="text-xs tabular-nums text-slate-500">
             {chosen.liveCount}回 ・{" "}
@@ -100,7 +100,7 @@ export function PrimaryPlanPanel({
           </span>
           <FormationUnchangedBadge />
           {!isPrimary && (
-            <NeuButton className="!px-2.5 !py-1 !text-[11px]" onClick={() => onAdopt({ kind: "primary" })}>
+            <NeuButton className="!px-2.5 !py-1 !text-xs" onClick={() => onAdopt({ kind: "primary" })}>
               推奨案（主役）に戻す
             </NeuButton>
           )}
@@ -131,11 +131,11 @@ export function PrimaryPlanPanel({
             );
           })}
         </ol>
-        <p className="mt-3 text-[11px] text-slate-400">
+        <p className="mt-3 text-xs text-slate-400">
           全{chosen.liveCount}
           回それぞれでスコア帯（2万点幅）を狙い撃つ必要があります。帯を外した回のLBは戻りません。
         </p>
-        <p className="mt-2 text-[11px] text-slate-400">
+        <p className="mt-2 text-xs text-slate-400">
           LBは{efficientLiveBonus}炊きまでは1個あたりの効率が同じです（2024-09-28改定）。
           それより少ない炊き数で止めると、本数が増えるぶん時間を余計に使います。
         </p>

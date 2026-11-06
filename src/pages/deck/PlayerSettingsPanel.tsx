@@ -69,7 +69,7 @@ function NumCell({
 function Where({ path }: { path: string }) {
   return (
     <span
-      className="ml-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-normal text-slate-500 shadow-neu-sm"
+      className="ml-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-normal text-slate-500 shadow-neu-sm"
       title={`ゲーム内の ${path} で見られます`}
     >
       <span className="material-icons !text-[12px]" aria-hidden>
@@ -195,7 +195,7 @@ export function PlayerSettingsPanel({
               const members = CHARACTERS.filter((c) => c.unit === unit);
               return (
                 <div key={unit}>
-                  <p className="mb-1 text-[10px] font-bold text-slate-400">{UNIT_NAME[unit]}</p>
+                  <p className="mb-1 text-xs font-bold text-slate-400">{UNIT_NAME[unit]}</p>
                   <div
                     className={cn(
                       "grid gap-1.5",

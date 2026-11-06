@@ -83,7 +83,7 @@ export function CardThumb({
       {failed || !card.asset ? (
         // 画像が無いときは属性色の枠にレアリティだけ。名前は隣に必ず出ているので情報は落ちない。
         <span
-          className="flex h-full w-full items-center justify-center rounded-md text-[9px] font-bold text-white"
+          className="flex h-full w-full items-center justify-center rounded-md text-xs font-bold text-white"
           style={{ backgroundColor: border }}
           aria-hidden
         >

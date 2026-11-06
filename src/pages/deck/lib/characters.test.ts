@@ -84,3 +84,10 @@ describe("キャラ表", () => {
     expect(charactersOf("piapro")).toHaveLength(6);
   });
 });
+
+describe("名前だけの呼び方", () => {
+  it("フルネームの末尾と一致し、全員で重ならない", () => {
+    for (const c of CHARACTERS) expect(c.name.endsWith(c.givenName)).toBe(true);
+    expect(new Set(CHARACTERS.map((c) => c.givenName)).size).toBe(CHARACTERS.length);
+  });
+});

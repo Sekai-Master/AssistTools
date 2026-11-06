@@ -72,7 +72,7 @@ export function AdoptedUnitLine({
           {" "}× {u.count}回（1回 {u.pt.toLocaleString()} Pt・{formatPlayBadges(u.pt)}）
         </span>
         {isFinish ? <FinishBadge /> : <ScoreBandTag band={scoreBandBadge(u)} />}
-        <NeuButton className="!px-2.5 !py-1 !text-[11px]" onClick={onPick}>
+        <NeuButton className="!px-2.5 !py-1 !text-xs" onClick={onPick}>
           変更
         </NeuButton>
       </div>
@@ -82,7 +82,7 @@ export function AdoptedUnitLine({
         </p>
       )}
       {alternatives.length > 0 && (
-        <p className="mt-1 text-[11px] text-slate-400">
+        <p className="mt-1 text-xs text-slate-400">
           代替曲:{" "}
           {alternatives
             .map((m) => (m.musicTime > 0 ? `${m.title}（${Math.round(m.musicTime)}秒）` : m.title))

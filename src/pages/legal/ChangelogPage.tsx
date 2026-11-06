@@ -37,7 +37,7 @@ export default function ChangelogPage() {
               </time>
               {/* 最新版だけ印を付ける。今どこまで来ているかが一目で分かればよい。 */}
               {i === 0 && (
-                <span className="rounded-full bg-[color:var(--color-vs)]/15 px-2 py-0.5 text-[11px] font-bold text-[color:var(--color-vs)]">
+                <span className="rounded-full bg-[color:var(--color-vs)]/15 px-2 py-0.5 text-xs font-bold text-[color:var(--color-vs)]">
                   最新
                 </span>
               )}

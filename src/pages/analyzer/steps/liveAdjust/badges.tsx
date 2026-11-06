@@ -8,12 +8,12 @@ import type { ScoreBandBadge } from "../../lib/scoreBandBadge";
 export function ScoreBandTag({ band }: { band: ScoreBandBadge }) {
   if (band === "狙い撃ち") {
     return (
-      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">
+      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700">
         狙い撃ち
       </span>
     );
   }
-  return <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600">放置</span>;
+  return <span className="rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-600">放置</span>;
 }
 
 /**
@@ -23,7 +23,7 @@ export function ScoreBandTag({ band }: { band: ScoreBandBadge }) {
 export function FormationUnchangedBadge() {
   return (
     <span
-      className="rounded px-1.5 py-0.5 text-[10px] text-white"
+      className="rounded px-1.5 py-0.5 text-xs text-white"
       style={{ backgroundColor: "var(--unit-color)" }}
     >
       編成変更なし
@@ -38,7 +38,7 @@ export function FormationUnchangedBadge() {
  */
 export function FinishBadge() {
   return (
-    <span className="rounded bg-slate-700 px-1.5 py-0.5 text-[10px] text-white">
+    <span className="rounded bg-slate-700 px-1.5 py-0.5 text-xs text-white">
       叩かない（スコア0固定）
     </span>
   );
