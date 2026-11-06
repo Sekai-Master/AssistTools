@@ -186,14 +186,14 @@ export function DeckSlots({
       {slots.map((card, i) => {
         const state = card ? states[card.id] : undefined;
         return (
-          <li key={i} className="neu-raised p-3">
+          <li key={i} className={card ? "rounded-lg border border-slate-200 p-3" : "neu-inset"}>
             {!card ? (
               <button
                 type="button"
                 onClick={() => onPick(i)}
-                className="flex w-full items-center gap-3 text-left text-sm text-slate-400"
+                className="flex w-full items-center gap-3 p-3 text-left text-sm text-slate-500"
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neu text-lg shadow-neu-inset">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center text-lg">
                   ＋
                 </span>
                 {i + 1}枠目：カードを選ぶ

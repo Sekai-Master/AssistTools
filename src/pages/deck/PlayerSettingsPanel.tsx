@@ -69,7 +69,7 @@ function NumCell({
 function Where({ path }: { path: string }) {
   return (
     <span
-      className="ml-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-normal text-slate-500 shadow-neu-sm"
+      className="ml-1 inline-flex items-center gap-1 text-xs font-normal text-slate-500"
       title={`ゲーム内の ${path} で見られます`}
     >
       <span className="material-icons text-base" aria-hidden>
@@ -93,13 +93,14 @@ function Section({
   where?: string;
 }) {
   return (
-    <details className="rounded-lg p-3 shadow-neu-inset">
-      <summary className="cursor-pointer text-sm font-bold text-slate-600">
+    <details className="border-t border-slate-200 first:border-t-0">
+      {/* ★ 影でなく線で区切る。枠の中で凹ませた行の中に入力欄を置くと、影が三重になる（docs/design-system.md の 6 節） */}
+      <summary className="cursor-pointer py-3 text-sm font-bold text-slate-600">
         {title}
         {where && <Where path={where} />}
       </summary>
-      {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
-      <div className="mt-3">{children}</div>
+      {hint && <p className="text-xs text-slate-500">{hint}</p>}
+      <div className="pb-3 pt-3">{children}</div>
     </details>
   );
 }
@@ -126,7 +127,7 @@ export function PlayerSettingsPanel({
         一度入れれば保存され、以後は編成を変えるだけで計算できます。
       </p>
 
-      <div className="space-y-2">
+      <div>
         <Section
           title="エリアアイテム効果"
           where="持ち物 → エリアアイテム → 効果確認"

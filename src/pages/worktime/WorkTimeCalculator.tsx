@@ -277,7 +277,7 @@ export default function WorkTimeCalculator() {
               {result.rows.map((r, i) => (
                 <li
                   key={r.segment.id}
-                  className="neu-raised flex flex-wrap items-center gap-3 p-3 text-sm"
+                  className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 p-3 text-sm"
                 >
                   <span className="text-slate-500">焚き</span>
                   <TakiInput
