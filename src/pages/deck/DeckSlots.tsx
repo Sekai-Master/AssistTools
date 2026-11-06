@@ -58,7 +58,7 @@ function CardStateEditor({
         <button
           type="button"
           onClick={() => onChange({ level: maxLevel })}
-          className={chip(false, "!text-[10px]")}
+          className={chip(false, "!text-xs")}
         >
           上限
         </button>

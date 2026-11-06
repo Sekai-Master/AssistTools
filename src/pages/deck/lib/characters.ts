@@ -19,6 +19,8 @@ export interface CharacterDef {
   /** 配信データの ch。 */
   ch: number;
   name: string;
+  /** 名前だけの呼び方。絞り込みのボタンなど、フルネームが入らない所で使う。 */
+  givenName: string;
   /**
    * 所属ユニットの内部名。
    * ★ VS の6人は全ユニットに跨るので piapro（＝ユニット枠を持たない側）にしてある。
@@ -28,32 +30,32 @@ export interface CharacterDef {
 }
 
 export const CHARACTERS: CharacterDef[] = [
-  { ch: 1, name: "星乃一歌", unit: "light_sound" },
-  { ch: 2, name: "天馬咲希", unit: "light_sound" },
-  { ch: 3, name: "望月穂波", unit: "light_sound" },
-  { ch: 4, name: "日野森志歩", unit: "light_sound" },
-  { ch: 5, name: "花里みのり", unit: "idol" },
-  { ch: 6, name: "桐谷遥", unit: "idol" },
-  { ch: 7, name: "桃井愛莉", unit: "idol" },
-  { ch: 8, name: "日野森雫", unit: "idol" },
-  { ch: 9, name: "小豆沢こはね", unit: "street" },
-  { ch: 10, name: "白石杏", unit: "street" },
-  { ch: 11, name: "東雲彰人", unit: "street" },
-  { ch: 12, name: "青柳冬弥", unit: "street" },
-  { ch: 13, name: "天馬司", unit: "theme_park" },
-  { ch: 14, name: "鳳えむ", unit: "theme_park" },
-  { ch: 15, name: "草薙寧々", unit: "theme_park" },
-  { ch: 16, name: "神代類", unit: "theme_park" },
-  { ch: 17, name: "宵崎奏", unit: "school_refusal" },
-  { ch: 18, name: "朝比奈まふゆ", unit: "school_refusal" },
-  { ch: 19, name: "東雲絵名", unit: "school_refusal" },
-  { ch: 20, name: "暁山瑞希", unit: "school_refusal" },
-  { ch: 21, name: "初音ミク", unit: "piapro" },
-  { ch: 22, name: "鏡音リン", unit: "piapro" },
-  { ch: 23, name: "鏡音レン", unit: "piapro" },
-  { ch: 24, name: "巡音ルカ", unit: "piapro" },
-  { ch: 25, name: "MEIKO", unit: "piapro" },
-  { ch: 26, name: "KAITO", unit: "piapro" },
+  { ch: 1, name: "星乃一歌", givenName: "一歌", unit: "light_sound" },
+  { ch: 2, name: "天馬咲希", givenName: "咲希", unit: "light_sound" },
+  { ch: 3, name: "望月穂波", givenName: "穂波", unit: "light_sound" },
+  { ch: 4, name: "日野森志歩", givenName: "志歩", unit: "light_sound" },
+  { ch: 5, name: "花里みのり", givenName: "みのり", unit: "idol" },
+  { ch: 6, name: "桐谷遥", givenName: "遥", unit: "idol" },
+  { ch: 7, name: "桃井愛莉", givenName: "愛莉", unit: "idol" },
+  { ch: 8, name: "日野森雫", givenName: "雫", unit: "idol" },
+  { ch: 9, name: "小豆沢こはね", givenName: "こはね", unit: "street" },
+  { ch: 10, name: "白石杏", givenName: "杏", unit: "street" },
+  { ch: 11, name: "東雲彰人", givenName: "彰人", unit: "street" },
+  { ch: 12, name: "青柳冬弥", givenName: "冬弥", unit: "street" },
+  { ch: 13, name: "天馬司", givenName: "司", unit: "theme_park" },
+  { ch: 14, name: "鳳えむ", givenName: "えむ", unit: "theme_park" },
+  { ch: 15, name: "草薙寧々", givenName: "寧々", unit: "theme_park" },
+  { ch: 16, name: "神代類", givenName: "類", unit: "theme_park" },
+  { ch: 17, name: "宵崎奏", givenName: "奏", unit: "school_refusal" },
+  { ch: 18, name: "朝比奈まふゆ", givenName: "まふゆ", unit: "school_refusal" },
+  { ch: 19, name: "東雲絵名", givenName: "絵名", unit: "school_refusal" },
+  { ch: 20, name: "暁山瑞希", givenName: "瑞希", unit: "school_refusal" },
+  { ch: 21, name: "初音ミク", givenName: "ミク", unit: "piapro" },
+  { ch: 22, name: "鏡音リン", givenName: "リン", unit: "piapro" },
+  { ch: 23, name: "鏡音レン", givenName: "レン", unit: "piapro" },
+  { ch: 24, name: "巡音ルカ", givenName: "ルカ", unit: "piapro" },
+  { ch: 25, name: "MEIKO", givenName: "MEIKO", unit: "piapro" },
+  { ch: 26, name: "KAITO", givenName: "KAITO", unit: "piapro" },
 ];
 
 /** キャラを並べるときの順。ゲーム内のキャラ一覧と同じ並び（レオニ→…→VS）。 */

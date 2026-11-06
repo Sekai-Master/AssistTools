@@ -123,7 +123,7 @@ function SketchBadge({ sketch }: { sketch: boolean | null }) {
 /** 相手のリストに入っていて、自分が持っている＝置いてあげられる家具。 */
 function OfferBadge() {
   return (
-    <span className="ml-1.5 inline-flex shrink-0 items-center rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-bold text-emerald-800">
+    <span className="ml-1.5 inline-flex shrink-0 items-center rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-bold text-emerald-800">
       置いてあげられる
     </span>
   );
@@ -228,7 +228,7 @@ function FixtureRow({
                   key={id}
                   title={c.name}
                   className={cn(
-                    "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-bold",
+                    "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-0.5 text-xs font-bold",
                     // 選択中の人を沈めない。他は退かせるが、消えるほど薄くはしない。
                     charId != null && charId !== id && "opacity-45"
                   )}
@@ -245,7 +245,7 @@ function FixtureRow({
               );
             })}
             {fixture.talkChars.length > facesShown.length && (
-              <span className="text-[10px] text-slate-400">
+              <span className="text-xs text-slate-400">
                 +{fixture.talkChars.length - facesShown.length}
               </span>
             )}

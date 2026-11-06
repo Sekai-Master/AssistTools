@@ -28,6 +28,8 @@ import { RarityBadge } from "./RarityBadge";
  * SongSearchModal を props で共通化しない代わりに、作法（固定高さ・useModalA11y・
  * data-overlay 印・NeuInput）はそのまま踏襲している。
  */
+const ROW_LABEL = "hidden w-16 shrink-0 whitespace-nowrap text-xs font-bold text-slate-400 sm:block";
+
 export function CardSearchModal({
   cards,
   onSelect,
@@ -154,24 +156,24 @@ export function CardSearchModal({
         </div>
 
         {/* キャラ選択。ゲーム内と同じ並び（レオニ→…→VS）で、1タップで絞れる。 */}
-        {/* ★ VS は6人。1行に収めたいので、この段だけ文字と余白を詰める
-            （2行に折り返すと他のユニットと段組みが揃わず、読み取りにくい）。 */}
+        {/* ★ ボタンは名前だけにする。フルネームを 12px で 6 人並べると「初…」「鏡…」と切れて、誰か分からなかった（2026-11-06）。
+            スマホは段の見出しを外して幅を空ける（名前の並びでユニットは分かる）。VS は人数が多いので文字の長さに合わせる。 */}
         <div className="shrink-0 space-y-1">
           {UNIT_ORDER.map((unit) => (
             <div key={unit} className="flex items-center gap-1">
-              <span className="w-14 shrink-0 whitespace-nowrap text-[9px] font-bold text-slate-400">
-                {UNIT_SHORT[unit]}
-              </span>
-              <span className="flex min-w-0 flex-1 gap-1">
+              <span className={ROW_LABEL}>{UNIT_SHORT[unit]}</span>
+              <span role="group" aria-label={UNIT_SHORT[unit]} className="flex min-w-0 flex-1 flex-wrap gap-1">
                 {CHARACTERS.filter((c) => c.unit === unit).map((c) => (
                   <button
                     key={c.ch}
                     type="button"
                     onClick={() => setCh(ch === c.ch ? null : c.ch)}
                     aria-pressed={ch === c.ch}
-                    className={cn(chip(ch === c.ch), "min-w-0 flex-1 truncate !px-1 !text-[10px]")}
+                    aria-label={c.name}
+                    title={c.name}
+                    className={cn(chip(ch === c.ch), unit === "piapro" ? "flex-auto" : "flex-1", "whitespace-nowrap !px-1 !text-xs")}
                   >
-                    {c.name}
+                    {c.givenName}
                   </button>
                 ))}
               </span>
@@ -182,29 +184,29 @@ export function CardSearchModal({
         {/* ★ レアリティと属性は別の軸なので行を分ける（混ざっていると、どちらの
             絞り込みなのか一目で分からない）。Birthday は★の並びに挟まないで最後に置く。 */}
         <div className="mt-2 flex shrink-0 items-center gap-1">
-          <span className="w-14 shrink-0 whitespace-nowrap text-[9px] font-bold text-slate-400">レア</span>
+          <span className={ROW_LABEL}>レア</span>
           {(["4", "3", "2", "1", "birthday"] as const).map((r) => (
             <button
               key={r}
               type="button"
               onClick={() => setRarity(rarity === r ? null : r)}
               aria-pressed={rarity === r}
-              className={cn(chip(rarity === r), "!px-2 !text-[11px]")}
+              className={cn(chip(rarity === r), "!px-2 !text-xs")}
             >
               {RARITY_LABEL[r]}
             </button>
           ))}
         </div>
 
-        <div className="mt-1 flex shrink-0 items-center gap-1">
-          <span className="w-14 shrink-0 whitespace-nowrap text-[9px] font-bold text-slate-400">タイプ</span>
+        <div className="mt-1 flex shrink-0 flex-wrap items-center gap-1">
+          <span className={ROW_LABEL}>タイプ</span>
           {ATTR_ORDER.map((a) => (
             <button
               key={a}
               type="button"
               onClick={() => setAttr(attr === a ? null : a)}
               aria-pressed={attr === a}
-              className={cn(chip(attr === a), "min-w-0 flex-1 truncate !px-1 !text-[10px]")}
+              className={cn(chip(attr === a), "flex-auto whitespace-nowrap !px-1 !text-xs")}
               style={attr === a ? undefined : { color: ATTR_COLOR[a] }}
             >
               {ATTR_LABEL[a]}
@@ -224,7 +226,7 @@ export function CardSearchModal({
             </button>
             {/* ★ Pt の差は前提（曲・ライブ種別・焚き数）で変わる。何を基準にした数字かを
                 書かないと、比較画面の Pt と食い違って見えたときに理由が分からない。 */}
-            <span className="text-[11px] text-slate-400">
+            <span className="text-xs text-slate-400">
               {ownedOnly
                 ? swap.basis
                   ? `効く順（${swap.basis} 基準の最終Pt差）`
@@ -291,7 +293,7 @@ export function CardSearchModal({
                         const sign = (v: number) => (v > 0 ? "+" : "");
                         const good = (d.deltaPt ?? d.deltaPower) > 0;
                         return (
-                          <span className="shrink-0 text-right text-[11px] leading-tight">
+                          <span className="shrink-0 text-right text-xs leading-tight">
                             <span className={cn("block font-bold", good ? "text-emerald-600" : "text-slate-400")}>
                               {d.deltaPt != null
                                 ? `${sign(d.deltaPt)}${Math.round(d.deltaPt).toLocaleString()}pt`
@@ -335,7 +337,7 @@ export function CardSearchModal({
                       disabled={usedIds.has(c.id)}
                       onClick={() => onToggleOwned(c)}
                       className={cn(
-                        "shrink-0 rounded-full px-2 py-1 text-[10px] font-bold",
+                        "shrink-0 rounded-full px-2 py-1 text-xs font-bold",
                         "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
                         owned?.has(c.id)
                           ? "neu-selected"
@@ -351,7 +353,7 @@ export function CardSearchModal({
             })
           )}
         </div>
-        <p className="mt-2 shrink-0 text-[11px] text-slate-400">
+        <p className="mt-2 shrink-0 text-xs text-slate-400">
           {results.length >= 120 ? "上位120件を表示中。絞り込んでください。" : `${results.length}件`}
         </p>
       </div>

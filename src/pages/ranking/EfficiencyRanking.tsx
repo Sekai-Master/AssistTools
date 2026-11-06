@@ -225,7 +225,7 @@ function DifficultyBadge({
   return (
     <span className="inline-flex items-center gap-1">
       <span
-        className="rounded px-1.5 py-0.5 text-[10px] font-bold leading-none text-white"
+        className="rounded px-1.5 py-0.5 text-xs font-bold leading-none text-white"
         style={{
           backgroundColor: color,
           textShadow: "0 1px 1px rgba(0,0,0,.3)",
@@ -257,7 +257,7 @@ function InfoNote({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-neu text-[10px] font-bold text-slate-500 shadow-neu-sm neu-tactile"
+        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-neu text-xs font-bold text-slate-500 shadow-neu-sm neu-tactile"
         title={label}
       >
         ?
@@ -343,7 +343,7 @@ function Stat({
 }) {
   return (
     <div className="rounded-xl bg-neu p-3 shadow-neu-inset">
-      <div className="text-[11px] font-bold text-slate-500">
+      <div className="text-xs font-bold text-slate-500">
         {label}
         {delta !== undefined && <Delta value={delta} format={formatDelta} />}
       </div>
@@ -358,7 +358,7 @@ function Stat({
       {sub && (
         <div
           className={cn(
-            "text-[11px]",
+            "text-xs",
             tone === "warn" ? "text-amber-700" : "text-slate-400",
           )}
         >
@@ -975,7 +975,7 @@ export default function EfficiencyRanking() {
                           const w = isWindow ? windowInfo(r) : null;
                           if (!w) return null;
                           return (
-                            <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-slate-500">
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-slate-500">
                               <span className="tabular-nums">{w.plays} 回</span>
                               <span className="rounded bg-neu px-1 py-0.5 shadow-neu-inset">
                                 {LIMIT_LABEL[w.limitedBy]}

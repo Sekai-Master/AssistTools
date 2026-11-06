@@ -254,7 +254,7 @@ export function ComparePanel({
                             バッジ付きの行だけ崩れて、列として比べられなくなる。
                           ★ 形はこのリポジトリの既定のピル（β バッジと同じ）に揃える。 */}
                       {r.powerCapped && (
-                        <span className="mr-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-normal text-amber-700">
+                        <span className="mr-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-normal text-amber-700">
                           上限
                         </span>
                       )}

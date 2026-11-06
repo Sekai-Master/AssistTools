@@ -149,13 +149,13 @@ export function FixtureModal({
               <CharaChip key={id} c={charById(id)} dim={dimOthers && highlight != null && highlight !== id} />
             ))}
           </span>
-          <span className={cn("ml-auto shrink-0 text-[11px]", done ? "text-white/80" : "text-slate-400")}>
+          <span className={cn("ml-auto shrink-0 text-xs", done ? "text-white/80" : "text-slate-400")}>
             {done ? "見た" : "未"}
           </span>
         </button>
         {/* ★ 連動することを押す前に見せる。黙って別の家具の印が変わるのが一番怖い。 */}
         {linked.length > 0 && (
-          <p className="mt-0.5 pl-3 text-[10px] leading-snug text-slate-400">
+          <p className="mt-0.5 pl-3 text-xs leading-snug text-slate-400">
             同じ会話が {linked.join("・")} でも起きます（印は一緒に付きます）
           </p>
         )}
@@ -337,7 +337,7 @@ export function FixtureModal({
                 <span className="text-xs font-bold text-slate-600">
                   ほかの人だけで起きる会話 {others.length} 通り
                 </span>
-                <span className="ml-auto shrink-0 text-[11px] text-slate-400">
+                <span className="ml-auto shrink-0 text-xs text-slate-400">
                   {othersSeen > 0 ? `見た ${othersSeen}` : "未"}
                 </span>
               </button>
@@ -345,7 +345,7 @@ export function FixtureModal({
               {showOthers && (
                 <div className="mt-2">
                   <div className="mb-2 flex items-center gap-2">
-                    <p className="text-[11px] leading-relaxed text-slate-500">
+                    <p className="text-xs leading-relaxed text-slate-500">
                       {highlightName}は出ません。見たものがあれば印を付けられます。
                     </p>
                     {others.length > 1 && (
@@ -371,7 +371,7 @@ export function FixtureModal({
           {fixture.actionChars.length > 0 && (
             <>
               <h3 className="mt-4 mb-1 text-xs font-bold text-slate-500">この家具を使う人</h3>
-              <p className="mb-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-slate-500">
+              <p className="mb-2 flex items-start gap-1.5 text-xs leading-relaxed text-slate-500">
                 <span aria-hidden className="material-icons mt-px text-[14px] leading-none">
                   info
                 </span>
@@ -390,7 +390,7 @@ export function FixtureModal({
           {fixture.likeChars.length > 0 && (
             <>
               <h3 className="mt-4 mb-1 text-xs font-bold text-slate-500">この家具を気に入っている人</h3>
-              <p className="mb-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-slate-500">
+              <p className="mb-2 flex items-start gap-1.5 text-xs leading-relaxed text-slate-500">
                 <span aria-hidden className="material-icons mt-px text-[14px] leading-none">
                   info
                 </span>
@@ -408,7 +408,7 @@ export function FixtureModal({
           )}
         </div>
 
-        <p className="mt-3 shrink-0 text-[11px] leading-relaxed text-slate-400">
+        <p className="mt-3 shrink-0 text-xs leading-relaxed text-slate-400">
           会話の本文は載せていません。チェックはこの端末にだけ保存されます。
         </p>
       </div>

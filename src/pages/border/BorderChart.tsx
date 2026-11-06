@@ -14,8 +14,8 @@ import { formatAxisMan, isShown, shownRuns, timeTicks, visibleEnd, yTicks, yTop,
  */
 
 const PLOT_H = 140;
-const PAD = { l: 44, r: 10, t: 8, b: 22 };
-const TICK_LABEL_W = 48;
+const PAD = { l: 52, r: 10, t: 8, b: 22 };
+const TICK_LABEL_W = 58;
 
 const VARS = {
   "--bp-actual": "light-dark(#475569, #cbd5e1)",
@@ -66,7 +66,7 @@ function Legend() {
 function Tooltip({ p, left, width }: { p: HistoryPoint; left: number; width: number }) {
   const side: CSSProperties = left > width / 2 ? { right: width - left + 10 } : { left: left + 10 };
   return (
-    <div className="pointer-events-none absolute top-0 z-10 rounded-lg bg-[color:var(--color-neu)] px-2.5 py-1.5 text-[11px] leading-5 shadow-neu-sm" style={side}>
+    <div className="pointer-events-none absolute top-0 z-10 rounded-lg bg-[color:var(--color-neu)] px-2.5 py-1.5 text-xs leading-5 shadow-neu-sm" style={side}>
       <p className="text-slate-500">{formatJst(p.t)}</p>
       <p className="flex items-center gap-1.5 whitespace-nowrap">
         <LineKey />
@@ -164,13 +164,13 @@ function RankChart({ rank, points, startAt, endAt }: { rank: number; points: His
             {yTicks(top).map((v) => (
               <g key={v}>
                 <line x1={PAD.l} x2={PAD.l + plotW} y1={y(v)} y2={y(v)} style={{ stroke: GRID }} strokeWidth={1} />
-                <text x={PAD.l - 6} y={y(v)} dy="0.32em" textAnchor="end" className="fill-slate-500 text-[10px] tabular-nums">
+                <text x={PAD.l - 6} y={y(v)} dy="0.32em" textAnchor="end" className="fill-slate-500 text-xs tabular-nums">
                   {formatAxisMan(v)}
                 </text>
               </g>
             ))}
             {timeTicks(startAt, endAt, Math.max(2, Math.floor(plotW / TICK_LABEL_W))).map((tk) => (
-              <text key={tk.t} x={x(tk.t)} y={height - 6} textAnchor="middle" className="fill-slate-500 text-[10px] tabular-nums">
+              <text key={tk.t} x={x(tk.t)} y={height - 6} textAnchor="middle" className="fill-slate-500 text-xs tabular-nums">
                 {tk.label}
               </text>
             ))}
@@ -274,7 +274,7 @@ export function BorderCharts({
     <div style={VARS}>
       <Legend />
       {xEnd < endAt && (
-        <p className="mt-1 text-[11px] text-slate-500">横軸は開始から最新の少し先まで（時間が経つと終了の {formatJst(endAt)} まで広がります）</p>
+        <p className="mt-1 text-xs text-slate-500">横軸は開始から最新の少し先まで（時間が経つと終了の {formatJst(endAt)} まで広がります）</p>
       )}
       {/* PC でも2列まで（ページの幅は 768px。3列だと1枚 215px で横軸の日付が間引かれる。2026-10-26 Nori） */}
       <div className="mt-3 grid gap-x-6 gap-y-5 sm:grid-cols-2">

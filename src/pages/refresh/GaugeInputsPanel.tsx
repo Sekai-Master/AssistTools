@@ -79,13 +79,13 @@ export function GaugeInputsPanel({
                     定数 {rc}
                     {isMeasured(selectedSong.id) ? (
                       <span
-                        className="ml-1.5 rounded px-1 py-0.5 text-[10px] font-bold text-white"
+                        className="ml-1.5 rounded px-1 py-0.5 text-xs font-bold text-white"
                         style={{ backgroundColor: "var(--unit-color)" }}
                       >
                         実測
                       </span>
                     ) : (
-                      <span className="ml-1.5 text-[10px] text-slate-400">
+                      <span className="ml-1.5 text-xs text-slate-400">
                         基礎点{selectedSong.basePoint}推定
                       </span>
                     )}

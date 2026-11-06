@@ -227,7 +227,7 @@ export function PlanExportPanel({
           <span className="ml-0.5 text-xs font-normal text-slate-500">個</span>
         </span>
       </div>
-      <p className="mb-4 text-[11px] leading-relaxed text-slate-400">{BADGE_NOTE}</p>
+      <p className="mb-4 text-xs leading-relaxed text-slate-400">{BADGE_NOTE}</p>
       <div className="flex flex-wrap items-center gap-2">
         <NeuButton className="!py-2 !text-sm" onClick={() => void copyImage()}>
           画像をコピー

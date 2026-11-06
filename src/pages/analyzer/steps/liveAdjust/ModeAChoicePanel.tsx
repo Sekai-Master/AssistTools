@@ -177,7 +177,7 @@ function BulkFractionCandidateCard({ choice, onAdopt }: { choice: ModeAChoice; o
       <div className="mt-1 font-mono text-xs tabular-nums text-slate-600">
         {fraction.liveBonus}炊き ・ {fraction.minScore.toLocaleString()}〜{fraction.maxScore.toLocaleString()}
       </div>
-      <div className="mt-1 text-[11px] tabular-nums text-slate-500">
+      <div className="mt-1 text-xs tabular-nums text-slate-500">
         合計{choice.liveCount}回 ・ LB合計{choice.lbCost}
       </div>
     </div>
@@ -193,7 +193,7 @@ function CompactMultiCard({ plan, onAdopt }: { plan: MultiLivePlan; onAdopt: () 
           全{plan.liveCount}回 ・ LB合計{plan.lbCost}
           <LbCostNote lbCost={plan.lbCost} />
         </span>
-        <NeuButton className="!px-2.5 !py-1 !text-[11px]" onClick={onAdopt}>
+        <NeuButton className="!px-2.5 !py-1 !text-xs" onClick={onAdopt}>
           この案にする
         </NeuButton>
       </div>
