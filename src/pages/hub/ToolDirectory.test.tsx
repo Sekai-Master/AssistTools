@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { TOOLS } from "../../tools";
+import { TOOL_CATEGORIES, TOOLS } from "../../tools";
 import { MORPH_ATTR } from "../../motion/morph";
 import { ToolDirectory } from "./ToolDirectory";
 import { LatestChanges } from "./LatestChanges";
@@ -28,6 +28,11 @@ describe("ツールの一覧", () => {
   });
 
   // ★ 説明文は一覧に出さない（文字を減らす）。説明は検索のときだけ
+  it("分類ごとに枠に入れる", () => {
+    const { container } = show(<ToolDirectory />);
+    expect(container.querySelectorAll(".neu-panel")).toHaveLength(TOOL_CATEGORIES.length);
+  });
+
   it("ふだんは説明文を出さない", () => {
     const { container } = show(<ToolDirectory />);
     for (const t of ready) expect(container.textContent).not.toContain(t.description);
@@ -55,11 +60,12 @@ describe("ツールの一覧", () => {
     expect(within(link).getByText(/家具/)).toBeTruthy();
   });
 
-  it("当たらなければそう書く", () => {
-    show(<ToolDirectory />);
+  it("当たらなければそう書き、空の枠は出さない", () => {
+    const { container } = show(<ToolDirectory />);
     fireEvent.change(screen.getByRole("searchbox", { name: "ツールを探す" }), { target: { value: "存在しない語XYZ" } });
     expect(screen.getByRole("status").textContent).toBe("見つかりませんでした");
     expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(container.querySelector(".neu-panel")).toBeNull();
   });
 
   it("検索を消すと分類ごとの一覧に戻る", () => {

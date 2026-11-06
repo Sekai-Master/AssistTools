@@ -123,8 +123,8 @@ export function rankBar(r: { current: number; predicted: number | null; low: num
   };
 }
 
-/** この語尾の前でだけ折る（ツールの名前）。 */
-const NAME_SUFFIXES = ["ジェネレーター", "アナライザー", "ランキング", "計算機"];
+/** この語の前でだけ折る（ツールの名前）。 */
+const NAME_BREAKS = /(?=ジェネレーター|アナライザー|ランキング|ゲージ|計算|計測|比較|図鑑)/;
 
 /**
  * ツールの名前を、折ってよい所で区切る。表示は区切りの間に <wbr> を入れ、ほかでは折らない。
@@ -132,11 +132,7 @@ const NAME_SUFFIXES = ["ジェネレーター", "アナライザー", "ランキ
  *   （2026-11-05 の撮影。文節で折る auto-phrase もカタカナの続きを1つの文節と見て効かなかった）。
  */
 export function nameParts(name: string): string[] {
-  for (const s of NAME_SUFFIXES) {
-    const i = name.lastIndexOf(s);
-    if (i > 0 && i + s.length === name.length) return [name.slice(0, i), s];
-  }
-  return [name];
+  return name.split(NAME_BREAKS);
 }
 
 /** 全角・半角と大文字・小文字の違いを無くす。 */

@@ -5,13 +5,15 @@ import { TOOL_CATEGORIES, toolsByCategory, type ToolDef } from "../../tools";
 import { nameParts, searchTools } from "./hubView";
 
 /**
- * トップのツールの一覧。分類ごとの列に、アイコンと名前だけを並べる。
+ * トップのツールの一覧。分類ごとの枠に、アイコンと名前だけを並べる。
  *
  * ★ 説明文は一覧に出さない（2026-11-05、Nori「画面に文字が多すぎると『うっ』ってなる」）。
  *   以前のカードは14枚ぶんの説明（約900字）と分類の説明（約140字）を常に出していた。
  *   説明は検索の照合に使い、検索しているあいだだけ1行添える（名前に無い語「ライボ」「家具」でも辿り着ける）。
  * ★ 色は分類の印（見出しの下線）だけ。アイコンは文字と同じ灰色。
  * ★ スマホは分類を全幅にして、中を2列にする（分類ごとの縦積みで長くならないように）。
+ * ★ 枠に入れるのは分類まで（2026-11-06、Nori が4通りの撮影から選んだ）。行は平らにして、触ったときだけ浮き、押すと沈む。
+ *   行ごとに影を付けると14個並んで騒がしい。
  *
  * data-morph は以前のカードと同じキーを行に付ける。押した行がツールの見出しへ飛ぶ（motion/morph.ts）。
  */
@@ -49,19 +51,19 @@ export function ToolDirectory() {
         {hits ? (hits.length > 0 ? `${hits.length}件` : "見つかりませんでした") : ""}
       </p>
       {hits ? (
-        <div>
-          <ul className="mt-1 grid gap-x-4 sm:grid-cols-2">
+        hits.length > 0 && (
+          <ul className="neu-panel mt-2 grid gap-x-4 p-2.5 sm:grid-cols-2">
             {hits.map((t) => (
               <li key={t.id}>
                 <ToolRow tool={t} detail />
               </li>
             ))}
           </ul>
-        </div>
+        )
       ) : (
-        <div className="mt-4 grid gap-y-5 lg:grid-cols-5 lg:gap-x-4">
+        <div className="mt-4 grid gap-4 lg:grid-cols-5">
           {toolsByCategory().map(({ category, tools }) => (
-            <section key={category.id} aria-labelledby={`${inputId}-${category.id}`}>
+            <section key={category.id} aria-labelledby={`${inputId}-${category.id}`} className="neu-panel p-2.5">
               <h2
                 id={`${inputId}-${category.id}`}
                 className="border-b-[3px] pb-1.5 text-sm font-bold text-slate-700"
@@ -88,10 +90,10 @@ function ToolRow({ tool, detail = false }: { tool: ToolDef; detail?: boolean }) 
   const ready = tool.status === "ready";
   const color = UNIT_COLOR_VAR[categoryUnit(tool)];
   const body = (
-    <span data-morph={ready ? `tool:${tool.id}` : undefined} className="flex min-h-11 items-center gap-2 rounded-lg px-1 py-1 sm:gap-2.5 sm:px-1.5">
+    <span data-morph={ready ? `tool:${tool.id}` : undefined} className={`flex h-full min-h-11 items-center gap-2 rounded-lg px-1 py-1 ${ready ? ROW_TOUCH : ""}`}>
       <span className="material-icons shrink-0 text-xl text-slate-500" aria-hidden data-icon={tool.icon} />
       <span className="min-w-0">
-        <span className="flex items-center gap-1.5 text-[0.8125rem] leading-snug text-slate-700 sm:text-sm">
+        <span className="flex items-center gap-1.5 text-[0.8125rem] leading-snug text-slate-700 max-[340px]:text-xs sm:text-sm">
           {detail && (
             <span aria-hidden className="inline-block size-2 shrink-0 rounded-full" style={{ background: color } as CSSProperties} />
           )}
@@ -113,13 +115,15 @@ function ToolRow({ tool, detail = false }: { tool: ToolDef; detail?: boolean }) 
     </span>
   );
   return ready ? (
-    <Link to={tool.path} className="block rounded-lg hover:bg-slate-200/50 focus-visible:bg-slate-200/50">
+    <Link to={tool.path} className="block h-full rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500">
       {body}
     </Link>
   ) : (
     <div className="opacity-60">{body}</div>
   );
 }
+
+const ROW_TOUCH = "hover:shadow-neu-sm active:shadow-neu-inset motion-safe:transition-shadow motion-safe:duration-150";
 
 function categoryUnit(tool: ToolDef) {
   return TOOL_CATEGORIES.find((c) => c.id === tool.category)?.unit ?? "vs";
