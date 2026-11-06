@@ -61,7 +61,7 @@ function Hero({ snap }: { snap: Snapshot }) {
               "終了"
             )}
           </p>
-          <div className="mt-2 flex items-center gap-2.5 sm:mt-3">
+          <div className="mt-2 flex items-center gap-3 sm:mt-3">
             <div className="h-1.5 flex-1 rounded-full shadow-neu-inset sm:h-2">
               <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${(ratio * 100).toFixed(2)}%` }} />
             </div>
@@ -74,7 +74,7 @@ function Hero({ snap }: { snap: Snapshot }) {
         </div>
       </div>
 
-      <ul className="mt-4 grid grid-cols-3 gap-1.5 sm:mt-6 sm:gap-2.5 lg:grid-cols-6">
+      <ul className="mt-4 grid grid-cols-3 gap-2 sm:mt-6 sm:gap-3 lg:grid-cols-6">
         {snap.ranks.map((r) => {
           // 終わった回は予測でなく、最後に集めた値（実際の着地に近い）を出す
           const shown = running && r.visible && r.predicted != null;
@@ -88,8 +88,8 @@ function Hero({ snap }: { snap: Snapshot }) {
                 {/* ★ スマホの3列で「1億2,644万」が「万」だけ次の行に落ち、1段目の枠が高くなった（2026-11-05 の撮影）。折り返さない大きさにする */}
                 <span className={VALUE}>{formatMan(shown ? (r.predicted as number) : r.current)}</span>
                 {/* ★ 予測が無い順位も同じ行の数にする。読み込み中の空の欄と高さが変わると、応答の後に下の一覧が動く（#194 のレビュー M2） */}
-                {bar ? <RankBar bar={bar} /> : <span className="mt-2.5 hidden h-1.5 sm:block" />}
-                <span className="mt-1.5 hidden text-xs text-slate-500 sm:block">
+                {bar ? <RankBar bar={bar} /> : <span className="mt-3 hidden h-1.5 sm:block" />}
+                <span className="mt-2 hidden text-xs text-slate-500 sm:block">
                   {bar ? (
                     <>
                       いま <span className="font-num tabular-nums">{formatMan(r.current)}</span>
@@ -103,7 +103,7 @@ function Hero({ snap }: { snap: Snapshot }) {
           );
         })}
       </ul>
-      <div className="mt-2.5 flex flex-wrap items-center justify-end gap-x-4 gap-y-1 text-xs text-slate-500">
+      <div className="mt-2 flex flex-wrap items-center justify-end gap-x-4 gap-y-1 text-xs text-slate-500">
         {kind === "predicted" && (
           <span className="hidden items-center gap-3 sm:flex" aria-hidden>
             <Swatch className="h-1.5 w-3 rounded-full bg-slate-500" label="いま" />
@@ -155,7 +155,7 @@ function Logo({ id, name, asset }: { id: number; name: string; asset: unknown })
  */
 function RankBar({ bar }: { bar: NonNullable<ReturnType<typeof rankBar>> }) {
   return (
-    <span className="relative mt-2.5 hidden h-1.5 rounded-full bg-slate-200 sm:block" aria-hidden>
+    <span className="relative mt-3 hidden h-1.5 rounded-full bg-slate-200 sm:block" aria-hidden>
       <span className="absolute inset-y-0 left-0 rounded-full bg-slate-500" style={{ width: `${bar.current}%` }} />
       <span className="absolute -inset-y-[3px] rounded-sm border-[1.5px] border-slate-700" style={{ left: `${bar.low}%`, width: `${bar.band}%` }} />
       <span className="absolute -inset-y-1 w-0.5 rounded-full bg-slate-800" style={{ left: `${bar.predicted}%` }} />
@@ -182,26 +182,26 @@ function Placeholder() {
           <p className="text-xs text-transparent sm:text-sm">集計まで</p>
           <p className={`${CLOCK} text-slate-300`}>—</p>
           {/* 本物と同じ形の行にする（バーの横の % の字が行の高さを決めている。バーだけだと 8〜10px 低くなった） */}
-          <div className="mt-2 flex items-center gap-2.5 sm:mt-3">
+          <div className="mt-2 flex items-center gap-3 sm:mt-3">
             <div className="h-1.5 flex-1 rounded-full shadow-neu-inset sm:h-2" />
             <span className="font-num text-xs text-transparent">0%</span>
           </div>
           <p className="mt-1 hidden text-xs sm:block">&nbsp;</p>
         </div>
       </div>
-      <ul className="mt-4 grid grid-cols-3 gap-1.5 sm:mt-6 sm:gap-2.5 lg:grid-cols-6">
+      <ul className="mt-4 grid grid-cols-3 gap-2 sm:mt-6 sm:gap-3 lg:grid-cols-6">
         {[50, 100, 200, 500, 1000, 2000].map((rank) => (
           <li key={rank}>
             <span className={CARD}>
               <span className="block text-xs text-slate-500">{rank}位</span>
               <span className={`${VALUE} text-slate-300`}>—</span>
-              <span className="mt-2.5 hidden h-1.5 sm:block" />
-              <span className="mt-1.5 hidden text-xs sm:block">&nbsp;</span>
+              <span className="mt-3 hidden h-1.5 sm:block" />
+              <span className="mt-2 hidden text-xs sm:block">&nbsp;</span>
             </span>
           </li>
         ))}
       </ul>
-      <div className="mt-2.5 text-xs">&nbsp;</div>
+      <div className="mt-2 text-xs">&nbsp;</div>
     </section>
   );
 }

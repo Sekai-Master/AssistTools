@@ -98,7 +98,7 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
         <div className="h-2 overflow-hidden rounded-full bg-slate-200">
           <div className="h-full rounded-full bg-[color:var(--unit-color)]" style={{ width: formatPercent(snap.progress, 1) }} />
         </div>
-        <p className="mt-1.5 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-slate-500">
           経過 {formatPercent(snap.progress)}・実測 {formatJst(snap.sampleAt)} 時点
         </p>
       </div>

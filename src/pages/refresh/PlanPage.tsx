@@ -336,7 +336,7 @@ export default function PlanPage() {
             {saved.map((p) => (
               <li
                 key={p.name}
-                className="neu-raised flex flex-wrap items-center gap-3 p-2.5 text-sm"
+                className="neu-raised flex flex-wrap items-center gap-3 p-3 text-sm"
               >
                 <span className="font-bold text-slate-700">{p.name}</span>
                 <span className="text-xs text-slate-400">

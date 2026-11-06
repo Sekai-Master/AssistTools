@@ -123,7 +123,7 @@ function SketchBadge({ sketch }: { sketch: boolean | null }) {
 /** 相手のリストに入っていて、自分が持っている＝置いてあげられる家具。 */
 function OfferBadge() {
   return (
-    <span className="ml-1.5 inline-flex shrink-0 items-center rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-bold text-emerald-800">
+    <span className="ml-2 inline-flex shrink-0 items-center rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-bold text-emerald-800">
       置いてあげられる
     </span>
   );
@@ -793,7 +793,7 @@ export default function MysekaiReactions() {
       <Panel title="条件">
         <div className="space-y-4">
           <div>
-            <div className="mb-2 flex flex-wrap gap-1.5">
+            <div className="mb-2 flex flex-wrap gap-2">
               {(Object.keys(KIND_LABEL) as ReactionKind[]).map((k) => (
                 <NeuButton
                   key={k}

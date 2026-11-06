@@ -66,12 +66,12 @@ export function ToolDirectory() {
             <section key={category.id} aria-labelledby={`${inputId}-${category.id}`} className="neu-panel p-3">
               <h2
                 id={`${inputId}-${category.id}`}
-                className="border-b-[3px] pb-1.5 text-sm font-bold text-slate-700"
+                className="border-b-[3px] pb-2 text-sm font-bold text-slate-700"
                 style={{ borderColor: UNIT_COLOR_VAR[category.unit] }}
               >
                 {category.label}
               </h2>
-              <ul className="mt-1.5 grid grid-cols-2 gap-x-2 lg:grid-cols-1">
+              <ul className="mt-1 grid grid-cols-2 gap-x-2 lg:grid-cols-1">
                 {tools.map((t) => (
                   <li key={t.id}>
                     <ToolRow tool={t} />
@@ -93,7 +93,7 @@ function ToolRow({ tool, detail = false }: { tool: ToolDef; detail?: boolean }) 
     <span data-morph={ready ? `tool:${tool.id}` : undefined} className={`flex h-full min-h-11 items-center gap-2 rounded-lg px-1 py-1 ${ready ? ROW_TOUCH : ""}`}>
       <span className="material-icons shrink-0 text-xl text-slate-500" aria-hidden data-icon={tool.icon} />
       <span className="min-w-0">
-        <span className="flex items-center gap-1.5 text-[0.8125rem] leading-snug text-slate-700 max-[340px]:text-xs sm:text-sm">
+        <span className="flex items-center gap-2 text-[0.8125rem] leading-snug text-slate-700 max-[340px]:text-xs sm:text-sm">
           {detail && (
             <span aria-hidden className="inline-block size-2 shrink-0 rounded-full" style={{ background: color } as CSSProperties} />
           )}

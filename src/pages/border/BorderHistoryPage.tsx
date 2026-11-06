@@ -366,7 +366,7 @@ function RankingPanel({ pool, target, onSelect }: { pool: HistoryEvent[]; target
                     >
                       {r.event.name}
                     </button>
-                    <span className="mt-0.5 flex items-center gap-1.5 text-xs font-normal tabular-nums text-slate-500 sm:hidden">
+                    <span className="mt-0.5 flex items-center gap-2 text-xs font-normal tabular-nums text-slate-500 sm:hidden">
                       <TypeChip e={r.event} />
                       {r.event.days}日・{r.event.hours}h
                     </span>

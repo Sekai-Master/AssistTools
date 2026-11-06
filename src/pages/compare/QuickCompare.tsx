@@ -164,9 +164,9 @@ export function QuickCompare({ entries, loading, error }: { entries: RankingMusi
                     ))}
                   </div>
                   {c.ok ? (
-                    <p className="mt-1.5 text-xs text-slate-500">実効値（協力） {pct1(c.effective)}%</p>
+                    <p className="mt-2 text-xs text-slate-500">実効値（協力） {pct1(c.effective)}%</p>
                   ) : (
-                    c.reason && <p className="mt-1.5 text-xs text-amber-700">{c.reason}</p>
+                    c.reason && <p className="mt-2 text-xs text-amber-700">{c.reason}</p>
                   )}
                 </fieldset>
               </li>

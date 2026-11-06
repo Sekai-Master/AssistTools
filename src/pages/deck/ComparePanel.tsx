@@ -167,8 +167,8 @@ export function ComparePanel({
 
       {decks.length > 0 && (
         <div className="mt-4">
-          <p className="mb-1.5 text-xs font-bold text-slate-500">比較に混ぜる保存済み編成</p>
-          <div className="flex flex-wrap gap-1.5">
+          <p className="mb-2 text-xs font-bold text-slate-500">比較に混ぜる保存済み編成</p>
+          <div className="flex flex-wrap gap-2">
             {decks.map((d) => (
               <button
                 key={d.name}

@@ -52,7 +52,7 @@ export default function ChangelogPage() {
                 <h3 className={`text-xs font-bold tracking-wide ${GROUP_TONE[group.label] ?? "text-slate-500"}`}>
                   {group.label}
                 </h3>
-                <ul className="mt-1.5 ml-5 list-disc space-y-1.5 text-sm leading-7 text-slate-600 marker:text-slate-400">
+                <ul className="mt-2 ml-5 list-disc space-y-2 text-sm leading-7 text-slate-600 marker:text-slate-400">
                   {group.items.map((item, j) => (
                     <li key={j}>{item}</li>
                   ))}

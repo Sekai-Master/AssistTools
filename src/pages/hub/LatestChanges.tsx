@@ -45,7 +45,7 @@ export function LatestChanges() {
         {releases.map((r, i) => (
           <li key={r.version} className={i > 0 ? "hidden sm:block" : undefined}>
             <Link to="/changelog" className="block h-full rounded-xl px-4 py-3 shadow-neu-sm">
-              <span className="flex items-baseline gap-2.5 font-num text-xs tabular-nums text-slate-500">
+              <span className="flex items-baseline gap-3 font-num text-xs tabular-nums text-slate-500">
                 <span className="text-sm font-medium text-slate-700">v{r.version}</span>
                 <span>{shortDate(r.date)}</span>
               </span>

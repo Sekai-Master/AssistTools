@@ -136,9 +136,9 @@ export function PlayerSettingsPanel({
           <div className="space-y-3">
             <div>
               <p className="mb-1 text-xs font-bold text-slate-500">ユニット</p>
-              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {AREA_UNIT_ORDER.map((u) => (
-                  <label key={u} className="flex items-center gap-1.5 text-xs text-slate-600">
+                  <label key={u} className="flex items-center gap-2 text-xs text-slate-600">
                     <NumCell
                       label={`${UNIT_NAME[u]} のエリア効果`}
                       value={area.units?.[u] ?? 0}
@@ -153,9 +153,9 @@ export function PlayerSettingsPanel({
 
             <div>
               <p className="mb-1 text-xs font-bold text-slate-500">属性</p>
-              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {ATTR_ORDER.map((a) => (
-                  <label key={a} className="flex items-center gap-1.5 text-xs text-slate-600">
+                  <label key={a} className="flex items-center gap-2 text-xs text-slate-600">
                     <NumCell
                       label={`${ATTR_LABEL[a]} のエリア効果`}
                       value={area.attrs?.[a] ?? 0}
@@ -170,9 +170,9 @@ export function PlayerSettingsPanel({
 
             <div>
               <p className="mb-1 text-xs font-bold text-slate-500">キャラクター</p>
-              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                 {CHARACTERS.map((c) => (
-                  <label key={c.ch} className="flex items-center gap-1.5 text-xs text-slate-600">
+                  <label key={c.ch} className="flex items-center gap-2 text-xs text-slate-600">
                     <NumCell
                       label={`${c.name} のエリア効果`}
                       value={area.chars?.[c.ch] ?? 0}
@@ -199,7 +199,7 @@ export function PlayerSettingsPanel({
                   <p className="mb-1 text-xs font-bold text-slate-400">{UNIT_NAME[unit]}</p>
                   <div
                     className={cn(
-                      "grid gap-1.5",
+                      "grid gap-2",
                       members.length === 6
                         ? "grid-cols-3 sm:grid-cols-6"
                         : "grid-cols-2 sm:grid-cols-4"
@@ -233,9 +233,9 @@ export function PlayerSettingsPanel({
           title="マイセカイのゲート"
           hint="ゲーム内のレベルをそのまま。入れるのはユニットの5つだけです（VS のゲートは無く、6周年で増えた「交わるセカイのゲート」は総合力に効きません）"
         >
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {AREA_UNIT_ORDER.filter((u) => u !== "piapro").map((u) => (
-              <label key={u} className="flex items-center gap-1.5 text-xs text-slate-600">
+              <label key={u} className="flex items-center gap-2 text-xs text-slate-600">
                 <NumCell
                   label={`${UNIT_NAME[u]} のゲートのレベル`}
                   value={settings.gateLevels[u] ?? 0}
@@ -254,11 +254,11 @@ export function PlayerSettingsPanel({
           title="マイセカイの家具"
           hint="ボーナスが付くのは「◯◯のぬいぐるみ」と「◯◯のダイヤモンドオブジェ」だけです。置いたキャラのカードにだけ乗ります（S=0.1% / M=0.3% / L=0.6%）"
         >
-          <div className="grid gap-1.5 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             {CHARACTERS.map((c) => {
               const f = settings.fixtures[c.ch] ?? { S: 0, M: 0, L: 0 };
               return (
-                <div key={c.ch} className="flex items-center gap-1.5 text-xs text-slate-600">
+                <div key={c.ch} className="flex items-center gap-2 text-xs text-slate-600">
                   <span className="w-24 shrink-0 truncate">{c.name}</span>
                   {(["S", "M", "L"] as const).map((size) => (
                     <label key={size} className="flex items-center gap-1">
