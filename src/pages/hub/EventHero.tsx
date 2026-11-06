@@ -24,6 +24,10 @@ export function EventHero() {
   return loading ? <Placeholder /> : null;
 }
 
+// ★ 残り時間の大きさは画面でなく枠の幅に合わせる（@container の中で cqw）。いちばん長い「12日 05:59:58」が
+//   秒を小さくして 6.88em なので、14.4cqw で収まる。vw で決めていたら 360px 以下で枠からはみ出した（2026-11-06 の実測）
+const CLOCK = "whitespace-nowrap font-num text-[clamp(1rem,14.4cqw,4.5rem)] font-medium leading-tight";
+const LOGO_W = "w-[clamp(7.5rem,30vw,17.5rem)] max-[360px]:w-24";
 const CARD = "block h-full rounded-xl px-2 py-1.5 shadow-neu-inset sm:px-3 sm:py-2.5";
 const VALUE = "block whitespace-nowrap font-num text-[0.9375rem] font-medium tabular-nums text-slate-800 max-[360px]:text-sm sm:text-xl";
 
@@ -34,15 +38,26 @@ function Hero({ snap }: { snap: Snapshot }) {
   const kind = captionKind(snap, running);
   const accent = eventUnitColor(ev.unit);
   const ratio = elapsedRatio(ev, now);
+  const left = running ? formatCountdown(ev.aggregateAt - now) : "";
 
   return (
     <section aria-label={running ? "開催中のイベント" : "直近のイベント"} className="neu-panel p-4 sm:p-8" style={{ "--accent": accent } as CSSProperties}>
       <div className="flex items-center gap-4 sm:gap-x-12">
         <Logo id={ev.id} name={ev.name} asset={ev.asset} />
-        <div className="min-w-0 flex-1">
+        <div className="@container min-w-0 flex-1">
           <p className="text-xs text-slate-500 sm:text-sm">{running ? "集計まで" : "このイベントは終わりました"}</p>
-          <p className="font-num text-[clamp(1.75rem,6.4vw,4.5rem)] font-medium leading-tight tabular-nums text-slate-800">
-            {running ? formatCountdown(ev.aggregateAt - now) || "集計中" : "終了"}
+          <p className={`${CLOCK} tabular-nums text-slate-800`}>
+            {left ? (
+              <>
+                {left.slice(0, -3)}
+                {/* ★ 秒だけ小さくする: 目に入るのは日と時:分のまま、毎秒動く所を控えめに。スマホの枠にも収まる */}
+                <span className="text-[0.6em] text-slate-500">{left.slice(-3)}</span>
+              </>
+            ) : running ? (
+              "集計中"
+            ) : (
+              "終了"
+            )}
           </p>
           <div className="mt-2 flex items-center gap-2.5 sm:mt-3">
             <div className="h-1.5 flex-1 rounded-full shadow-neu-inset sm:h-2">
@@ -119,7 +134,7 @@ function Logo({ id, name, asset }: { id: number; name: string; asset: unknown })
           width={280}
           height={140}
           onError={() => setFailed(true)}
-          className="block aspect-[2/1] h-auto w-[clamp(7.5rem,30vw,17.5rem)] object-contain"
+          className={`block aspect-[2/1] h-auto ${LOGO_W} object-contain`}
         />
       ) : (
         <span className="block max-w-[10rem] text-base font-bold text-slate-700 sm:max-w-none sm:text-xl">{label}</span>
@@ -157,10 +172,10 @@ function Placeholder() {
   return (
     <section aria-label="開催中のイベント（読み込み中）" aria-busy className="neu-panel p-4 sm:p-8">
       <div className="flex items-center gap-4 sm:gap-x-12">
-        <span className="block aspect-[2/1] w-[clamp(7.5rem,30vw,17.5rem)] shrink-0 rounded-lg bg-slate-200/60" />
-        <div className="min-w-0 flex-1">
+        <span className={`block aspect-[2/1] ${LOGO_W} shrink-0 rounded-lg bg-slate-200/60`} />
+        <div className="@container min-w-0 flex-1">
           <p className="text-xs text-transparent sm:text-sm">集計まで</p>
-          <p className="font-num text-[clamp(1.75rem,6.4vw,4.5rem)] font-medium leading-tight text-slate-300">—</p>
+          <p className={`${CLOCK} text-slate-300`}>—</p>
           {/* 本物と同じ形の行にする（バーの横の % の字が行の高さを決めている。バーだけだと 8〜10px 低くなった） */}
           <div className="mt-2 flex items-center gap-2.5 sm:mt-3">
             <div className="h-1.5 flex-1 rounded-full shadow-neu-inset sm:h-2" />

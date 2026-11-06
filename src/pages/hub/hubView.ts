@@ -56,25 +56,24 @@ export function captionKind(snap: Snapshot, running: boolean): "predicted" | "cu
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
 /**
- * 集計までの残り時間。1日以上は「3日 04:05」、1日未満は「04:05:06」。
- * ★ 1日以上あるあいだは秒を出さない（大きな数字が毎秒変わると目障り）。最終日は秒が要る
- *   （集計直前の最後の1曲の判断に使う）。秒未満は切り捨てる。終わっていれば空文字。
+ * 集計までの残り時間。1日以上は「3日 04:05:06」、1日未満は「04:05:06」。
+ * ★ 秒は常に出す（以前は1日以上あるあいだ隠していた。Nori「残り時間秒単位で出ないの」2026-11-06）。
+ *   秒未満は切り捨てる。終わっていれば空文字。末尾は必ず「:秒」（EventHero が秒だけ小さく描く）。
  */
 export function formatCountdown(ms: number): string {
   if (!(ms > 0)) return "";
   const s = Math.floor(ms / 1000);
   const d = Math.floor(s / 86_400);
-  const hm = `${pad2(Math.floor(s / 3600) % 24)}:${pad2(Math.floor(s / 60) % 60)}`;
-  return d > 0 ? `${d}日 ${hm}` : `${hm}:${pad2(s % 60)}`;
+  const hms = `${pad2(Math.floor(s / 3600) % 24)}:${pad2(Math.floor(s / 60) % 60)}:${pad2(s % 60)}`;
+  return d > 0 ? `${d}日 ${hms}` : hms;
 }
 
 /**
- * 秒を出すあいだは1秒ごと、出さないあいだは15秒ごとに描き直せば足りる。
+ * 集計までは秒を出すので1秒ごとに描き直す。
  * 終わった後は「終了」のままなので、1分ごとで足りる（次の回まで1秒ごとに描き直さない）。
  */
 export function tickMs(msLeft: number): number {
-  if (msLeft <= -60_000) return 60_000;
-  return msLeft < 86_400_000 ? 1000 : 15_000;
+  return msLeft <= -60_000 ? 60_000 : 1000;
 }
 
 /** 始まりから集計までの、いまの位置（0〜1）。 */

@@ -77,7 +77,8 @@ describe("トップの開催中のイベント", () => {
     expect(logo.getAttribute("src")).toBe("/CardDatas/logo/event_someday_2026.webp");
     expect(screen.getByText("集計まで")).toBeTruthy();
     // 98時間後 → 1日以上なので秒は出さない
-    expect(screen.getByText(/^4日 0[12]:\d\d$/)).toBeTruthy();
+    // 秒だけ小さくするので要素が分かれる。行全体の文字で確かめる
+    expect(screen.getByText(/^4日 0[12]:\d\d$/).textContent).toMatch(/^4日 0[12]:\d\d:\d\d$/);
     expect(screen.getByText("1億2,598万")).toBeTruthy();
     expect(screen.getByText(/^予測・/)).toBeTruthy();
   });
