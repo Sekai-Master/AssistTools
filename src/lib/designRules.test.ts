@@ -25,4 +25,15 @@ describe("デザインの規約", () => {
     );
     expect(small).toEqual([]);
   });
+
+  // ★ 4 節。大きさは 22px（見出しの中）・20px（既定）・16px（札の中）の 3 段。!text-* や別の大きさを足さない
+  it("アイコンの大きさは 3 段だけ", () => {
+    const off = sources(path.join(__dirname, "..")).flatMap((file) =>
+      fs
+        .readFileSync(file, "utf8")
+        .split("\n")
+        .flatMap((line, i) => (/material-icons[^"]*(?:!text-|text-\[(?!22px))/.test(line) ? [`${path.basename(file)}:${i + 1}`] : [])),
+    );
+    expect(off).toEqual([]);
+  });
 });

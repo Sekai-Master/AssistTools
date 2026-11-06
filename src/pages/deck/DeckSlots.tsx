@@ -116,7 +116,7 @@ function CardStateEditor({
               state.artUntrained ? "neu-selected" : "bg-neu text-slate-500 shadow-neu-sm"
             )}
           >
-            <span className="material-icons !text-[16px]" aria-hidden>
+            <span className="material-icons text-base" aria-hidden>
               autorenew
             </span>
           </button>

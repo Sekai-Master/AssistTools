@@ -3,6 +3,17 @@
    CSS 仕様上 @import は他のどの規則よりも前にしか書けないので、ファイル末尾に
    足すとブラウザ/Lightning CSS が黙って落とす。 */
 @import "./motion/motion.css";
+/* filled のみ。material-icons.css は outlined/round/sharp/two-tone まで抱き込む。
+   ★ base のレイヤーに入れる。レイヤーの外で読むと font-size: 24px が Tailwind の text-* に勝ち、
+     text-xl と書いたアイコンも 24px で出ていた（2026-11-06 の計測で判明）。 */
+@import "material-icons/iconfont/filled.css" layer(base);
+
+/* アイコンの大きさは 3 段（docs/design-system.md の 4 節）。既定は 20px。見出しの中は text-[22px]、札の中は text-base。 */
+@layer base {
+  .material-icons {
+    font-size: 1.25rem;
+  }
+}
 
 /*
  * SekaiMaster デザイン言語（legacy/common.css から継承。不可侵ライン）。
