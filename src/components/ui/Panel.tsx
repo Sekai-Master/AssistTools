@@ -15,9 +15,9 @@ export function Panel({
   title?: string;
 }) {
   return (
-    <section className={cn("neu-panel p-5 sm:p-6", className)}>
+    <section className={cn("neu-panel p-4 sm:p-6", className)}>
       {title && (
-        <h2 className="mb-4 text-sm font-bold text-slate-500 tracking-wide">{title}</h2>
+        <h2 className="mb-4 text-base font-bold text-slate-700">{title}</h2>
       )}
       {children}
     </section>
