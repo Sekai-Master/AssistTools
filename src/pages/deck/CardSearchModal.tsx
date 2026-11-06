@@ -16,6 +16,8 @@ import type { CatalogCard } from "./lib/deckInputs";
 import { CardThumb } from "./CardThumb";
 import { RarityBadge } from "./RarityBadge";
 
+const ROW_LABEL = "hidden w-16 shrink-0 whitespace-nowrap text-xs font-bold text-slate-400 sm:block";
+
 /**
  * カード選択モーダル。
  *
@@ -28,8 +30,6 @@ import { RarityBadge } from "./RarityBadge";
  * SongSearchModal を props で共通化しない代わりに、作法（固定高さ・useModalA11y・
  * data-overlay 印・NeuInput）はそのまま踏襲している。
  */
-const ROW_LABEL = "hidden w-16 shrink-0 whitespace-nowrap text-xs font-bold text-slate-400 sm:block";
-
 export function CardSearchModal({
   cards,
   onSelect,
@@ -139,7 +139,7 @@ export function CardSearchModal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="flex h-[80vh] max-h-[680px] w-full max-w-lg flex-col neu-panel p-4 focus:outline-none sm:p-5"
+        className="flex h-[80vh] max-h-[680px] w-full max-w-lg flex-col neu-panel p-4 focus:outline-none max-sm:h-[90dvh] sm:p-5"
       >
         <div className="mb-3 flex shrink-0 items-center justify-between">
           <h2 id={titleId} className="font-bold text-slate-700">
@@ -206,7 +206,7 @@ export function CardSearchModal({
               type="button"
               onClick={() => setAttr(attr === a ? null : a)}
               aria-pressed={attr === a}
-              className={cn(chip(attr === a), "flex-auto whitespace-nowrap !px-1 !text-xs")}
+              className={cn(chip(attr === a), "flex-auto whitespace-nowrap !px-1 !text-xs max-[340px]:flex-none max-[340px]:!px-2")}
               style={attr === a ? undefined : { color: ATTR_COLOR[a] }}
             >
               {ATTR_LABEL[a]}

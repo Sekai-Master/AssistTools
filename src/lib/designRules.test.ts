@@ -33,7 +33,7 @@ describe("デザインの規約", () => {
         .readFileSync(file, "utf8")
         .split("\n")
         .flatMap((line, i) =>
-          /(?<![\w.-])(?:gap(?:-[xy])?-(?:1|2)\.5|space-y-(?:1|2)\.5|m[tblr]-(?:1|2)\.5|p-2\.5)(?![\w.-])/.test(line) ? [`${path.basename(file)}:${i + 1}`] : [],
+          /(?<![\w.-])(?:gap(?:-[xy])?|space-[xy]|m[xytblrse]?|p)-[123]\.5(?![\w.-])/.test(line) ? [`${path.basename(file)}:${i + 1}`] : [],
         ),
     );
     expect(off).toEqual([]);
@@ -45,7 +45,7 @@ describe("デザインの規約", () => {
       fs
         .readFileSync(file, "utf8")
         .split("\n")
-        .flatMap((line, i) => (/material-icons[^"]*(?:!text-|text-\[(?!22px))/.test(line) ? [`${path.basename(file)}:${i + 1}`] : [])),
+        .flatMap((line, i) => (/material-icons[^"]*(?:!text-|text-\[(?!22px)|text-(?:xs|sm|lg|[2-9]xl)\b)/.test(line) ? [`${path.basename(file)}:${i + 1}`] : [])),
     );
     expect(off).toEqual([]);
   });

@@ -186,7 +186,7 @@ export function DeckSlots({
       {slots.map((card, i) => {
         const state = card ? states[card.id] : undefined;
         return (
-          <li key={i} className={card ? "rounded-lg border border-slate-200 p-3" : "neu-inset"}>
+          <li key={i} className={card ? "rounded-lg border border-slate-300 p-3" : "neu-inset"}>
             {!card ? (
               <button
                 type="button"

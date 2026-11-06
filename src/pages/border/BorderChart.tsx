@@ -15,7 +15,7 @@ import { formatAxisMan, isShown, shownRuns, timeTicks, visibleEnd, yTicks, yTop,
 
 const PLOT_H = 140;
 const PAD = { l: 52, r: 10, t: 8, b: 22 };
-const TICK_LABEL_W = 58;
+const TICK_LABEL_W = 50;
 
 const VARS = {
   "--bp-actual": "light-dark(#475569, #cbd5e1)",
@@ -64,7 +64,9 @@ function Legend() {
 
 /** 値が先、名前が後（読む人は系列を知っていて数字が欲しい） */
 function Tooltip({ p, left, width }: { p: HistoryPoint; left: number; width: number }) {
-  const side: CSSProperties = left > width / 2 ? { right: width - left + 10 } : { left: left + 10 };
+  // ★ 触った位置の割合だけ自分の幅をずらす。左右に振る形は、狭いグラフで画面の外へ出た（スマホ 390px で 7px、320px で 43px）
+  const ratio = width > 0 ? Math.min(1, Math.max(0, left / width)) : 0;
+  const side: CSSProperties = { left, transform: `translateX(${-ratio * 100}%)` };
   return (
     <div className="pointer-events-none absolute top-0 z-10 rounded-lg bg-[color:var(--color-neu)] px-2.5 py-1.5 text-xs leading-5 shadow-neu-sm" style={side}>
       <p className="text-slate-500">{formatJst(p.t)}</p>
@@ -276,7 +278,7 @@ export function BorderCharts({
       {xEnd < endAt && (
         <p className="mt-1 text-xs text-slate-500">横軸は開始から最新の少し先まで（時間が経つと終了の {formatJst(endAt)} まで広がります）</p>
       )}
-      {/* PC でも2列まで（ページの幅は 768px。3列だと1枚 215px で横軸の日付が間引かれる。2026-10-26 Nori） */}
+      {/* PC は 3 列（ページの幅が 1152px なので 1 枚 340px 前後）。768px の幅で 3 列にすると 1 枚 215px で横軸の日付が間引かれたので、当時は 2 列だった（2026-10-26 Nori） */}
       <div className="mt-3 grid gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
         {series.map(([rank, pts]) => (
           <RankChart key={rank} rank={rank} points={pts} startAt={startAt} endAt={xEnd} />

@@ -73,7 +73,7 @@ export function PowerPanel({
         </div>
       </div>
 
-      <details className="mt-4 border-t border-slate-200">
+      <details className="mt-4 border-t border-slate-300">
         <summary className="cursor-pointer py-3 text-sm font-bold text-slate-600">内訳</summary>
 
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">

@@ -493,7 +493,7 @@ function MobileActionBar({
             aria-label="プレビューを表示"
             aria-expanded={previewOpen}
             onClick={() => setPreviewOpen((v) => !v)}
-            className="material-icons shrink-0 rounded-lg px-2 py-2 text-xl text-slate-500 shadow-neu active:shadow-neu-inset"
+            className="material-icons shrink-0 rounded-lg px-3 py-3 text-xl text-slate-500 shadow-neu active:shadow-neu-inset"
           >
             {previewOpen ? "expand_more" : "expand_less"}
           </button>
