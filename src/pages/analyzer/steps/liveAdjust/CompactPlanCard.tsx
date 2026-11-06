@@ -28,8 +28,8 @@ export function CompactPlanCard({
     <div
       className={
         adopted
-          ? "rounded-xl bg-neu p-3 shadow-neu-inset ring-1 [--tw-ring-color:var(--unit-color)]"
-          : "rounded-xl bg-neu p-3 shadow-neu-sm"
+          ? "rounded-lg p-3 ring-2 [--tw-ring-color:var(--unit-color)]"
+          : "rounded-lg border border-slate-300 p-3"
       }
     >
       <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">

@@ -228,7 +228,7 @@ function Index() {
       <div className="space-y-4">
         {ENTRIES.map((e) => (
           <Link key={e.slug} to={`/knowledge/${e.slug}`} className="block">
-            <article className="neu-panel neu-tactile p-5">
+            <article className="neu-panel neu-tactile p-4 sm:p-6">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="min-w-0 flex-1 font-bold text-slate-700">
                   {e.title}
@@ -248,7 +248,7 @@ function Index() {
         ))}
       </div>
 
-      <div className="neu-panel p-5 text-sm leading-relaxed text-slate-600">
+      <div className="neu-panel p-4 sm:p-6 text-sm leading-relaxed text-slate-600">
         <h2 className="mb-2 font-bold text-slate-700">「状態」の見方</h2>
         <ul className="ml-5 list-disc space-y-2">
           <li>
@@ -285,7 +285,7 @@ function Article({ entry }: { entry: Entry }) {
         </Link>
       </p>
 
-      <div className="neu-panel p-5">
+      <div className="neu-panel p-4 sm:p-6">
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={entry.status} />
           <span className="text-xs text-slate-500">
@@ -304,7 +304,7 @@ function Article({ entry }: { entry: Entry }) {
         </dl>
       </div>
 
-      <article className="neu-panel p-5 sm:p-6">
+      <article className="neu-panel p-4 sm:p-6">
         <Blocks blocks={entry.body} />
       </article>
 
@@ -312,7 +312,7 @@ function Article({ entry }: { entry: Entry }) {
        * ★ 引用のための情報を最後に置く。**外の人が参照できる文献**として出す以上、
        *   URL と最終更新が同じ場所に無いと引く側が困る。
        */}
-      <div className="neu-panel p-5 text-xs leading-relaxed text-slate-500">
+      <div className="neu-panel p-4 sm:p-6 text-xs leading-relaxed text-slate-500">
         <h2 className="mb-2 text-sm font-bold text-slate-600">
           この記事を引用するとき
         </h2>
@@ -338,7 +338,7 @@ export default function KnowledgePage() {
   if (!entry) {
     return (
       <ToolPage unit="vs" title="知見ノート" icon="menu_book">
-        <div className="neu-panel p-5 text-sm text-slate-600">
+        <div className="neu-panel p-4 sm:p-6 text-sm text-slate-600">
           <p>その記事は見つかりませんでした。</p>
           <p className="mt-3">
             <Link to="/knowledge" className="font-bold underline">

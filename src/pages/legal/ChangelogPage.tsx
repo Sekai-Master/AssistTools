@@ -29,7 +29,7 @@ export default function ChangelogPage() {
 
       <div className="space-y-8">
         {RELEASES.map((release, i) => (
-          <article key={release.version} className="neu-panel p-5 sm:p-6">
+          <article key={release.version} className="neu-panel p-4 sm:p-6">
             <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <h2 className="text-lg font-bold text-slate-700">v{release.version}</h2>
               <time className="text-xs text-slate-500" dateTime={release.date}>

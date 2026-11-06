@@ -187,7 +187,7 @@ function BulkFractionCandidateCard({ choice, onAdopt }: { choice: ModeAChoice; o
 /** 従来の複数回プラン（畳みセクション）のコンパクトカード。旧 CompactChoiceCard の multi 分岐を踏襲。 */
 function CompactMultiCard({ plan, onAdopt }: { plan: MultiLivePlan; onAdopt: () => void }) {
   return (
-    <div className="rounded-xl bg-neu p-3 shadow-neu-sm">
+    <div className="rounded-lg border border-slate-300 p-3">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
         <span className="tabular-nums">
           全{plan.liveCount}回 ・ LB合計{plan.lbCost}
@@ -279,7 +279,7 @@ export function ModeAChoicePanel({
       )}
 
       {legacy.length > 0 && (
-        <details className="rounded-xl bg-neu p-3 shadow-neu-sm">
+        <details className="rounded-lg border border-slate-300 p-3">
           <summary className="cursor-pointer text-xs font-bold text-slate-600">
             その他の複数回プラン（従来形式・{legacy.length}件）
           </summary>

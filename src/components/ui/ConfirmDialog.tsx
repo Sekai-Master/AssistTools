@@ -45,7 +45,7 @@ export function ConfirmDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="neu-panel w-full max-w-md p-5"
+        className="neu-panel w-full max-w-md p-4 sm:p-6"
       >
         <h2 id={titleId} className="text-base font-bold text-slate-700">
           {title}

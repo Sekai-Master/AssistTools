@@ -516,7 +516,7 @@ export function PlanTimeline({
                  */
                 <li
                   key={seg.id}
-                  className="neu-raised flex flex-wrap items-center gap-x-3 gap-y-2 p-3"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-slate-300 p-3"
                 >
                   <div className="order-1 w-24 shrink-0 text-xs leading-tight text-slate-500">
                     {fmtClock(startMOD, pt.startMinute)}
