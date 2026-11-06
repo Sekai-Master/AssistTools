@@ -5,7 +5,7 @@ import { Panel } from "../../components/ui/Panel";
 import { Segmented } from "../../components/ui/Segmented";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { ToolPage } from "../../components/ui/ToolPage";
-import { UNIT_COLOR_VAR, type UnitKey } from "../../lib/units";
+import { eventUnitColor } from "../../lib/units";
 import { formatMan } from "../../../workers/border/src/posts";
 import {
   HISTORY_RANKS,
@@ -32,16 +32,6 @@ import {
  * 200・500・2000位とワールドリンク、種別の出し入れは 2026-10-25 Nori「一部のイベントのデータがないことを明記しつつ参照可能に」
  * 「WLも入れる・チアフルを抜く、みたいな調整」。
  */
-
-/** events の unit → サイトのユニットのキー（混合・バーチャル・シンガーはバーチャル・シンガーの色） */
-const UNIT_KEY: Record<string, UnitKey> = {
-  light_sound: "ln",
-  idol: "mmj",
-  street: "vbs",
-  theme_park: "wxs",
-  school_refusal: "n25",
-  piapro: "vs",
-};
 
 /** 種別の札の色。ダーク表示の値も持たせる（index.css の remap に無い色なので light-dark で書く） */
 const TYPE_CHIP: Record<string, CSSProperties> = {
@@ -357,7 +347,7 @@ function RankingPanel({ pool, target, onSelect }: { pool: HistoryEvent[]; target
           <tbody>
             {rows.map((r) => {
               const me = r.event.id === target.id;
-              const bar = UNIT_COLOR_VAR[own(UNIT_KEY, r.event.unit) ?? "vs"];
+              const bar = eventUnitColor(r.event.unit);
               return (
                 <tr
                   key={r.event.id}

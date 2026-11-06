@@ -23,6 +23,7 @@
     "border:analyze": "node scripts/border/analyze.ts"
   },
   "dependencies": {
+    "@fontsource/geist-mono": "^5.3.0",
     "@fontsource/m-plus-rounded-1c": "^5.3.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.563.0",
