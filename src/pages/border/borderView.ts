@@ -142,6 +142,11 @@ export function recordRows(report: Report): RecordRow[] {
   });
 }
 
+/** 畳んだ回のうち、実測が 8 割の幅から外れた順位の数（答え合わせの見出しに出す）。 */
+export function outOfBandCount(reports: Report[]): number {
+  return reports.flatMap(recordRows).filter((r) => r.inBand === false).length;
+}
+
 export function candidateLabel(id: string): string {
   return (CANDIDATE_LABEL as Record<string, string>)[id] ?? id;
 }
