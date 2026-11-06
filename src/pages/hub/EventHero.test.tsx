@@ -115,12 +115,20 @@ describe("トップの開催中のイベント", () => {
     expect(clock.parentElement?.className).toContain("@container");
   });
 
+  // ★ 数字の枠を押せるとは気づきにくい。文字のリンクも置く（Nori 2026-11-06）
+  it("ボーダー予測のページへの文字のリンクを出す", async () => {
+    serve(snapshot());
+    show();
+    const link = await screen.findByRole("link", { name: /ボーダー予測を見る/ });
+    expect(link.getAttribute("href")).toBe("/border");
+  });
+
   it("各順位はボーダー予測のページへのリンク", async () => {
     serve(snapshot());
     show();
     await screen.findByText("1億2,598万");
     const links = screen.getAllByRole("link");
-    expect(links.length).toBe(2);
+    expect(links.length).toBe(3);
     for (const a of links) expect(a.getAttribute("href")).toBe("/border");
   });
 
@@ -141,12 +149,12 @@ describe("トップの開催中のイベント", () => {
     expect(screen.getByText("第223回 いつかの君へ、旋律を")).toBeTruthy();
   });
 
-  it("集計を過ぎた回は「終了」で、予測でなく最後に集めた値を出す", async () => {
+  it("集計を過ぎた回は「終了」で、予測でなく最後の値を出す", async () => {
     serve(snapshot({ aggregateAt: Date.now() - 2 * H }));
     show();
     expect(await screen.findByText("終了")).toBeTruthy();
     expect(screen.getByText("集計が終わりました")).toBeTruthy();
-    expect(screen.getByText(/^最後に集めた値・/)).toBeTruthy();
+    expect(screen.getByText(/^最後の値・/)).toBeTruthy();
     expect(screen.getByText("6,922万")).toBeTruthy();
     expect(screen.queryByText("1億2,598万")).toBeNull();
     expect(screen.queryByText(/ いま$/)).toBeNull();
@@ -157,7 +165,7 @@ describe("トップの開催中のイベント", () => {
     serve(snapshot({ ranks: [null, { rank: "x" }, PREDICTED] }));
     show();
     expect(await screen.findByText("1億2,598万")).toBeTruthy();
-    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(document.querySelectorAll("li > a")).toHaveLength(1);
   });
 
   it("時刻が無ければ時刻の行を出さない（NaN を見せない）", async () => {

@@ -103,19 +103,29 @@ function Hero({ snap }: { snap: Snapshot }) {
           );
         })}
       </ul>
-      <div className="mt-2 flex flex-wrap items-center justify-end gap-x-4 gap-y-1 text-xs text-slate-500">
-        {kind === "predicted" && (
-          <span className="hidden items-center gap-3 sm:flex" aria-hidden>
-            <Swatch className="h-1.5 w-3 rounded-full bg-slate-500" label="いま" />
-            <Swatch className="h-3 w-0.5 rounded-full bg-slate-800" label="予測" />
-            <Swatch className="h-2.5 w-3 rounded-sm border-[1.5px] border-slate-700" label="8割の幅" />
-          </span>
-        )}
-        {Number.isFinite(snap.sampleAt) && (
-          <span>
-            {kind === "predicted" ? "予測" : kind === "current" ? "いまの値" : "最後に集めた値"}・{formatJst(snap.sampleAt)} 時点
-          </span>
-        )}
+      <div className="mt-2 flex items-center justify-between gap-x-4 text-xs text-slate-500 sm:text-sm">
+        {/* ★ 数字の枠を押せるとは気づきにくいので、文字のリンクも置く（Nori 2026-11-06）。
+              行の高さを変えず、押せる範囲だけ 44px に広げる（スマホの欄の高さを増やさない） */}
+        <Link to="/border" className="-my-3.5 shrink-0 whitespace-nowrap py-3.5 font-bold text-slate-600 underline-offset-2 hover:underline">
+          ボーダー予測を見る <span aria-hidden>→</span>
+        </Link>
+        <div className="flex min-w-0 items-center justify-end gap-x-4 text-xs">
+          {kind === "predicted" && (
+            <span className="hidden items-center gap-3 sm:flex" aria-hidden>
+              <Swatch className="h-1.5 w-3 rounded-full bg-slate-500" label="いま" />
+              <Swatch className="h-3 w-0.5 rounded-full bg-slate-800" label="予測" />
+              <Swatch className="h-2.5 w-3 rounded-sm border-[1.5px] border-slate-700" label="8割の幅" />
+            </span>
+          )}
+          {Number.isFinite(snap.sampleAt) && (
+            <span className="whitespace-nowrap">
+              <span className="max-[360px]:hidden">
+                {kind === "predicted" ? "予測" : kind === "current" ? "いまの値" : "最後の値"}・
+              </span>
+              {formatJst(snap.sampleAt)} 時点
+            </span>
+          )}
+        </div>
       </div>
     </section>
   );
@@ -201,7 +211,7 @@ function Placeholder() {
           </li>
         ))}
       </ul>
-      <div className="mt-2 text-xs">&nbsp;</div>
+      <div className="mt-2 text-xs sm:text-sm">&nbsp;</div>
     </section>
   );
 }
