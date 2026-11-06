@@ -128,7 +128,7 @@ export function QuickCompare({ entries, loading, error }: { entries: RankingMusi
             const c = checks[i];
             return (
               <li key={r.id}>
-                <fieldset aria-label={`編成 ${label}`} className="rounded-lg border border-slate-200 p-3">
+                <fieldset aria-label={`編成 ${label}`} className="rounded-lg border border-slate-300 p-3">
                   <div className="flex items-center gap-2">
                     <NeuInput
                       aria-label="編成の名前"

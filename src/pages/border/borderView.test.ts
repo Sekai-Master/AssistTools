@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatJst, hiddenReason, isStale, outOfBandCount, phaseOf, recordRows, referenceDetail, type Report, type Snapshot } from "./borderView";
+import { formatJst, hiddenReason, bandSummary, isStale, phaseOf, recordRows, referenceDetail, type Report, type Snapshot } from "./borderView";
 
 const H = 3_600_000;
 const START = Date.UTC(2026, 9, 1, 6, 0); // 10/1 15:00 JST
@@ -119,7 +119,7 @@ describe("recordRows", () => {
   });
 });
 
-describe("outOfBandCount", () => {
+describe("bandSummary", () => {
   const report = (bands: (boolean | null)[]) =>
     ({
       ranks: bands.map((inBand, i) => ({
@@ -129,8 +129,13 @@ describe("outOfBandCount", () => {
       })),
     }) as unknown as Report;
 
-  it("幅の外だけを、全部の回で数える。予測の無い順位は数えない", () => {
-    expect(outOfBandCount([report([true, false, null]), report([false, false])])).toBe(3);
-    expect(outOfBandCount([])).toBe(0);
+  // ★ 再現だけの回（予測が無い順位）まで分母に入れると、判定していない順位まで「外れなし」に読める（#200 のレビュー H1）
+  it("幅の外の数と、判定できた順位の数を別に返す", () => {
+    expect(bandSummary([report([true, false, null]), report([false, false])])).toEqual({ out: 3, judged: 4 });
+  });
+
+  it("予測が 1 つも無ければ判定 0", () => {
+    expect(bandSummary([report([null, null])])).toEqual({ out: 0, judged: 0 });
+    expect(bandSummary([])).toEqual({ out: 0, judged: 0 });
   });
 });

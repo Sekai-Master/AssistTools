@@ -93,7 +93,7 @@ function Section({
   where?: string;
 }) {
   return (
-    <details className="border-t border-slate-200 first:border-t-0">
+    <details className="border-t border-slate-300 first:border-t-0">
       {/* ★ 影でなく線で区切る。枠の中で凹ませた行の中に入力欄を置くと、影が三重になる（docs/design-system.md の 6 節） */}
       <summary className="cursor-pointer py-3 text-sm font-bold text-slate-600">
         {title}

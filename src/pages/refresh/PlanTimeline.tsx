@@ -561,7 +561,7 @@ export function PlanTimeline({
                     ) : seg.kind === "mysekai" ? (
                       <div className="flex flex-wrap items-center gap-2 text-sm">
                         <span
-                          className="material-icons text-base text-emerald-500"
+                          className="material-icons text-base text-slate-500"
                           aria-hidden
                         >
                           park
