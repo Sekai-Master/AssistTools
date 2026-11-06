@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatJst, hiddenReason, isStale, phaseOf, recordRows, referenceDetail, type Report, type Snapshot } from "./borderView";
+import { formatJst, hiddenReason, isStale, outOfBandCount, phaseOf, recordRows, referenceDetail, type Report, type Snapshot } from "./borderView";
 
 const H = 3_600_000;
 const START = Date.UTC(2026, 9, 1, 6, 0); // 10/1 15:00 JST
@@ -116,5 +116,21 @@ describe("recordRows", () => {
     const rows = recordRows(report);
     expect(rows[0]).toMatchObject({ rank: 1000, predicted: 98, error: -0.02, inBand: true });
     expect(rows[1]).toMatchObject({ rank: 2000, predicted: null, error: null, replayError: 0.01 });
+  });
+});
+
+describe("outOfBandCount", () => {
+  const report = (bands: (boolean | null)[]) =>
+    ({
+      ranks: bands.map((inBand, i) => ({
+        rank: i + 1,
+        final: 1,
+        prospective: inBand === null ? [] : [{ checkpoint: 0.85, progress: 0.85, modelVersion: "v", predicted: 1, low: 1, high: 1, error: 0, inBand }],
+      })),
+    }) as unknown as Report;
+
+  it("幅の外だけを、全部の回で数える。予測の無い順位は数えない", () => {
+    expect(outOfBandCount([report([true, false, null]), report([false, false])])).toBe(3);
+    expect(outOfBandCount([])).toBe(0);
   });
 });

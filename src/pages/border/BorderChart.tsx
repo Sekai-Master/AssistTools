@@ -223,7 +223,7 @@ function HistoryTable({ series }: { series: readonly (readonly [number, HistoryP
     <details className="mt-4 text-xs" onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary className="cursor-pointer text-slate-500">数字の表で見る（30分ごと・新しい順）</summary>
       {open && (
-        <div className="mt-2 grid gap-4 sm:grid-cols-2">
+        <div className="mt-2 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {series.map(([rank, pts]) => (
             <table key={rank} className="w-full text-left tabular-nums">
               <caption className="py-1 text-left font-bold text-slate-700">{rank}位</caption>
@@ -277,7 +277,7 @@ export function BorderCharts({
         <p className="mt-1 text-xs text-slate-500">横軸は開始から最新の少し先まで（時間が経つと終了の {formatJst(endAt)} まで広がります）</p>
       )}
       {/* PC でも2列まで（ページの幅は 768px。3列だと1枚 215px で横軸の日付が間引かれる。2026-10-26 Nori） */}
-      <div className="mt-3 grid gap-x-6 gap-y-5 sm:grid-cols-2">
+      <div className="mt-3 grid gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
         {series.map(([rank, pts]) => (
           <RankChart key={rank} rank={rank} points={pts} startAt={startAt} endAt={xEnd} />
         ))}
