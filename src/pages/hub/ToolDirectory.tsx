@@ -52,7 +52,7 @@ export function ToolDirectory() {
       </p>
       {hits ? (
         hits.length > 0 && (
-          <ul className="neu-panel mt-2 grid gap-x-4 p-2.5 sm:grid-cols-2">
+          <ul className="neu-panel mt-2 grid gap-x-4 p-3 sm:grid-cols-2">
             {hits.map((t) => (
               <li key={t.id}>
                 <ToolRow tool={t} detail />
@@ -63,7 +63,7 @@ export function ToolDirectory() {
       ) : (
         <div className="mt-4 grid gap-4 lg:grid-cols-5">
           {toolsByCategory().map(({ category, tools }) => (
-            <section key={category.id} aria-labelledby={`${inputId}-${category.id}`} className="neu-panel p-2.5">
+            <section key={category.id} aria-labelledby={`${inputId}-${category.id}`} className="neu-panel p-3">
               <h2
                 id={`${inputId}-${category.id}`}
                 className="border-b-[3px] pb-1.5 text-sm font-bold text-slate-700"
@@ -97,7 +97,7 @@ function ToolRow({ tool, detail = false }: { tool: ToolDef; detail?: boolean }) 
           {detail && (
             <span aria-hidden className="inline-block size-2 shrink-0 rounded-full" style={{ background: color } as CSSProperties} />
           )}
-          {/* ★ 名前は決まった語尾の前（<wbr>）でだけ折る（nameParts）。語の途中で折れていた（2026-11-05 の撮影）。
+          {/* ★ 名前は決まった語の前（<wbr>）でだけ折る（nameParts）。語の途中で折れていた（2026-11-05 の撮影）。
                 それでも入らない幅のときだけ、どこでも折る（隣の列へはみ出さない） */}
           <span className="min-w-0 [overflow-wrap:anywhere] [word-break:keep-all]">
             {nameParts(tool.name).map((part, i) => (

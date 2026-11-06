@@ -28,7 +28,9 @@ export function EventHero() {
 //   秒を小さくして 6.88em なので、14.4cqw で収まる。vw で決めていたら 360px 以下で枠からはみ出した（2026-11-06 の実測）
 const CLOCK = "whitespace-nowrap font-num text-[clamp(1rem,14.4cqw,4.5rem)] font-medium leading-tight";
 const LOGO_W = "w-[clamp(7.5rem,30vw,17.5rem)] max-[360px]:w-24";
-const CARD = "block h-full rounded-xl px-2 py-1.5 shadow-neu-inset sm:px-3 sm:py-2.5";
+// ロゴが読めないときの名前も、ロゴより広く取らない（残り時間の欄が狭くなって枠の外へ出た。#194 のレビュー M1）
+const LOGO_MAX_W = "max-w-[clamp(7.5rem,30vw,17.5rem)] max-[360px]:max-w-24";
+const CARD = "block h-full rounded-xl px-2 py-1.5 shadow-neu-inset max-[360px]:px-1.5 sm:px-3 sm:py-2.5";
 const VALUE = "block whitespace-nowrap font-num text-[0.9375rem] font-medium tabular-nums text-slate-800 max-[360px]:text-sm sm:text-xl";
 
 function Hero({ snap }: { snap: Snapshot }) {
@@ -45,13 +47,13 @@ function Hero({ snap }: { snap: Snapshot }) {
       <div className="flex items-center gap-4 sm:gap-x-12">
         <Logo id={ev.id} name={ev.name} asset={ev.asset} />
         <div className="@container min-w-0 flex-1">
-          <p className="text-xs text-slate-500 sm:text-sm">{running ? "集計まで" : "このイベントは終わりました"}</p>
+          <p className="whitespace-nowrap text-xs text-slate-500 sm:text-sm">{running ? "集計まで" : "集計が終わりました"}</p>
           <p className={`${CLOCK} tabular-nums text-slate-800`}>
             {left ? (
               <>
                 {left.slice(0, -3)}
                 {/* ★ 秒だけ小さくする: 目に入るのは日と時:分のまま、毎秒動く所を控えめに。スマホの枠にも収まる */}
-                <span className="text-[0.6em] text-slate-500">{left.slice(-3)}</span>
+                <span className="text-[0.6em] text-slate-600">{left.slice(-3)}</span>
               </>
             ) : running ? (
               "集計中"
@@ -80,19 +82,22 @@ function Hero({ snap }: { snap: Snapshot }) {
           return (
             <li key={r.rank}>
               <Link to="/border" className={CARD}>
-                <span className="block text-xs text-slate-500">
-                  {r.rank}位{shown || kind === "final" ? "" : "（いま）"}
+                <span className="block whitespace-nowrap text-xs text-slate-500">
+                  {r.rank}位{shown || kind === "final" ? "" : " いま"}
                 </span>
                 {/* ★ スマホの3列で「1億2,644万」が「万」だけ次の行に落ち、1段目の枠が高くなった（2026-11-05 の撮影）。折り返さない大きさにする */}
                 <span className={VALUE}>{formatMan(shown ? (r.predicted as number) : r.current)}</span>
-                {bar && (
-                  <>
-                    <RankBar bar={bar} />
-                    <span className="mt-1.5 hidden text-xs text-slate-500 sm:block">
+                {/* ★ 予測が無い順位も同じ行の数にする。読み込み中の空の欄と高さが変わると、応答の後に下の一覧が動く（#194 のレビュー M2） */}
+                {bar ? <RankBar bar={bar} /> : <span className="mt-2.5 hidden h-1.5 sm:block" />}
+                <span className="mt-1.5 hidden text-xs text-slate-500 sm:block">
+                  {bar ? (
+                    <>
                       いま <span className="font-num tabular-nums">{formatMan(r.current)}</span>
-                    </span>
-                  </>
-                )}
+                    </>
+                  ) : (
+                    " "
+                  )}
+                </span>
               </Link>
             </li>
           );
@@ -137,7 +142,7 @@ function Logo({ id, name, asset }: { id: number; name: string; asset: unknown })
           className={`block aspect-[2/1] h-auto ${LOGO_W} object-contain`}
         />
       ) : (
-        <span className="block max-w-[10rem] text-base font-bold text-slate-700 sm:max-w-none sm:text-xl">{label}</span>
+        <span className={`block ${LOGO_MAX_W} text-base font-bold text-slate-700 max-[360px]:text-sm sm:text-xl`}>{label}</span>
       )}
     </h2>
   );
@@ -203,7 +208,7 @@ function Placeholder() {
 
 /**
  * 残り時間のために描き直す。この欄の中だけで回す（ページ全体は描き直さない）。
- * 秒を出すのは最終日だけなので、それより前は15秒ごと、終わった後は1分ごとで足りる。
+ * 集計までは秒を出すので1秒ごと、終わった後は1分ごとで足りる。
  */
 function useNow(aggregateAt: number): number {
   const [now, setNow] = useState(() => Date.now());

@@ -76,8 +76,7 @@ describe("トップの開催中のイベント", () => {
     const logo = await screen.findByRole("img", { name: "第223回 いつかの君へ、旋律を" });
     expect(logo.getAttribute("src")).toBe("/CardDatas/logo/event_someday_2026.webp");
     expect(screen.getByText("集計まで")).toBeTruthy();
-    // 98時間後 → 1日以上なので秒は出さない
-    // 秒だけ小さくするので要素が分かれる。行全体の文字で確かめる
+    // 98時間後 → 秒まで出す。秒だけ小さくするので要素が分かれる。行全体の文字で確かめる
     expect(screen.getByText(/^4日 0[12]:\d\d$/).textContent).toMatch(/^4日 0[12]:\d\d:\d\d$/);
     expect(screen.getByText("1億2,598万")).toBeTruthy();
     expect(screen.getByText(/^予測・/)).toBeTruthy();
@@ -86,7 +85,7 @@ describe("トップの開催中のイベント", () => {
   it("予測がまだ無い順位は、いまの値を「いま」と付けて出す", async () => {
     serve(snapshot());
     show();
-    expect(await screen.findByText("100位（いま）")).toBeTruthy();
+    expect(await screen.findByText("100位 いま")).toBeTruthy();
     expect(screen.getByText("4,659万")).toBeTruthy();
   });
 
@@ -96,6 +95,24 @@ describe("トップの開催中のイベント", () => {
     show();
     expect(await screen.findByText(/^いまの値・/)).toBeTruthy();
     expect(screen.queryByText(/^予測・/)).toBeNull();
+  });
+
+  // ★ 行の数が変わると、読み込み中の空の欄から本物へ替わるときに下の一覧が動く（#194 のレビュー M2）
+  it("予測が無い順位も、空の欄と同じ行の数にする", async () => {
+    serve(snapshot());
+    show();
+    await screen.findByText("100位 いま");
+    const cards = Array.from(document.querySelectorAll("li > a"));
+    expect(cards).toHaveLength(snapshot().ranks.length);
+    for (const c of cards) expect(c.childElementCount).toBe(4);
+  });
+
+  it("残り時間は枠の幅に合わせた大きさで出す", async () => {
+    serve(snapshot());
+    show();
+    const clock = await screen.findByText(/^4日 0[12]:\d\d$/);
+    expect(clock.className).toContain("cqw");
+    expect(clock.parentElement?.className).toContain("@container");
   });
 
   it("各順位はボーダー予測のページへのリンク", async () => {
@@ -128,11 +145,11 @@ describe("トップの開催中のイベント", () => {
     serve(snapshot({ aggregateAt: Date.now() - 2 * H }));
     show();
     expect(await screen.findByText("終了")).toBeTruthy();
-    expect(screen.getByText("このイベントは終わりました")).toBeTruthy();
+    expect(screen.getByText("集計が終わりました")).toBeTruthy();
     expect(screen.getByText(/^最後に集めた値・/)).toBeTruthy();
     expect(screen.getByText("6,922万")).toBeTruthy();
     expect(screen.queryByText("1億2,598万")).toBeNull();
-    expect(screen.queryByText(/（いま）/)).toBeNull();
+    expect(screen.queryByText(/ いま$/)).toBeNull();
   });
 
   // ★ 形の崩れた順位1つで、トップ全体（ツールの一覧ごと）を失敗の表示にしない（#194 のレビュー M1）
@@ -181,7 +198,10 @@ describe("欄を後から差し込まない", () => {
   it("初めて開いたときは、読み込み中も同じ形の欄で場所を取る", () => {
     hang();
     show();
-    expect(screen.getByRole("region", { name: "開催中のイベント（読み込み中）" })).toBeTruthy();
+    const region = screen.getByRole("region", { name: "開催中のイベント（読み込み中）" });
+    // 本物と同じ大きさの指定と行の数（高さが変わると、応答の後に下の一覧が動く）
+    expect(region.querySelector("p.font-num")?.className).toContain("cqw");
+    for (const c of Array.from(region.querySelectorAll("li > span"))) expect(c.childElementCount).toBe(4);
   });
 
   it("2回目からは、前に読んだ値を最初の描画から出す（応答を待たない）", async () => {

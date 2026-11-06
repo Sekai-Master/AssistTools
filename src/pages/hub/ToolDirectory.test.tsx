@@ -27,12 +27,29 @@ describe("ツールの一覧", () => {
     }
   });
 
-  // ★ 説明文は一覧に出さない（文字を減らす）。説明は検索のときだけ
   it("分類ごとに枠に入れる", () => {
     const { container } = show(<ToolDirectory />);
     expect(container.querySelectorAll(".neu-panel")).toHaveLength(TOOL_CATEGORIES.length);
   });
 
+  // ★ 語の途中で折らない。折ってよい所にだけ <wbr> を置き、ほかは keep-all で止める
+  it("名前の折り目に <wbr> を置く", () => {
+    show(<ToolDirectory />);
+    const link = screen.getByRole("link", { name: "リフレッシュゲージ計算機" });
+    expect(link.querySelectorAll("wbr")).toHaveLength(2);
+    expect(link.querySelector("wbr")?.parentElement?.className).toContain("[word-break:keep-all]");
+  });
+
+  it("行は触ると浮き、押すと沈み、キーボードでもどこにいるか見える", () => {
+    show(<ToolDirectory />);
+    const link = screen.getByRole("link", { name: "ボーダー予測" });
+    expect(link.className).toContain("focus-visible:outline-2");
+    const row = link.querySelector(`[${MORPH_ATTR}]`);
+    expect(row?.className).toContain("hover:shadow-neu-sm");
+    expect(row?.className).toContain("active:shadow-neu-inset");
+  });
+
+  // ★ 説明文は一覧に出さない（文字を減らす）。説明は検索のときだけ
   it("ふだんは説明文を出さない", () => {
     const { container } = show(<ToolDirectory />);
     for (const t of ready) expect(container.textContent).not.toContain(t.description);
@@ -52,12 +69,13 @@ describe("ツールの一覧", () => {
     expect(border.textContent).not.toContain("insights");
   });
 
-  it("検索すると当たったものだけ、説明を1行添えて出す", () => {
-    show(<ToolDirectory />);
+  it("検索すると当たったものだけ、説明を1行添えて1つの枠に出す", () => {
+    const { container } = show(<ToolDirectory />);
     fireEvent.change(screen.getByRole("searchbox", { name: "ツールを探す" }), { target: { value: "家具" } });
     expect(screen.getByRole("status").textContent).toBe("1件");
     const link = screen.getByRole("link", { name: /マイセカイ/ });
     expect(within(link).getByText(/家具/)).toBeTruthy();
+    expect(container.querySelectorAll(".neu-panel")).toHaveLength(1);
   });
 
   it("当たらなければそう書き、空の枠は出さない", () => {
