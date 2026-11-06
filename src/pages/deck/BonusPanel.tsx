@@ -148,7 +148,7 @@ export function BonusPanel({
 
       {/* カスタムのときだけ、対象メンバーとタイプを置かせる。 */}
       {eventId === CUSTOM_EVENT_ID && custom && onCustom && (
-        <div className="mt-4 rounded-lg p-3 shadow-neu-inset">
+        <div className="mt-4 rounded-lg border border-slate-300 p-3">
           <p className="mb-2 text-xs text-slate-500">
             ボーナス対象のメンバーとタイプを選んでください。
             カード個別のピックアップぶんは載りません（誰が対象かは分からないため）。

@@ -51,7 +51,7 @@ export function ProfilePanel() {
       ) : (
         <ul className="mt-4 space-y-2">
           {profiles.map((p) => (
-            <li key={p.id} className="rounded-lg p-3 shadow-neu-inset">
+            <li key={p.id} className="rounded-lg border border-slate-300 p-3">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <button
                   type="button"

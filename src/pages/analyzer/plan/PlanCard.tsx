@@ -49,7 +49,7 @@ export function PlanCard({ plan, variant, jacketSrc, songTitle, onClick }: PlanC
   }
 
   return (
-    <div className="neu-panel p-5">
+    <div className="neu-panel p-4 sm:p-6">
       <div className="flex flex-col sm:flex-row items-center gap-5">
         {jacketSrc && (
           <img

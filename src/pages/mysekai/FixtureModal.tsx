@@ -179,7 +179,7 @@ export function FixtureModal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="neu-panel flex h-[80vh] max-h-[680px] w-full max-w-lg flex-col p-5 focus:outline-none"
+        className="neu-panel flex h-[80vh] max-h-[680px] w-full max-w-lg flex-col p-4 sm:p-6 focus:outline-none"
       >
         <div className="mb-3 flex shrink-0 items-start gap-3">
           {img && (

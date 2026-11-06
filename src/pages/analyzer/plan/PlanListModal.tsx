@@ -59,7 +59,7 @@ export function PlanListModal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="w-full max-w-2xl h-[75vh] max-h-[620px] flex flex-col neu-panel p-5 focus:outline-none"
+        className="w-full max-w-2xl h-[75vh] max-h-[620px] flex flex-col neu-panel p-4 sm:p-6 focus:outline-none"
       >
         <div className="mb-3 flex items-center justify-between shrink-0">
           <h2 id={titleId} className="font-bold text-slate-700">
