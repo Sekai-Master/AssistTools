@@ -195,8 +195,8 @@ export function PlanExportPanel({
   // （ボタンが無ければ render/copyImage/saveImage は呼びようがない）。
   if (!result.isVerified) {
     return (
-      <div className="neu-panel p-5 sm:p-6">
-        <h2 className="mb-3 text-sm font-bold text-slate-600">
+      <div className="neu-panel p-4 sm:p-6">
+        <h2 className="mb-4 text-base font-bold text-slate-700">
           Step1〜3 統合プランの画像
         </h2>
         <div className="rounded-xl bg-rose-50 p-6 text-center text-sm text-rose-600">
@@ -210,8 +210,8 @@ export function PlanExportPanel({
   const totals = adjustPlanContributions(buildMySekai(), buildStep2(), buildFinalRun());
 
   return (
-    <div className="neu-panel p-5 sm:p-6">
-      <h2 className="mb-3 text-sm font-bold text-slate-600">
+    <div className="neu-panel p-4 sm:p-6">
+      <h2 className="mb-4 text-base font-bold text-slate-700">
         Step1〜3 統合プランの画像
       </h2>
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 rounded-xl bg-neu p-3 shadow-neu-inset">
