@@ -32,7 +32,7 @@ export function DocSection({ title, children }: { title: string; children: React
 }
 
 export function DocList({ children }: { children: ReactNode }) {
-  return <ul className="ml-5 list-disc space-y-1.5 marker:text-slate-400">{children}</ul>;
+  return <ul className="ml-5 list-disc space-y-2 marker:text-slate-400">{children}</ul>;
 }
 
 /**

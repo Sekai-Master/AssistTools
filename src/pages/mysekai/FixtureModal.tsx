@@ -35,7 +35,7 @@ function CharaChip({ c, dim }: { c: MysekaiCharacter | undefined; dim?: boolean 
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full py-1 pr-2.5 pl-1 text-xs font-bold",
+        "inline-flex items-center gap-1 rounded-full py-1 pr-3 pl-1 text-xs font-bold",
         dim && "opacity-45"
       )}
       style={{ backgroundColor: bg, color: "#ffffff", textShadow: CHIP_SHADOW }}
@@ -124,7 +124,7 @@ export function FixtureModal({
     const done = collected.has(key);
     const linked = linkedNames(p);
     return (
-      <li key={key} className="mb-1.5">
+      <li key={key} className="mb-2">
         <button
           type="button"
           onClick={() => onToggleCollected(key)}
@@ -241,7 +241,7 @@ export function FixtureModal({
             onClick={() => onToggleOwned(fixture.id)}
             aria-pressed={owned}
             className={cn(
-              "ml-auto flex min-h-11 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold",
+              "ml-auto flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold",
               "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
               owned ? "neu-selected" : "bg-neu text-slate-600 shadow-neu-sm neu-tactile"
             )}
@@ -258,7 +258,7 @@ export function FixtureModal({
             onClick={() => onToggleWish(fixture.id)}
             aria-pressed={wished}
             className={cn(
-              "flex min-h-11 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold",
+              "flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold",
               "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
               wished ? "neu-selected" : "bg-neu text-slate-600 shadow-neu-sm neu-tactile"
             )}
@@ -371,7 +371,7 @@ export function FixtureModal({
           {fixture.actionChars.length > 0 && (
             <>
               <h3 className="mt-4 mb-1 text-xs font-bold text-slate-500">この家具を使う人</h3>
-              <p className="mb-2 flex items-start gap-1.5 text-xs leading-relaxed text-slate-500">
+              <p className="mb-2 flex items-start gap-2 text-xs leading-relaxed text-slate-500">
                 <span aria-hidden className="material-icons mt-px text-base leading-none">
                   info
                 </span>
@@ -390,7 +390,7 @@ export function FixtureModal({
           {fixture.likeChars.length > 0 && (
             <>
               <h3 className="mt-4 mb-1 text-xs font-bold text-slate-500">この家具を気に入っている人</h3>
-              <p className="mb-2 flex items-start gap-1.5 text-xs leading-relaxed text-slate-500">
+              <p className="mb-2 flex items-start gap-2 text-xs leading-relaxed text-slate-500">
                 <span aria-hidden className="material-icons mt-px text-base leading-none">
                   info
                 </span>

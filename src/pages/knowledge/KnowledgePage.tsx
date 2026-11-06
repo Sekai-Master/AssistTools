@@ -104,7 +104,7 @@ function Blocks({ blocks }: { blocks: Block[] }) {
             );
           case "list": {
             const cls =
-              "ml-5 space-y-1.5 text-sm leading-relaxed text-slate-600";
+              "ml-5 space-y-2 text-sm leading-relaxed text-slate-600";
             const items = b.items.map((it, j) => (
               <li key={j}>
                 <Text parts={it} />
@@ -250,7 +250,7 @@ function Index() {
 
       <div className="neu-panel p-5 text-sm leading-relaxed text-slate-600">
         <h2 className="mb-2 font-bold text-slate-700">「状態」の見方</h2>
-        <ul className="ml-5 list-disc space-y-1.5">
+        <ul className="ml-5 list-disc space-y-2">
           <li>
             <b>確定</b> … 独立した2つ以上の根拠が一致しています（例:
             マスタデータ＋実機の計測）
@@ -292,7 +292,7 @@ function Article({ entry }: { entry: Entry }) {
             {STATUS_TONE[entry.status].note}
           </span>
         </div>
-        <dl className="mt-3 space-y-1.5 text-sm text-slate-600">
+        <dl className="mt-3 space-y-2 text-sm text-slate-600">
           {entry.meta.map((m) => (
             <div key={m.label} className="flex flex-wrap gap-x-2">
               <dt className="shrink-0 font-bold text-slate-500">{m.label}</dt>
@@ -313,7 +313,7 @@ function Article({ entry }: { entry: Entry }) {
        *   URL と最終更新が同じ場所に無いと引く側が困る。
        */}
       <div className="neu-panel p-5 text-xs leading-relaxed text-slate-500">
-        <h2 className="mb-1.5 text-sm font-bold text-slate-600">
+        <h2 className="mb-2 text-sm font-bold text-slate-600">
           この記事を引用するとき
         </h2>
         <p>

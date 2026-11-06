@@ -19,7 +19,7 @@ export function Field({
   className?: string;
 }) {
   return (
-    <div className={cn("space-y-1.5", className)}>
+    <div className={cn("space-y-2", className)}>
       <label
         htmlFor={htmlFor}
         className="block text-sm font-bold text-slate-600 border-l-4 pl-2"

@@ -154,7 +154,7 @@ export function BonusPanel({
             カード個別のピックアップぶんは載りません（誰が対象かは分からないため）。
           </p>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {UNIT_ORDER.map((unit) => (
               <div key={unit} className="flex flex-wrap items-center gap-1">
                 <span className="w-16 shrink-0 text-xs font-bold text-slate-400">

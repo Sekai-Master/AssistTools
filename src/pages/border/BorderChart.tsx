@@ -52,9 +52,9 @@ function LineKey({ dashed }: { dashed?: boolean }) {
 function Legend() {
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
-      <li className="flex items-center gap-1.5"><LineKey />実測</li>
-      <li className="flex items-center gap-1.5"><LineKey dashed />その時点の予測（最終値）</li>
-      <li className="flex items-center gap-1.5">
+      <li className="flex items-center gap-2"><LineKey />実測</li>
+      <li className="flex items-center gap-2"><LineKey dashed />その時点の予測（最終値）</li>
+      <li className="flex items-center gap-2">
         <span aria-hidden className="inline-block h-2.5 w-4 rounded-sm" style={{ background: PRED, opacity: 0.2 }} />
         8割の幅
       </li>
@@ -68,13 +68,13 @@ function Tooltip({ p, left, width }: { p: HistoryPoint; left: number; width: num
   return (
     <div className="pointer-events-none absolute top-0 z-10 rounded-lg bg-[color:var(--color-neu)] px-2.5 py-1.5 text-xs leading-5 shadow-neu-sm" style={side}>
       <p className="text-slate-500">{formatJst(p.t)}</p>
-      <p className="flex items-center gap-1.5 whitespace-nowrap">
+      <p className="flex items-center gap-2 whitespace-nowrap">
         <LineKey />
         <b className="tabular-nums text-slate-800">{formatMan(p.current)}</b>
         <span className="text-slate-500">実測</span>
       </p>
       {p.predicted != null && (
-        <p className="flex items-center gap-1.5 whitespace-nowrap">
+        <p className="flex items-center gap-2 whitespace-nowrap">
           <LineKey dashed />
           <b className="tabular-nums text-slate-800">{formatMan(p.predicted)}</b>
           <span className="text-slate-500">予測</span>

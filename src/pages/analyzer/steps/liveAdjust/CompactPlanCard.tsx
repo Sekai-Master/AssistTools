@@ -52,7 +52,7 @@ export function CompactPlanCard({
       </div>
       <div className="space-y-0.5 text-xs text-slate-600">
         {plan.units.map((u, j) => (
-          <div key={j} className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <div key={j} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <UnitLine u={u} />
             <ScoreBandTag band={scoreBandBadge(u)} />
           </div>
