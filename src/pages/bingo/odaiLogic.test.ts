@@ -7,6 +7,7 @@ import { decodeSeed } from "./bingoLogic";
 import { parseMusics } from "./useBingoMusics";
 import {
   type OdaiCell,
+  type OdaiTheme,
   DEEP_MIN_RATE,
   DEFAULT_ODAI_LEVEL,
   MAX_RATE,
@@ -14,13 +15,21 @@ import {
   ODAI_KIND_CAPS,
   ODAI_LEVELS,
   ODAI_LEVEL_KEYS,
+  ODAI_THEMES,
+  ODAI_THEME_KEYS,
+  OVERLAP_LIMIT,
+  THEME_CAP_BONUS,
   buildOdaiCandidates,
   buildOdaiCard,
+  clashes,
   createRng,
   decodeOdaiSeed,
   encodeOdaiSeed,
+  groupOdaiSongs,
   hasBingo,
   isOdaiSeed,
+  odaiCapsFor,
+  odaiThemeFloor,
   listOdaiSongs,
   setOdaiCleared,
   odaiLevelOf,
@@ -83,6 +92,8 @@ describe("titleKind（曲名の文字の種類。数字・記号・空白は数�
     ["威風堂々", "kanji"],
     ["いーあるふぁんくらぶ", "hiragana"],
     ["ぼうけんのしょがきえました！", "hiragana"],
+    // × (U+00D7) は英字に数えない
+    ["きみ×ぼく", "hiragana"],
     ["potatoになっていく", null],
     ["初音ミクの消失", null],
     ["ロキ", null],
@@ -100,10 +111,10 @@ describe("buildOdaiCandidates（実データから計算）", () => {
     }
   });
 
-  it("MIN_RATE を下回るのは作者のお題だけ（曲の少ない作者は EXPERT・MASTER で使う）", () => {
+  // ★ 花・春・桜（9 曲）のような語のお題も、曲が増えれば MIN_RATE を割る。そうなっても毎日の更新は止めない
+  it("MIN_RATE を下回るお題は、曲の少ない作者を中心に 24 以上（HARD・EXPERT・MASTER で使う）", () => {
     const deep = CANDIDATES.filter((o) => o.rate < MIN_RATE);
-    expect(deep.length).toBeGreaterThanOrEqual(24);
-    expect(deep.every((o) => o.kind === "creator")).toBe(true);
+    expect(deep.filter((o) => o.kind === "creator").length).toBeGreaterThanOrEqual(24);
   });
 
   it("割合は実データの数え上げと一致する", () => {
@@ -119,9 +130,10 @@ describe("buildOdaiCandidates（実データから計算）", () => {
     for (const k of ["u1", "u2", "u3", "u4", "u5", "u9"]) expect(keys).toContain(k);
   });
 
-  it("ユニット・読み・長さ・曲名・作者・曲の種類の 6 種類がそろう", () => {
+  it("14 種類（ユニット・歌う人・歌唱・曲の種類・読みの頭・読み・長さ・曲名・曲名の語・MV・追加・譜面・作り手・作者）がそろう", () => {
     const kinds = new Set(CANDIDATES.map((o) => o.kind));
-    expect([...kinds].sort()).toEqual(["creator", "length", "origin", "row", "title", "unit"]);
+    expect([...kinds].sort()).toEqual(Object.keys(ODAI_KIND_CAPS).sort());
+    expect(kinds.size).toBe(14);
   });
 
   it("易しい（10%〜）・中くらい（4〜10%）・難しい（〜4%）がそれぞれある", () => {
@@ -154,7 +166,8 @@ describe("buildOdaiCandidates（実データから計算）", () => {
 
   it("お題の文言は短い（区切りの 1 つが長すぎない）", () => {
     for (const o of CANDIDATES) {
-      expect(o.caption.length).toBeLessThanOrEqual(4);
+      // 札は幅で数える（MASTER は 6 字だが全角 3.3 字ぶん）
+      expect(textEm(o.caption)).toBeLessThanOrEqual(4);
       for (const chunk of o.chunks) expect(/[A-Za-z0-9]{8,}/.test(chunk)).toBe(false);
     }
   });
@@ -261,6 +274,98 @@ describe("buildOdaiCard", () => {
     const r30 = bingoRate(1000, 30, 7);
     expect(r10).toBeLessThan(r20);
     expect(r20).toBeLessThan(r30);
+  });
+});
+
+describe("似たお題を並べない（当てはまる曲の重なり・同じユニット）", () => {
+  const byKey = (key: string) => {
+    const o = CANDIDATES.find((c) => c.key === key);
+    if (!o) throw new Error(`候補に無い: ${key}`);
+    return o;
+  };
+  // 当てはまる曲の集合。実装のビット集合とは別の道筋で数える
+  const songsOf = new Map(CANDIDATES.map((o) => [o.key, new Set(MUSICS.filter((m) => o.test(m)).map((m) => m.id))]));
+  const overlap = (a: string, b: string) => {
+    const A = songsOf.get(a)!;
+    const B = songsOf.get(b)!;
+    let n = 0;
+    for (const id of A) if (B.has(id)) n++;
+    return n / Math.min(A.size, B.size);
+  };
+
+  it("並べない組は、重なり（|A∩B| / min(|A|,|B|)）が OVERLAP_LIMIT 以上か、同じユニットの色の印を持つ組とちょうど一致する", () => {
+    for (const a of CANDIDATES) {
+      for (const b of CANDIDATES) {
+        if (a.key === b.key) continue;
+        const expected = overlap(a.key, b.key) >= OVERLAP_LIMIT || (a.unit !== undefined && a.unit === b.unit);
+        expect(clashes(a, b), `${a.key} ${b.key}`).toBe(expected);
+      }
+    }
+  });
+
+  it.each([
+    ["dm32", "dm33", "MASTER Lv.32 以上と Lv.33 以上（入れ子）"],
+    ["a0", "a2020", "サービス開始時と 2020 年（入れ子）"],
+    ["u1", "s1", "ユニットとそのメンバー"],
+    ["u1", "w1", "ユニットとその書き下ろし"],
+    ["s1", "w1", "メンバーとその書き下ろし"],
+    ["s1", "s2", "同じユニットのメンバー"],
+  ])("%s と %s は並べない（%s）", (a, b) => {
+    expect(clashes(byKey(a), byKey(b))).toBe(true);
+    expect(clashes(byKey(b), byKey(a))).toBe(true);
+  });
+
+  // ★ VS のメンバーどうしの重なりは 0.3〜0.4 しかなく、重なりの決まりだけでは止まらない。
+  //   誰が候補に入るかは割合で変わる（ミクは易しすぎて外れる）ので、候補にいる VS のメンバーで見る
+  it("VS のメンバーどうし・VS のメンバーと VS の書き下ろしは並べない（重なりは小さいが同じユニット）", () => {
+    const vs = CANDIDATES.filter((o) => o.kind === "singer" && o.unit === "vs");
+    expect(vs.length).toBeGreaterThanOrEqual(2);
+    expect(overlap(vs[0].key, vs[1].key)).toBeLessThan(OVERLAP_LIMIT);
+    for (const a of vs) {
+      expect(clashes(a, byKey("w0"))).toBe(true);
+      for (const b of vs) if (a !== b) expect(clashes(a, b)).toBe(true);
+    }
+  });
+
+  it("重ならない組（読みの頭どうし・別のユニット）は並べてよい", () => {
+    expect(clashes(byKey("ra"), byKey("rk"))).toBe(false);
+    expect(clashes(byKey("u1"), byKey("u2"))).toBe(false);
+    expect(clashes(byKey("s1"), byKey("s5"))).toBe(false);
+  });
+
+  it.each(ODAI_LEVEL_KEYS)("%s: 作ったカードに、重なる組と同じユニットの色の印が並ばない", (level) => {
+    const rng = createRng(41);
+    for (let t = 0; t < 60; t++) {
+      const cells = buildOdaiCard(CANDIDATES, rng, level).filter((c): c is Exclude<OdaiCell, "FREE"> => c !== "FREE");
+      const units = cells.map((c) => c.odai.unit).filter((u) => u !== undefined);
+      expect(new Set(units).size).toBe(units.length);
+      for (let i = 0; i < cells.length; i++) {
+        for (let j = i + 1; j < cells.length; j++) {
+          expect(overlap(cells[i].odai.key, cells[j].odai.key), `${cells[i].odai.key} ${cells[j].odai.key}`).toBeLessThan(
+            OVERLAP_LIMIT
+          );
+        }
+      }
+    }
+  });
+
+  // ★ Nori の不満「似たようなシートばっかりになる」への答え。前の版（#212）は NORMAL で、2 枚に共通するお題が
+  //   平均 12.6、1 枚の種類が平均 5.8 だった（2026-11-09 実測）
+  it("NORMAL の 2 枚に共通するお題は平均 10 未満、1 枚の中の種類は平均 9 以上", () => {
+    const rng = createRng(77);
+    let shared = 0;
+    let kinds = 0;
+    const pairs = 200;
+    for (let p = 0; p < pairs; p++) {
+      const [a, b] = [buildOdaiCard(CANDIDATES, rng), buildOdaiCard(CANDIDATES, rng)].map((card) =>
+        card.filter((c): c is Exclude<OdaiCell, "FREE"> => c !== "FREE").map((c) => c.odai)
+      );
+      const keys = new Set(a.map((o) => o.key));
+      shared += b.filter((o) => keys.has(o.key)).length;
+      kinds += new Set(a.map((o) => o.kind)).size;
+    }
+    expect(shared / pairs).toBeLessThan(10);
+    expect(kinds / pairs).toBeGreaterThanOrEqual(9);
   });
 });
 
@@ -389,6 +494,136 @@ describe("listOdaiSongs（お題に当てはまる曲の一覧）", () => {
     expect(listOdaiSongs(deco, MUSICS, kata).map((m) => m.id)).toContain(target.id);
     expect(listOdaiSongs(deco, MUSICS, "  ")).toHaveLength(all.length);
     expect(listOdaiSongs(deco, MUSICS, "存在しない曲名xyz")).toHaveLength(0);
+  });
+});
+
+describe("テーマつきのカード（ODAI_THEMES）", () => {
+  const THEMES = ODAI_THEME_KEYS.filter((t) => t !== "any");
+  const COMBOS = THEMES.flatMap((theme) => ODAI_LEVEL_KEYS.map((level) => [theme, level] as const));
+  const themedCount = (card: readonly OdaiCell[], theme: OdaiTheme) =>
+    card.filter((c) => c !== "FREE" && ODAI_THEMES[theme].kinds.includes(c.odai.kind)).length;
+
+  it("テーマを渡さなければおまかせ（\"any\" を渡したのと同じカード）。おまかせの下限は 0", () => {
+    for (const level of ODAI_LEVEL_KEYS) {
+      const a = buildOdaiCard(CANDIDATES, createRng(8), level);
+      const b = buildOdaiCard(CANDIDATES, createRng(8), level, "any");
+      expect(encodeOdaiSeed(b)).toBe(encodeOdaiSeed(a));
+      expect(odaiThemeFloor(CANDIDATES, level, "any")).toBe(0);
+    }
+  });
+
+  it("テーマどうしで種類は重ならず、作者はどのテーマにも入れない", () => {
+    const kinds = THEMES.flatMap((t) => ODAI_THEMES[t].kinds);
+    expect(new Set(kinds).size).toBe(kinds.length);
+    expect(kinds).not.toContain("creator");
+  });
+
+  it.each(COMBOS)("%s × %s: テーマのマスが下限以上で、上限・割合の下限・並べない組を守り、目安の曲数は段の曲数ちょうど", (theme, level) => {
+    const def = ODAI_LEVELS[level];
+    const floor = odaiThemeFloor(CANDIDATES, level, theme);
+    expect(floor).toBeGreaterThan(0);
+    expect(floor).toBeLessThanOrEqual(ODAI_THEMES[theme].floor[level]);
+    const rng = createRng(59);
+    for (let t = 0; t < 100; t++) {
+      const card = buildOdaiCard(CANDIDATES, rng, level, theme);
+      expect(themedCount(card, theme)).toBeGreaterThanOrEqual(floor);
+      expect(odaiSongsToHalf(card)).toBe(def.songs);
+      const cells = card.filter((c): c is Exclude<OdaiCell, "FREE"> => c !== "FREE").map((c) => c.odai);
+      expect(new Set(cells.map((o) => o.key)).size).toBe(24);
+      const count: Record<string, number> = {};
+      for (const o of cells) count[o.kind] = (count[o.kind] ?? 0) + 1;
+      // テーマの種類だけ上限が THEME_CAP_BONUS 増える
+      const caps = odaiCapsFor(level, theme);
+      for (const [kind, n] of Object.entries(count)) expect(n).toBeLessThanOrEqual(caps[kind as keyof typeof caps]);
+      expect(cells.every((o) => o.rate >= def.minRate)).toBe(true);
+      for (let i = 0; i < cells.length; i++) for (let j = i + 1; j < cells.length; j++) expect(clashes(cells[i], cells[j])).toBe(false);
+    }
+  });
+
+  it.each(COMBOS)("%s × %s: 実測で、半分の人が BINGO になる曲数が段の曲数の ±15%", (theme, level) => {
+    const rng = createRng(2026);
+    const runs: number[] = [];
+    for (let t = 0; t < 400; t++) runs.push(songsToBingo(buildOdaiCard(CANDIDATES, rng, level, theme), rng));
+    runs.sort((a, b) => a - b);
+    const median = runs[runs.length >> 1];
+    const target = ODAI_LEVELS[level].songs;
+    expect(median).toBeGreaterThanOrEqual(Math.floor(target * 0.85));
+    expect(median).toBeLessThanOrEqual(Math.ceil(target * 1.15));
+  });
+
+  it("テーマを選んだときは、テーマの種類だけ上限を THEME_CAP_BONUS 足す（作者・ほかの種類・おまかせは段の上限のまま）", () => {
+    for (const level of ODAI_LEVEL_KEYS) {
+      const base = ODAI_LEVELS[level].caps;
+      expect(odaiCapsFor(level, "any")).toEqual(base);
+      for (const theme of THEMES) {
+        const caps = odaiCapsFor(level, theme);
+        for (const kind of Object.keys(base) as (keyof typeof base)[]) {
+          const bonus = ODAI_THEMES[theme].kinds.includes(kind) ? THEME_CAP_BONUS : 0;
+          expect(caps[kind], `${theme} ${level} ${kind}`).toBe(base[kind] + bonus);
+        }
+        expect(caps.creator).toBe(base.creator);
+      }
+    }
+  });
+
+  // ★ 曲が増えて候補が割合の範囲から外れたり、並べない組が増えたりしても、届かない下限を課さない
+  it.each([
+    // 譜面は Lv.32 以上・Lv.33 以上・EXPERT Lv.28 以上が互いに並べない組なので 4 つまで（上限の 5 ではない）。譜面 4＋追加 4
+    ["chart", ["kl", "m2", "mo", "m3"], 8, "作り手と MV が全部外れる"],
+    ["title", ["l0", "l1", "yi", "yn", "y4", "gn", "gf", "gc", "gl", "gw", "gs"], 10, "曲名と読みの頭だけが残る"],
+    // 残るのはユニットの色の印を持つお題だけ。同じユニットは 1 枚に 1 つなので、色の数（6）まで
+    ["singer", ["u9", "om", "oc", "v6", "va"], 6, "色の印を持たないお題が全部外れる"],
+  ] as const)("%s: 候補から %j が外れたら、下限は %i に下がり、そのカードが作れる（%s）", (theme, keys, expected, _why) => {
+    const without = CANDIDATES.filter((o) => !(keys as readonly string[]).includes(o.key));
+    for (const level of ["easy", "master"] as const) {
+      const floor = odaiThemeFloor(without, level, theme);
+      expect(floor).toBe(expected);
+      const rng = createRng(61);
+      for (let t = 0; t < 20; t++) {
+        const card = buildOdaiCard(without, rng, level, theme);
+        expect(themedCount(card, theme)).toBeGreaterThanOrEqual(floor);
+        expect(odaiSongsToHalf(card)).toBe(ODAI_LEVELS[level].songs);
+      }
+    }
+  });
+});
+
+describe("groupOdaiSongs（コラボのお題はコラボごとに区切る）", () => {
+  const collab = CANDIDATES.find((o) => o.key === "oc")!;
+
+  it("区切りはコラボの名前ごと。曲の多いコラボから、同じ数なら名前の順。曲は一覧と同じ", () => {
+    const groups = groupOdaiSongs(collab, MUSICS);
+    expect(groups.length).toBeGreaterThanOrEqual(3);
+    for (const g of groups) {
+      expect(g.songs.every((m) => m.collab === g.label)).toBe(true);
+      expect(g.total).toBe(g.songs.length);
+    }
+    for (let i = 1; i < groups.length; i++) {
+      const [a, b] = [groups[i - 1], groups[i]];
+      expect(a.total > b.total || (a.total === b.total && a.label.localeCompare(b.label, "ja") <= 0)).toBe(true);
+    }
+    expect(groups.flatMap((g) => g.songs.map((m) => m.id)).sort()).toEqual(
+      listOdaiSongs(collab, MUSICS).map((m) => m.id).sort()
+    );
+  });
+
+  it("絞り込みは区切りの中で効き、当てはまる曲が無い区切りは出さない。見出しの数は絞り込む前のまま", () => {
+    const all = groupOdaiSongs(collab, MUSICS);
+    // 曲の多いコラボの 1 曲で絞る（見出しの数が絞り込み後の数とずれるように）
+    expect(all[0].total).toBeGreaterThanOrEqual(2);
+    const target = all[0].songs[0];
+    const narrowed = groupOdaiSongs(collab, MUSICS, target.title);
+    expect(narrowed.map((g) => g.label)).toContain(target.collab);
+    expect(narrowed.length).toBeLessThan(all.length);
+    const g = narrowed.find((x) => x.label === target.collab)!;
+    expect(g.songs.map((m) => m.id)).toContain(target.id);
+    expect(g.songs.length).toBeLessThan(g.total);
+    expect(g.total).toBe(all[0].total);
+    expect(groupOdaiSongs(collab, MUSICS, "存在しない曲名xyz")).toEqual([]);
+  });
+
+  it("区切りを持たないお題は空", () => {
+    expect(groupOdaiSongs(CANDIDATES.find((o) => o.key === "u1")!, MUSICS)).toEqual([]);
   });
 });
 

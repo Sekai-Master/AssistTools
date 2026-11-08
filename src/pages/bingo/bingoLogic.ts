@@ -20,6 +20,25 @@ export interface BingoMusic {
   /** コラボ・タイアップの名前（マスタの musicCollaborations。「劇場版プロジェクトセカイ」も含む）。ほかの曲には無い。 */
   collab?: string;
   jacketLink: string;
+  /** ゲームに入った日時（ミリ秒）。サービス開始時からある曲は 2019 年の仮の値。 */
+  publishedAt?: number;
+  // ---- お題ビンゴ用（scripts/lib/musicBingoFields.mjs）。楽曲データに無い項目は「無い・偽」 ----
+  /** すべての歌唱 ver.（アナザーボーカル込み）で歌うゲームのキャラの id（昇順）。 */
+  singers?: readonly number[];
+  /** 1 つの ver. で歌う人数の最大。 */
+  maxSingers?: number;
+  /** エイプリルフールの ver. がある。 */
+  hasAprilFool?: boolean;
+  /** 3DMV で踊る人数。 */
+  dancerCount?: number;
+  /** 作詞と作曲が別の人。 */
+  lyricsByOther?: boolean;
+  expertLevel?: number;
+  masterLevel?: number;
+  /** APPEND の譜面がある曲だけ。 */
+  appendLevel?: number;
+  /** MASTER のノーツ数。 */
+  masterNotes?: number;
 }
 
 export type Cell = "FREE" | (BingoMusic & { cleared: boolean });
