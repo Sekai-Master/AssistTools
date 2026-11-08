@@ -11,7 +11,9 @@ import { type Cell, buildRandomCard, filterForGeneration, pickBorderColor } from
 import {
   type OdaiCell,
   type OdaiLevel,
+  type OdaiTheme,
   DEFAULT_ODAI_LEVEL,
+  DEFAULT_ODAI_THEME,
   ODAI_LEVELS,
   ODAI_LEVEL_KEYS,
   buildOdaiCandidates,
@@ -88,6 +90,8 @@ function BingoBoard({
   const [level, setLevel] = useState<OdaiLevel>(() =>
     initial.odai ? odaiLevelOf(initial.odai) : DEFAULT_ODAI_LEVEL
   );
+  // テーマは作るときだけ使う（コードにも保存にも入れない。開き直すとおまかせに戻る）
+  const [theme, setTheme] = useState<OdaiTheme>(DEFAULT_ODAI_THEME);
   const [odaiCard, setOdaiCard] = useState<OdaiCell[] | null>(initial.odai);
   const [songCard, setSongCard] = useState<Cell[] | null>(initial.song);
   const [filters, setFilters] = useState<SongFilters>(DEFAULT_FILTERS);
@@ -172,7 +176,7 @@ function BingoBoard({
     setError(null);
     try {
       if (kind === "odai") {
-        setOdaiCard(buildOdaiCard(odaiCandidates, Math.random, level));
+        setOdaiCard(buildOdaiCard(odaiCandidates, Math.random, level, theme));
       } else {
         const pool = filterForGeneration(musics, filters.units, filters.categories, filters.types);
         setSongCard(buildRandomCard(pool, filters.centerMode, filters.centerSong));
@@ -285,6 +289,8 @@ function BingoBoard({
           kind={kind}
           filters={filters}
           onFiltersChange={setFilters}
+          theme={theme}
+          onThemeChange={setTheme}
           onPickCenter={() => setPickingCenter(true)}
           onOpenCode={openCode}
         />

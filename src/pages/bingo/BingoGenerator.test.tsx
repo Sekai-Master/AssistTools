@@ -7,9 +7,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { BingoMusic } from "./bingoLogic";
 import { parseMusics } from "./useBingoMusics";
+import { ODAI_THEMES, decodeOdaiSeed } from "./odaiLogic";
+import { BINGO_STORAGE_KEY } from "./bingoStorage";
 import BingoGenerator from "./BingoGenerator";
 
 // 楽曲データの読み込み（fetch）だけ差し替える。読むのは描画のときなので、宣言より後でよい
@@ -60,5 +62,34 @@ describe("難易度", () => {
   it("選択欄に「難易度」という名前が付いている", () => {
     render(<BingoGenerator />);
     expect(screen.getByRole("radiogroup", { name: "難易度" })).toBeTruthy();
+  });
+});
+
+/** この端末に保存されたお題のカード（作ったカードはすぐ保存される）。 */
+const savedOdaiCard = () => {
+  const saved = JSON.parse(localStorage.getItem(BINGO_STORAGE_KEY) ?? "{}") as { odai?: string };
+  return decodeOdaiSeed(saved.odai ?? "", mockMusics);
+};
+
+describe("テーマ（細かい設定）", () => {
+  it("お題ビンゴのときだけ出て、既定はおまかせ", () => {
+    render(<BingoGenerator />);
+    fireEvent.click(screen.getByText("細かい設定"));
+    const group = screen.getByRole("radiogroup", { name: "テーマ" });
+    expect(within(group).getByRole("radio", { name: "おまかせ" }).getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(screen.getByRole("radio", { name: "曲名ビンゴ" }));
+    expect(screen.queryByRole("radiogroup", { name: "テーマ" })).toBeNull();
+  });
+
+  it.each(["singer", "title", "chart"] as const)("テーマ %s を選んで作ると、そのテーマのお題が下限以上入ったカードになる", (theme) => {
+    render(<BingoGenerator />);
+    fireEvent.click(screen.getByText("細かい設定"));
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "テーマ" })).getByRole("radio", { name: ODAI_THEMES[theme].label }));
+    fireEvent.click(screen.getByRole("button", { name: "新しいカードを作る" }));
+    const card = savedOdaiCard();
+    const themed = card.filter((c) => c !== "FREE" && ODAI_THEMES[theme].kinds.includes(c.odai.kind)).length;
+    expect(themed).toBeGreaterThanOrEqual(ODAI_THEMES[theme].floor.normal);
+    // テーマはコードに入らないので、カードの枠の段と時間はいつもどおり
+    expect(cardHeader()).toContain("NORMAL ・ 約1時間20分");
   });
 });

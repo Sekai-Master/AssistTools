@@ -7,6 +7,7 @@ import { decodeSeed } from "./bingoLogic";
 import { parseMusics } from "./useBingoMusics";
 import {
   type OdaiCell,
+  type OdaiTheme,
   DEEP_MIN_RATE,
   DEFAULT_ODAI_LEVEL,
   MAX_RATE,
@@ -14,6 +15,8 @@ import {
   ODAI_KIND_CAPS,
   ODAI_LEVELS,
   ODAI_LEVEL_KEYS,
+  ODAI_THEMES,
+  ODAI_THEME_KEYS,
   OVERLAP_LIMIT,
   buildOdaiCandidates,
   buildOdaiCard,
@@ -488,6 +491,64 @@ describe("listOdaiSongs（お題に当てはまる曲の一覧）", () => {
     expect(listOdaiSongs(deco, MUSICS, kata).map((m) => m.id)).toContain(target.id);
     expect(listOdaiSongs(deco, MUSICS, "  ")).toHaveLength(all.length);
     expect(listOdaiSongs(deco, MUSICS, "存在しない曲名xyz")).toHaveLength(0);
+  });
+});
+
+describe("テーマつきのカード（ODAI_THEMES）", () => {
+  const THEMES = ODAI_THEME_KEYS.filter((t) => t !== "any");
+  const COMBOS = THEMES.flatMap((theme) => ODAI_LEVEL_KEYS.map((level) => [theme, level] as const));
+  const themedCount = (card: readonly OdaiCell[], theme: OdaiTheme) =>
+    card.filter((c) => c !== "FREE" && ODAI_THEMES[theme].kinds.includes(c.odai.kind)).length;
+
+  it("テーマを渡さなければ、おまかせ（これまでと同じカード）", () => {
+    for (const level of ODAI_LEVEL_KEYS) {
+      const a = buildOdaiCard(CANDIDATES, createRng(8), level);
+      const b = buildOdaiCard(CANDIDATES, createRng(8), level, "any");
+      expect(encodeOdaiSeed(b)).toBe(encodeOdaiSeed(a));
+    }
+  });
+
+  it("テーマの種類はどれも候補にあり、テーマどうしで重ならない。作者はどのテーマにも入れない", () => {
+    const kinds = THEMES.flatMap((t) => ODAI_THEMES[t].kinds);
+    expect(new Set(kinds).size).toBe(kinds.length);
+    expect(kinds).not.toContain("creator");
+    const present = new Set(CANDIDATES.map((o) => o.kind));
+    for (const k of kinds) expect(present).toContain(k);
+  });
+
+  it.each(COMBOS)("%s × %s: テーマのマスが下限以上で、上限・割合の下限・並べない組を守り、目安の曲数は段の曲数ちょうど", (theme, level) => {
+    const def = ODAI_LEVELS[level];
+    const floor = ODAI_THEMES[theme].floor[level];
+    expect(floor).toBeGreaterThan(0);
+    const rng = createRng(59);
+    for (let t = 0; t < 100; t++) {
+      const card = buildOdaiCard(CANDIDATES, rng, level, theme);
+      expect(themedCount(card, theme)).toBeGreaterThanOrEqual(floor);
+      expect(odaiSongsToHalf(card)).toBe(def.songs);
+      const cells = card.filter((c): c is Exclude<OdaiCell, "FREE"> => c !== "FREE").map((c) => c.odai);
+      expect(new Set(cells.map((o) => o.key)).size).toBe(24);
+      const count: Record<string, number> = {};
+      for (const o of cells) count[o.kind] = (count[o.kind] ?? 0) + 1;
+      for (const [kind, n] of Object.entries(count)) expect(n).toBeLessThanOrEqual(def.caps[kind as keyof typeof def.caps]);
+      expect(cells.every((o) => o.rate >= def.minRate)).toBe(true);
+      for (let i = 0; i < cells.length; i++) for (let j = i + 1; j < cells.length; j++) expect(clashes(cells[i], cells[j])).toBe(false);
+    }
+  });
+
+  it.each(COMBOS)("%s × %s: 実測で、半分の人が BINGO になる曲数が段の曲数の ±15%", (theme, level) => {
+    const rng = createRng(2026);
+    const runs: number[] = [];
+    for (let t = 0; t < 400; t++) runs.push(songsToBingo(buildOdaiCard(CANDIDATES, rng, level, theme), rng));
+    runs.sort((a, b) => a - b);
+    const median = runs[runs.length >> 1];
+    const target = ODAI_LEVELS[level].songs;
+    expect(median).toBeGreaterThanOrEqual(Math.floor(target * 0.85));
+    expect(median).toBeLessThanOrEqual(Math.ceil(target * 1.15));
+  });
+
+  // ★ 上限と同じユニットの決まりを守ったまま入る最大: 曲名・読みは 12、歌う人は 11（下限は 9）、譜面・MV は 8
+  it("曲名・読みは、どの段でも 24 マスの半分（12）以上", () => {
+    for (const level of ODAI_LEVEL_KEYS) expect(ODAI_THEMES.title.floor[level]).toBeGreaterThanOrEqual(12);
   });
 });
 

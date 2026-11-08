@@ -90,6 +90,42 @@ const HALF_ESTIMATE = TARGET_ESTIMATE - TARGET_TOLERANCE;
 const MAX_STEPS = 4000;
 /** 種類ごとの上限と重なりの決まりで 24 マスを埋められなかったとき、並びを変えてやり直す回数。 */
 const MAX_PICK_TRIES = 20;
+/**
+ * MAX_STEPS で目標に届かなかったとき、選び直してやり直す回数（いちばん近いカードを使う）。
+ * テーマの下限は、選んだ顔ぶれによっては 1 つずつの入れ替えでは届かない（2026-11-09 実測、歌う人の EXPERT で 1800 枚に 1 枚）。
+ */
+const MAX_BUILD_TRIES = 5;
+/** テーマの下限に足りないマス 1 つの重み。合わせ込みの外れ（最大でも 1 程度）より重くする。 */
+const THEME_SHORT_WEIGHT = 2;
+
+// ---- テーマ ----
+
+export type OdaiTheme = "any" | "singer" | "title" | "chart";
+
+export interface OdaiThemeDef {
+  label: string;
+  /** テーマの種類。 */
+  kinds: readonly OdaiKind[];
+  /** 段ごとの、テーマの種類から入れるマスの下限（24 マスのうち）。 */
+  floor: Record<OdaiLevel, number>;
+}
+
+const levelsOf = (n: number): Record<OdaiLevel, number> => ({ easy: n, normal: n, hard: n, expert: n, master: n });
+
+/**
+ * テーマつきのカード（Nori 2026-11-09、案 27。設計はオーケストレーター一任）。テーマの種類のマスを 24 のうち
+ * 12 以上にする。ただし種類ごとの上限と並べない組はそのまま守るので、届かない組み合わせは下限を下げてある:
+ * - 歌う人: 同じユニットは 1 枚に 1 つまでなので、ユニットの色の 6 つ＋その他・劇場版・コラボ・6人以上・エイプリルフールの 11 が最大
+ * - 譜面・MV: 譜面 3・MV 2・追加 2・作り手 1 の上限で 8 が最大
+ */
+export const ODAI_THEMES: Record<OdaiTheme, OdaiThemeDef> = {
+  any: { label: "おまかせ", kinds: [], floor: levelsOf(0) },
+  singer: { label: "歌う人", kinds: ["singer", "vocal", "unit", "origin"], floor: levelsOf(9) },
+  title: { label: "曲名・読み", kinds: ["title", "word", "row", "reading", "length"], floor: levelsOf(12) },
+  chart: { label: "譜面・MV", kinds: ["chart", "mv", "added", "maker"], floor: levelsOf(8) },
+};
+export const ODAI_THEME_KEYS: readonly OdaiTheme[] = ["any", "singer", "title", "chart"];
+export const DEFAULT_ODAI_THEME: OdaiTheme = "any";
 
 const CELLS = 25;
 const CENTER = 12;
@@ -199,19 +235,33 @@ export function estimateBingoChance(cells: readonly (Odai | null)[], songs: numb
   return 1 - noLine;
 }
 
+/**
+ * 種類ごとの上限と並べない組を守って、ランダムに 24 個選ぶ。
+ * テーマがあれば、テーマの種類から先に floor 個まで入れてから、残りを全部の候補から埋める。
+ */
 function pickWithCaps(
   candidates: readonly Odai[],
   caps: Record<OdaiKind, number>,
-  rng: () => number
+  rng: () => number,
+  inTheme: (o: Odai) => boolean = () => false,
+  floor = 0
 ): Odai[] | null {
   const count: Partial<Record<OdaiKind, number>> = {};
   const picked: Odai[] = [];
-  for (const o of shuffleWith(candidates, rng)) {
-    if (picked.length === CELLS - 1) break;
+  const tryAdd = (o: Odai) => {
     const n = count[o.kind] ?? 0;
-    if (n >= caps[o.kind] || picked.some((p) => clashes(p, o))) continue;
+    if (n >= caps[o.kind] || picked.includes(o) || picked.some((p) => clashes(p, o))) return;
     count[o.kind] = n + 1;
     picked.push(o);
+  };
+  const order = shuffleWith(candidates, rng);
+  for (const o of order) {
+    if (picked.length >= floor) break;
+    if (inTheme(o)) tryAdd(o);
+  }
+  for (const o of order) {
+    if (picked.length === CELLS - 1) break;
+    tryAdd(o);
   }
   return picked.length === CELLS - 1 ? picked : null;
 }
@@ -247,36 +297,48 @@ function replaceOne(
  * ランダムにお題カードを作る。中央は FREE。
  * ランダムな並びから始め、段の曲数での見積もりが目標の幅に近づく入れ替えだけを受け入れる。
  * 1 曲少ないときは線に届かないことも条件にする（カードの枠に出す目安が段の曲数とずれないように）。
+ * テーマ（theme）があれば、テーマの種類のマスが下限（ODAI_THEMES の floor）を割らないことも条件にする。
  */
 export function buildOdaiCard(
   candidates: readonly Odai[],
   rng: () => number = Math.random,
-  level: OdaiLevel = DEFAULT_ODAI_LEVEL
+  level: OdaiLevel = DEFAULT_ODAI_LEVEL,
+  theme: OdaiTheme = DEFAULT_ODAI_THEME
 ): OdaiCell[] {
   const { songs, minRate, caps } = ODAI_LEVELS[level];
   const pool = candidates.filter((o) => o.rate >= minRate);
   if (pool.length < CELLS - 1) {
     throw new Error(`お題が足りません（必要 ${CELLS - 1} / 候補 ${pool.length}）。`);
   }
-  let picked: Odai[] | null = null;
-  for (let t = 0; t < MAX_PICK_TRIES && !picked; t++) picked = pickWithCaps(pool, caps, rng);
-  if (!picked) throw new Error("お題の組み合わせを作れませんでした。");
-  let cells = toPositions(picked);
-  // 外れの量: 見積もりが目標から離れた分と、1 曲少なくても線を越えてしまう分（目安が段の曲数より少なく出る）
+  const { kinds } = ODAI_THEMES[theme];
+  const floor = ODAI_THEMES[theme].floor[level];
+  const inTheme = (o: Odai) => kinds.includes(o.kind);
+  // 外れの量: 見積もりが目標から離れた分と、1 曲少なくても線を越えてしまう分（目安が段の曲数より少なく出る）。
+  // テーマの下限に足りないマスは重く数える（合わせ込みと引き換えに、テーマのマスを手放さない）
   const missOf = (c: readonly (Odai | null)[]) =>
     Math.max(0, Math.abs(estimateBingoChance(c, songs) - TARGET_ESTIMATE) - TARGET_TOLERANCE) +
-    Math.max(0, estimateBingoChance(c, songs - 1) - HALF_ESTIMATE + 0.001);
-  let miss = missOf(cells);
-  for (let step = 0; step < MAX_STEPS && miss > 0; step++) {
-    const next = rng() < 0.5 ? swapTwo(cells, rng) : replaceOne(cells, pool, caps, rng);
-    if (!next) continue;
-    const m = missOf(next);
-    if (m < miss) {
-      cells = next;
-      miss = m;
+    Math.max(0, estimateBingoChance(c, songs - 1) - HALF_ESTIMATE + 0.001) +
+    (floor > 0 ? THEME_SHORT_WEIGHT * Math.max(0, floor - c.filter((o) => o !== null && inTheme(o)).length) : 0);
+
+  let best: { cells: (Odai | null)[]; miss: number } | null = null;
+  for (let attempt = 0; attempt < MAX_BUILD_TRIES && (best === null || best.miss > 0); attempt++) {
+    let picked: Odai[] | null = null;
+    for (let t = 0; t < MAX_PICK_TRIES && !picked; t++) picked = pickWithCaps(pool, caps, rng, inTheme, floor);
+    if (!picked) throw new Error("お題の組み合わせを作れませんでした。");
+    let cells = toPositions(picked);
+    let miss = missOf(cells);
+    for (let step = 0; step < MAX_STEPS && miss > 0; step++) {
+      const next = rng() < 0.5 ? swapTwo(cells, rng) : replaceOne(cells, pool, caps, rng);
+      if (!next) continue;
+      const m = missOf(next);
+      if (m < miss) {
+        cells = next;
+        miss = m;
+      }
     }
+    if (best === null || miss < best.miss) best = { cells, miss };
   }
-  return cells.map((o) => (o ? { odai: o, cleared: false } : "FREE"));
+  return best!.cells.map((o) => (o ? { odai: o, cleared: false } : "FREE"));
 }
 
 /** このカードで半分の人が BINGO になる曲数の目安（見積もりが線を越える最小の曲数）。埋めたマスは見ない。 */

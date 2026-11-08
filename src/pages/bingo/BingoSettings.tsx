@@ -4,7 +4,10 @@ import { NeuInput } from "../../components/ui/NeuInput";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import type { BingoMusic, CenterMode } from "./bingoLogic";
 import type { CardKind } from "./bingoShare";
+import { type OdaiTheme, ODAI_THEMES, ODAI_THEME_KEYS } from "./odaiLogic";
 import { CATEGORY_OPTIONS, TYPE_OPTIONS, UNIT_OPTIONS } from "./bingoConstants";
+
+const THEME_OPTIONS = ODAI_THEME_KEYS.map((k) => ({ value: k, label: ODAI_THEMES[k].label }));
 
 export interface SongFilters {
   units: Set<string>;
@@ -56,15 +59,18 @@ interface Props {
   kind: CardKind;
   filters: SongFilters;
   onFiltersChange: (f: SongFilters) => void;
+  /** お題ビンゴのテーマ（作るときだけ使う。コードにも保存にも入れない）。 */
+  theme: OdaiTheme;
+  onThemeChange: (theme: OdaiTheme) => void;
   onPickCenter: () => void;
   onOpenCode: (code: string) => void;
 }
 
 /**
- * 細かい設定（初めは閉じておく）。曲名ビンゴの絞り込み・中央マスと、コードから開く。
+ * 細かい設定（初めは閉じておく）。お題ビンゴのテーマ、曲名ビンゴの絞り込み・中央マスと、コードから開く。
  * 初めての人には要らないものをここに寄せて、最初の画面を「選ぶ・作る」だけにする。
  */
-export function BingoSettings({ kind, filters, onFiltersChange, onPickCenter, onOpenCode }: Props) {
+export function BingoSettings({ kind, filters, onFiltersChange, theme, onThemeChange, onPickCenter, onOpenCode }: Props) {
   const [code, setCode] = useState("");
   const set = (patch: Partial<SongFilters>) => onFiltersChange({ ...filters, ...patch });
 
@@ -74,6 +80,21 @@ export function BingoSettings({ kind, filters, onFiltersChange, onPickCenter, on
         細かい設定
       </summary>
       <div className="space-y-4 border-t border-slate-300 p-4">
+        {kind === "odai" && (
+          <div>
+            <p className="mb-2 text-xs font-bold text-slate-500">テーマ</p>
+            <SegmentedControl
+              compact
+              ariaLabel="テーマ"
+              options={THEME_OPTIONS}
+              value={theme}
+              // ★ 320px では 1 つが約 54px で、「曲名・読み」（全角 5 字・60px）は 1 行に入らない。
+              //   語の途中（曲名・読｜み）で折れないよう、折るのは「・」の後ろだけにする（曲名・｜読み）
+              buttonClassName="min-h-11 min-w-0 px-0 leading-tight tracking-tight [word-break:keep-all]"
+              onChange={onThemeChange}
+            />
+          </div>
+        )}
         {kind === "song" && (
           <>
             <ToggleChips label="ユニット" options={UNIT_OPTIONS} selected={filters.units} onChange={(units) => set({ units })} />
