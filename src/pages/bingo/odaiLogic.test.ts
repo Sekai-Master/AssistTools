@@ -193,17 +193,21 @@ describe("曲の種類のお題（書き下ろし・劇場版・コラボ）", (
   it("コラボは劇場版・エイプリルフールを除いたコラボ・タイアップの曲（遊べない曲は入らない）", () => {
     const o = byKey("oc")!;
     const songs = MUSICS.filter((m) => o.test(m));
+    // 期間が過ぎた太鼓の達人タイアップは、楽曲データで遊べない曲になっているので入らない
+    expect(songs.some((m) => ["707", "708", "709"].includes(m.id))).toBe(false);
     expect(songs.length).toBeGreaterThanOrEqual(30);
     expect(songs.some((m) => m.collab === "劇場版プロジェクトセカイ")).toBe(false);
     expect(songs.some((m) => /エイプリルフール|ボスラッシュ/.test(m.collab ?? ""))).toBe(false);
     expect(songs.some((m) => m.title === "Bad Apple!! feat.SEKAI")).toBe(true);
   });
 
-  it("どれもお題の割合の範囲に入り、コードで開ける", () => {
+  it("どれもお題の候補に入り、コードで開ける", () => {
+    // ★ 下限は候補全体の DEEP_MIN_RATE で見る。劇場版は 8 曲で MIN_RATE すれすれ（1.1%）なので、
+    //   曲が増えて易しい段から外れても、毎日の楽曲データの更新（npm test）は止めない
     for (const key of ["w0", "w1", "w2", "w3", "w4", "w5", "om", "oc"]) {
       const o = byKey(key);
       expect(o, key).toBeTruthy();
-      expect(o!.rate).toBeGreaterThanOrEqual(MIN_RATE);
+      expect(o!.rate).toBeGreaterThanOrEqual(DEEP_MIN_RATE);
       expect(o!.rate).toBeLessThanOrEqual(MAX_RATE);
     }
     const keys = ["w1", "om", "oc"];

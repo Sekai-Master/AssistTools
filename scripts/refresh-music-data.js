@@ -64,9 +64,9 @@ async function toThumbnail(input) {
       console.warn(`::warning::musicCategories.json が取れない（${err.message}）。カテゴリは直前の配信データから引き継ぐ`);
       return [];
     }),
-    // ★ コラボの名前もビンゴでしか使わないので、取れなくても止めない（その回はコラボのお題が出ないだけ）
+    // ★ コラボの名前もビンゴでしか使わないので、取れなくても止めない（直前の配信データの名前を引き継ぐ）
     fetchJson(musicCollaborationsUrl).catch((err) => {
-      console.warn(`::warning::musicCollaborations.json が取れない（${err.message}）。この回はコラボの名前を入れない`);
+      console.warn(`::warning::musicCollaborations.json が取れない（${err.message}）。コラボの名前は直前の配信データから引き継ぐ`);
       return [];
     }),
   ]);
@@ -77,14 +77,20 @@ async function toThumbnail(input) {
   //   - collaborationModeId 無し = イベント限定開催でソロ常設に無い（メドレー 674/675/676・
   //     初音ミクの激唱 388）。これらは調整曲として選べないので、いつでも published=false を焼き込む。
   //   - collaborationModeId 有り = コラボの期間だけ遊べる曲（太鼓の達人タイアップ 707/708/709、
-  //     2026-02-21〜04-21）。期間（endAt）が過ぎたら外す。2026-07 に「常設」として残したのは誤りで、
-  //     期間の後は遊べない（Nori 2026-11-09）。
+  //     2026-02-21〜04-21）。いま開催中の行が 1 つも無ければ外す。表は履歴なので、終わった行が残ったまま
+  //     再開催されても新しい行で戻る。endAt が無い・null の行は終わりが無いものとして扱う。
+  //     2026-07 に「常設」として残したのは誤りで、期間の後は遊べない（Nori 2026-11-09）。
   // categories / Unit / isFullLength / タイトル文字列は判定不可・誤爆（380 スターダストメドレー
   // は limitedTimeMusics に無く published のまま）のため使わない。musicDifficulties での
   // 独立クロスチェックは検証済みだが、フェッチを増やさないため判定はここに一本化する。
+  const isRunning = (e) =>
+    (typeof e.startAt !== 'number' || e.startAt <= now) && (typeof e.endAt !== 'number' || now <= e.endAt);
+  const runningCollabIds = new Set(
+    limitedTimeMusics.filter((e) => e && e.collaborationModeId !== undefined && isRunning(e)).map((e) => e.musicId)
+  );
   const limitedExcludedIds = new Set(
     limitedTimeMusics
-      .filter((e) => e && (e.collaborationModeId === undefined || e.endAt < now))
+      .filter((e) => e && (e.collaborationModeId === undefined || !runningCollabIds.has(e.musicId)))
       .map((e) => String(e.musicId).padStart(3, '0'))
   );
 
@@ -201,6 +207,14 @@ async function toThumbnail(input) {
   }
   const categoryIndex = indexMusicCategories(musicCategories);
   const previousCategories = previousCategoriesFrom(previousSnapshot);
+  // コラボの名前の表が取れなかった日は、直前の配信データの名前を使う（無いまま書くとビンゴのテストで更新が止まる）
+  const previousCollabOf = new Map(
+    (Array.isArray(previousSnapshot) ? previousSnapshot : [])
+      .filter((p) => p && typeof p.collab === 'string')
+      .map((p) => [Number(p.id), p.collab])
+  );
+  const collabOf = (m) =>
+    collabLabelOf.size > 0 ? collabLabelOf.get(m.musicCollaborationId) : previousCollabOf.get(m.id);
   const categoryOf = new Map(
     releasedMusics.map((m) => [m.id, resolveCategories(m, categoryIndex, previousCategories)])
   );
@@ -230,7 +244,7 @@ async function toThumbnail(input) {
       published,
       isNewlyWrittenMusic: m.isNewlyWrittenMusic,
       // コラボ・タイアップの曲だけ名前を持たせる（ほかの曲には項目自体を書かない）
-      ...(collabLabelOf.has(m.musicCollaborationId) ? { collab: collabLabelOf.get(m.musicCollaborationId) } : {}),
+      ...(collabOf(m) ? { collab: collabOf(m) } : {}),
       isFullLength: m.isFullLength,
       jacketLink: `jacket_s_${id}.webp`,
       music_time: meta ? meta.music_time : null,
