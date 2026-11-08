@@ -68,7 +68,6 @@ export function FillButton({ cleared, onSetCleared }: { cleared: boolean; onSetC
   return cleared ? (
     <button
       type="button"
-      autoFocus
       onClick={() => onSetCleared(false)}
       className="mt-4 min-h-12 w-full shrink-0 rounded-xl bg-neu text-base font-bold text-slate-600 shadow-neu-sm neu-tactile focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]"
     >
@@ -77,7 +76,6 @@ export function FillButton({ cleared, onSetCleared }: { cleared: boolean; onSetC
   ) : (
     <button
       type="button"
-      autoFocus
       onClick={() => onSetCleared(true)}
       className="neu-cta mt-4 min-h-12 w-full shrink-0 rounded-xl text-base font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]"
     >

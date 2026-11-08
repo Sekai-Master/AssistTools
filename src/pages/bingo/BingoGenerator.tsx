@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { Panel } from "../../components/ui/Panel";
 import { ActionButton } from "../../components/ui/ActionButton";
+import { NeuButton } from "../../components/ui/NeuButton";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { SongSearchModal } from "../../components/SongSearchModal";
 import { resolveColor } from "../../lib/canvasColor";
@@ -53,6 +53,14 @@ interface Initial {
   odai: OdaiCell[] | null;
   song: Cell[] | null;
   error: string | null;
+  /** 埋めた途中のカードと同じ種類のリンクを開いたとき。確かめてから置き換える。 */
+  pendingLink: KindedCard | null;
+}
+
+/** 同じ種類の今のカードを、確かめずに置き換えてよいか（埋めたマスが無い・同じカード）。 */
+function canReplaceSilently(existing: KindedCard["card"] | null, next: KindedCard): boolean {
+  if (!existing || progressOf(existing).filled === 0) return true;
+  return cardCode({ kind: next.kind, card: existing } as KindedCard) === cardCode(next);
 }
 
 /**
@@ -60,7 +68,7 @@ interface Initial {
  * 壊れた・古い保存は黙って捨てる。読めないリンクは文言を出し、新しいカードを作れる状態にする。
  */
 function restoreInitial(musics: BingoMusic[], linked: string | null): Initial {
-  const init: Initial = { kind: "odai", odai: null, song: null, error: null };
+  const init: Initial = { kind: "odai", odai: null, song: null, error: null, pendingLink: null };
   if (musics.length === 0) return init;
   const put = (kc: KindedCard) => {
     if (kc.kind === "odai") init.odai = kc.card;
@@ -81,7 +89,8 @@ function restoreInitial(musics: BingoMusic[], linked: string | null): Initial {
   if (linked !== null) {
     try {
       const kc = decodeCardCode(linked, musics);
-      put(kc);
+      if (canReplaceSilently(kc.kind === "odai" ? init.odai : init.song, kc)) put(kc);
+      else init.pendingLink = kc;
       init.kind = kc.kind;
     } catch (e) {
       init.error = `リンクのカードを読めませんでした。${errorText(e, "コードの形が違います。")}`;
@@ -106,8 +115,9 @@ function BingoBoard({
   loading,
   error: dataError,
 }: ReturnType<typeof useBingoMusics>) {
-  const [params, setParams] = useSearchParams();
-  const [initial] = useState(() => restoreInitial(musics, params.get(CARD_PARAM)));
+  const [initial] = useState(() =>
+    restoreInitial(musics, new URLSearchParams(window.location.search).get(CARD_PARAM))
+  );
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // 書き出し画像の描き終わり。共有・保存はこれを待ってから画像にする（埋めた直後でも最新の絵）
   const drawn = useRef<Promise<void>>(Promise.resolve());
@@ -119,6 +129,7 @@ function BingoBoard({
   const [pickingCenter, setPickingCenter] = useState(false);
   const [borderColor, setBorderColor] = useState(pickBorderColor);
   const [error, setError] = useState<string | null>(initial.error);
+  const [pendingLink, setPendingLink] = useState<KindedCard | null>(initial.pendingLink);
   const ready = musics.length > 0;
 
   const odaiCandidates = useMemo(() => buildOdaiCandidates(musics), [musics]);
@@ -129,17 +140,15 @@ function BingoBoard({
     setKind(kc.kind);
   }, []);
 
-  // リンクのカードを出した後はリンクを外す（開き直したときに、埋めた途中が人のカードで上書きされないように）
+  // リンクのカードを読んだ後はリンクを外す（開き直したときに、埋めた途中が人のカードで上書きされないように）。
+  // ★ ルーターの setSearchParams を使うと同じ /bingo でも画面遷移の演出が走るので、履歴を直接書き換える
   useEffect(() => {
-    if (!ready || !params.has(CARD_PARAM)) return;
-    setParams(
-      (p) => {
-        p.delete(CARD_PARAM);
-        return p;
-      },
-      { replace: true }
-    );
-  }, [ready, params, setParams]);
+    if (!ready) return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has(CARD_PARAM)) return;
+    url.searchParams.delete(CARD_PARAM);
+    window.history.replaceState(window.history.state, "", url);
+  }, [ready]);
 
   // 途中経過を残す（楽曲データが届く前の空のカードで上書きしない）
   useEffect(() => {
@@ -211,12 +220,20 @@ function BingoBoard({
 
   const openCode = (input: string) => {
     try {
-      applyCard(decodeCardCode(extractCode(input), musics));
+      const kc = decodeCardCode(extractCode(input), musics);
+      const existing = kc.kind === "odai" ? odaiCard : songCard;
+      if (!canReplaceSilently(existing, kc) && !window.confirm("いまのカードを消して、このコードのカードを開きますか？")) {
+        return;
+      }
+      applyCard(kc);
       setError(null);
     } catch (e) {
       setError(errorText(e, "コードを読めませんでした"));
     }
   };
+
+  // useModalA11y は onClose が変わるたびに掛け直すので、同じ関数を渡す
+  const closeCenterPicker = useCallback(() => setPickingCenter(false), []);
 
   const centerMissing = kind === "song" && filters.centerMode === "specified" && !filters.centerSong;
   const code = current ? cardCode(current) : "";
@@ -254,6 +271,25 @@ function BingoBoard({
           <p className="mt-3 text-sm text-rose-600" role="alert">
             {error}
           </p>
+        )}
+        {pendingLink && (
+          <div className="mt-4 rounded-lg border border-slate-300 p-4" role="status">
+            <p className="text-sm text-slate-700">リンクのカードを開きますか？いまのカードは消えます</p>
+            <div className="mt-3 flex gap-3">
+              <NeuButton
+                className="min-h-11 flex-1 !px-2"
+                onClick={() => {
+                  applyCard(pendingLink);
+                  setPendingLink(null);
+                }}
+              >
+                開く
+              </NeuButton>
+              <NeuButton className="min-h-11 flex-1 !px-2" onClick={() => setPendingLink(null)}>
+                いまのまま
+              </NeuButton>
+            </div>
+          </div>
         )}
         <BingoSettings
           kind={kind}
@@ -307,7 +343,7 @@ function BingoBoard({
             setFilters((f) => ({ ...f, centerSong: m }));
             setPickingCenter(false);
           }}
-          onClose={() => setPickingCenter(false)}
+          onClose={closeCenterPicker}
         />
       )}
     </>

@@ -96,6 +96,15 @@ describe("shareCard（端末に合わせて切り替える）", () => {
     expect(share).not.toHaveBeenCalled();
   });
 
+  it("canShare が例外を投げる端末でも、コピーに切り替える", async () => {
+    const share = vi.fn();
+    const canShare = () => {
+      throw new Error("TypeError");
+    };
+    const copyImage = vi.fn().mockResolvedValue(undefined);
+    expect(await shareCard(blob, meta, { share, canShare, copyImage, download: vi.fn() })).toBe("copied");
+  });
+
   it("コピーもできなければ保存する", async () => {
     const copyImage = vi.fn().mockRejectedValue(new Error("denied"));
     const download = vi.fn();

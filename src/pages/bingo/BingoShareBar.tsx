@@ -21,12 +21,13 @@ export function BingoShareBar({ getImage, link, text, fileName }: Props) {
   const [message, setMessage] = useState<string | null>(null);
 
   const withImage = async (act: (blob: Blob) => Promise<void> | void) => {
-    const blob = await getImage();
-    if (!blob) {
+    try {
+      const blob = await getImage();
+      if (!blob) throw new Error("no image");
+      await act(blob);
+    } catch {
       setMessage("画像を作れませんでした");
-      return;
     }
-    await act(blob);
   };
 
   const share = () =>

@@ -74,10 +74,13 @@ export async function shareCard(
   const file = new File([blob], meta.fileName, { type: "image/png" });
   // url を別に渡すと、画像と並べたときに文が落ちる端末がある。文の中に入れる。
   const data: ShareData = { files: [file], text: `${meta.text}\n${meta.url}` };
-  if (env.share && env.canShare?.(data)) {
+  if (env.share) {
     try {
-      await env.share(data);
-      return "shared";
+      // canShare が投げる端末もあるので try の中で聞く
+      if (env.canShare?.(data)) {
+        await env.share(data);
+        return "shared";
+      }
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") return "cancelled";
     }
