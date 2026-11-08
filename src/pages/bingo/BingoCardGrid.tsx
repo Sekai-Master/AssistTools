@@ -3,10 +3,13 @@ import { SongSearchModal, type AliasEntry } from "../../components/SongSearchMod
 import { UNIT_COLOR_VAR } from "../../lib/units";
 import { onJacketError } from "../../lib/img";
 import { cn } from "../../lib/utils";
+import { NeuButton } from "../../components/ui/NeuButton";
 import type { BingoMusic, Cell } from "./bingoLogic";
 import type { OdaiCell } from "./odaiLogic";
-import { BINGO_LINES, type Progress, progressOf, withCleared } from "./bingoProgress";
+import { BINGO_LINES, type Progress, progressOf, withCleared, withClearedAll } from "./bingoProgress";
+import { matchingCells } from "./bingoPlayed";
 import { OdaiSheet } from "./OdaiSheet";
+import { PlayedSongSheet, type PlayedMatch } from "./PlayedSongSheet";
 import { SongCellSheet } from "./SongCellSheet";
 
 interface Common {
@@ -118,6 +121,7 @@ function BingoLines({ lines, outline }: { lines: number[]; outline: boolean }) {
 /**
  * カードの 5×5（お題・曲名で共通）。マスを押すと小窓が開き、そこで埋める／戻す。
  * 押しただけでは埋めない: 流れた曲が本当に当てはまるかを確かめてから埋めるため。
+ * 上の「遊んだ曲を入れる」は逆引き: 曲を選ぶと当てはまるマスを並べ、まとめて埋める。
  * ★ 320px では 1 マスが約 50px しかない。お題の文言は区切り（chunks）ごとに inline-block で
  *   まとめ、語の途中で折れないようにする（line-break: strict で「ー」が行の頭に来ないように）。
  */
@@ -125,9 +129,12 @@ export function BingoCardGrid(props: Props) {
   const { card, musics, aliases, jacketBase } = props;
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [replacing, setReplacing] = useState<number | null>(null);
+  // 遊んだ曲: 検索を開いている間は "picking"、選んだ後はその曲
+  const [played, setPlayed] = useState<BingoMusic | "picking" | null>(null);
   // useModalA11y は onClose が変わるたびに掛け直すので、同じ関数を渡す
   const close = useCallback(() => setOpenIndex(null), []);
   const closeReplace = useCallback(() => setReplacing(null), []);
+  const closePlayed = useCallback(() => setPlayed(null), []);
   const progress = progressOf(card);
 
   const setCleared = (index: number, cleared: boolean) => {
@@ -143,11 +150,35 @@ export function BingoCardGrid(props: Props) {
     setReplacing(null);
   };
 
+  const playedMatches: PlayedMatch[] =
+    played && played !== "picking"
+      ? matchingCells(card, played).map((index) => {
+          const cell = card[index] as Exclude<(typeof card)[number], "FREE">;
+          return "odai" in cell
+            ? { index, caption: cell.odai.caption, text: cell.odai.text, cleared: cell.cleared }
+            : { index, cleared: cell.cleared };
+        })
+      : [];
+
+  const fillPlayed = () => {
+    const indices = playedMatches.map((m) => m.index);
+    if (props.kind === "odai") props.onChange(withClearedAll(props.card, indices));
+    else props.onChange(withClearedAll(props.card, indices));
+    setPlayed(null);
+  };
+
   const square = props.kind === "song" ? "aspect-square" : "min-h-16 sm:aspect-square";
   const open = openIndex !== null ? card[openIndex] : null;
 
   return (
     <>
+      <NeuButton
+        onClick={() => setPlayed("picking")}
+        className="mb-4 flex min-h-12 w-full items-center justify-center gap-2 text-base"
+      >
+        <span className="material-icons text-xl text-slate-500" aria-hidden data-icon="search" />
+        遊んだ曲を入れる
+      </NeuButton>
       <ProgressLine progress={progress} />
       <div className="relative -mx-2 sm:mx-auto sm:max-w-lg">
         <div className="grid grid-cols-5 gap-1 sm:gap-2">
@@ -240,6 +271,26 @@ export function BingoCardGrid(props: Props) {
             setReplacing(openIndex);
           }}
           onClose={close}
+        />
+      )}
+      {played === "picking" && (
+        <SongSearchModal
+          musics={musics}
+          aliases={aliases}
+          jacketBase={jacketBase}
+          title="遊んだ曲を選ぶ"
+          onSelect={setPlayed}
+          onClose={closePlayed}
+        />
+      )}
+      {played && played !== "picking" && (
+        <PlayedSongSheet
+          kind={props.kind}
+          music={played}
+          matches={playedMatches}
+          onFill={fillPlayed}
+          onPickAgain={() => setPlayed("picking")}
+          onClose={closePlayed}
         />
       )}
       {replacing !== null && (

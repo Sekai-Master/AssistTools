@@ -35,8 +35,8 @@ const FREE_ICON = `${base}images/icon.webp`;
 
 /** 種類ごとの 1 行の説明。曲名はほぼ埋まらない（1 曲が載る確率 24/740）ので、既定はお題。 */
 const KIND_HINT: Record<CardKind, string> = {
-  odai: "マスはお題。流れた曲が当てはまるお題を埋める",
-  song: "マスは曲。流れた曲のマスを埋める",
+  odai: "マスはお題。遊んだ曲を入れると、当てはまるマスが分かる",
+  song: "マスは曲。遊んだ曲を入れると、カードにあるか分かる",
 };
 
 const DEFAULT_FILTERS: SongFilters = {
