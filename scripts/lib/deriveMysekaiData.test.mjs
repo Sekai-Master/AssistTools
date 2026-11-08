@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { derive, summarize } from "./deriveMysekaiData.mjs";
+import { derive, summarize, withoutUnreleased } from "./deriveMysekaiData.mjs";
 
 const NOW = Date.UTC(2026, 7, 17);
 
@@ -289,5 +289,46 @@ describe("summarize", () => {
     expect(s.withCommon).toBe(1); // 家具1
     expect(s.reactive).toBe(2); // 家具3は反応なし
     expect(s.sketchable).toBe(1); // 模写可は家具1のみ
+  });
+});
+
+// ★ 家具の表には公開日が無い。画像の配信を公開の目安にして、画像がまだ無い家具は出さない。
+//   以前はテストが落ちて更新全体が止まり、毎日失敗が飛んでいた（2026-10-31 の 26 件、11/6〜 の彰人の誕生日 5 件）
+describe("withoutUnreleased", () => {
+  const out = () => ({
+    genres: { main: [{ id: 1, name: "a" }, { id: 2, name: "b" }] },
+    talkLinks: [
+      { p: [1], f: [10, 11] },
+      { p: [2], f: [10, 11, 12] },
+    ],
+    fixtures: [
+      { id: 10, im: "a", mg: 1 },
+      { id: 11, im: "b", mg: 1 },
+      { id: 12, im: "c", mg: 2 },
+      { id: 13, mg: 1 },
+    ],
+  });
+
+  it("画像が無い家具を外し、外した家具を返す。画像を持たない家具は残す", () => {
+    const { out: o, dropped } = withoutUnreleased(out(), (im) => im !== "c");
+    expect(o.fixtures.map((f) => f.id)).toEqual([10, 11, 13]);
+    expect(dropped.map((f) => f.id)).toEqual([12]);
+  });
+
+  it("外した家具を指すリンクを外し、2 つ未満になったリンクは捨てる", () => {
+    const { out: o } = withoutUnreleased(out(), (im) => im !== "b");
+    expect(o.talkLinks).toEqual([{ p: [2], f: [10, 12] }]);
+  });
+
+  it("家具が無くなったジャンルを選択肢から落とす", () => {
+    const { out: o } = withoutUnreleased(out(), (im) => im !== "c");
+    expect(o.genres.main.map((g) => g.id)).toEqual([1]);
+  });
+
+  it("外すものが無ければ元のまま返す", () => {
+    const src = out();
+    const { out: o, dropped } = withoutUnreleased(src, () => true);
+    expect(o).toBe(src);
+    expect(dropped).toEqual([]);
   });
 });

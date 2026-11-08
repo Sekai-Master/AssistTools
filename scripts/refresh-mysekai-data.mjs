@@ -14,7 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
 import sharp from "sharp";
-import { derive, summarize } from "./lib/deriveMysekaiData.mjs";
+import { derive, summarize, withoutUnreleased } from "./lib/deriveMysekaiData.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = path.join(__dirname, "../public/MysekaiDatas");
@@ -197,7 +197,21 @@ async function main() {
   }
 
   const before = previousSummary();
-  const out = derive(src, now);
+  const derived = derive(src, now);
+
+  // ★ 画像を先に揃え、まだ配信されていない家具（＝公開前とみなす）を外してから書き出す。
+  //   以前は書き出したあとに画像を取り、無い家具はテストで止めていた（更新全体が止まった）
+  await syncThumbnails(derived.fixtures, derived.vocab);
+  const { out, dropped } = withoutUnreleased(derived, (im) => fs.existsSync(path.join(THUMB_DIR, `${im}.webp`)));
+  if (dropped.length) {
+    console.warn(
+      `画像がまだ無い家具 ${dropped.length} 件は出さない（公開前とみなす。画像が配信されたら次の回で入る）:`,
+      dropped
+        .slice(0, 20)
+        .map((f) => `${f.name} (${f.im})`)
+        .join(" / ")
+    );
+  }
   const after = summarize(out);
 
   console.log(
@@ -231,8 +245,6 @@ async function main() {
     `  fixtures.json ${byteKb(json).padStart(8)}  (brotli ${kb(zlib.brotliCompressSync(json).length)})`
   );
 
-  // ★ 画像は JSON を書き出したあとに取りに行く（out を起点にするため）。
-  await syncThumbnails(out.fixtures, out.vocab);
 
   console.log("完了");
 }
