@@ -1,11 +1,11 @@
 import type { Cell } from "./bingoLogic";
 
 /** カード描画の定数（現行 draw.js 準拠）。 */
-const CELL = 100;
-const MARGIN = 20;
+export const CELL = 100;
+export const MARGIN = 20;
 export const CANVAS_SIZE = CELL * 5 + MARGIN * 2; // 520
 
-function loadImage(src: string): Promise<HTMLImageElement> {
+export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
@@ -14,7 +14,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-function drawClearedOverlay(ctx: CanvasRenderingContext2D, x: number, y: number) {
+export function drawClearedOverlay(ctx: CanvasRenderingContext2D, x: number, y: number) {
   ctx.save();
   ctx.globalAlpha = 0.7;
   ctx.fillStyle = "#cccccc";
@@ -38,7 +38,7 @@ function drawClearedOverlay(ctx: CanvasRenderingContext2D, x: number, y: number)
   ctx.restore();
 }
 
-function drawFree(ctx: CanvasRenderingContext2D, x: number, y: number, icon: HTMLImageElement | null) {
+export function drawFree(ctx: CanvasRenderingContext2D, x: number, y: number, icon: HTMLImageElement | null) {
   if (icon) {
     ctx.save();
     ctx.globalAlpha = 0.7;
@@ -125,15 +125,18 @@ export async function drawBingoCard(
   );
   if (isCancelled()) return;
 
-  // 署名
+  drawSignatureAndFrame(ctx, opts.borderColor);
+}
+
+/** 右下の署名と角丸の枠（曲名・お題で共通）。 */
+export function drawSignatureAndFrame(ctx: CanvasRenderingContext2D, borderColor: string) {
   ctx.fillStyle = "#000000";
   ctx.font = "14px sans-serif";
   ctx.textAlign = "right";
   ctx.textBaseline = "bottom";
   ctx.fillText("Created by Sekai-Master @YesNoritake", CANVAS_SIZE - 4, CANVAS_SIZE - 2);
 
-  // 角丸枠
-  ctx.strokeStyle = opts.borderColor;
+  ctx.strokeStyle = borderColor;
   ctx.lineWidth = 4;
   drawRoundedRect(ctx, MARGIN, MARGIN, CELL * 5, CELL * 5, 10);
   ctx.stroke();

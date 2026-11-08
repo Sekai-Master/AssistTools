@@ -9,6 +9,10 @@ export interface BingoMusic {
   title: string;
   pronunciation?: string;
   artistName?: string;
+  /** 作者の安定した鍵（お題ビンゴの作者のお題に使う）。 */
+  creatorArtistId?: number;
+  /** ゲーム内の長さ（秒）。 */
+  musicTime?: number;
   default: number;
   Unit: string;
   categories: string[];
