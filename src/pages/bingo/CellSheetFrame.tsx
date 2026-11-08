@@ -29,7 +29,8 @@ export function CellSheetFrame({ caption, title, sub, onClose, className, childr
       data-overlay=""
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        // ダブルクリックの 2 回目では閉じない（検索の結果を素早く 2 回押すと、出たばかりの小窓の外を押してしまう）
+        if (e.target === e.currentTarget && e.detail < 2) onClose();
       }}
     >
       <div

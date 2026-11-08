@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SongSearchModal, type AliasEntry } from "../../components/SongSearchModal";
 import { UNIT_COLOR_VAR } from "../../lib/units";
 import { onJacketError } from "../../lib/img";
@@ -135,6 +135,14 @@ export function BingoCardGrid(props: Props) {
   const close = useCallback(() => setOpenIndex(null), []);
   const closeReplace = useCallback(() => setReplacing(null), []);
   const closePlayed = useCallback(() => setPlayed(null), []);
+  const playedButton = useRef<HTMLButtonElement>(null);
+  const wasPlayedOpen = useRef(false);
+  // 閉じたら「遊んだ曲を入れる」にフォーカスを戻す。検索欄の autoFocus のせいで、小窓が覚える
+  // 「開く前のフォーカス」は消えた検索欄になり、そのままだとフォーカスが body に落ちる
+  useEffect(() => {
+    if (played === null && wasPlayedOpen.current) playedButton.current?.focus({ preventScroll: true });
+    wasPlayedOpen.current = played !== null;
+  }, [played]);
   const progress = progressOf(card);
 
   const setCleared = (index: number, cleared: boolean) => {
@@ -173,6 +181,7 @@ export function BingoCardGrid(props: Props) {
   return (
     <>
       <NeuButton
+        ref={playedButton}
         onClick={() => setPlayed("picking")}
         className="mb-4 flex min-h-12 w-full items-center justify-center gap-2 text-base"
       >

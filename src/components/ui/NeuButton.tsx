@@ -1,7 +1,7 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { ComponentProps } from "react";
 import { cn } from "../../lib/utils";
 
-interface NeuButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface NeuButtonProps extends ComponentProps<"button"> {
   /** 選択状態。ユニットカラーで塗り、へこませる（＝選ばれて沈んでいる）。 */
   active?: boolean;
 }

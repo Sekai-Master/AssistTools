@@ -37,9 +37,16 @@ export function PlayedSongSheet({ kind, music, matches, onFill, onPickAgain, onC
   const open = matches.filter((m) => !m.cleared).length;
 
   return (
-    <CellSheetFrame caption="遊んだ曲" title={music.title} sub={summary(kind, matches.length)} onClose={onClose}>
+    <CellSheetFrame
+      caption="遊んだ曲"
+      title={music.title}
+      sub={summary(kind, matches.length)}
+      onClose={onClose}
+      // 横向きのスマホでも上の × と下のボタンが画面に残るよう、一覧の側を縮めてスクロールさせる
+      className="max-h-[90dvh]"
+    >
       {kind === "odai" && matches.length > 0 && (
-        <ul className="mt-4 divide-y divide-slate-300 rounded-lg border border-slate-300">
+        <ul className="mt-4 min-h-0 divide-y divide-slate-300 overflow-y-auto rounded-lg border border-slate-300">
           {matches.map((m) => (
             <li key={m.index} className="flex items-center justify-between gap-3 px-3 py-2">
               <span className="min-w-0">
@@ -65,7 +72,7 @@ export function PlayedSongSheet({ kind, music, matches, onFill, onPickAgain, onC
       <button
         type="button"
         onClick={onPickAgain}
-        className="mt-3 min-h-11 w-full rounded-lg text-sm font-bold text-slate-600 hover:bg-[color:color-mix(in_srgb,var(--neu-ink)_9%,transparent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]"
+        className="mt-3 min-h-11 w-full shrink-0 rounded-lg text-sm font-bold text-slate-600 hover:bg-[color:color-mix(in_srgb,var(--neu-ink)_9%,transparent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]"
       >
         別の曲を選ぶ
       </button>

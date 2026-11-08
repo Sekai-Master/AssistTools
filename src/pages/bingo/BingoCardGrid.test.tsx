@@ -136,6 +136,49 @@ describe("遊んだ曲を入れる（お題）", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     const filled = seen.at(-1)!.flatMap((c, i) => (c !== "FREE" && c.cleared ? [i] : []));
     expect(filled).toEqual(hits(song));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "遊んだ曲を入れる" }));
+  });
+
+  it("一部だけ埋めてあれば、埋めた印を付け、残りだけを埋める", () => {
+    const seen: OdaiCell[][] = [];
+    render(<OdaiHarness onCard={(c) => seen.push(c)} />);
+    const song = MUSICS.find((m) => hits(m).length === 2 && unique(m))!;
+    const [first, second] = hits(song);
+    // マスの小窓から 1 つ目だけ埋める（FREE はボタンでないので、中央より後ろは 1 つずれる）
+    fireEvent.click(cellButtons()[first < 12 ? first : first - 1]);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "埋める" }));
+    enterPlayed(song.title);
+    expect(within(dialog()).getByText("2つ")).toBeTruthy();
+    expect(within(dialog()).getAllByText("埋めた")).toHaveLength(1);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "埋める" }));
+    const filled = seen.at(-1)!.flatMap((c, i) => (c !== "FREE" && c.cleared ? [i] : []));
+    expect(filled).toEqual([first, second]);
+  });
+
+  it("検索も小窓も Escape で閉じ、カードは変わらず、フォーカスはボタンに戻る", () => {
+    const seen: OdaiCell[][] = [];
+    render(<OdaiHarness onCard={(c) => seen.push(c)} />);
+    const open = screen.getByRole("button", { name: "遊んだ曲を入れる" });
+    open.focus();
+    fireEvent.click(open);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(open);
+    enterPlayed(MUSICS.find((m) => hits(m).length >= 1 && unique(m))!.title);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(open);
+    expect(seen).toHaveLength(0);
+  });
+
+  it("小窓は背景を押すと閉じるが、ダブルクリックの 2 回目では閉じない", () => {
+    render(<OdaiHarness onCard={() => {}} />);
+    enterPlayed(MUSICS.find((m) => hits(m).length >= 1 && unique(m))!.title);
+    const backdrop = dialog().parentElement!;
+    fireEvent.mouseDown(backdrop, { detail: 2 });
+    expect(screen.queryByRole("dialog")).not.toBeNull();
+    fireEvent.mouseDown(backdrop, { detail: 1 });
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("当てはまるマスが無い曲は、そう出して埋めるボタンを出さない", () => {
