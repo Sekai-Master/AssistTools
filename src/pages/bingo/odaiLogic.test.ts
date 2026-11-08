@@ -21,6 +21,7 @@ import {
   createRng,
   decodeOdaiSeed,
   encodeOdaiSeed,
+  groupOdaiSongs,
   hasBingo,
   isOdaiSeed,
   listOdaiSongs,
@@ -487,6 +488,45 @@ describe("listOdaiSongs（お題に当てはまる曲の一覧）", () => {
     expect(listOdaiSongs(deco, MUSICS, kata).map((m) => m.id)).toContain(target.id);
     expect(listOdaiSongs(deco, MUSICS, "  ")).toHaveLength(all.length);
     expect(listOdaiSongs(deco, MUSICS, "存在しない曲名xyz")).toHaveLength(0);
+  });
+});
+
+describe("groupOdaiSongs（コラボのお題はコラボごとに区切る）", () => {
+  const collab = CANDIDATES.find((o) => o.key === "oc")!;
+
+  it("区切りはコラボの名前ごと。曲の多いコラボから、同じ数なら名前の順。曲は一覧と同じ", () => {
+    const groups = groupOdaiSongs(collab, MUSICS);
+    expect(groups.length).toBeGreaterThanOrEqual(3);
+    for (const g of groups) {
+      expect(g.songs.every((m) => m.collab === g.label)).toBe(true);
+      expect(g.total).toBe(g.songs.length);
+    }
+    for (let i = 1; i < groups.length; i++) {
+      const [a, b] = [groups[i - 1], groups[i]];
+      expect(a.total > b.total || (a.total === b.total && a.label.localeCompare(b.label, "ja") <= 0)).toBe(true);
+    }
+    expect(groups.flatMap((g) => g.songs.map((m) => m.id)).sort()).toEqual(
+      listOdaiSongs(collab, MUSICS).map((m) => m.id).sort()
+    );
+  });
+
+  it("絞り込みは区切りの中で効き、当てはまる曲が無い区切りは出さない。見出しの数は絞り込む前のまま", () => {
+    const all = groupOdaiSongs(collab, MUSICS);
+    // 曲の多いコラボの 1 曲で絞る（見出しの数が絞り込み後の数とずれるように）
+    expect(all[0].total).toBeGreaterThanOrEqual(2);
+    const target = all[0].songs[0];
+    const narrowed = groupOdaiSongs(collab, MUSICS, target.title);
+    expect(narrowed.map((g) => g.label)).toContain(target.collab);
+    expect(narrowed.length).toBeLessThan(all.length);
+    const g = narrowed.find((x) => x.label === target.collab)!;
+    expect(g.songs.map((m) => m.id)).toContain(target.id);
+    expect(g.songs.length).toBeLessThan(g.total);
+    expect(g.total).toBe(all[0].total);
+    expect(groupOdaiSongs(collab, MUSICS, "存在しない曲名xyz")).toEqual([]);
+  });
+
+  it("区切りを持たないお題は空", () => {
+    expect(groupOdaiSongs(CANDIDATES.find((o) => o.key === "u1")!, MUSICS)).toEqual([]);
   });
 });
 

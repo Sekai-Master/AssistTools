@@ -7,9 +7,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { parseMusics } from "./useBingoMusics";
-import { decodeOdaiSeed, listOdaiSongs } from "./odaiLogic";
+import { decodeOdaiSeed, groupOdaiSongs, listOdaiSongs } from "./odaiLogic";
 import { OdaiSheet } from "./OdaiSheet";
 
 afterEach(cleanup);
@@ -60,5 +60,38 @@ describe("お題の小窓の、曲名の下の値", () => {
 
   it.each(["s1", "kl", "gn", "m3", "va"])("%s: 曲名で判定できる・値を持たないお題は出さない", (key) => {
     for (const li of open(key)) expect(li.querySelector(".text-xs")).toBeNull();
+  });
+});
+
+describe("コラボのお題の小窓（コラボごとに区切る）", () => {
+  const collab = decodeOdaiSeed(`OD1:${["oc", ...filler.slice(0, 11), "F", ...KEYS].join(".")}`, MUSICS)[0];
+  const odai = collab !== "FREE" ? collab.odai : null;
+  const renderSheet = () =>
+    render(<OdaiSheet odai={odai!} cleared={false} musics={MUSICS} jacketBase="/j/" onSetCleared={() => {}} onClose={() => {}} />);
+  const sections = () => within(screen.getByRole("dialog")).getAllByRole("region");
+
+  it("コラボごとの見出し（名前と曲数）の下に曲が並び、曲名の下にコラボの名前は出さない", () => {
+    renderSheet();
+    const groups = groupOdaiSongs(odai!, MUSICS);
+    const shown = sections();
+    expect(shown.map((s) => within(s).getByRole("heading").textContent)).toEqual(groups.map((g) => `${g.label}${g.total}曲`));
+    shown.forEach((s, i) => {
+      expect(within(s).getAllByRole("listitem").map((li) => li.textContent)).toEqual(groups[i].songs.map((m) => m.title));
+    });
+    // 一覧の曲の数は、お題に当てはまる曲の数
+    expect(within(screen.getByRole("dialog")).getAllByRole("listitem")).toHaveLength(listOdaiSongs(odai!, MUSICS).length);
+  });
+
+  it("絞り込むと、当てはまる曲のあるコラボだけが残る（見出しの曲数は変わらない）", () => {
+    renderSheet();
+    const groups = groupOdaiSongs(odai!, MUSICS);
+    // 曲の多いコラボの 1 曲で絞る
+    const target = groups[0];
+    expect(target.total).toBeGreaterThanOrEqual(2);
+    fireEvent.change(within(screen.getByRole("dialog")).getByRole("searchbox"), { target: { value: target.songs[0].title } });
+    const shown = sections();
+    expect(shown.length).toBeLessThan(groups.length);
+    const heading = shown.map((s) => within(s).getByRole("heading").textContent);
+    expect(heading).toContain(`${target.label}${target.total}曲`);
   });
 });

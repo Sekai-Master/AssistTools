@@ -45,6 +45,8 @@ export interface OdaiDef {
   test: (m: BingoMusic) => boolean;
   /** お題の小窓で曲名の下に出す、判定に使う値（読み・長さ・追加された日・レベルなど）。判定しやすいお題には無い。 */
   hint?: (m: BingoMusic) => string | null;
+  /** お題の小窓で、当てはまる曲をこの名前ごとに区切って出す（コラボのお題はコラボごと）。 */
+  group?: (m: BingoMusic) => string | null;
 }
 
 export interface Odai extends OdaiDef {
@@ -216,8 +218,8 @@ const originDefs: OdaiDef[] = [
     text: "コラボ",
     chunks: ["コラボ"],
     test: isCollab,
-    // どのコラボの曲かを添える（東方Projectコラボ など）
-    hint: (m) => m.collab ?? null,
+    // 小窓ではコラボごとに区切る（東方Projectコラボ 6曲 など）。見出しに名前が出るので、曲名の下には出さない
+    group: (m) => m.collab ?? null,
   },
 ];
 

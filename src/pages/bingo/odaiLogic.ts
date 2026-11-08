@@ -371,3 +371,28 @@ export function listOdaiSongs(odai: Odai, musics: readonly BingoMusic[], query =
     )
     .sort((a, b) => (a.pronunciation ?? a.title).localeCompare(b.pronunciation ?? b.title, "ja"));
 }
+
+export interface OdaiSongGroup {
+  label: string;
+  /** 絞り込む前の、この区切りの曲数（見出しに出す。絞り込んでも並びと数は動かない）。 */
+  total: number;
+  /** 絞り込んだ後の曲（読み順）。 */
+  songs: BingoMusic[];
+}
+
+/**
+ * 区切りを持つお題（コラボ）の、区切りごとの曲。曲の多い区切りから、同じ数なら名前の順。
+ * query で絞り込み、当てはまる曲が無くなった区切りは出さない。区切りを持たないお題は空。
+ */
+export function groupOdaiSongs(odai: Odai, musics: readonly BingoMusic[], query = ""): OdaiSongGroup[] {
+  const groupOf = odai.group;
+  if (!groupOf) return [];
+  const label = (m: BingoMusic) => groupOf(m) ?? "その他";
+  const totals = new Map<string, number>();
+  for (const m of listOdaiSongs(odai, musics)) totals.set(label(m), (totals.get(label(m)) ?? 0) + 1);
+  const shown = listOdaiSongs(odai, musics, query);
+  return [...totals.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ja"))
+    .map(([name, total]) => ({ label: name, total, songs: shown.filter((m) => label(m) === name) }))
+    .filter((g) => g.songs.length > 0);
+}
