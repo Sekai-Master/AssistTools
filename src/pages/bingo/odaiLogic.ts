@@ -115,16 +115,17 @@ const levelsOf = (n: number): Record<OdaiLevel, number> => ({ easy: n, normal: n
 /**
  * テーマつきのカード（Nori 2026-11-09、案 27。設計はオーケストレーター一任）。テーマを選んだときは、テーマの種類だけ
  * 上限を THEME_CAP_BONUS 足し（Nori の決定、案 b）、テーマの種類のマスをこの下限以上にする。並べない組・段の割合の下限・
- * 合わせ込みはそのまま守る。下限は実測で全部のカードが届く数（2026-11-09、テーマ × 段ごとに 600 枚 × 3 回）:
+ * 合わせ込みはそのまま守る。下限（2026-11-09、テーマ × 段ごとに 600 枚 × 3 回で全部のカードが届く）:
  * - 曲名・読み 12
- * - 歌う人 10（同じユニットは 1 枚に 1 つまでなので、ユニットの色の 6 つ＋その他・劇場版・コラボ・6人以上・エイプリルフールの 11 が最大）
- * - 譜面・MV 11（Lv.32 以上・Lv.33 以上・EXPERT Lv.28 以上が互いに並べない組なので、譜面は 4 つまで。12 は 97〜99% しか届かない）
+ * - 歌う人 9・譜面・MV 9。並べられる最大（歌う人 11: ユニットの色の 6 つ＋色の印の無い 5 つ、譜面・MV 12: 譜面は並べない組で 4 つまで）
+ *   の近くまで下限を上げると、足した上限の分を下限が使い切り、同じテーマのカードが似る（譜面・MV 11 で 2 枚に共通するお題が
+ *   EASY 10.0・MASTER 15.5、9 なら 8.1・11.2）。テーマのマスを多めにしつつ、顔ぶれに余裕を残す数にした
  */
 export const ODAI_THEMES: Record<OdaiTheme, OdaiThemeDef> = {
   any: { label: "おまかせ", kinds: [], floor: levelsOf(0) },
-  singer: { label: "歌う人", kinds: ["singer", "vocal", "unit", "origin"], floor: levelsOf(10) },
+  singer: { label: "歌う人", kinds: ["singer", "vocal", "unit", "origin"], floor: levelsOf(9) },
   title: { label: "曲名・読み", kinds: ["title", "word", "row", "reading", "length"], floor: levelsOf(12) },
-  chart: { label: "譜面・MV", kinds: ["chart", "mv", "added", "maker"], floor: levelsOf(11) },
+  chart: { label: "譜面・MV", kinds: ["chart", "mv", "added", "maker"], floor: levelsOf(9) },
 };
 export const ODAI_THEME_KEYS: readonly OdaiTheme[] = ["any", "singer", "title", "chart"];
 export const DEFAULT_ODAI_THEME: OdaiTheme = "any";
