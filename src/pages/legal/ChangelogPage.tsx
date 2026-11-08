@@ -1,6 +1,7 @@
 import { ToolPage } from "../../components/ui/ToolPage";
 import { DocIntro, DocLink } from "./LegalDoc";
 import { parseChangelog } from "./changelogParser";
+import { changelogImageOf } from "./changelogImages";
 import { REPO_URL } from "../../lib/site";
 // 正本はリポジトリ直下の CHANGELOG.md（docs/versioning.md）。
 // ここで読み込んでいるので、ページ用にデータを持ち直す必要は無い。
@@ -17,6 +18,39 @@ const GROUP_TONE: Record<string, string> = {
   変更: "text-[color:var(--color-vs)]",
   修正: "text-[color:var(--color-n25)]",
 };
+
+/**
+ * X に載せた告知画像。版の見出しのすぐ下に、本文と同じ幅で置く。
+ *
+ * - 横に並べないのは、このページの幅（max-w-3xl、枠の内側 688px）だと、画像の列を 280px 取るだけで
+ *   本文が 1 行 27 字ほどに細くなり、画像の中の説明の字も 5px ほどに縮んで読めないから。
+ *   上に置けば PC で 688px 幅になり、画像の中の説明の字が 13px ほどで読める
+ * - 線の囲みを付けるのは、暗いテーマでパネルの地（#2a2d33）と画像の地が同じ色で縁が消えるから
+ * - 押すと原寸（幅 1200px）を新しいタブで開く。スマホでは縮んで字が読めないので、拡大して読む用。
+ *   ページ内で拡大するわけではないので、カーソルは虫めがねにしない（ふつうのリンクの指）
+ *
+ * 画像を作っていない版では何も出さない（文章だけ）。
+ */
+function ReleaseImage({ version }: { version: string }) {
+  const image = changelogImageOf(version);
+  if (!image) return null;
+  const src = `${import.meta.env.BASE_URL}${image.src}`;
+  return (
+    <a href={src} target="_blank" rel="noopener" className="mt-4 block">
+      <img
+        src={src}
+        alt={image.alt}
+        width={image.width}
+        height={image.height}
+        loading="lazy"
+        decoding="async"
+        className="block h-auto w-full rounded-lg border border-slate-300"
+      />
+      {/* 読み上げでは、リンクの名前が alt だけだと押すと何が起きるか分からない。 */}
+      <span className="sr-only">（原寸を新しいタブで開く）</span>
+    </a>
+  );
+}
 
 export default function ChangelogPage() {
   return (
@@ -42,6 +76,8 @@ export default function ChangelogPage() {
                 </span>
               )}
             </header>
+
+            <ReleaseImage version={release.version} />
 
             {release.summary && (
               <p className="mt-3 text-sm leading-7 text-slate-600">{release.summary}</p>

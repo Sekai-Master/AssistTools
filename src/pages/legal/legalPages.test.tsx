@@ -10,12 +10,15 @@
  *   - 窓口・サイト名が site.ts と一致していること（各ページに直書きされていない）
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { ReactElement } from "react";
 import TermsPage from "./TermsPage";
 import PrivacyPage from "./PrivacyPage";
 import ChangelogPage from "./ChangelogPage";
+import { CHANGELOG_IMAGE_VERSIONS, changelogImageOf } from "./changelogImages";
+import { parseChangelog } from "./changelogParser";
+import changelogMarkdown from "../../../CHANGELOG.md?raw";
 import { SiteFooter } from "../../components/SiteFooter";
 import { STORED_ITEMS } from "../settings/lib/storedItems";
 import { ISSUES_URL, OWNER_NAME, OWNER_X_URL, SITE_NAME, X_HANDLE, X_URL } from "../../lib/site";
@@ -87,6 +90,43 @@ describe("更新履歴ページ", () => {
     expect(screen.getByText("最新")).toBeTruthy();
     // 最初のリリースまで残っていること（途中で解析が止まっていないか）。
     expect(screen.getByText("v1.0.0")).toBeTruthy();
+  });
+
+  /** 版の見出し（v1.28.0 など）が入っている枠。 */
+  const releaseArticle = (version: string) => {
+    const article = screen.getByRole("heading", { name: `v${version}`, level: 2 }).closest("article");
+    if (!article) throw new Error(`v${version} の枠が無い`);
+    return article;
+  };
+
+  it("告知画像のある版は、その版の枠に代替テキストと寸法付きで出す", () => {
+    at(<ChangelogPage />);
+    expect(CHANGELOG_IMAGE_VERSIONS.length).toBeGreaterThan(0);
+    for (const version of CHANGELOG_IMAGE_VERSIONS) {
+      const image = changelogImageOf(version)!;
+      const img = within(releaseArticle(version)).getByRole("img");
+      expect(img.getAttribute("alt"), `v${version} の alt`).toBe(image.alt);
+      // 寸法が無いと、遅延読み込みの画像が出た瞬間に下の本文が押し下げられる。
+      expect(img.getAttribute("width"), `v${version} の width`).toBe(String(image.width));
+      expect(img.getAttribute("height"), `v${version} の height`).toBe(String(image.height));
+      expect(img.getAttribute("loading"), `v${version} の loading`).toBe("lazy");
+      expect(img.getAttribute("src"), `v${version} の src`).toMatch(new RegExp(`images/changelog/${version.replace(/\./g, "\\.")}\\.webp$`));
+      // 見出しのすぐ下に置き、押すと同じ画像を開く。
+      const link = img.closest("a");
+      expect(link?.getAttribute("href"), `v${version} のリンク`).toBe(img.getAttribute("src"));
+      expect(releaseArticle(version).querySelector("header")?.nextElementSibling, `v${version} の位置`).toBe(link);
+    }
+  });
+
+  it("告知画像の無い版は画像を出さない", () => {
+    at(<ChangelogPage />);
+    const without = parseChangelog(changelogMarkdown)
+      .map((r) => r.version)
+      .filter((version) => !changelogImageOf(version));
+    expect(without.length).toBeGreaterThan(0);
+    for (const version of without) {
+      expect(within(releaseArticle(version)).queryByRole("img"), `v${version} に画像がある`).toBeNull();
+    }
   });
 });
 
