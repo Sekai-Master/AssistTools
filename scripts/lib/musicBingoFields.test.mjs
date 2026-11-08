@@ -85,6 +85,8 @@ describe("musics.json の項目", () => {
     expect(musicFields({ lyricist: "A", composer: "B" }).lyricsByOther).toBe(true);
     expect(musicFields({ lyricist: "DECO*27", composer: " DECO*27 " }).lyricsByOther).toBeUndefined();
     expect(musicFields({ lyricist: "ナユタン 星人", composer: "ナユタン星人" }).lyricsByOther).toBeUndefined();
+    // 全角・半角と大文字・小文字の違いは同じ人
+    expect(musicFields({ lyricist: "ＤＥＣＯ＊２７", composer: "deco*27" }).lyricsByOther).toBeUndefined();
     expect(musicFields({ lyricist: "  ", composer: "B" }).lyricsByOther).toBeUndefined();
     expect(musicFields({ composer: "B" }).lyricsByOther).toBeUndefined();
     expect(musicFields(undefined)).toEqual({});
@@ -119,5 +121,11 @@ describe("compact と JSON の書き方", () => {
     expect(json).toContain('"singers": [1, 21, 22]');
     expect(json).toContain('"categories": [\n');
     expect(JSON.parse(json)).toEqual(value);
+  });
+
+  it("NaN・Infinity を含む配列は詰めない（目印の文字列を残さない）", () => {
+    const json = stringifyCompactNumbers([{ singers: [1, NaN, Infinity] }]);
+    expect(json).not.toContain("nums:");
+    expect(JSON.parse(json)).toEqual([{ singers: [1, null, null] }]);
   });
 });

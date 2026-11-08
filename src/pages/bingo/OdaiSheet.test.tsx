@@ -9,7 +9,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { parseMusics } from "./useBingoMusics";
-import { decodeOdaiSeed } from "./odaiLogic";
+import { decodeOdaiSeed, listOdaiSongs } from "./odaiLogic";
 import { OdaiSheet } from "./OdaiSheet";
 
 afterEach(cleanup);
@@ -33,23 +33,29 @@ function open(key: string) {
   return within(screen.getByRole("dialog")).getAllByRole("listitem");
 }
 
+/** 「MASTER Lv.33」「MASTER 650ノーツ」などから数を取り出す。形が違えば NaN。 */
+const numberIn = (hint: string, pattern: RegExp) => Number(pattern.exec(hint)?.[1] ?? NaN);
+
 describe("お題の小窓の、曲名の下の値", () => {
   it.each([
-    ["dm32", /^MASTER Lv\.3[2-9]$/],
-    ["de28", /^EXPERT Lv\.(2[89]|3\d)$/],
-    ["da", /^APPEND Lv\.\d+$/],
-    ["dn7", /^MASTER [1-6]\d{2}ノーツ$/],
-    ["a2021", /^2021\/\d{2}\/\d{2}$/],
-    ["a0", /^2020\/09\/30$/],
-    // 読みの後ろの「！」などは数えない（odaiDefs.ts の readingKana）
-    ["yi", /い[^ぁ-ゖァ-ヺー]*$/],
-  ])("%s: 判定に使う値を出す", (key, pattern) => {
+    ["dm32", (h: string) => numberIn(h, /^MASTER Lv\.(\d+)$/) >= 32],
+    ["de28", (h: string) => numberIn(h, /^EXPERT Lv\.(\d+)$/) >= 28],
+    ["da", (h: string) => numberIn(h, /^APPEND Lv\.(\d+)$/) > 0],
+    ["dn7", (h: string) => numberIn(h, /^MASTER (\d+)ノーツ$/) < 700],
+    ["a2021", (h: string) => /^2021\/\d{2}\/\d{2}$/.test(h)],
+    ["a0", (h: string) => h === "2020/09/30"],
+  ])("%s: 判定に使う値を出す", (key, ok) => {
     const items = open(key);
     expect(items.length).toBe(MUSICS.filter((m) => odaiOf(key).test(m)).length);
     for (const li of items) {
       const hint = li.querySelector(".text-xs")?.textContent ?? "";
-      expect(hint).toMatch(pattern);
+      expect(ok(hint), hint).toBe(true);
     }
+  });
+
+  it("読みのお題は、曲の読みをそのまま出す", () => {
+    const expected = listOdaiSongs(odaiOf("yi"), MUSICS).map((m) => m.pronunciation);
+    expect(open("yi").map((li) => li.querySelector(".text-xs")?.textContent)).toEqual(expected);
   });
 
   it.each(["s1", "kl", "gn", "m3", "va"])("%s: 曲名で判定できる・値を持たないお題は出さない", (key) => {

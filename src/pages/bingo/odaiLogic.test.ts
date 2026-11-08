@@ -85,6 +85,8 @@ describe("titleKind（曲名の文字の種類。数字・記号・空白は数�
     ["威風堂々", "kanji"],
     ["いーあるふぁんくらぶ", "hiragana"],
     ["ぼうけんのしょがきえました！", "hiragana"],
+    // × (U+00D7) は英字に数えない
+    ["きみ×ぼく", "hiragana"],
     ["potatoになっていく", null],
     ["初音ミクの消失", null],
     ["ロキ", null],
@@ -301,11 +303,21 @@ describe("似たお題を並べない（当てはまる曲の重なり・同じ�
     ["u1", "w1", "ユニットとその書き下ろし"],
     ["s1", "w1", "メンバーとその書き下ろし"],
     ["s1", "s2", "同じユニットのメンバー"],
-    ["s23", "s24", "VS のメンバー（重なりは小さいが同じユニット）"],
-    ["s25", "w0", "VS のメンバーと VS の書き下ろし"],
   ])("%s と %s は並べない（%s）", (a, b) => {
     expect(clashes(byKey(a), byKey(b))).toBe(true);
     expect(clashes(byKey(b), byKey(a))).toBe(true);
+  });
+
+  // ★ VS のメンバーどうしの重なりは 0.3〜0.4 しかなく、重なりの決まりだけでは止まらない。
+  //   誰が候補に入るかは割合で変わる（ミクは易しすぎて外れる）ので、候補にいる VS のメンバーで見る
+  it("VS のメンバーどうし・VS のメンバーと VS の書き下ろしは並べない（重なりは小さいが同じユニット）", () => {
+    const vs = CANDIDATES.filter((o) => o.kind === "singer" && o.unit === "vs");
+    expect(vs.length).toBeGreaterThanOrEqual(2);
+    expect(overlap(vs[0].key, vs[1].key)).toBeLessThan(OVERLAP_LIMIT);
+    for (const a of vs) {
+      expect(clashes(a, byKey("w0"))).toBe(true);
+      for (const b of vs) if (a !== b) expect(clashes(a, b)).toBe(true);
+    }
   });
 
   it("重ならない組（読みの頭どうし・別のユニット）は並べてよい", () => {

@@ -146,14 +146,6 @@ function countShared(a: Uint32Array, b: Uint32Array): number {
   return n;
 }
 
-/** 2 つのお題の重なり（|A∩B| / min(|A|,|B|)）。どちらかが 0 曲なら 0。 */
-export function overlapOf(a: Odai, b: Odai, musics: readonly BingoMusic[]): number {
-  const ba = songBits(a.test, musics);
-  const bb = songBits(b.test, musics);
-  const min = Math.min(countBits(ba), countBits(bb));
-  return min > 0 ? countShared(ba, bb) / min : 0;
-}
-
 /**
  * 実データから使うお題の候補を作る（割合が DEEP_MIN_RATE〜MAX_RATE で、1 マスに収まるもの）。段ごとの下限は buildOdaiCard で絞る。
  * 候補の組ごとに、同じカードに並べないか（clashes）もここで 1 回だけ数える:
@@ -169,19 +161,19 @@ export function buildOdaiCandidates(musics: readonly BingoMusic[], overlapLimit 
       return { def, bits, n, rate: musics.length > 0 ? n / musics.length : 0 };
     })
     .filter((s) => s.rate >= DEEP_MIN_RATE && s.rate <= MAX_RATE);
-  const clashes = scored.map(() => new Set<string>());
+  const clashSets = scored.map(() => new Set<string>());
   for (let i = 0; i < scored.length; i++) {
     for (let j = i + 1; j < scored.length; j++) {
       const a = scored[i];
       const b = scored[j];
       const sameUnit = a.def.unit !== undefined && a.def.unit === b.def.unit;
       if (sameUnit || countShared(a.bits, b.bits) / Math.min(a.n, b.n) >= overlapLimit) {
-        clashes[i].add(b.def.key);
-        clashes[j].add(a.def.key);
+        clashSets[i].add(b.def.key);
+        clashSets[j].add(a.def.key);
       }
     }
   }
-  return scored.map((s, i) => ({ ...s.def, rate: s.rate, clashes: clashes[i] }));
+  return scored.map((s, i) => ({ ...s.def, rate: s.rate, clashes: clashSets[i] }));
 }
 
 /** 同じカードに並べない組か。 */

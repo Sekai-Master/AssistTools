@@ -91,7 +91,10 @@ const SPEC: Record<string, (m: RawMusic) => boolean> = {
   dn7: (m) => typeof m.masterNotes === "number" && m.masterNotes < 700,
   kl: (m) => m.lyricsByOther === true,
   t4: (m) => [...m.title.replace(/\s/g, "")].length === 4,
-  tx: (m) => /[A-Za-zＡ-Ｚａ-ｚÀ-ɏ]/.test(m.title) && /[ぁ-ゖァ-ヺｦ-ﾝ一-鿿㐀-䶿豈-﫿々〆]/.test(m.title),
+  // 実装の文字の範囲とは別に、Unicode の文字の種類（Script）で数える
+  tx: (m) =>
+    /(?=\p{Script=Latin})\p{L}/u.test(m.title) &&
+    /(?=[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}])\p{L}/u.test(m.title),
   ty: (m) => /[♪☆★♭♯＊*@＠＆&〜~♡♥]/.test(m.title),
   yi: (m) => kana(m.pronunciation).endsWith("い"),
   yn: (m) => [...kana(m.pronunciation)].filter((c) => c === "ん").length >= 2,
@@ -124,12 +127,13 @@ describe("新しいお題の割合（実データの数え上げ）", () => {
     expect(PLAYABLE.some((m) => m.dancerCount === 3)).toBe(true);
   });
 
-  it("歌う人・譜面・追加・MV・曲名の語などがお題の候補に入る（ミク・リンは易しすぎて外れる）", () => {
+  // ★ 割合が上限（22%）に近いお題（APPEND 20.5%・原曲 MV 21.9%・レン 18.9%）は、曲が増えると外れうるので名指ししない
+  it("歌う人・譜面・追加・MV・曲名の語などがお題の候補に入る（ミク（約 70%）は易しすぎて外れる）", () => {
     const kinds = new Set(CANDIDATES.map((o) => o.kind));
     for (const k of ["singer", "vocal", "mv", "added", "chart", "maker", "word", "reading"]) expect(kinds).toContain(k);
     const keys = CANDIDATES.map((o) => o.key);
     expect(keys).not.toContain("s21");
-    for (const k of ["s1", "s20", "s23", "dm32", "dm33", "da", "a2021", "kl", "gn"]) expect(keys).toContain(k);
+    for (const k of ["s1", "s20", "dm32", "dm33", "a2021", "kl", "gn"]) expect(keys).toContain(k);
   });
 
   it("「2019年に追加」は出さない（サービス開始時の曲は 2019 年の仮の日付）", () => {
@@ -184,6 +188,9 @@ describe("曲名・読みの判定", () => {
     expect(def("t4").test(song({ title: "アイ ドル" }))).toBe(true);
     expect(def("tx").test(song({ title: "potatoになっていく" }))).toBe(true);
     expect(def("tx").test(song({ title: "超最終鬼畜妹フランドール・Ｓ" }))).toBe(true);
+    expect(def("tx").test(song({ title: "ÅMARA(大未来電脳)" }))).toBe(true);
+    // × は英字ではない
+    expect(def("tx").test(song({ title: "ピアノ×フォルテ×スキャンダル" }))).toBe(false);
     expect(def("tx").test(song({ title: "Tell Your World" }))).toBe(false);
     expect(def("tx").test(song({ title: "千本桜" }))).toBe(false);
     expect(def("ty").test(song({ title: "ポジティブ☆ダンスタイム" }))).toBe(true);
@@ -300,24 +307,28 @@ describe("コード（鍵）", () => {
 // ---- 1 マスに収まるか ----
 
 describe("札と文言の長さ（320px の 1 マスは約 50px、札は 12px）", () => {
+  // ★ 候補は 1 マスに収まらない定義を黙って落とす（fitsCell）。作者以外の定義は、落とされずに全部残ることを見る
+  const own = allOdaiDefs(MUSICS).filter((d) => d.kind !== "creator");
+
   it("札は全角 4 字の幅まで（MASTER・EXPERT のような英字は幅で数える）、文言は 10 まで", () => {
-    for (const o of CANDIDATES) {
-      expect(textEm(o.caption), o.caption).toBeLessThanOrEqual(MAX_CAPTION_EM);
-      expect(textEm(o.text), o.text).toBeLessThanOrEqual(MAX_TEXT_EM);
+    for (const d of own) {
+      expect(textEm(d.caption), d.caption).toBeLessThanOrEqual(MAX_CAPTION_EM);
+      expect(textEm(d.text), d.text).toBeLessThanOrEqual(MAX_TEXT_EM);
     }
   });
 
-  it("作者以外のお題の区切りは、どれも全角 4 字の幅まで（語の途中で折れない）", () => {
-    for (const o of CANDIDATES.filter((x) => x.kind !== "creator")) {
-      for (const chunk of o.chunks) expect(textEm(chunk), `${o.key} ${chunk}`).toBeLessThanOrEqual(4);
-      expect(o.chunks.join("")).toBe(o.text);
+  it("区切りは、どれも全角 4 字の幅まで（語の途中で折れない）で、つなぐと文言になる", () => {
+    for (const d of own) {
+      for (const chunk of d.chunks) expect(textEm(chunk), `${d.key} ${chunk}`).toBeLessThanOrEqual(4);
+      expect(d.chunks.join("")).toBe(d.text);
     }
   });
 
-  it("候補の割合はすべて DEEP_MIN_RATE〜MAX_RATE", () => {
-    for (const o of CANDIDATES) {
-      expect(o.rate).toBeGreaterThanOrEqual(DEEP_MIN_RATE);
-      expect(o.rate).toBeLessThanOrEqual(MAX_RATE);
+  it("割合の範囲に入るものは、1 マスに収まらないという理由で落とされない", () => {
+    const keys = new Set(CANDIDATES.map((o) => o.key));
+    for (const d of own) {
+      const n = MUSICS.filter((m) => d.test(m)).length / MUSICS.length;
+      if (n >= DEEP_MIN_RATE && n <= MAX_RATE) expect(keys.has(d.key), d.key).toBe(true);
     }
   });
 });

@@ -74,8 +74,8 @@ export function resolveVocals(musicId, index, previous) {
   };
 }
 
-/** 空白を除いた名前。 */
-const bare = (s) => (typeof s === "string" ? s.replace(/\s/g, "") : "");
+/** 比べるための名前: 空白を除き、全角・半角と大文字・小文字をそろえる（ＤＥＣＯ＊２７ と DECO*27 は同じ人）。 */
+const bare = (s) => (typeof s === "string" ? s.normalize("NFKC").replace(/\s/g, "").toLowerCase() : "");
 
 /**
  * musics.json の 1 曲から: 3DMV で踊る人数と、作詞と作曲が別の人か。
@@ -125,7 +125,8 @@ export function stringifyCompactNumbers(value) {
   const MARK = "\u0000nums:";
   const json = JSON.stringify(
     value,
-    (_, v) => (Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "number") ? `${MARK}${v.join(",")}` : v),
+    // NaN・Infinity を含む配列は JSON の数で書けないので、詰めずにそのまま（JSON.stringify が null にする）
+    (_, v) => (Array.isArray(v) && v.length > 0 && v.every((x) => Number.isFinite(x)) ? `${MARK}${v.join(",")}` : v),
     2
   );
   return json.replace(/"\\u0000nums:([-\d.,e+]*)"/g, (_, body) => `[${body.split(",").join(", ")}]`);
