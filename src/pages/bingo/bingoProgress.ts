@@ -51,3 +51,12 @@ export function withCleared<T extends { cleared: boolean }>(
 ): (T | "FREE")[] {
   return card.map((c, i) => (i === index && c !== "FREE" ? { ...c, cleared } : c));
 }
+
+/** 複数のマスをまとめて埋める（新しいカードを返す）。遊んだ曲の逆引きで使う。 */
+export function withClearedAll<T extends { cleared: boolean }>(
+  card: readonly (T | "FREE")[],
+  indices: readonly number[]
+): (T | "FREE")[] {
+  const targets = new Set(indices);
+  return card.map((c, i) => (targets.has(i) && c !== "FREE" ? { ...c, cleared: true } : c));
+}

@@ -3,7 +3,8 @@
  *
  * 曲名ビンゴは 1 曲がカードに載る確率が 24/740 しかなく、50 曲遊んでもほぼビンゴにならない。
  * お題ビンゴはマスを「多くの曲に当てはまる条件」にする。お題は手書きの曲名リストを持たず、
- * 楽曲マスタから当てはまる割合を毎回計算して、MIN_RATE〜MAX_RATE のものだけを使う。
+ * 楽曲マスタから当てはまる割合を毎回計算して、DEEP_MIN_RATE〜MAX_RATE のものだけを使う。
+ * 難易度（EASY〜MASTER）の数字は「半分の人が BINGO になる曲数」。
  */
 import type { UnitKey } from "../../lib/units";
 import type { BingoMusic } from "./bingoLogic";
@@ -34,6 +35,11 @@ export type OdaiCell = "FREE" | { odai: Odai; cleared: boolean };
 /** 使うお題の割合の下限と上限。だいたい 1〜20%（データ更新の揺れを見て少し広げてある）。 */
 export const MIN_RATE = 0.009;
 export const MAX_RATE = 0.22;
+/**
+ * EXPERT・MASTER だけで使う下限（曲が 4 曲以上の作者）。MIN_RATE の候補だけでは、
+ * 種類ごとの上限があるので「半分の人が BINGO になる曲数」が 29 曲より難しくならない（2026-11-09 実測）。
+ */
+export const DEEP_MIN_RATE = 0.005;
 
 /** 同じ種類が偏らないよう、1 枚に入れてよい数。 */
 export const ODAI_KIND_CAPS: Record<OdaiKind, number> = {
@@ -44,15 +50,43 @@ export const ODAI_KIND_CAPS: Record<OdaiKind, number> = {
   creator: 6,
 };
 
+export type OdaiLevel = "easy" | "normal" | "hard" | "expert" | "master";
+
+export interface OdaiLevelDef {
+  label: string;
+  /** 全曲から一様に流れるとして、半分の人が BINGO になる曲数。難易度の数字。 */
+  songs: number;
+  /** この段で使うお題の割合の下限。 */
+  minRate: number;
+  /** 同じ種類を 1 枚に入れてよい数。 */
+  caps: Record<OdaiKind, number>;
+}
+
 /**
- * 難しさの目安: 全曲から一様に流れるとして、20 曲でビンゴになる確率がおよそ半分。
- * 1 枚ごとに見積もり（estimateBingoChance）がこの範囲に入るまで引き直す。
- * 見積もりはマスどうしを独立とみなすので、実測（odaiLogic.test.ts）で目標を合わせてある。
+ * 1 曲 4 分として、EASY 約30分・NORMAL 約1時間20分・HARD 約2時間・EXPERT 約3時間・MASTER 約5時間。
+ * 難しい側は思い切って長くする（Nori、2026-11-09）。NORMAL がこれまでのカード（20 曲で半分）。
  */
-const TARGET_SONGS = 20;
-const TARGET_ESTIMATE = 0.5;
-const TARGET_TOLERANCE = 0.06;
-const MAX_ATTEMPTS = 300;
+const DEEP_CAPS: Record<OdaiKind, number> = { ...ODAI_KIND_CAPS, creator: 12 };
+export const ODAI_LEVELS: Record<OdaiLevel, OdaiLevelDef> = {
+  easy: { label: "EASY", songs: 8, minRate: MIN_RATE, caps: ODAI_KIND_CAPS },
+  normal: { label: "NORMAL", songs: 20, minRate: MIN_RATE, caps: ODAI_KIND_CAPS },
+  hard: { label: "HARD", songs: 30, minRate: DEEP_MIN_RATE, caps: DEEP_CAPS },
+  expert: { label: "EXPERT", songs: 45, minRate: DEEP_MIN_RATE, caps: DEEP_CAPS },
+  master: { label: "MASTER", songs: 75, minRate: DEEP_MIN_RATE, caps: DEEP_CAPS },
+};
+export const ODAI_LEVEL_KEYS: readonly OdaiLevel[] = ["easy", "normal", "hard", "expert", "master"];
+export const DEFAULT_ODAI_LEVEL: OdaiLevel = "normal";
+
+/**
+ * 段の曲数で見積もり（estimateBingoChance）がこの値に近づくまで、マスを入れ替える。
+ * 見積もりはマスどうしを独立とみなすので実測より少し易しく出る。0.56 を狙うと、実測で
+ * 「段の曲数で半分の人が BINGO」になる（odaiLogic.test.ts）。
+ */
+const TARGET_ESTIMATE = 0.56;
+const TARGET_TOLERANCE = 0.01;
+/** 目安の曲数を数えるときの線。作ったカードは段の曲数でこの線を越える。 */
+const HALF_ESTIMATE = TARGET_ESTIMATE - TARGET_TOLERANCE;
+const MAX_STEPS = 4000;
 
 /** 作者名の英数字の続きがこれより長いと、スマホの 1 マスに収まらない。 */
 const MAX_LATIN_RUN = 7;
@@ -204,6 +238,11 @@ const titleDefs: OdaiDef[] = [
 const FIXED_DEFS: readonly OdaiDef[] = [...unitDefs, ...rowDefs, ...lengthDefs, ...titleDefs];
 
 const NAME_BREAK_AFTER = ".@*/・_";
+/** 開き括弧の前で区切り、閉じ括弧の前では区切らない（emon｜(Tes.)）。 */
+const NAME_BREAK_BEFORE = "(（";
+const NAME_NO_BREAK_BEFORE = ")）";
+/** 1 マスに 3 行まで。全角を 1、半角を 0.55 と数えた幅の上限（ビートまりお×まろん が 10）。 */
+const MAX_TEXT_EM = 10;
 
 function cjkScript(ch: string): "h" | "k" | "j" | null {
   if (HIRAGANA.test(ch)) return "h";
@@ -223,7 +262,9 @@ function splitName(name: string): string[] {
   let breakNext = false;
   for (const ch of name) {
     const cur = cjkScript(ch);
-    if (out.length === 0 || breakNext || (prev && cur && prev !== cur)) out.push(ch);
+    const canBreak = !NAME_NO_BREAK_BEFORE.includes(ch);
+    const wantsBreak = breakNext || NAME_BREAK_BEFORE.includes(ch) || (prev && cur && prev !== cur);
+    if (out.length === 0 || (canBreak && wantsBreak)) out.push(ch);
     else out[out.length - 1] += ch;
     breakNext = NAME_BREAK_AFTER.includes(ch);
     prev = cur;
@@ -254,11 +295,19 @@ function withRate(def: OdaiDef, musics: readonly BingoMusic[]): Odai {
   return { ...def, rate: musics.length > 0 ? n / musics.length : 0 };
 }
 
-function fitsCell(def: OdaiDef): boolean {
-  return def.chunks.every((c) => !new RegExp(`[A-Za-z0-9]{${MAX_LATIN_RUN + 1},}`).test(c));
+/** 文言の幅（全角 1・半角 0.55）。 */
+export function textEm(text: string): number {
+  return [...text].reduce((acc, ch) => acc + (ch.charCodeAt(0) < 0x80 ? 0.55 : 1), 0);
 }
 
-/** 実データから使うお題の候補を作る（割合が MIN_RATE〜MAX_RATE で、1 マスに収まるもの）。 */
+function fitsCell(def: OdaiDef): boolean {
+  return (
+    textEm(def.text) <= MAX_TEXT_EM &&
+    def.chunks.every((c) => !new RegExp(`[A-Za-z0-9]{${MAX_LATIN_RUN + 1},}`).test(c))
+  );
+}
+
+/** 実データから使うお題の候補を作る（割合が DEEP_MIN_RATE〜MAX_RATE で、1 マスに収まるもの）。段ごとの下限は buildOdaiCard で絞る。 */
 export function buildOdaiCandidates(musics: readonly BingoMusic[]): Odai[] {
   const creatorIds = [...new Set(musics.map((m) => m.creatorArtistId).filter((v): v is number => v !== undefined))].sort(
     (a, b) => a - b
@@ -267,7 +316,7 @@ export function buildOdaiCandidates(musics: readonly BingoMusic[]): Odai[] {
   return [...FIXED_DEFS, ...creators]
     .filter(fitsCell)
     .map((d) => withRate(d, musics))
-    .filter((o) => o.rate >= MIN_RATE && o.rate <= MAX_RATE);
+    .filter((o) => o.rate >= DEEP_MIN_RATE && o.rate <= MAX_RATE);
 }
 
 // ---- カード ----
@@ -288,38 +337,99 @@ export function estimateBingoChance(cells: readonly (Odai | null)[], songs: numb
   return 1 - noLine;
 }
 
-function pickWithCaps(candidates: readonly Odai[], rng: () => number): Odai[] | null {
+function pickWithCaps(
+  candidates: readonly Odai[],
+  caps: Record<OdaiKind, number>,
+  rng: () => number
+): Odai[] | null {
   const count: Partial<Record<OdaiKind, number>> = {};
   const picked: Odai[] = [];
   for (const o of shuffleWith(candidates, rng)) {
     if (picked.length === CELLS - 1) break;
     const n = count[o.kind] ?? 0;
-    if (n >= ODAI_KIND_CAPS[o.kind]) continue;
+    if (n >= caps[o.kind]) continue;
     count[o.kind] = n + 1;
     picked.push(o);
   }
   return picked.length === CELLS - 1 ? picked : null;
 }
 
-/** ランダムにお題カードを作る。中央は FREE。難しさが目安に近い並びになるまで引き直す。 */
-export function buildOdaiCard(candidates: readonly Odai[], rng: () => number = Math.random): OdaiCell[] {
-  if (candidates.length < CELLS - 1) {
-    throw new Error(`お題が足りません（必要 ${CELLS - 1} / 候補 ${candidates.length}）。`);
+/** 2 つのマスの位置を入れ替える（並びで、そろいやすい列が変わる）。 */
+function swapTwo(cells: readonly (Odai | null)[], rng: () => number): (Odai | null)[] | null {
+  const a = Math.floor(rng() * CELLS);
+  const b = Math.floor(rng() * CELLS);
+  if (a === CENTER || b === CENTER || a === b) return null;
+  const next = [...cells];
+  [next[a], next[b]] = [next[b], next[a]];
+  return next;
+}
+
+/** 1 マスを、まだ使っていない候補に替える（種類ごとの上限を守る）。 */
+function replaceOne(
+  cells: readonly (Odai | null)[],
+  pool: readonly Odai[],
+  caps: Record<OdaiKind, number>,
+  rng: () => number
+): (Odai | null)[] | null {
+  const a = Math.floor(rng() * CELLS);
+  const out = cells[a];
+  const cand = pool[Math.floor(rng() * pool.length)];
+  if (!out || cells.some((o) => o?.key === cand.key)) return null;
+  const sameKind = cells.filter((o) => o?.kind === cand.kind).length - (out.kind === cand.kind ? 1 : 0);
+  if (sameKind >= caps[cand.kind]) return null;
+  return cells.map((o, i) => (i === a ? cand : o));
+}
+
+/**
+ * ランダムにお題カードを作る。中央は FREE。
+ * ランダムな並びから始め、段の曲数での見積もりが目標の幅に近づく入れ替えだけを受け入れる。
+ * 1 曲少ないときは線に届かないことも条件にする（カードの枠に出す目安が段の曲数とずれないように）。
+ */
+export function buildOdaiCard(
+  candidates: readonly Odai[],
+  rng: () => number = Math.random,
+  level: OdaiLevel = DEFAULT_ODAI_LEVEL
+): OdaiCell[] {
+  const { songs, minRate, caps } = ODAI_LEVELS[level];
+  const pool = candidates.filter((o) => o.rate >= minRate);
+  if (pool.length < CELLS - 1) {
+    throw new Error(`お題が足りません（必要 ${CELLS - 1} / 候補 ${pool.length}）。`);
   }
-  let best: (Odai | null)[] | null = null;
-  let bestGap = Infinity;
-  for (let a = 0; a < MAX_ATTEMPTS && bestGap > TARGET_TOLERANCE; a++) {
-    const picked = pickWithCaps(candidates, rng);
-    if (!picked) continue;
-    const cells = toPositions(picked);
-    const gap = Math.abs(estimateBingoChance(cells, TARGET_SONGS) - TARGET_ESTIMATE);
-    if (gap < bestGap) {
-      best = cells;
-      bestGap = gap;
+  const picked = pickWithCaps(pool, caps, rng);
+  if (!picked) throw new Error("お題の組み合わせを作れませんでした。");
+  let cells = toPositions(picked);
+  // 外れの量: 見積もりが目標から離れた分と、1 曲少なくても線を越えてしまう分（目安が段の曲数より少なく出る）
+  const missOf = (c: readonly (Odai | null)[]) =>
+    Math.max(0, Math.abs(estimateBingoChance(c, songs) - TARGET_ESTIMATE) - TARGET_TOLERANCE) +
+    Math.max(0, estimateBingoChance(c, songs - 1) - HALF_ESTIMATE + 0.001);
+  let miss = missOf(cells);
+  for (let step = 0; step < MAX_STEPS && miss > 0; step++) {
+    const next = rng() < 0.5 ? swapTwo(cells, rng) : replaceOne(cells, pool, caps, rng);
+    if (!next) continue;
+    const m = missOf(next);
+    if (m < miss) {
+      cells = next;
+      miss = m;
     }
   }
-  if (!best) throw new Error("お題の組み合わせを作れませんでした。");
-  return best.map((o) => (o ? { odai: o, cleared: false } : "FREE"));
+  return cells.map((o) => (o ? { odai: o, cleared: false } : "FREE"));
+}
+
+/** このカードで半分の人が BINGO になる曲数の目安（見積もりが線を越える最小の曲数）。埋めたマスは見ない。 */
+export function odaiSongsToHalf(card: readonly OdaiCell[]): number {
+  const cells = card.map((c) => (c === "FREE" ? null : c.odai));
+  for (let n = 1; n < 400; n++) {
+    if (estimateBingoChance(cells, n) >= HALF_ESTIMATE) return n;
+  }
+  return 400;
+}
+
+/** 目安の曲数にいちばん近い段（リンクや前の版のカードにも段を付けるため）。並んだら易しい方。 */
+export function odaiLevelOf(card: readonly OdaiCell[]): OdaiLevel {
+  const n = odaiSongsToHalf(card);
+  return ODAI_LEVEL_KEYS.reduce((best, k) =>
+    Math.abs(ODAI_LEVELS[k].songs - n) < Math.abs(ODAI_LEVELS[best].songs - n) ? k : best
+  );
 }
 
 // ---- シード値 ----

@@ -7,9 +7,13 @@ import { decodeSeed } from "./bingoLogic";
 import { parseMusics } from "./useBingoMusics";
 import {
   type OdaiCell,
+  DEEP_MIN_RATE,
+  DEFAULT_ODAI_LEVEL,
   MAX_RATE,
   MIN_RATE,
   ODAI_KIND_CAPS,
+  ODAI_LEVELS,
+  ODAI_LEVEL_KEYS,
   buildOdaiCandidates,
   buildOdaiCard,
   createRng,
@@ -19,6 +23,9 @@ import {
   isOdaiSeed,
   listOdaiSongs,
   setOdaiCleared,
+  odaiLevelOf,
+  odaiSongsToHalf,
+  textEm,
   readingRow,
   titleKind,
 } from "./odaiLogic";
@@ -85,12 +92,18 @@ describe("titleKind（曲名の文字の種類。数字・記号・空白は数�
 });
 
 describe("buildOdaiCandidates（実データから計算）", () => {
-  it("当てはまる割合はすべて MIN_RATE〜MAX_RATE（30% を超える易しいものは無い）", () => {
-    expect(CANDIDATES.length).toBeGreaterThanOrEqual(30);
+  it("当てはまる割合はすべて DEEP_MIN_RATE〜MAX_RATE（30% を超える易しいものは無い）", () => {
+    expect(CANDIDATES.filter((o) => o.rate >= MIN_RATE).length).toBeGreaterThanOrEqual(30);
     for (const o of CANDIDATES) {
-      expect(o.rate).toBeGreaterThanOrEqual(MIN_RATE);
+      expect(o.rate).toBeGreaterThanOrEqual(DEEP_MIN_RATE);
       expect(o.rate).toBeLessThanOrEqual(MAX_RATE);
     }
+  });
+
+  it("MIN_RATE を下回るのは作者のお題だけ（曲の少ない作者は EXPERT・MASTER で使う）", () => {
+    const deep = CANDIDATES.filter((o) => o.rate < MIN_RATE);
+    expect(deep.length).toBeGreaterThanOrEqual(24);
+    expect(deep.every((o) => o.kind === "creator")).toBe(true);
   });
 
   it("割合は実データの数え上げと一致する", () => {
@@ -130,6 +143,13 @@ describe("buildOdaiCandidates（実データから計算）", () => {
     expect(chunksOf("cosMo@暴走P")).toEqual(["cosMo@", "暴走P"]);
     expect(chunksOf("DECO*27")).toEqual(["DECO*", "27"]);
     expect(chunksOf("みきとP")).toEqual(["みきとP"]);
+    expect(chunksOf("emon(Tes.)")).toEqual(["emon", "(Tes.)"]);
+  });
+
+  it("1 マスに 3 行で収まらない長い名前は使わない", () => {
+    expect(CANDIDATES.every((o) => textEm(o.text) <= 10)).toBe(true);
+    expect(CANDIDATES.some((o) => o.text === "ビートまりお×まろん")).toBe(true);
+    expect(CANDIDATES.some((o) => o.text === "ワンダフル☆オポチュニティ！")).toBe(false);
   });
 
   it("お題の文言は短い（区切りの 1 つが長すぎない）", () => {
@@ -323,5 +343,71 @@ describe("setOdaiCleared", () => {
     const back = setOdaiCleared(filled, 0, false);
     expect(encodeOdaiSeed(back)).toBe(encodeOdaiSeed(card));
     expect(setOdaiCleared(card, 12, true)[12]).toBe("FREE");
+  });
+});
+
+/** 1 枚のカードを全曲から一様に流して、何曲目に BINGO になったか。 */
+function songsToBingo(card: readonly OdaiCell[], rng: () => number, max = 400): number {
+  const filled = card.map((c) => c === "FREE");
+  for (let s = 1; s <= max; s++) {
+    const m = MUSICS[Math.floor(rng() * MUSICS.length)];
+    card.forEach((c, i) => {
+      if (c !== "FREE" && c.odai.test(m)) filled[i] = true;
+    });
+    if (hasBingo(filled)) return s;
+  }
+  return Infinity;
+}
+
+describe("難易度（ODAI_LEVELS）", () => {
+  it("段の曲数は EASY < NORMAL < HARD < EXPERT < MASTER。既定は NORMAL の 20 曲（これまでのカード）", () => {
+    const songs = ODAI_LEVEL_KEYS.map((k) => ODAI_LEVELS[k].songs);
+    expect([...songs].sort((a, b) => a - b)).toEqual(songs);
+    expect(new Set(songs).size).toBe(songs.length);
+    expect(DEFAULT_ODAI_LEVEL).toBe("normal");
+    expect(ODAI_LEVELS.normal.songs).toBe(20);
+  });
+
+  it.each(ODAI_LEVEL_KEYS)("%s: 種類ごとの上限と、割合の下限を守る", (level) => {
+    const def = ODAI_LEVELS[level];
+    const rng = createRng(17);
+    for (let t = 0; t < 20; t++) {
+      const cells = buildOdaiCard(CANDIDATES, rng, level).filter(
+        (c): c is Exclude<OdaiCell, "FREE"> => c !== "FREE"
+      );
+      expect(new Set(cells.map((c) => c.odai.key)).size).toBe(24);
+      const count: Record<string, number> = {};
+      for (const c of cells) count[c.odai.kind] = (count[c.odai.kind] ?? 0) + 1;
+      for (const [kind, n] of Object.entries(count)) {
+        expect(n).toBeLessThanOrEqual(def.caps[kind as keyof typeof def.caps]);
+      }
+      expect(cells.every((c) => c.odai.rate >= def.minRate)).toBe(true);
+    }
+  });
+
+  it.each(ODAI_LEVEL_KEYS)("%s: 作ったカードの目安の曲数は段の曲数ちょうどで、段を当てられる", (level) => {
+    const rng = createRng(23);
+    for (let t = 0; t < 200; t++) {
+      const card = buildOdaiCard(CANDIDATES, rng, level);
+      expect(odaiSongsToHalf(card)).toBe(ODAI_LEVELS[level].songs);
+      expect(odaiLevelOf(card)).toBe(level);
+    }
+  });
+
+  // ★ 難易度の数字の意味: 全曲から一様に流れるとして、半分の人が BINGO になる曲数
+  it.each(ODAI_LEVEL_KEYS)("%s: 実測で、半分の人が BINGO になる曲数が段の曲数の ±15%", (level) => {
+    const rng = createRng(2026);
+    const runs: number[] = [];
+    for (let t = 0; t < 400; t++) runs.push(songsToBingo(buildOdaiCard(CANDIDATES, rng, level), rng));
+    runs.sort((a, b) => a - b);
+    const median = runs[runs.length >> 1];
+    const target = ODAI_LEVELS[level].songs;
+    expect(median).toBeGreaterThanOrEqual(Math.floor(target * 0.85));
+    expect(median).toBeLessThanOrEqual(Math.ceil(target * 1.15));
+  });
+
+  it("目安の曲数は、埋めたマスに左右されない（カードのお題だけで決まる）", () => {
+    const card = buildOdaiCard(CANDIDATES, createRng(31));
+    expect(odaiSongsToHalf(setOdaiCleared(card, 0, true))).toBe(odaiSongsToHalf(card));
   });
 });

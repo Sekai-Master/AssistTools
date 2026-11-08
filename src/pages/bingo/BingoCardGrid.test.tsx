@@ -109,6 +109,138 @@ describe("お題の小窓", () => {
   });
 });
 
+/** 「遊んだ曲を入れる」→ 検索で曲を選ぶ。 */
+function enterPlayed(title: string) {
+  fireEvent.click(screen.getByRole("button", { name: "遊んだ曲を入れる" }));
+  const search = dialog();
+  fireEvent.change(within(search).getByRole("textbox"), { target: { value: title } });
+  fireEvent.click(within(search).getAllByRole("button").find((b) => b.textContent?.startsWith(title))!);
+}
+
+describe("遊んだ曲を入れる（お題）", () => {
+  const hits = (m: (typeof MUSICS)[number]) =>
+    ODAI.flatMap((c, i) => (c !== "FREE" && c.odai.test(m) ? [i] : []));
+  // 曲名で検索して一意に選べる曲に限る（同じ文字で始まる別の曲があると押し分けられない）
+  const unique = (m: (typeof MUSICS)[number]) => MUSICS.filter((o) => o.title.startsWith(m.title)).length === 1;
+
+  it("当てはまるマスを一覧で見せ、「まとめて埋める」でそのマスだけ埋まる", () => {
+    const seen: OdaiCell[][] = [];
+    render(<OdaiHarness onCard={(c) => seen.push(c)} />);
+    const song = MUSICS.find((m) => hits(m).length >= 2 && unique(m))!;
+    enterPlayed(song.title);
+    const sheet = dialog();
+    expect(within(sheet).getByRole("heading", { name: song.title })).toBeTruthy();
+    expect(within(sheet).getByText(`${hits(song).length}つ`)).toBeTruthy();
+    expect(within(sheet).getAllByRole("listitem")).toHaveLength(hits(song).length);
+    fireEvent.click(within(sheet).getByRole("button", { name: "まとめて埋める" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    const filled = seen.at(-1)!.flatMap((c, i) => (c !== "FREE" && c.cleared ? [i] : []));
+    expect(filled).toEqual(hits(song));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "遊んだ曲を入れる" }));
+  });
+
+  it("一部だけ埋めてあれば、埋めた印を付け、残りだけを埋める", () => {
+    const seen: OdaiCell[][] = [];
+    render(<OdaiHarness onCard={(c) => seen.push(c)} />);
+    const song = MUSICS.find((m) => hits(m).length === 2 && unique(m))!;
+    const [first, second] = hits(song);
+    // マスの小窓から 1 つ目だけ埋める（FREE はボタンでないので、中央より後ろは 1 つずれる）
+    fireEvent.click(cellButtons()[first < 12 ? first : first - 1]);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "埋める" }));
+    enterPlayed(song.title);
+    expect(within(dialog()).getByText("2つ")).toBeTruthy();
+    expect(within(dialog()).getAllByText("埋めた")).toHaveLength(1);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "埋める" }));
+    const filled = seen.at(-1)!.flatMap((c, i) => (c !== "FREE" && c.cleared ? [i] : []));
+    expect(filled).toEqual([first, second]);
+  });
+
+  it("開いた直後はフォーカスを動かさない", () => {
+    render(<OdaiHarness onCard={() => {}} />);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("検索も小窓も Escape で閉じ、カードは変わらず、フォーカスはボタンに戻る", () => {
+    const seen: OdaiCell[][] = [];
+    render(<OdaiHarness onCard={(c) => seen.push(c)} />);
+    const open = screen.getByRole("button", { name: "遊んだ曲を入れる" });
+    open.focus();
+    fireEvent.click(open);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(open);
+    enterPlayed(MUSICS.find((m) => hits(m).length >= 1 && unique(m))!.title);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(open);
+    expect(seen).toHaveLength(0);
+  });
+
+  it("小窓は背景を押すと閉じるが、ダブルクリックの 2 回目では閉じない", () => {
+    render(<OdaiHarness onCard={() => {}} />);
+    enterPlayed(MUSICS.find((m) => hits(m).length >= 1 && unique(m))!.title);
+    const backdrop = dialog().parentElement!;
+    fireEvent.mouseDown(backdrop, { detail: 2 });
+    expect(screen.queryByRole("dialog")).not.toBeNull();
+    fireEvent.mouseDown(backdrop, { detail: 1 });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("当てはまるマスが無い曲は、そう出して埋めるボタンを出さない", () => {
+    const seen: OdaiCell[][] = [];
+    render(<OdaiHarness onCard={(c) => seen.push(c)} />);
+    const song = MUSICS.find((m) => hits(m).length === 0 && unique(m))!;
+    enterPlayed(song.title);
+    expect(within(dialog()).getByText("当てはまるマスはありません")).toBeTruthy();
+    expect(within(dialog()).queryByRole("button", { name: /埋める/ })).toBeNull();
+    expect(seen).toHaveLength(0);
+  });
+
+  it("「別の曲を選ぶ」で検索に戻れる", () => {
+    render(<OdaiHarness onCard={() => {}} />);
+    const song = MUSICS.find((m) => hits(m).length === 1 && unique(m))!;
+    enterPlayed(song.title);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "別の曲を選ぶ" }));
+    expect(within(dialog()).getByRole("heading", { name: "遊んだ曲を選ぶ" })).toBeTruthy();
+  });
+
+  it("当てはまるマスが全部埋めてあれば、もう埋まっていると出す", () => {
+    render(<OdaiHarness onCard={() => {}} />);
+    const song = MUSICS.find((m) => hits(m).length === 1 && unique(m))!;
+    enterPlayed(song.title);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "埋める" }));
+    enterPlayed(song.title);
+    expect(within(dialog()).getByText("もう埋まっています")).toBeTruthy();
+    expect(within(dialog()).queryByRole("button", { name: /埋める/ })).toBeNull();
+  });
+});
+
+describe("遊んだ曲を入れる（曲名）", () => {
+  it("カードにある曲なら「埋める」でそのマスが埋まる", () => {
+    const seen: Cell[][] = [];
+    render(<SongHarness onCard={(c) => seen.push(c)} />);
+    const onCard = SONG.filter((c): c is Exclude<Cell, "FREE"> => c !== "FREE").find(
+      (c) => MUSICS.filter((o) => o.title.startsWith(c.title)).length === 1
+    )!;
+    enterPlayed(onCard.title);
+    expect(within(dialog()).getByText("カードにあります")).toBeTruthy();
+    fireEvent.click(within(dialog()).getByRole("button", { name: "埋める" }));
+    const filled = seen.at(-1)!.flatMap((c, i) => (c !== "FREE" && c.cleared ? [i] : []));
+    expect(filled).toEqual([SONG.indexOf(onCard)]);
+  });
+
+  it("カードに無い曲なら、そう出して埋めない", () => {
+    const seen: Cell[][] = [];
+    render(<SongHarness onCard={(c) => seen.push(c)} />);
+    const ids = new Set(SONG.flatMap((c) => (c === "FREE" ? [] : [c.id])));
+    const off = MUSICS.find((m) => !ids.has(m.id) && MUSICS.filter((o) => o.title.startsWith(m.title)).length === 1)!;
+    enterPlayed(off.title);
+    expect(within(dialog()).getByText("カードにはありません")).toBeTruthy();
+    expect(within(dialog()).queryByRole("button", { name: /埋める/ })).toBeNull();
+    expect(seen).toHaveLength(0);
+  });
+});
+
 describe("曲名ビンゴの小窓", () => {
   it("曲のマスを押すと、その曲の小窓が開き「埋める」で反映される", () => {
     const seen: Cell[][] = [];

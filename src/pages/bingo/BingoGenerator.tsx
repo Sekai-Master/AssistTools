@@ -8,8 +8,19 @@ import { SongSearchModal } from "../../components/SongSearchModal";
 import { resolveColor } from "../../lib/canvasColor";
 import { useBingoMusics } from "./useBingoMusics";
 import { type Cell, buildRandomCard, filterForGeneration, pickBorderColor } from "./bingoLogic";
-import { type OdaiCell, buildOdaiCandidates, buildOdaiCard } from "./odaiLogic";
+import {
+  type OdaiCell,
+  type OdaiLevel,
+  DEFAULT_ODAI_LEVEL,
+  ODAI_LEVELS,
+  ODAI_LEVEL_KEYS,
+  buildOdaiCandidates,
+  buildOdaiCard,
+  odaiLevelOf,
+  odaiSongsToHalf,
+} from "./odaiLogic";
 import { progressOf } from "./bingoProgress";
+import { MINUTES_PER_SONG, playTimeText } from "./playTime";
 import {
   CARD_PARAM,
   type CardKind,
@@ -35,9 +46,11 @@ const FREE_ICON = `${base}images/icon.webp`;
 
 /** 種類ごとの 1 行の説明。曲名はほぼ埋まらない（1 曲が載る確率 24/740）ので、既定はお題。 */
 const KIND_HINT: Record<CardKind, string> = {
-  odai: "マスはお題。流れた曲が当てはまるお題を埋める",
-  song: "マスは曲。流れた曲のマスを埋める",
+  odai: "マスはお題。遊んだ曲を入れると、当てはまるマスが分かる",
+  song: "マスは曲。遊んだ曲を入れると、カードにあるか分かる",
 };
+
+const LEVEL_OPTIONS = ODAI_LEVEL_KEYS.map((k) => ({ value: k, label: ODAI_LEVELS[k].label }));
 
 const DEFAULT_FILTERS: SongFilters = {
   units: new Set(ALL_UNIT_VALUES),
@@ -71,6 +84,10 @@ function BingoBoard({
   const drawn = useRef<Promise<void>>(Promise.resolve());
 
   const [kind, setKind] = useState<CardKind>(initial.kind);
+  // 開き直したときは今のカードの段から（HARD に戻ると、MASTER のつもりで HARD のカードを作ってしまう）
+  const [level, setLevel] = useState<OdaiLevel>(() =>
+    initial.odai ? odaiLevelOf(initial.odai) : DEFAULT_ODAI_LEVEL
+  );
   const [odaiCard, setOdaiCard] = useState<OdaiCell[] | null>(initial.odai);
   const [songCard, setSongCard] = useState<Cell[] | null>(initial.song);
   const [filters, setFilters] = useState<SongFilters>(DEFAULT_FILTERS);
@@ -155,7 +172,7 @@ function BingoBoard({
     setError(null);
     try {
       if (kind === "odai") {
-        setOdaiCard(buildOdaiCard(odaiCandidates));
+        setOdaiCard(buildOdaiCard(odaiCandidates, Math.random, level));
       } else {
         const pool = filterForGeneration(musics, filters.units, filters.categories, filters.types);
         setSongCard(buildRandomCard(pool, filters.centerMode, filters.centerSong));
@@ -184,6 +201,9 @@ function BingoBoard({
   const closeCenterPicker = useCallback(() => setPickingCenter(false), []);
 
   const centerMissing = kind === "song" && filters.centerMode === "specified" && !filters.centerSong;
+  // いまのカードの段（リンクや前の版のカードも、お題から数える）
+  const cardLevel = current?.kind === "odai" ? odaiLevelOf(current.card) : null;
+  const cardSongs = current?.kind === "odai" ? odaiSongsToHalf(current.card) : null;
   const code = current ? cardCode(current) : "";
   const link = typeof window === "undefined" ? "" : cardLink(`${window.location.origin}${base}`, code);
 
@@ -208,6 +228,28 @@ function BingoBoard({
           }}
         />
         <p className="mt-2 text-sm text-slate-600">{KIND_HINT[kind]}</p>
+        {kind === "odai" && (
+          <div className="mt-4">
+            <p className="text-sm font-bold text-slate-700">難易度</p>
+            <SegmentedControl
+              compact
+              ariaLabel="難易度"
+              options={LEVEL_OPTIONS}
+              value={level}
+              // ★ 320px では 1 つが約 50px で、NORMAL がやっと入る。カードの盤面と同じく左右の余白へ 8px ずつ広げ、
+              //   min-w-0 で 5 つを同じ幅に保つ（字が押し広げると、5 等分で動くつまみとずれる）
+              buttonClassName="min-h-11 min-w-0 px-0 tracking-tight"
+              className="-mx-2 mt-2 w-[calc(100%+1rem)] max-w-none sm:mx-0 sm:w-full sm:max-w-sm"
+              onChange={setLevel}
+            />
+            <p className="mt-2 text-sm text-slate-600">
+              半分の人がBINGOになるまで <span className="font-bold">{playTimeText(ODAI_LEVELS[level].songs)}</span>
+              <span className="text-slate-500">
+                （<span className="font-num">{ODAI_LEVELS[level].songs}</span>曲・1曲{MINUTES_PER_SONG}分として）
+              </span>
+            </p>
+          </div>
+        )}
         <ActionButton
           onClick={newCard}
           disabled={loading || centerMissing}
@@ -249,7 +291,15 @@ function BingoBoard({
       </Panel>
 
       {current && (
-        <Panel title="カード">
+        <Panel>
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 className="text-base font-bold text-slate-700">カード</h2>
+            {cardLevel && cardSongs !== null && (
+              <p className="text-sm text-slate-600">
+                <span className="font-bold">{ODAI_LEVELS[cardLevel].label}</span> ・ {playTimeText(cardSongs)}
+              </p>
+            )}
+          </div>
           {current.kind === "odai" ? (
             <BingoCardGrid
               kind="odai"
@@ -273,7 +323,7 @@ function BingoBoard({
             key={current.kind}
             getImage={getImage}
             link={link}
-            text={shareText(current.kind, progressOf(current.card))}
+            text={shareText(current.kind, progressOf(current.card), cardLevel ? ODAI_LEVELS[cardLevel].label : undefined)}
             fileName={current.kind === "odai" ? "odai_bingo_card.png" : "bingo_card.png"}
           />
         </Panel>

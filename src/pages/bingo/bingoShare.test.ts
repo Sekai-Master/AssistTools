@@ -61,6 +61,11 @@ describe("共有の文", () => {
     expect(t.match(/#\S+/g)).toEqual(["#プロセカ"]);
     expect(shareText("song", { filled: 3, total: 24, reach: 2, bingo: false, lines: [] })).toContain("リーチ 2");
   });
+
+  it("お題ビンゴは難易度も添える", () => {
+    const t = shareText("odai", { filled: 5, total: 24, reach: 0, bingo: false, lines: [] }, "MASTER");
+    expect(t).toContain("お題ビンゴ MASTER");
+  });
 });
 
 describe("shareCard（端末に合わせて切り替える）", () => {

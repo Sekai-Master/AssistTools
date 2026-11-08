@@ -48,9 +48,11 @@ export function cardLink(base: string, code: string): string {
 }
 
 /** 共有に添える短い文。ハッシュタグは #プロセカ だけ。 */
-export function shareText(kind: CardKind, p: Progress): string {
+/** levelLabel はお題ビンゴの難易度（「MASTER」など）。 */
+export function shareText(kind: CardKind, p: Progress, levelLabel?: string): string {
   const state = p.bingo ? "・BINGO!" : p.reach > 0 ? `・リーチ ${p.reach}` : "";
-  return `チアフルカーニバルの${KIND_LABEL[kind]}（埋めたマス ${p.filled}/${p.total}${state}）#プロセカ`;
+  const name = levelLabel ? `${KIND_LABEL[kind]} ${levelLabel}` : KIND_LABEL[kind];
+  return `チアフルカーニバルの${name}（埋めたマス ${p.filled}/${p.total}${state}）#プロセカ`;
 }
 
 export type ShareResult = "shared" | "copied" | "saved" | "cancelled";
