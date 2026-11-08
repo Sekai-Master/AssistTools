@@ -13754,6 +13754,25 @@
     "event_rate": 113
   },
   {
+    "id": "782",
+    "title": "プシ",
+    "pronunciation": "ぷし",
+    "creatorArtistId": 205,
+    "artistName": "r-906",
+    "default": 1171001,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1793944800000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_782.webp",
+    "music_time": 137.1,
+    "event_rate": 118
+  },
+  {
     "id": "783",
     "title": "ULTIM@TE☆BE∀M!!",
     "pronunciation": "あるてぃめっとびーむ",

@@ -35,7 +35,7 @@ function CharaChip({ c, dim }: { c: MysekaiCharacter | undefined; dim?: boolean 
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full py-1 pr-2.5 pl-1 text-xs font-bold",
+        "inline-flex items-center gap-1 rounded-full py-1 pr-3 pl-1 text-xs font-bold",
         dim && "opacity-45"
       )}
       style={{ backgroundColor: bg, color: "#ffffff", textShadow: CHIP_SHADOW }}
@@ -124,7 +124,7 @@ export function FixtureModal({
     const done = collected.has(key);
     const linked = linkedNames(p);
     return (
-      <li key={key} className="mb-1.5">
+      <li key={key} className="mb-2">
         <button
           type="button"
           onClick={() => onToggleCollected(key)}
@@ -138,7 +138,7 @@ export function FixtureModal({
           <span
             aria-hidden
             className={cn(
-              "material-icons shrink-0 text-[20px] leading-none",
+              "material-icons shrink-0 text-xl leading-none",
               done ? "text-white" : "text-slate-400"
             )}
           >
@@ -149,13 +149,13 @@ export function FixtureModal({
               <CharaChip key={id} c={charById(id)} dim={dimOthers && highlight != null && highlight !== id} />
             ))}
           </span>
-          <span className={cn("ml-auto shrink-0 text-[11px]", done ? "text-white/80" : "text-slate-400")}>
+          <span className={cn("ml-auto shrink-0 text-xs", done ? "text-white/80" : "text-slate-400")}>
             {done ? "見た" : "未"}
           </span>
         </button>
         {/* ★ 連動することを押す前に見せる。黙って別の家具の印が変わるのが一番怖い。 */}
         {linked.length > 0 && (
-          <p className="mt-0.5 pl-3 text-[10px] leading-snug text-slate-400">
+          <p className="mt-0.5 pl-3 text-xs leading-snug text-slate-400">
             同じ会話が {linked.join("・")} でも起きます（印は一緒に付きます）
           </p>
         )}
@@ -179,7 +179,7 @@ export function FixtureModal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="neu-panel flex h-[80vh] max-h-[680px] w-full max-w-lg flex-col p-5 focus:outline-none"
+        className="neu-panel flex h-[80vh] max-h-[680px] w-full max-w-lg flex-col p-4 sm:p-6 focus:outline-none"
       >
         <div className="mb-3 flex shrink-0 items-start gap-3">
           {img && (
@@ -241,12 +241,12 @@ export function FixtureModal({
             onClick={() => onToggleOwned(fixture.id)}
             aria-pressed={owned}
             className={cn(
-              "ml-auto flex min-h-11 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold",
+              "ml-auto flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold",
               "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
               owned ? "neu-selected" : "bg-neu text-slate-600 shadow-neu-sm neu-tactile"
             )}
           >
-            <span aria-hidden className="material-icons text-[18px] leading-none">
+            <span aria-hidden className="material-icons text-xl leading-none">
               {owned ? "check_circle" : "radio_button_unchecked"}
             </span>
             持っている
@@ -258,12 +258,12 @@ export function FixtureModal({
             onClick={() => onToggleWish(fixture.id)}
             aria-pressed={wished}
             className={cn(
-              "flex min-h-11 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold",
+              "flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold",
               "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
               wished ? "neu-selected" : "bg-neu text-slate-600 shadow-neu-sm neu-tactile"
             )}
           >
-            <span aria-hidden className="material-icons text-[18px] leading-none">
+            <span aria-hidden className="material-icons text-xl leading-none">
               {wished ? "favorite" : "favorite_border"}
             </span>
             ほしい
@@ -331,13 +331,13 @@ export function FixtureModal({
                   "bg-neu shadow-neu-sm neu-tactile"
                 )}
               >
-                <span aria-hidden className="material-icons text-[20px] leading-none text-slate-400">
+                <span aria-hidden className="material-icons text-xl leading-none text-slate-500">
                   {showOthers ? "expand_less" : "expand_more"}
                 </span>
                 <span className="text-xs font-bold text-slate-600">
                   ほかの人だけで起きる会話 {others.length} 通り
                 </span>
-                <span className="ml-auto shrink-0 text-[11px] text-slate-400">
+                <span className="ml-auto shrink-0 text-xs text-slate-400">
                   {othersSeen > 0 ? `見た ${othersSeen}` : "未"}
                 </span>
               </button>
@@ -345,7 +345,7 @@ export function FixtureModal({
               {showOthers && (
                 <div className="mt-2">
                   <div className="mb-2 flex items-center gap-2">
-                    <p className="text-[11px] leading-relaxed text-slate-500">
+                    <p className="text-xs leading-relaxed text-slate-500">
                       {highlightName}は出ません。見たものがあれば印を付けられます。
                     </p>
                     {others.length > 1 && (
@@ -371,8 +371,8 @@ export function FixtureModal({
           {fixture.actionChars.length > 0 && (
             <>
               <h3 className="mt-4 mb-1 text-xs font-bold text-slate-500">この家具を使う人</h3>
-              <p className="mb-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-slate-500">
-                <span aria-hidden className="material-icons mt-px text-[14px] leading-none">
+              <p className="mb-2 flex items-start gap-2 text-xs leading-relaxed text-slate-500">
+                <span aria-hidden className="material-icons mt-px text-base leading-none">
                   info
                 </span>
                 <span>
@@ -390,8 +390,8 @@ export function FixtureModal({
           {fixture.likeChars.length > 0 && (
             <>
               <h3 className="mt-4 mb-1 text-xs font-bold text-slate-500">この家具を気に入っている人</h3>
-              <p className="mb-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-slate-500">
-                <span aria-hidden className="material-icons mt-px text-[14px] leading-none">
+              <p className="mb-2 flex items-start gap-2 text-xs leading-relaxed text-slate-500">
+                <span aria-hidden className="material-icons mt-px text-base leading-none">
                   info
                 </span>
                 <span>
@@ -408,7 +408,7 @@ export function FixtureModal({
           )}
         </div>
 
-        <p className="mt-3 shrink-0 text-[11px] leading-relaxed text-slate-400">
+        <p className="mt-3 shrink-0 text-xs leading-relaxed text-slate-400">
           会話の本文は載せていません。チェックはこの端末にだけ保存されます。
         </p>
       </div>

@@ -10,6 +10,13 @@
 /** 正式名称。URL の「sekaimaster」やリポジトリ名「AssistTools」も同じサイトを指す（利用規約 第1条）。 */
 export const SITE_NAME = "Sekai-Master";
 
+/**
+ * 検索で拾ってほしい別の呼び方（2026-11-04 Nori「｢セカイマスター｣とかでヒットするように」）。
+ * トップの WebSite 構造化データの alternateName と、トップの <title> に使う。
+ */
+export const SITE_NAME_KANA = "セカイマスター";
+export const SITE_ALT_NAMES = ["SekaiMaster", SITE_NAME_KANA] as const;
+
 export const SITE_URL = "https://sekaimaster.pages.dev";
 
 /**

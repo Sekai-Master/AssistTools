@@ -177,7 +177,7 @@ function BulkFractionCandidateCard({ choice, onAdopt }: { choice: ModeAChoice; o
       <div className="mt-1 font-mono text-xs tabular-nums text-slate-600">
         {fraction.liveBonus}炊き ・ {fraction.minScore.toLocaleString()}〜{fraction.maxScore.toLocaleString()}
       </div>
-      <div className="mt-1 text-[11px] tabular-nums text-slate-500">
+      <div className="mt-1 text-xs tabular-nums text-slate-500">
         合計{choice.liveCount}回 ・ LB合計{choice.lbCost}
       </div>
     </div>
@@ -187,19 +187,19 @@ function BulkFractionCandidateCard({ choice, onAdopt }: { choice: ModeAChoice; o
 /** 従来の複数回プラン（畳みセクション）のコンパクトカード。旧 CompactChoiceCard の multi 分岐を踏襲。 */
 function CompactMultiCard({ plan, onAdopt }: { plan: MultiLivePlan; onAdopt: () => void }) {
   return (
-    <div className="rounded-xl bg-neu p-3 shadow-neu-sm">
+    <div className="rounded-lg border border-slate-300 p-3">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
         <span className="tabular-nums">
           全{plan.liveCount}回 ・ LB合計{plan.lbCost}
           <LbCostNote lbCost={plan.lbCost} />
         </span>
-        <NeuButton className="!px-2.5 !py-1 !text-[11px]" onClick={onAdopt}>
+        <NeuButton className="!px-2.5 !py-1 !text-xs" onClick={onAdopt}>
           この案にする
         </NeuButton>
       </div>
       <div className="space-y-0.5 text-xs text-slate-600">
         {plan.units.map((u, j) => (
-          <div key={j} className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <div key={j} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="font-bold" style={{ color: "var(--unit-color)" }}>
               {u.bonus !== undefined ? `${u.bonus}%` : "現在"}
             </span>
@@ -279,7 +279,7 @@ export function ModeAChoicePanel({
       )}
 
       {legacy.length > 0 && (
-        <details className="rounded-xl bg-neu p-3 shadow-neu-sm">
+        <details className="rounded-lg border border-slate-300 p-3">
           <summary className="cursor-pointer text-xs font-bold text-slate-600">
             その他の複数回プラン（従来形式・{legacy.length}件）
           </summary>

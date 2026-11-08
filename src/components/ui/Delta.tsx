@@ -47,7 +47,7 @@ export function Delta({
     <span
       // 読み上げは邪魔になるので出さない（本体の数値が既に読まれている）。
       aria-hidden
-      className={`delta-badge ml-1.5 text-xs font-bold tabular-nums ${
+      className={`delta-badge ml-2 text-xs font-bold tabular-nums ${
         up ? "text-emerald-500" : "text-rose-500"
       }`}
     >

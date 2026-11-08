@@ -146,7 +146,7 @@ export function BackupPanel({ onImported }: { onImported?: () => void }) {
       )}
 
       {parsed && (
-        <div className="mt-4 rounded-lg p-3 shadow-neu-inset">
+        <div className="mt-4 rounded-lg border border-slate-300 p-3">
           <p className="text-sm font-bold text-slate-700">
             取り込む内容の確認
             {parsed.exportedAt && (

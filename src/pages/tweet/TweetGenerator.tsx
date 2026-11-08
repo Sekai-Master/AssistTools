@@ -493,7 +493,7 @@ function MobileActionBar({
             aria-label="プレビューを表示"
             aria-expanded={previewOpen}
             onClick={() => setPreviewOpen((v) => !v)}
-            className="material-icons shrink-0 rounded-lg px-2 py-2 text-slate-500 shadow-neu active:shadow-neu-inset"
+            className="material-icons shrink-0 rounded-lg px-3 py-3 text-xl text-slate-500 shadow-neu active:shadow-neu-inset"
           >
             {previewOpen ? "expand_more" : "expand_less"}
           </button>
@@ -507,10 +507,10 @@ function MobileActionBar({
             className="flex-1 !min-w-0"
           />
           <NeuButton className="!px-3" onClick={onSave} aria-label="入力を保存">
-            <span className="material-icons text-base">bookmark_add</span>
+            <span className="material-icons text-xl">bookmark_add</span>
           </NeuButton>
           <NeuButton className="!px-3" onClick={onCopy} aria-label="テキストをコピー">
-            <span className="material-icons text-base">content_copy</span>
+            <span className="material-icons text-xl">content_copy</span>
           </NeuButton>
           <a
             href={tweetHref}

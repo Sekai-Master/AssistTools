@@ -48,14 +48,14 @@ export function MySekaiStep({ result }: { result: CalculationResultV6 }) {
             >
               {item.count}
             </span>
-            <span className="mt-1 text-[11px] font-medium leading-tight text-slate-500 sm:text-xs">
+            <span className="mt-1 text-xs font-medium leading-tight text-slate-500">
               {item.label}
             </span>
             <div className="mt-2 flex flex-wrap items-center justify-center gap-1">
-              <span className="rounded-full bg-slate-200/70 px-2 py-0.5 text-[10px] text-slate-500">
+              <span className="rounded-full bg-slate-200/70 px-2 py-0.5 text-xs text-slate-500">
                 ×{item.memo}
               </span>
-              <span className="text-[10px] text-slate-500">単価 {item.pt}</span>
+              <span className="text-xs text-slate-500">単価 {item.pt}</span>
             </div>
           </div>
         ))}

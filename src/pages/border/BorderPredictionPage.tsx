@@ -14,6 +14,7 @@ import {
   isStale,
   phaseOf,
   rankViews,
+  bandSummary,
   recordRows,
   referenceDetail,
   signedPercent,
@@ -30,8 +31,9 @@ import { useBorderData } from "./useBorderData";
 export default function BorderPredictionPage() {
   const { current, record, history, loading, error, now } = useBorderData();
   return (
-    <ToolPage morphKey="tool:border" title="ボーダー予測" icon="insights">
-      <p className="text-sm leading-7 text-slate-600">
+    <ToolPage morphKey="tool:border" title="ボーダー予測" icon="insights" wide>
+      {/* ★ 広い幅に移した（docs/design-system.md の 1 節）。グラフは 3 列に増やし、説明の文だけ 1 行 40 字前後で止める */}
+      <p className="max-w-xl text-sm leading-7 text-slate-600">
         開催中のイベントの主要ボーダー（50〜2000位）の最終値を、過去のイベントの伸び方から予測します。
         イベントが終わるたびに予測と実測を突き合わせて、使うモデルと予測の幅を自動で選び直しています。
       </p>
@@ -49,10 +51,10 @@ export default function BorderPredictionPage() {
       )}
       {!loading && current && <CurrentPanel snap={current} model={record?.model ?? null} now={now} />}
       {!loading && current && history.size > 0 && (
-        // id は X の告知で Bot がここまでスクロールして撮るための目印（sekaimaster-bot の page の anchor。2026-10-25）
+        // id は X の告知で Bot がここまでスクロールして撮るための目印（sekaimaster-bot の feat/page-anchor。未マージで、いまの Bot は使っていない）
         <section id="trend" className="scroll-mt-20">
         <Panel title="推移">
-          <p className="mb-3 text-xs leading-6 text-slate-500">
+          <p className="mb-3 max-w-lg text-xs leading-6 text-slate-500">
             30分ごとの実測（実線）と、その時点で出していた最終値の予測（破線）・8割の幅（帯）です。
             帯はその時点の予測なので、終了時の実測（＝最終値）が最後の帯の中に入れば当たりです。
             グラフに触れる（キーボードなら左右キー）と、その時刻の数字が出ます。
@@ -94,7 +96,7 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
         <div className="h-2 overflow-hidden rounded-full bg-slate-200">
           <div className="h-full rounded-full bg-[color:var(--unit-color)]" style={{ width: formatPercent(snap.progress, 1) }} />
         </div>
-        <p className="mt-1.5 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-slate-500">
           経過 {formatPercent(snap.progress)}・実測 {formatJst(snap.sampleAt)} 時点
         </p>
       </div>
@@ -116,9 +118,9 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
         </p>
       )}
       {/* ★ 予測を出す前も、いまの値は出す（30分ごとに集めているのに、以前は1行の断りだけだった） */}
-      <ul className="mt-4 divide-y divide-[color:var(--neu-edge)]">
+      <ul className="mt-4 grid gap-x-6 sm:grid-cols-2 lg:grid-cols-3">
         {rows.map((r) => (
-          <li key={r.rank} className="grid grid-cols-[4.5rem_1fr] items-baseline gap-x-3 py-3">
+          <li key={r.rank} className="grid grid-cols-[4.5rem_1fr] items-baseline gap-x-3 border-t border-[color:var(--neu-edge)] py-3">
             <span className="text-sm font-bold text-slate-700">{r.rank}位</span>
             {r.visible && r.predicted != null ? (
               <div>
@@ -153,12 +155,12 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
         </p>
       )}
       {snap.predicted && (
-        <p className="mt-3 text-[11px] leading-5 text-slate-500">
+        <p className="mt-3 max-w-lg text-xs leading-5 text-slate-500">
           確度は8割の幅の広さです。高＝±5%くらい、中＝±15%くらい、目安＝それより広い（序盤）。
           序盤の目安は、全体の熱さを読むためのものとして見てください。
         </p>
       )}
-      {snap.modelVersion && <p className="mt-2 text-[11px] text-slate-400">モデル {snap.modelVersion}</p>}
+      {snap.modelVersion && <p className="mt-2 text-xs text-slate-400">モデル {snap.modelVersion}</p>}
     </Panel>
   );
 }
@@ -172,71 +174,101 @@ const CONFIDENCE_TONE: Record<Confidence, string> = {
 function ConfidenceChip({ value, reference }: { value: Confidence; reference: boolean }) {
   // 過去に無い長さ（外挿）のときは確度を名乗らず「参考値」と書く（2026-10-25、221 の 1000位が大きく外れた）
   if (reference) {
-    return <span className="rounded-full border border-dashed border-amber-600 px-2 py-0.5 text-[11px] font-bold text-amber-700">参考値</span>;
+    return <span className="rounded-full border border-dashed border-amber-600 px-2 py-0.5 text-xs font-bold text-amber-700">参考値</span>;
   }
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${CONFIDENCE_TONE[value]}`}>
+    <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${CONFIDENCE_TONE[value]}`}>
       確度 {CONFIDENCE_LABEL[value]}
     </span>
   );
 }
 
+/** 答え合わせで最初から見せる回の数。 */
+const RECENT_REPORTS = 2;
+
 function RecordPanel({ reports }: { reports: Report[] }) {
+  const older = reports.slice(RECENT_REPORTS);
+  const band = bandSummary(older);
   return (
     <Panel title="答え合わせ">
-      <p className="text-xs leading-6 text-slate-500">
+      <p className="max-w-lg text-xs leading-6 text-slate-500">
         終わったイベントの実測と、経過85%の時点で出していた予測です。外れた回も消さずに残しています。
         本番の予測が無い回（仕組みを動かす前のイベント）は、その時点までのデータだけで作ったモデルで経過90%を再現した誤差を載せています。
       </p>
-      <div className="mt-4 space-y-6">
-        {reports.map((rep) => (
-          <section key={rep.eventId}>
-            <h3 className="text-sm font-bold text-slate-700">
-              {rep.name}
-              <span className="ml-2 text-xs font-normal text-slate-500">{formatJst(rep.aggregateAt + 60_000).split(" ")[0]} 終了</span>
-            </h3>
-            <table className="mt-2 w-full table-fixed text-left text-xs tabular-nums">
-              <thead className="text-slate-500">
-                <tr>
-                  <th className="w-[16%] py-1 font-normal">順位</th>
-                  <th className="w-[28%] py-1 font-normal">実測</th>
-                  <th className="w-[28%] py-1 font-normal">予測</th>
-                  <th className="w-[28%] py-1 font-normal">誤差</th>
-                </tr>
-              </thead>
-              <tbody className="text-slate-700">
-                {recordRows(rep).map((r) => (
-                  <tr key={r.rank} className="border-t border-[color:var(--neu-edge)]">
-                    <td className="whitespace-nowrap py-1.5">{r.rank}位</td>
-                    <td className="py-1.5">{formatMan(r.final)}</td>
-                    <td className="py-1.5">{r.predicted != null ? formatMan(r.predicted) : "—"}</td>
-                    <td className="py-1.5">
-                      {r.error != null ? (
-                        <>
-                          {signedPercent(r.error)}
-                          {r.inBand === false && <span className="ml-1 text-[color:var(--color-rose-600)]">幅の外</span>}
-                        </>
-                      ) : r.replayError != null ? (
-                        <span className="text-slate-500">再現 {signedPercent(r.replayError)}</span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
+      <div className="mt-4 grid gap-6 lg:grid-cols-2">
+        {reports.slice(0, RECENT_REPORTS).map((rep) => (
+          <ReportTable key={rep.eventId} rep={rep} />
         ))}
       </div>
+      {/* ★ 表が 7 回ぶん（画面 2 枚）並んでいたので、直近だけ見せて残りは畳む（docs/design-system.md の 7 節）。
+            外れた回を隠したように見えないよう、畳んだ中の「幅の外」の数は見出しに出す */}
+      {older.length > 0 && (
+        <details className="mt-4 border-t border-slate-300">
+          <summary className="cursor-pointer py-3 text-sm font-bold text-slate-600">
+            それより前の {older.length} 回
+            {band.judged > 0 && (
+              <span className="ml-2 text-xs font-normal text-slate-500">
+                幅の外 {band.out} 件（判定できた {band.judged} 順位のうち）
+              </span>
+            )}
+          </summary>
+          <div className="grid gap-6 pb-3 lg:grid-cols-2">
+            {older.map((rep) => (
+              <ReportTable key={rep.eventId} rep={rep} />
+            ))}
+          </div>
+        </details>
+      )}
     </Panel>
+  );
+}
+
+function ReportTable({ rep }: { rep: Report }) {
+  return (
+    <section>
+      <h3 className="text-sm font-bold text-slate-700">
+        {rep.name}
+        <span className="ml-2 text-xs font-normal text-slate-500">{formatJst(rep.aggregateAt + 60_000).split(" ")[0]} 終了</span>
+      </h3>
+      <table className="mt-2 w-full table-fixed text-left text-xs tabular-nums">
+        <thead className="text-slate-500">
+          <tr>
+            <th className="w-[16%] py-1 font-normal">順位</th>
+            <th className="w-[28%] py-1 font-normal">実測</th>
+            <th className="w-[28%] py-1 font-normal">予測</th>
+            <th className="w-[28%] py-1 font-normal">誤差</th>
+          </tr>
+        </thead>
+        <tbody className="text-slate-700">
+          {recordRows(rep).map((r) => (
+            <tr key={r.rank} className="border-t border-[color:var(--neu-edge)]">
+              <td className="whitespace-nowrap py-1.5">{r.rank}位</td>
+              <td className="py-1.5">{formatMan(r.final)}</td>
+              <td className="py-1.5">{r.predicted != null ? formatMan(r.predicted) : "—"}</td>
+              <td className="py-1.5">
+                {r.error != null ? (
+                  <>
+                    {signedPercent(r.error)}
+                    {r.inBand === false && <span className="ml-1 text-[color:var(--color-rose-600)]">幅の外</span>}
+                  </>
+                ) : r.replayError != null ? (
+                  <span className="text-slate-500">再現 {signedPercent(r.replayError)}</span>
+                ) : (
+                  "—"
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   );
 }
 
 function ModelPanel({ model }: { model: ModelSummary }) {
   return (
     <Panel title="いまのモデル">
-      <p className="text-xs leading-6 text-slate-500">
+      <p className="max-w-lg text-xs leading-6 text-slate-500">
         {model.version}・過去 {model.poolSize} 回のマラソンで学習（{formatJst(Date.parse(model.createdAt))} 更新）
       </p>
       <table className="mt-3 w-full text-left text-xs tabular-nums">
@@ -275,7 +307,7 @@ function ModelPanel({ model }: { model: ModelSummary }) {
 function HowPanel() {
   return (
     <Panel title="しくみ">
-      <div className="space-y-3 text-sm leading-7 text-slate-600">
+      <div className="max-w-xl space-y-3 text-sm leading-7 text-slate-600">
         <p>
           予測は「いまのボーダー ÷ 過去の同じ長さのイベントで、同じ経過の時点に最終値の何割まで積み上がっていたか」です。
           イベントの盛り上がり（全体の大きさ）はいまの実測がすでに含んでいるので、過去から借りるのは伸び方の形だけです。

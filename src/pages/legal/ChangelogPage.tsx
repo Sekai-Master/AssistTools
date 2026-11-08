@@ -29,7 +29,7 @@ export default function ChangelogPage() {
 
       <div className="space-y-8">
         {RELEASES.map((release, i) => (
-          <article key={release.version} className="neu-panel p-5 sm:p-6">
+          <article key={release.version} className="neu-panel p-4 sm:p-6">
             <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <h2 className="text-lg font-bold text-slate-700">v{release.version}</h2>
               <time className="text-xs text-slate-500" dateTime={release.date}>
@@ -37,7 +37,7 @@ export default function ChangelogPage() {
               </time>
               {/* 最新版だけ印を付ける。今どこまで来ているかが一目で分かればよい。 */}
               {i === 0 && (
-                <span className="rounded-full bg-[color:var(--color-vs)]/15 px-2 py-0.5 text-[11px] font-bold text-[color:var(--color-vs)]">
+                <span className="rounded-full bg-[color:var(--color-vs)]/15 px-2 py-0.5 text-xs font-bold text-[color:var(--color-vs)]">
                   最新
                 </span>
               )}
@@ -52,7 +52,7 @@ export default function ChangelogPage() {
                 <h3 className={`text-xs font-bold tracking-wide ${GROUP_TONE[group.label] ?? "text-slate-500"}`}>
                   {group.label}
                 </h3>
-                <ul className="mt-1.5 ml-5 list-disc space-y-1.5 text-sm leading-7 text-slate-600 marker:text-slate-400">
+                <ul className="mt-2 ml-5 list-disc space-y-2 text-sm leading-7 text-slate-600 marker:text-slate-400">
                   {group.items.map((item, j) => (
                     <li key={j}>{item}</li>
                   ))}

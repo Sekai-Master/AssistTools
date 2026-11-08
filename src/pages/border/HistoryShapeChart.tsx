@@ -15,7 +15,7 @@ import { SHAPE_POINTS, dayTicks, elapsedLabel, extentOf, hourAt, parseShape, run
  */
 
 const PLOT_H = 220;
-const PAD = { l: 48, r: 12, t: 10, b: 24 };
+const PAD = { l: 56, r: 12, t: 10, b: 24 };
 const TICK_LABEL_W = 44;
 const TWEEN_MS = 450;
 
@@ -142,7 +142,7 @@ export function HistoryShapeChart({ eventId, hours }: { eventId: number; hours: 
               disabled={!has}
               onClick={() => toggle(rank)}
               className={
-                "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold tabular-nums transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)] disabled:opacity-40 " +
+                "flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold tabular-nums transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)] disabled:opacity-40 " +
                 (on ? "neu-inset text-slate-700" : "bg-neu text-slate-500 shadow-neu-sm")
               }
             >
@@ -224,7 +224,7 @@ function Plot({ series, hours, lastHour, target, view }: { series: ShapeSeries[]
             .map((v) => (
               <g key={v}>
                 <line x1={PAD.l} x2={PAD.l + plotW} y1={y(v)} y2={y(v)} style={{ stroke: GRID_COLOR }} strokeWidth={1} />
-                <text x={PAD.l - 6} y={y(v)} dy="0.32em" textAnchor="end" className="fill-slate-500 text-[10px] tabular-nums">
+                <text x={PAD.l - 6} y={y(v)} dy="0.32em" textAnchor="end" className="fill-slate-500 text-xs tabular-nums">
                   {formatAxisMan(v)}
                 </text>
               </g>
@@ -232,7 +232,7 @@ function Plot({ series, hours, lastHour, target, view }: { series: ShapeSeries[]
           {dayTicks(target.xEnd, Math.max(2, Math.floor(plotW / TICK_LABEL_W)))
             .filter((tk) => tk.h <= xEnd + 1e-6)
             .map((tk) => (
-              <text key={tk.h} x={x(tk.h)} y={height - 6} textAnchor="middle" className="fill-slate-500 text-[10px] tabular-nums">
+              <text key={tk.h} x={x(tk.h)} y={height - 6} textAnchor="middle" className="fill-slate-500 text-xs tabular-nums">
                 {tk.label}
               </text>
             ))}
@@ -280,12 +280,14 @@ function Plot({ series, hours, lastHour, target, view }: { series: ShapeSeries[]
 
 /** 値が先、順位が後。上の順位から */
 function Tooltip({ series, i, hours, left, width }: { series: ShapeSeries[]; i: number; hours: number; left: number; width: number }) {
-  const side: CSSProperties = left > width / 2 ? { right: width - left + 10 } : { left: left + 10 };
+  // ★ 触った位置の割合だけ自分の幅をずらす。左右に振る形は、狭いグラフで画面の外へ出た（ボーダー予測のグラフで実測、#202）
+  const ratio = width > 0 ? Math.min(1, Math.max(0, left / width)) : 0;
+  const side: CSSProperties = { left, transform: `translateX(${-ratio * 100}%)` };
   return (
-    <div className="pointer-events-none absolute top-0 z-10 rounded-lg bg-[color:var(--color-neu)] px-2.5 py-1.5 text-[11px] leading-5 shadow-neu-sm" style={side}>
+    <div className="pointer-events-none absolute top-0 z-10 rounded-lg bg-[color:var(--color-neu)] px-2.5 py-1.5 text-xs leading-5 shadow-neu-sm" style={side}>
       <p className="whitespace-nowrap text-slate-500">{elapsedLabel(i, hours)}</p>
       {series.map((s) => (
-        <p key={s.rank} className="flex items-center gap-1.5 whitespace-nowrap">
+        <p key={s.rank} className="flex items-center gap-2 whitespace-nowrap">
           <Swatch rank={s.rank} />
           <b className="tabular-nums text-slate-800">{s.values[i] != null ? formatMan(s.values[i]) : "—"}</b>
           <span className="text-slate-500">{s.rank}位</span>

@@ -142,6 +142,15 @@ export function recordRows(report: Report): RecordRow[] {
   });
 }
 
+/**
+ * 畳んだ回のうち、実測が 8 割の幅から外れた順位の数と、そもそも判定できた順位の数。
+ * ★ 本番の予測が無い回（再現だけの回）は判定できない。分母を出さないと「全部当たった」に読める。
+ */
+export function bandSummary(reports: Report[]): { out: number; judged: number } {
+  const judged = reports.flatMap(recordRows).filter((r) => r.inBand != null);
+  return { out: judged.filter((r) => r.inBand === false).length, judged: judged.length };
+}
+
 export function candidateLabel(id: string): string {
   return (CANDIDATE_LABEL as Record<string, string>)[id] ?? id;
 }

@@ -3,6 +3,17 @@
    CSS 仕様上 @import は他のどの規則よりも前にしか書けないので、ファイル末尾に
    足すとブラウザ/Lightning CSS が黙って落とす。 */
 @import "./motion/motion.css";
+/* filled のみ。material-icons.css は outlined/round/sharp/two-tone まで抱き込む。
+   ★ base のレイヤーに入れる。レイヤーの外で読むと font-size: 24px が Tailwind の text-* に勝ち、
+     text-xl と書いたアイコンも 24px で出ていた（2026-11-06 の計測で判明）。 */
+@import "material-icons/iconfont/filled.css" layer(base);
+
+/* アイコンの大きさは 3 段（docs/design-system.md の 4 節）。既定は 20px。見出しの中は text-[22px]、札の中は text-base。 */
+@layer base {
+  .material-icons {
+    font-size: 1.25rem;
+  }
+}
 
 /*
  * SekaiMaster デザイン言語（legacy/common.css から継承。不可侵ライン）。
@@ -81,6 +92,9 @@
 
 @theme {
   --font-sans: "M PLUS Rounded 1c", ui-sans-serif, system-ui, sans-serif;
+  /* 数字（残り時間・ポイント）専用。等幅で桁が揃う。日本語の字（「日」「万」「位」）は
+     Geist Mono に無いので、続く M PLUS Rounded 1c で出る。Nori 決定 2026-11-05 */
+  --font-num: "Geist Mono", "M PLUS Rounded 1c", ui-monospace, monospace;
 
   /* ニューモーフィズムの土台と影。
      値は --neu-lift = 1 のとき従来と完全に等価（calc 化しただけ）。 */
@@ -429,6 +443,12 @@ body {
       rgba(255, 255, 255, 0.22) 0 28%,
       rgba(255, 255, 255, 0) 32%
     );
+  }
+  /* 見出しのアイコンは文字でなく CSS で出す。h1 の中に合字の元の文字（insights など）があると、
+     Google が検索結果のタイトルを「insightsボーダー予測」にした（2026-11-04） */
+  /* トップのツールの一覧も同じ。リンクの中に合字の元の文字があると、検索エンジンにはリンクの文字として読まれる */
+  .material-icons[data-icon]::before {
+    content: attr(data-icon);
   }
   .unit-title > * {
     position: relative;

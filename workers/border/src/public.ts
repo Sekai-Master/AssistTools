@@ -6,7 +6,7 @@
  * ★ D1 の読み取り行数も無料枠（500万行/日・SAWAYAKA と共有）を食うので、
  *   事前に組み立てた1行（kv）を返す。予測ログの表を毎回なめない。
  */
-import { activeModelSummary, allReports, kvGet, shapesOf } from './db.ts'
+import { activeModelSummary, allReports, eventAsset, kvGet, shapesOf } from './db.ts'
 
 /** 形の順位の数（50・100・200・500・1000・2000） */
 const SHAPE_RANKS = 6
@@ -18,13 +18,32 @@ function rawJson(body: string, maxAge: number): Response {
 }
 
 /**
+ * current の回にロゴの素材名を足す（トップの開催中のイベントに出す）。
+ *
+ * kv の current は Worker が30分ごとに組む。ここで足せば、Worker を出し直さなくても
+ * サイトの Pages Functions だけで載る。読み取りは events の主キーで1行だけ。
+ * ★ 失敗してもロゴが出ないだけにする。予測そのものを巻き添えで落とさない。
+ */
+async function withEventAsset(db: D1Database, body: string): Promise<string> {
+  try {
+    const snap = JSON.parse(body) as { event?: { id?: unknown; asset?: unknown } }
+    const ev = snap.event
+    if (!ev || typeof ev.id !== 'number' || ev.asset !== undefined) return body
+    return JSON.stringify({ ...snap, event: { ...ev, asset: await eventAsset(db, ev.id) } })
+  } catch (err) {
+    console.error('current: 素材名を足せなかった', err)
+    return body
+  }
+}
+
+/**
  * path は "/current" "/track-record" "/finals" "/events/{id}/history" "/events/{id}/shape" のどれか。該当しなければ null。
  * 返す JSON の形はサイト側の src/pages/border/types.ts と揃える。
  */
 export async function publicBorderResponse(db: D1Database, path: string): Promise<Response | null> {
   if (path === '/current') {
     const v = await kvGet(db, 'current')
-    return v ? rawJson(v, 60) : new Response(JSON.stringify({ error: 'no data yet' }), { status: 404, headers: { 'Content-Type': 'application/json; charset=utf-8' } })
+    return v ? rawJson(await withEventAsset(db, v), 60) : new Response(JSON.stringify({ error: 'no data yet' }), { status: 404, headers: { 'Content-Type': 'application/json; charset=utf-8' } })
   }
 
   const hist = /^\/events\/(\d+)\/history$/.exec(path)

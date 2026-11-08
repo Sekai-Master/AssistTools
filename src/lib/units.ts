@@ -11,6 +11,25 @@ export const UNIT_COLOR_VAR: Record<UnitKey, string> = {
   n25: "var(--color-n25)",
 };
 
+/**
+ * イベント（D1 の events.unit・ゲームのマスタの名前）→ サイトのユニットのキー。
+ * 混合（none）はどこにも当てない。呼ぶ側がバーチャル・シンガーの色に落とす。
+ */
+export const EVENT_UNIT_KEY: Record<string, UnitKey> = {
+  light_sound: "ln",
+  idol: "mmj",
+  street: "vbs",
+  theme_park: "wxs",
+  school_refusal: "n25",
+  piapro: "vs",
+};
+
+/** イベントのユニットの色。表に無い名前（混合など）はバーチャル・シンガーの色。 */
+export function eventUnitColor(unit: string): string {
+  const key = Object.hasOwn(EVENT_UNIT_KEY, unit) ? EVENT_UNIT_KEY[unit] : "vs";
+  return UNIT_COLOR_VAR[key];
+}
+
 export const UNIT_LABEL: Record<UnitKey, string> = {
   vs: "VIRTUAL SINGER",
   ln: "Leo/need",

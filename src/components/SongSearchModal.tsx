@@ -83,7 +83,7 @@ export function SongSearchModal<T extends SearchableSong>({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="w-full max-w-lg h-[70vh] max-h-[560px] flex flex-col neu-panel p-5 focus:outline-none"
+        className="w-full max-w-lg h-[70vh] max-h-[560px] flex flex-col neu-panel p-4 sm:p-6 focus:outline-none"
       >
         <div className="flex items-center justify-between mb-3 shrink-0">
           <h2 id={titleId} className="font-bold text-slate-700">

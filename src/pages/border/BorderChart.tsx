@@ -14,8 +14,8 @@ import { formatAxisMan, isShown, shownRuns, timeTicks, visibleEnd, yTicks, yTop,
  */
 
 const PLOT_H = 140;
-const PAD = { l: 44, r: 10, t: 8, b: 22 };
-const TICK_LABEL_W = 48;
+const PAD = { l: 52, r: 10, t: 8, b: 22 };
+const TICK_LABEL_W = 50;
 
 const VARS = {
   "--bp-actual": "light-dark(#475569, #cbd5e1)",
@@ -52,9 +52,9 @@ function LineKey({ dashed }: { dashed?: boolean }) {
 function Legend() {
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
-      <li className="flex items-center gap-1.5"><LineKey />実測</li>
-      <li className="flex items-center gap-1.5"><LineKey dashed />その時点の予測（最終値）</li>
-      <li className="flex items-center gap-1.5">
+      <li className="flex items-center gap-2"><LineKey />実測</li>
+      <li className="flex items-center gap-2"><LineKey dashed />その時点の予測（最終値）</li>
+      <li className="flex items-center gap-2">
         <span aria-hidden className="inline-block h-2.5 w-4 rounded-sm" style={{ background: PRED, opacity: 0.2 }} />
         8割の幅
       </li>
@@ -64,17 +64,19 @@ function Legend() {
 
 /** 値が先、名前が後（読む人は系列を知っていて数字が欲しい） */
 function Tooltip({ p, left, width }: { p: HistoryPoint; left: number; width: number }) {
-  const side: CSSProperties = left > width / 2 ? { right: width - left + 10 } : { left: left + 10 };
+  // ★ 触った位置の割合だけ自分の幅をずらす。左右に振る形は、狭いグラフで画面の外へ出た（スマホ 390px で 7px、320px で 43px）
+  const ratio = width > 0 ? Math.min(1, Math.max(0, left / width)) : 0;
+  const side: CSSProperties = { left, transform: `translateX(${-ratio * 100}%)` };
   return (
-    <div className="pointer-events-none absolute top-0 z-10 rounded-lg bg-[color:var(--color-neu)] px-2.5 py-1.5 text-[11px] leading-5 shadow-neu-sm" style={side}>
+    <div className="pointer-events-none absolute top-0 z-10 rounded-lg bg-[color:var(--color-neu)] px-2.5 py-1.5 text-xs leading-5 shadow-neu-sm" style={side}>
       <p className="text-slate-500">{formatJst(p.t)}</p>
-      <p className="flex items-center gap-1.5 whitespace-nowrap">
+      <p className="flex items-center gap-2 whitespace-nowrap">
         <LineKey />
         <b className="tabular-nums text-slate-800">{formatMan(p.current)}</b>
         <span className="text-slate-500">実測</span>
       </p>
       {p.predicted != null && (
-        <p className="flex items-center gap-1.5 whitespace-nowrap">
+        <p className="flex items-center gap-2 whitespace-nowrap">
           <LineKey dashed />
           <b className="tabular-nums text-slate-800">{formatMan(p.predicted)}</b>
           <span className="text-slate-500">予測</span>
@@ -164,13 +166,13 @@ function RankChart({ rank, points, startAt, endAt }: { rank: number; points: His
             {yTicks(top).map((v) => (
               <g key={v}>
                 <line x1={PAD.l} x2={PAD.l + plotW} y1={y(v)} y2={y(v)} style={{ stroke: GRID }} strokeWidth={1} />
-                <text x={PAD.l - 6} y={y(v)} dy="0.32em" textAnchor="end" className="fill-slate-500 text-[10px] tabular-nums">
+                <text x={PAD.l - 6} y={y(v)} dy="0.32em" textAnchor="end" className="fill-slate-500 text-xs tabular-nums">
                   {formatAxisMan(v)}
                 </text>
               </g>
             ))}
             {timeTicks(startAt, endAt, Math.max(2, Math.floor(plotW / TICK_LABEL_W))).map((tk) => (
-              <text key={tk.t} x={x(tk.t)} y={height - 6} textAnchor="middle" className="fill-slate-500 text-[10px] tabular-nums">
+              <text key={tk.t} x={x(tk.t)} y={height - 6} textAnchor="middle" className="fill-slate-500 text-xs tabular-nums">
                 {tk.label}
               </text>
             ))}
@@ -223,7 +225,7 @@ function HistoryTable({ series }: { series: readonly (readonly [number, HistoryP
     <details className="mt-4 text-xs" onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary className="cursor-pointer text-slate-500">数字の表で見る（30分ごと・新しい順）</summary>
       {open && (
-        <div className="mt-2 grid gap-4 sm:grid-cols-2">
+        <div className="mt-2 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {series.map(([rank, pts]) => (
             <table key={rank} className="w-full text-left tabular-nums">
               <caption className="py-1 text-left font-bold text-slate-700">{rank}位</caption>
@@ -274,10 +276,10 @@ export function BorderCharts({
     <div style={VARS}>
       <Legend />
       {xEnd < endAt && (
-        <p className="mt-1 text-[11px] text-slate-500">横軸は開始から最新の少し先まで（時間が経つと終了の {formatJst(endAt)} まで広がります）</p>
+        <p className="mt-1 text-xs text-slate-500">横軸は開始から最新の少し先まで（時間が経つと終了の {formatJst(endAt)} まで広がります）</p>
       )}
-      {/* PC でも2列まで（ページの幅は 768px。3列だと1枚 215px で横軸の日付が間引かれる。2026-10-26 Nori） */}
-      <div className="mt-3 grid gap-x-6 gap-y-5 sm:grid-cols-2">
+      {/* PC は 3 列（ページの幅が 1152px なので 1 枚 340px 前後）。768px の幅で 3 列にすると 1 枚 215px で横軸の日付が間引かれたので、当時は 2 列だった（2026-10-26 Nori） */}
+      <div className="mt-3 grid gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
         {series.map(([rank, pts]) => (
           <RankChart key={rank} rank={rank} points={pts} startAt={startAt} endAt={xEnd} />
         ))}

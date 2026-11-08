@@ -27,7 +27,7 @@ export function RarityBadge({
   return (
     <span
       className={cn(
-        "min-w-14 shrink-0 rounded px-1.5 py-0.5 text-center text-[10px] font-bold text-white",
+        "min-w-14 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-bold text-white",
         className
       )}
       style={{ backgroundColor: ATTR_COLOR[attr] ?? "#888" }}

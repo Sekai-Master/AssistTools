@@ -73,8 +73,8 @@ export function PowerPanel({
         </div>
       </div>
 
-      <details className="mt-4 rounded-lg p-3 shadow-neu-inset">
-        <summary className="cursor-pointer text-sm font-bold text-slate-600">内訳</summary>
+      <details className="mt-4 border-t border-slate-300">
+        <summary className="cursor-pointer py-3 text-sm font-bold text-slate-600">内訳</summary>
 
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Stat label="パフォーマンス" value={n(result.performance)} sub="カードの素の値" />

@@ -5,7 +5,7 @@ import { Panel } from "../../components/ui/Panel";
 import { Segmented } from "../../components/ui/Segmented";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { ToolPage } from "../../components/ui/ToolPage";
-import { UNIT_COLOR_VAR, type UnitKey } from "../../lib/units";
+import { eventUnitColor } from "../../lib/units";
 import { formatMan } from "../../../workers/border/src/posts";
 import { CHARACTERS, UNIT_ORDER, UNIT_SHORT, characterShort } from "../deck/lib/characters";
 import { HistoryShapeChart } from "./HistoryShapeChart";
@@ -45,16 +45,6 @@ import {
  *「箱イベと混合イベのフィルタ」「参加キャラでフィルタリング」「各ボーダーの遷移グラフ」。
  * キャラを複数選んだら全員そろう回、VS はユニットを問わず同じキャラ（同日 Nori）。
  */
-
-/** events の unit → サイトのユニットのキー（混合・バーチャル・シンガーはバーチャル・シンガーの色） */
-const UNIT_KEY: Record<string, UnitKey> = {
-  light_sound: "ln",
-  idol: "mmj",
-  street: "vbs",
-  theme_park: "wxs",
-  school_refusal: "n25",
-  piapro: "vs",
-};
 
 /** 種別の札の色。ダーク表示の値も持たせる（index.css の remap に無い色なので light-dark で書く） */
 const TYPE_CHIP: Record<string, CSSProperties> = {
@@ -248,7 +238,7 @@ export default function BorderHistoryPage() {
 function TypeChip({ e }: { e: HistoryEvent }) {
   return (
     <span
-      className="inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold leading-4"
+      className="inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-bold leading-4"
       style={own(TYPE_CHIP, e.type) ?? TYPE_CHIP.marathon}
     >
       {e.typeLabel}
@@ -472,7 +462,7 @@ function RankingPanel({
           <tbody>
             {rows.map((r) => {
               const me = r.event.id === target.id;
-              const bar = UNIT_COLOR_VAR[own(UNIT_KEY, r.event.unit) ?? "vs"];
+              const bar = eventUnitColor(r.event.unit);
               return (
                 <tr
                   key={r.event.id}
@@ -491,7 +481,7 @@ function RankingPanel({
                     >
                       {r.event.name}
                     </button>
-                    <span className="mt-0.5 flex items-center gap-1.5 text-[11px] font-normal tabular-nums text-slate-500 sm:hidden">
+                    <span className="mt-0.5 flex items-center gap-2 text-xs font-normal tabular-nums text-slate-500 sm:hidden">
                       <TypeChip e={r.event} />
                       {r.event.days}日・{r.event.hours}h
                     </span>
@@ -560,7 +550,7 @@ function FilterBox({ label, types, unit, chars, pending, bonusFailed, open, onOp
               </button>
             ))}
           </div>
-          <p className="mt-1.5 text-[11px] leading-5 text-slate-500">最初はワールドリンクを外しています（X の歴代ボーダーの画像と同じ数え方）。</p>
+          <p className="mt-2 text-xs leading-5 text-slate-500">最初はワールドリンクを外しています（X の歴代ボーダーの画像と同じ数え方）。</p>
         </div>
         <div>
           <p className="mb-2 text-xs font-bold text-slate-500">箱／混合</p>
@@ -577,7 +567,7 @@ function FilterBox({ label, types, unit, chars, pending, bonusFailed, open, onOp
           <div role="group" aria-label="参加キャラ" className="space-y-1">
             {UNIT_ORDER.map((u) => (
               <div key={u} className="flex items-center gap-1">
-                <span className="w-16 shrink-0 whitespace-nowrap text-[10px] font-bold text-slate-400">{UNIT_SHORT[u]}</span>
+                <span className="w-16 shrink-0 whitespace-nowrap text-xs font-bold text-slate-400">{UNIT_SHORT[u]}</span>
                 <span className="flex min-w-0 flex-1 flex-wrap gap-1">
                   {CHARACTERS.filter((c) => c.unit === u).map((c) => (
                     <button
@@ -585,7 +575,7 @@ function FilterBox({ label, types, unit, chars, pending, bonusFailed, open, onOp
                       type="button"
                       aria-pressed={chars.includes(c.ch)}
                       title={c.name}
-                      className={`${chip(chars.includes(c.ch))} !px-2 !text-[11px]`}
+                      className={`${chip(chars.includes(c.ch))} !px-2 !text-xs`}
                       onClick={() => onChar(c.ch)}
                     >
                       {characterShort(c.ch)}
@@ -595,14 +585,14 @@ function FilterBox({ label, types, unit, chars, pending, bonusFailed, open, onOp
               </div>
             ))}
           </div>
-          {pending && !bonusFailed && <p className="mt-1.5 text-[11px] text-slate-500">キャラのデータを読み込み中…</p>}
-          {bonusFailed && <p className="mt-1.5 text-[11px] text-amber-700">キャラのデータを読み込めなかったので、キャラでは絞っていません。</p>}
+          {pending && !bonusFailed && <p className="mt-2 text-xs text-slate-500">キャラのデータを読み込み中…</p>}
+          {bonusFailed && <p className="mt-2 text-xs text-amber-700">キャラのデータを読み込めなかったので、キャラでは絞っていません。</p>}
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <NeuButton className="!px-3 !py-1.5 !text-xs" onClick={onReset}>
             条件を戻す
           </NeuButton>
-          <p className="text-[11px] leading-5 text-slate-500">選んでいる回は、条件から外れても比べる回に入れます。</p>
+          <p className="text-xs leading-5 text-slate-500">選んでいる回は、条件から外れても比べる回に入れます。</p>
         </div>
       </div>
     </details>

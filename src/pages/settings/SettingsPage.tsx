@@ -58,9 +58,7 @@ export function SettingsPage() {
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-8">
       <h1 className="unit-title text-xl font-bold">
-        <span className="material-icons" aria-hidden>
-          tune
-        </span>
+        <span className="material-icons text-[22px]" aria-hidden data-icon="tune" />
         <span>設定</span>
       </h1>
 

@@ -128,7 +128,7 @@ export function QuickCompare({ entries, loading, error }: { entries: RankingMusi
             const c = checks[i];
             return (
               <li key={r.id}>
-                <fieldset aria-label={`編成 ${label}`} className="rounded-xl p-3 shadow-neu-sm">
+                <fieldset aria-label={`編成 ${label}`} className="rounded-lg border border-slate-300 p-3">
                   <div className="flex items-center gap-2">
                     <NeuInput
                       aria-label="編成の名前"
@@ -164,9 +164,9 @@ export function QuickCompare({ entries, loading, error }: { entries: RankingMusi
                     ))}
                   </div>
                   {c.ok ? (
-                    <p className="mt-1.5 text-xs text-slate-500">実効値（協力） {pct1(c.effective)}%</p>
+                    <p className="mt-2 text-xs text-slate-500">実効値（協力） {pct1(c.effective)}%</p>
                   ) : (
-                    c.reason && <p className="mt-1.5 text-xs text-amber-700">{c.reason}</p>
+                    c.reason && <p className="mt-2 text-xs text-amber-700">{c.reason}</p>
                   )}
                 </fieldset>
               </li>

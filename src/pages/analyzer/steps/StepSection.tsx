@@ -17,9 +17,9 @@ export function StepSection({
 }) {
   const style = { "--unit-color": UNIT_COLOR_VAR[unit] } as CSSProperties;
   return (
-    <section style={style} className="neu-panel p-5 sm:p-6">
+    <section style={style} className="neu-panel p-4 sm:p-6">
       <h2
-        className="mb-4 inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-bold text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.32)]"
+        className="mb-4 inline-flex items-center rounded-lg px-3 py-1.5 text-base font-bold text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.32)]"
         style={{ backgroundColor: "var(--unit-color)" }}
       >
         {title}

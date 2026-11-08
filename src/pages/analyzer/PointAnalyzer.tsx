@@ -351,7 +351,7 @@ export default function PointAnalyzer() {
                 <span className="font-bold" style={{ color: "var(--unit-color)" }}>
                   {unitHint} Pt/個
                 </span>
-                <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-bold text-amber-700">
                   β
                 </span>
               </p>

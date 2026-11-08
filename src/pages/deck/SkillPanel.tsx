@@ -31,8 +31,8 @@ export function SkillPanel({ cards, result }: { cards: CatalogCard[]; result: De
         <Stat label="実効値（協力）" value={`${round(result.effective)}%`} sub="先頭＋残り×0.2" />
       </div>
 
-      <details className="mt-3 rounded-lg p-3 shadow-neu-inset">
-        <summary className="cursor-pointer text-sm font-bold text-slate-600">内訳</summary>
+      <details className="mt-3 border-t border-slate-300">
+        <summary className="cursor-pointer py-3 text-sm font-bold text-slate-600">内訳</summary>
         <ul className="mt-2 space-y-1 text-sm">
           {result.perCard.map((c) => {
             const card = byId.get(c.cardId);

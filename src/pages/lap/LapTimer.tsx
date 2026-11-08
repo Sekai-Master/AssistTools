@@ -168,7 +168,7 @@ export default function LapTimer() {
         )}
         <span className="min-w-0 flex-1 truncate">
           {song?.title ?? state.songTitle ?? "曲が未選択"}
-          <span className="ml-1.5 font-normal text-slate-500">
+          <span className="ml-2 font-normal text-slate-500">
             {state.songSec > 0 && `${state.songSec}秒`}
             {state.taki > 0 && ` / 焚き${state.taki}`}
             {state.ptPerRun > 0 &&
@@ -185,7 +185,7 @@ export default function LapTimer() {
             type="button"
             onClick={() => setSongOpen(true)}
             disabled={loading}
-            className="neu-raised neu-tactile flex w-full items-center gap-3 rounded-xl p-2.5 text-left disabled:opacity-50"
+            className="neu-raised neu-tactile flex w-full items-center gap-3 rounded-xl p-3 text-left disabled:opacity-50"
           >
             {song && (
               <img
@@ -205,7 +205,7 @@ export default function LapTimer() {
               </span>
             </span>
             <span
-              className="material-icons shrink-0 text-slate-400"
+              className="material-icons shrink-0 text-slate-500"
               aria-hidden
             >
               search

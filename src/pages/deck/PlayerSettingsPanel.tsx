@@ -69,10 +69,10 @@ function NumCell({
 function Where({ path }: { path: string }) {
   return (
     <span
-      className="ml-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-normal text-slate-500 shadow-neu-sm"
+      className="ml-1 inline-flex items-center gap-1 text-xs font-normal text-slate-500"
       title={`ゲーム内の ${path} で見られます`}
     >
-      <span className="material-icons !text-[12px]" aria-hidden>
+      <span className="material-icons text-base" aria-hidden>
         info
       </span>
       {path}
@@ -93,13 +93,14 @@ function Section({
   where?: string;
 }) {
   return (
-    <details className="rounded-lg p-3 shadow-neu-inset">
-      <summary className="cursor-pointer text-sm font-bold text-slate-600">
+    <details className="border-t border-slate-300 first:border-t-0">
+      {/* ★ 影でなく線で区切る。枠の中で凹ませた行の中に入力欄を置くと、影が三重になる（docs/design-system.md の 6 節） */}
+      <summary className="cursor-pointer py-3 text-sm font-bold text-slate-600">
         {title}
         {where && <Where path={where} />}
       </summary>
-      {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
-      <div className="mt-3">{children}</div>
+      {hint && <p className="text-xs text-slate-500">{hint}</p>}
+      <div className="pb-3 pt-3">{children}</div>
     </details>
   );
 }
@@ -126,7 +127,7 @@ export function PlayerSettingsPanel({
         一度入れれば保存され、以後は編成を変えるだけで計算できます。
       </p>
 
-      <div className="space-y-2">
+      <div>
         <Section
           title="エリアアイテム効果"
           where="持ち物 → エリアアイテム → 効果確認"
@@ -135,9 +136,9 @@ export function PlayerSettingsPanel({
           <div className="space-y-3">
             <div>
               <p className="mb-1 text-xs font-bold text-slate-500">ユニット</p>
-              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {AREA_UNIT_ORDER.map((u) => (
-                  <label key={u} className="flex items-center gap-1.5 text-xs text-slate-600">
+                  <label key={u} className="flex items-center gap-2 text-xs text-slate-600">
                     <NumCell
                       label={`${UNIT_NAME[u]} のエリア効果`}
                       value={area.units?.[u] ?? 0}
@@ -152,9 +153,9 @@ export function PlayerSettingsPanel({
 
             <div>
               <p className="mb-1 text-xs font-bold text-slate-500">属性</p>
-              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {ATTR_ORDER.map((a) => (
-                  <label key={a} className="flex items-center gap-1.5 text-xs text-slate-600">
+                  <label key={a} className="flex items-center gap-2 text-xs text-slate-600">
                     <NumCell
                       label={`${ATTR_LABEL[a]} のエリア効果`}
                       value={area.attrs?.[a] ?? 0}
@@ -169,9 +170,9 @@ export function PlayerSettingsPanel({
 
             <div>
               <p className="mb-1 text-xs font-bold text-slate-500">キャラクター</p>
-              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                 {CHARACTERS.map((c) => (
-                  <label key={c.ch} className="flex items-center gap-1.5 text-xs text-slate-600">
+                  <label key={c.ch} className="flex items-center gap-2 text-xs text-slate-600">
                     <NumCell
                       label={`${c.name} のエリア効果`}
                       value={area.chars?.[c.ch] ?? 0}
@@ -195,10 +196,10 @@ export function PlayerSettingsPanel({
               const members = CHARACTERS.filter((c) => c.unit === unit);
               return (
                 <div key={unit}>
-                  <p className="mb-1 text-[10px] font-bold text-slate-400">{UNIT_NAME[unit]}</p>
+                  <p className="mb-1 text-xs font-bold text-slate-400">{UNIT_NAME[unit]}</p>
                   <div
                     className={cn(
-                      "grid gap-1.5",
+                      "grid gap-2",
                       members.length === 6
                         ? "grid-cols-3 sm:grid-cols-6"
                         : "grid-cols-2 sm:grid-cols-4"
@@ -232,9 +233,9 @@ export function PlayerSettingsPanel({
           title="マイセカイのゲート"
           hint="ゲーム内のレベルをそのまま。入れるのはユニットの5つだけです（VS のゲートは無く、6周年で増えた「交わるセカイのゲート」は総合力に効きません）"
         >
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {AREA_UNIT_ORDER.filter((u) => u !== "piapro").map((u) => (
-              <label key={u} className="flex items-center gap-1.5 text-xs text-slate-600">
+              <label key={u} className="flex items-center gap-2 text-xs text-slate-600">
                 <NumCell
                   label={`${UNIT_NAME[u]} のゲートのレベル`}
                   value={settings.gateLevels[u] ?? 0}
@@ -253,11 +254,11 @@ export function PlayerSettingsPanel({
           title="マイセカイの家具"
           hint="ボーナスが付くのは「◯◯のぬいぐるみ」と「◯◯のダイヤモンドオブジェ」だけです。置いたキャラのカードにだけ乗ります（S=0.1% / M=0.3% / L=0.6%）"
         >
-          <div className="grid gap-1.5 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             {CHARACTERS.map((c) => {
               const f = settings.fixtures[c.ch] ?? { S: 0, M: 0, L: 0 };
               return (
-                <div key={c.ch} className="flex items-center gap-1.5 text-xs text-slate-600">
+                <div key={c.ch} className="flex items-center gap-2 text-xs text-slate-600">
                   <span className="w-24 shrink-0 truncate">{c.name}</span>
                   {(["S", "M", "L"] as const).map((size) => (
                     <label key={size} className="flex items-center gap-1">

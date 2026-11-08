@@ -516,9 +516,9 @@ export function PlanTimeline({
                  */
                 <li
                   key={seg.id}
-                  className="neu-raised flex flex-wrap items-center gap-x-3 gap-y-2 p-3"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-slate-300 p-3"
                 >
-                  <div className="order-1 w-24 shrink-0 text-[11px] leading-tight text-slate-500">
+                  <div className="order-1 w-24 shrink-0 text-xs leading-tight text-slate-500">
                     {fmtClock(startMOD, pt.startMinute)}
                     <br />↓ {fmtClock(startMOD, pt.endMinute)}
                   </div>
@@ -527,8 +527,7 @@ export function PlanTimeline({
                     {seg.kind === "play" ? (
                       <div className="flex flex-wrap items-center gap-2 text-sm">
                         <span
-                          className="material-icons text-base"
-                          style={{ color: "var(--unit-color)" }}
+                          className="material-icons text-base text-slate-500"
                           aria-hidden
                         >
                           music_note
@@ -562,7 +561,7 @@ export function PlanTimeline({
                     ) : seg.kind === "mysekai" ? (
                       <div className="flex flex-wrap items-center gap-2 text-sm">
                         <span
-                          className="material-icons text-base text-emerald-500"
+                          className="material-icons text-base text-slate-500"
                           aria-hidden
                         >
                           park
@@ -591,11 +590,11 @@ export function PlanTimeline({
                               MYSEKAI_FULL_HARVEST_MEMORI,
                             )
                           }
-                          className="neu-raised neu-tactile rounded-lg px-2 py-1 text-[10px] text-slate-600"
+                          className="neu-raised neu-tactile rounded-lg px-2 py-1 text-xs text-slate-600"
                         >
                           全回収
                         </button>
-                        <span className="text-[10px] text-slate-400">
+                        <span className="text-xs text-slate-400">
                           ≈スタミナ{Math.round(mysekaiMemoriOf(seg) * 5)}
                         </span>
                         <DurationInput
@@ -615,7 +614,7 @@ export function PlanTimeline({
                     ) : (
                       <div className="flex flex-wrap items-center gap-2 text-sm">
                         <span
-                          className="material-icons text-base text-slate-400"
+                          className="material-icons text-base text-slate-500"
                           aria-hidden
                         >
                           bedtime
@@ -711,7 +710,7 @@ export function PlanTimeline({
                           {pointRows[i].cumulative.toLocaleString()}
                         </div>
                         <div
-                          className="text-[10px]"
+                          className="text-xs"
                           style={{
                             color:
                               pt.endPercent >= 100
@@ -735,7 +734,7 @@ export function PlanTimeline({
                         >
                           {pt.endPercent.toFixed(1)}%
                         </div>
-                        <div className="text-[10px] text-slate-400">
+                        <div className="text-xs text-slate-400">
                           {pt.startPercent.toFixed(1)}%→
                         </div>
                       </>

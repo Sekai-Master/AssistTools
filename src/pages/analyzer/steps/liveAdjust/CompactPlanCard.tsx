@@ -28,8 +28,8 @@ export function CompactPlanCard({
     <div
       className={
         adopted
-          ? "rounded-xl bg-neu p-3 shadow-neu-inset ring-1 [--tw-ring-color:var(--unit-color)]"
-          : "rounded-xl bg-neu p-3 shadow-neu-sm"
+          ? "rounded-lg p-3 ring-2 [--tw-ring-color:var(--unit-color)]"
+          : "rounded-lg border border-slate-300 p-3"
       }
     >
       <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
@@ -39,10 +39,10 @@ export function CompactPlanCard({
         </span>
         <FormationUnchangedBadge />
         {singleSong && (
-          <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600">同一曲</span>
+          <span className="rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-600">同一曲</span>
         )}
         <NeuButton
-          className="ml-auto !px-2.5 !py-1 !text-[11px]"
+          className="ml-auto !px-2.5 !py-1 !text-xs"
           active={adopted}
           disabled={adopted}
           onClick={onAdopt}
@@ -52,7 +52,7 @@ export function CompactPlanCard({
       </div>
       <div className="space-y-0.5 text-xs text-slate-600">
         {plan.units.map((u, j) => (
-          <div key={j} className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <div key={j} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <UnitLine u={u} />
             <ScoreBandTag band={scoreBandBadge(u)} />
           </div>

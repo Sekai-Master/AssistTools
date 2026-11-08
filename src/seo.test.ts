@@ -80,8 +80,20 @@ describe("<head> の差し替え（renderHead）", () => {
 
   it("トップはサイト名を先に出し、canonical は / で終わる", () => {
     const html = renderHead(SHELL, "/", PAGES["/"]);
-    expect(html).toContain("<title>Sekai-Master｜プロセカのイベラン支援ツール集</title>");
+    expect(html).toContain("<title>Sekai-Master（セカイマスター）｜プロセカのイベラン支援ツール集</title>");
     expect(html).toContain(`<link rel="canonical" href="https://sekaimaster.pages.dev/" />`);
+    // サイト名の構造化データはトップだけ。読める JSON で、別名に SekaiMaster・セカイマスター
+    const ld = /<script type="application\/ld\+json">(.*?)<\/script>/.exec(html);
+    expect(ld).not.toBeNull();
+    expect(JSON.parse(ld![1])).toEqual({
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "Sekai-Master",
+      alternateName: ["SekaiMaster", "セカイマスター"],
+      url: "https://sekaimaster.pages.dev/",
+    });
+    expect(renderHead(html, "/", PAGES["/"])).toBe(html);
+    expect(renderHead(SHELL, "/border", PAGES["/border"])).not.toContain("ld+json");
   });
 
   it("2回かけても同じ（canonical などが重ならない）", () => {
@@ -178,7 +190,7 @@ describe("sitemap・robots・ファイル名", () => {
   });
 
   it("タブの名前: トップはサイト名が先、ほかは後ろ", () => {
-    expect(docTitle("/", PAGES["/"])).toBe("Sekai-Master｜プロセカのイベラン支援ツール集");
+    expect(docTitle("/", PAGES["/"])).toBe("Sekai-Master（セカイマスター）｜プロセカのイベラン支援ツール集");
     expect(docTitle("/lap", PAGES["/lap"])).toBe("周回ラップ計測｜プロセカの1周の秒数と周/時｜Sekai-Master");
   });
 });

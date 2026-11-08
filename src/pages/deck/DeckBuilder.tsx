@@ -364,7 +364,7 @@ export default function DeckBuilder() {
             保存済み編成が持っているのはカード5枚の並びだけで、総合力・ボーナス・
             スキルの内部値はプロフィールに書かれて初めて他のツールから読める。 */}
         {unlinkedDecks.length > 0 && evalBase && (
-          <div className="neu-raised mb-4 flex flex-wrap items-center gap-3 p-3 text-sm">
+          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-300 p-3 text-sm">
             <span className="text-slate-600">
               保存した編成のうち{" "}
               <span className="font-bold">{unlinkedDecks.length}件</span>{" "}
