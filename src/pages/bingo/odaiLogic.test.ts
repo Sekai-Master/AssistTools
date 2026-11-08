@@ -18,6 +18,7 @@ import {
   ODAI_THEMES,
   ODAI_THEME_KEYS,
   OVERLAP_LIMIT,
+  THEME_CAP_BONUS,
   buildOdaiCandidates,
   buildOdaiCard,
   clashes,
@@ -27,6 +28,7 @@ import {
   groupOdaiSongs,
   hasBingo,
   isOdaiSeed,
+  odaiCapsFor,
   odaiThemeFloor,
   listOdaiSongs,
   setOdaiCleared,
@@ -530,7 +532,9 @@ describe("テーマつきのカード（ODAI_THEMES）", () => {
       expect(new Set(cells.map((o) => o.key)).size).toBe(24);
       const count: Record<string, number> = {};
       for (const o of cells) count[o.kind] = (count[o.kind] ?? 0) + 1;
-      for (const [kind, n] of Object.entries(count)) expect(n).toBeLessThanOrEqual(def.caps[kind as keyof typeof def.caps]);
+      // テーマの種類だけ上限が THEME_CAP_BONUS 増える
+      const caps = odaiCapsFor(level, theme);
+      for (const [kind, n] of Object.entries(count)) expect(n).toBeLessThanOrEqual(caps[kind as keyof typeof caps]);
       expect(cells.every((o) => o.rate >= def.minRate)).toBe(true);
       for (let i = 0; i < cells.length; i++) for (let j = i + 1; j < cells.length; j++) expect(clashes(cells[i], cells[j])).toBe(false);
     }
@@ -547,10 +551,26 @@ describe("テーマつきのカード（ODAI_THEMES）", () => {
     expect(median).toBeLessThanOrEqual(Math.ceil(target * 1.15));
   });
 
-  // ★ 下限には余裕が無い。曲が増えて必ず使う候補が割合の範囲から外れても、届かない下限を課さない
+  it("テーマを選んだときは、テーマの種類だけ上限を THEME_CAP_BONUS 足す（作者・ほかの種類・おまかせは段の上限のまま）", () => {
+    for (const level of ODAI_LEVEL_KEYS) {
+      const base = ODAI_LEVELS[level].caps;
+      expect(odaiCapsFor(level, "any")).toEqual(base);
+      for (const theme of THEMES) {
+        const caps = odaiCapsFor(level, theme);
+        for (const kind of Object.keys(base) as (keyof typeof base)[]) {
+          const bonus = ODAI_THEMES[theme].kinds.includes(kind) ? THEME_CAP_BONUS : 0;
+          expect(caps[kind], `${theme} ${level} ${kind}`).toBe(base[kind] + bonus);
+        }
+        expect(caps.creator).toBe(base.creator);
+      }
+    }
+  });
+
+  // ★ 曲が増えて候補が割合の範囲から外れたり、並べない組が増えたりしても、届かない下限を課さない
   it.each([
-    ["chart", ["kl"], 7, "作り手は「作詞と作曲が別」の 1 つだけ"],
-    ["title", ["l1"], 11, "長さは 2 つだけ"],
+    // 譜面は Lv.32 以上・Lv.33 以上・EXPERT Lv.28 以上が互いに並べない組なので 4 つまで（上限の 5 ではない）。4＋MV 2＋追加 4
+    ["chart", ["kl", "m3"], 10, "作り手と 3DMV で 3 人が踊るが外れる"],
+    ["title", ["l0", "l1", "yi", "yn", "y4", "gn", "gf", "gc", "gl", "gw", "gs"], 10, "曲名と読みの頭だけが残る"],
     // 残るのはユニットの色の印を持つお題だけ。同じユニットは 1 枚に 1 つなので、色の数（6）まで
     ["singer", ["u9", "om", "oc", "v6", "va"], 6, "色の印を持たないお題が全部外れる"],
   ] as const)("%s: 候補から %j が外れたら、下限は %i に下がり、そのカードが作れる（%s）", (theme, keys, expected, _why) => {

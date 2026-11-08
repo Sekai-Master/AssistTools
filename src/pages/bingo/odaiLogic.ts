@@ -113,44 +113,79 @@ export interface OdaiThemeDef {
 const levelsOf = (n: number): Record<OdaiLevel, number> => ({ easy: n, normal: n, hard: n, expert: n, master: n });
 
 /**
- * テーマつきのカード（Nori 2026-11-09、案 27。設計はオーケストレーター一任）。テーマの種類のマスを 24 のうち
- * 12 以上にする。ただし種類ごとの上限と並べない組はそのまま守るので、届かない組み合わせは下限を下げてある:
- * - 歌う人: 同じユニットは 1 枚に 1 つまでなので、ユニットの色の 6 つ＋その他・劇場版・コラボ・6人以上・エイプリルフールの 11 が最大
- * - 譜面・MV: 譜面 3・MV 2・追加 2・作り手 1 の上限で 8 が最大
+ * テーマつきのカード（Nori 2026-11-09、案 27。設計はオーケストレーター一任）。テーマを選んだときは、テーマの種類だけ
+ * 上限を THEME_CAP_BONUS 足し（Nori の決定、案 b）、テーマの種類のマスをこの下限以上にする。並べない組・段の割合の下限・
+ * 合わせ込みはそのまま守る。下限は実測で全部のカードが届く数（2026-11-09、テーマ × 段ごとに 600 枚 × 3 回）:
+ * - 曲名・読み 12
+ * - 歌う人 10（同じユニットは 1 枚に 1 つまでなので、ユニットの色の 6 つ＋その他・劇場版・コラボ・6人以上・エイプリルフールの 11 が最大）
+ * - 譜面・MV 11（Lv.32 以上・Lv.33 以上・EXPERT Lv.28 以上が互いに並べない組なので、譜面は 4 つまで。12 は 97〜99% しか届かない）
  */
 export const ODAI_THEMES: Record<OdaiTheme, OdaiThemeDef> = {
   any: { label: "おまかせ", kinds: [], floor: levelsOf(0) },
-  singer: { label: "歌う人", kinds: ["singer", "vocal", "unit", "origin"], floor: levelsOf(9) },
+  singer: { label: "歌う人", kinds: ["singer", "vocal", "unit", "origin"], floor: levelsOf(10) },
   title: { label: "曲名・読み", kinds: ["title", "word", "row", "reading", "length"], floor: levelsOf(12) },
-  chart: { label: "譜面・MV", kinds: ["chart", "mv", "added", "maker"], floor: levelsOf(8) },
+  chart: { label: "譜面・MV", kinds: ["chart", "mv", "added", "maker"], floor: levelsOf(11) },
 };
 export const ODAI_THEME_KEYS: readonly OdaiTheme[] = ["any", "singer", "title", "chart"];
 export const DEFAULT_ODAI_THEME: OdaiTheme = "any";
 
+/** テーマを選んだとき、テーマの種類の上限に足す数。上限のままだと、譜面・MV は 8、歌う人は 9 しか入らず、毎回同じお題が並んだ。 */
+export const THEME_CAP_BONUS = 2;
+
+/** この段・テーマで守る、種類ごとの上限。テーマの種類だけ THEME_CAP_BONUS 足す（作者はどのテーマにも入らないので段の上限のまま）。 */
+export function odaiCapsFor(level: OdaiLevel, theme: OdaiTheme): Record<OdaiKind, number> {
+  const caps = ODAI_LEVELS[level].caps;
+  const { kinds } = ODAI_THEMES[theme];
+  if (kinds.length === 0) return caps;
+  const out = { ...caps };
+  for (const k of kinds) out[k] = caps[k] + THEME_CAP_BONUS;
+  return out;
+}
+
+/** 入れられる数を数えるときに試す並びの数。 */
+const REACH_TRIES = 64;
+
 /**
- * テーマの種類から入れられるマスの数の上限（並べない組は数えない見積もり）。種類ごとに min(上限, 候補の数) を足し、
- * ユニットの色の印を持つお題は色の数で頭打ちにする（同じユニットは 1 枚に 1 つまで）。
+ * テーマの種類から、上限・並べない組・同じユニットの決まりを守って同時に入れられる数。いくつかの並びで貪欲に詰めた
+ * 最大なので、本当の最大を超えない（ここで出た数は必ず並べられる）。target に届いたらそこで止める。
  */
-function reachableThemed(pool: readonly Odai[], caps: Record<OdaiKind, number>, kinds: readonly OdaiKind[]): number {
+function reachableThemed(
+  pool: readonly Odai[],
+  caps: Record<OdaiKind, number>,
+  kinds: readonly OdaiKind[],
+  target: number
+): number {
   const themed = pool.filter((o) => kinds.includes(o.kind));
-  const countOf = (list: readonly Odai[], kind: OdaiKind) => list.filter((o) => o.kind === kind).length;
-  const byCaps = kinds.reduce((acc, k) => acc + Math.min(caps[k], countOf(themed, k)), 0);
-  const plain = themed.filter((o) => o.unit === undefined);
-  const colors = new Set(themed.map((o) => o.unit).filter((u) => u !== undefined)).size;
-  const byColors = colors + kinds.reduce((acc, k) => acc + Math.min(caps[k], countOf(plain, k)), 0);
-  return Math.min(byCaps, byColors);
+  // 並べない組の少ないものから詰める並びを最初に、あとは決まった種の乱数の並び（いつ数えても同じ結果）
+  const rng = createRng(1);
+  let best = 0;
+  for (let t = 0; t < REACH_TRIES && best < target; t++) {
+    const order = t === 0 ? [...themed].sort((a, b) => (a.clashes?.size ?? 0) - (b.clashes?.size ?? 0)) : shuffleWith(themed, rng);
+    const count: Partial<Record<OdaiKind, number>> = {};
+    const picked: Odai[] = [];
+    for (const o of order) {
+      if (picked.length === CELLS - 1) break;
+      const n = count[o.kind] ?? 0;
+      if (n >= caps[o.kind] || picked.some((p) => clashes(p, o))) continue;
+      count[o.kind] = n + 1;
+      picked.push(o);
+    }
+    best = Math.max(best, picked.length);
+  }
+  return best;
 }
 
 /**
- * このテーマ・段で守るテーマのマスの下限。ODAI_THEMES の floor を、いまの候補で入れられる数で頭打ちにする。
- * ★ 下限には余裕が無い（曲名・読みは長さの 2 つ、譜面・MV は作り手の 1 つを必ず使う）。曲が増えて候補が割合の範囲から
- *   外れても、届かない下限を課さない（毎日の楽曲データの更新のテストも止めない）。
+ * このテーマ・段で守るテーマのマスの下限。ODAI_THEMES の floor を、いまの候補で同時に入れられる数で頭打ちにする。
+ * ★ 曲が増えて候補が割合の範囲から外れたり、並べない組が増えたりしても、届かない下限を課さない
+ *   （毎日の楽曲データの更新のテストも止めない）。
  */
 export function odaiThemeFloor(candidates: readonly Odai[], level: OdaiLevel, theme: OdaiTheme): number {
-  const { minRate, caps } = ODAI_LEVELS[level];
+  const { minRate } = ODAI_LEVELS[level];
   const { kinds, floor } = ODAI_THEMES[theme];
   if (floor[level] === 0) return 0;
-  return Math.min(floor[level], reachableThemed(candidates.filter((o) => o.rate >= minRate), caps, kinds));
+  const pool = candidates.filter((o) => o.rate >= minRate);
+  return Math.min(floor[level], reachableThemed(pool, odaiCapsFor(level, theme), kinds, floor[level]));
 }
 
 const CELLS = 25;
@@ -331,7 +366,8 @@ export function buildOdaiCard(
   level: OdaiLevel = DEFAULT_ODAI_LEVEL,
   theme: OdaiTheme = DEFAULT_ODAI_THEME
 ): OdaiCell[] {
-  const { songs, minRate, caps } = ODAI_LEVELS[level];
+  const { songs, minRate } = ODAI_LEVELS[level];
+  const caps = odaiCapsFor(level, theme);
   const pool = candidates.filter((o) => o.rate >= minRate);
   if (pool.length < CELLS - 1) {
     throw new Error(`お題が足りません（必要 ${CELLS - 1} / 候補 ${pool.length}）。`);
