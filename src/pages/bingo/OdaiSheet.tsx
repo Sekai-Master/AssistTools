@@ -17,10 +17,12 @@ interface Props {
 const formatTime = (sec: number) =>
   `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
 
-/** 判定しにくいお題（読みの頭・長さ）は、判定に使う値を曲名の下に出す。 */
+/** 判定しにくいお題（読みの頭・長さ・コラボ）は、判定に使う値を曲名の下に出す。 */
 function judgeHint(odai: Odai, m: BingoMusic): string | null {
   if (odai.kind === "row") return m.pronunciation ?? null;
   if (odai.kind === "length") return m.musicTime !== undefined ? formatTime(m.musicTime) : null;
+  // コラボはどのコラボの曲かを添える（東方Projectコラボ など）
+  if (odai.key === "oc") return m.collab ?? null;
   return null;
 }
 

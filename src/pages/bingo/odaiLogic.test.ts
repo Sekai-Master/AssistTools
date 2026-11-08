@@ -119,9 +119,9 @@ describe("buildOdaiCandidates（実データから計算）", () => {
     for (const k of ["u1", "u2", "u3", "u4", "u5", "u9"]) expect(keys).toContain(k);
   });
 
-  it("ユニット・読み・長さ・曲名・作者の 5 種類がそろう", () => {
+  it("ユニット・読み・長さ・曲名・作者・曲の種類の 6 種類がそろう", () => {
     const kinds = new Set(CANDIDATES.map((o) => o.kind));
-    expect([...kinds].sort()).toEqual(["creator", "length", "row", "title", "unit"]);
+    expect([...kinds].sort()).toEqual(["creator", "length", "origin", "row", "title", "unit"]);
   });
 
   it("易しい（10%〜）・中くらい（4〜10%）・難しい（〜4%）がそれぞれある", () => {
@@ -157,6 +157,61 @@ describe("buildOdaiCandidates（実データから計算）", () => {
       expect(o.caption.length).toBeLessThanOrEqual(4);
       for (const chunk of o.chunks) expect(/[A-Za-z0-9]{8,}/.test(chunk)).toBe(false);
     }
+  });
+});
+
+describe("曲の種類のお題（書き下ろし・劇場版・コラボ）", () => {
+  const byKey = (key: string) => CANDIDATES.find((o) => o.key === key);
+  const raw = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "../../../public/MusicDatas/transformedMusics.json"), "utf8")
+  ) as { id: string; published?: boolean; collab?: string; isNewlyWrittenMusic?: boolean; Unit: string }[];
+  const playable = raw.filter((m) => m.published !== false);
+
+  it("楽曲データに、コラボ・タイアップの名前が入っている", () => {
+    expect(MUSICS.filter((m) => m.collab !== undefined).length).toBeGreaterThanOrEqual(40);
+    expect(MUSICS.filter((m) => m.collab === "劇場版プロジェクトセカイ").length).toBeGreaterThanOrEqual(8);
+  });
+
+  it("ユニットの書き下ろしは 6 ユニットぶんあり、当てはまるのはそのユニットの書き下ろしだけ", () => {
+    for (const [key, unit] of [["w0", "0_VS"], ["w1", "1_L/n"], ["w2", "2_MMJ"], ["w3", "3_VBS"], ["w4", "4_WxS"], ["w5", "5_25"]]) {
+      const o = byKey(key);
+      expect(o?.kind).toBe("origin");
+      expect(o?.caption).toBe("書下ろし");
+      const expected = playable.filter((m) => m.isNewlyWrittenMusic && m.Unit === unit).length;
+      expect(MUSICS.filter((m) => o!.test(m)).length).toBe(expected);
+    }
+  });
+
+  it("劇場版は劇場版プロジェクトセカイの曲だけ", () => {
+    const o = byKey("om")!;
+    expect(o.text).toBe("劇場版");
+    const songs = MUSICS.filter((m) => o.test(m));
+    expect(songs.length).toBe(playable.filter((m) => m.collab === "劇場版プロジェクトセカイ").length);
+    expect(songs.every((m) => m.collab === "劇場版プロジェクトセカイ")).toBe(true);
+  });
+
+  it("コラボは劇場版・エイプリルフールを除いたコラボ・タイアップの曲（遊べない曲は入らない）", () => {
+    const o = byKey("oc")!;
+    const songs = MUSICS.filter((m) => o.test(m));
+    expect(songs.length).toBeGreaterThanOrEqual(30);
+    expect(songs.some((m) => m.collab === "劇場版プロジェクトセカイ")).toBe(false);
+    expect(songs.some((m) => /エイプリルフール|ボスラッシュ/.test(m.collab ?? ""))).toBe(false);
+    expect(songs.some((m) => m.title === "Bad Apple!! feat.SEKAI")).toBe(true);
+  });
+
+  it("どれもお題の割合の範囲に入り、コードで開ける", () => {
+    for (const key of ["w0", "w1", "w2", "w3", "w4", "w5", "om", "oc"]) {
+      const o = byKey(key);
+      expect(o, key).toBeTruthy();
+      expect(o!.rate).toBeGreaterThanOrEqual(MIN_RATE);
+      expect(o!.rate).toBeLessThanOrEqual(MAX_RATE);
+    }
+    const keys = ["w1", "om", "oc"];
+    const odais = [...keys.map((k) => byKey(k)!), ...CANDIDATES.filter((o) => !keys.includes(o.key)).slice(0, 21)];
+    const card: OdaiCell[] = [...odais.slice(0, 12), null, ...odais.slice(12)].map((o) =>
+      o ? { odai: o, cleared: false } : "FREE"
+    );
+    expect(decodeOdaiSeed(encodeOdaiSeed(card), MUSICS).slice(0, 3).map((c) => c !== "FREE" && c.odai.key)).toEqual(keys);
   });
 });
 

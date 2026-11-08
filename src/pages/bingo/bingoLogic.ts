@@ -17,6 +17,8 @@ export interface BingoMusic {
   Unit: string;
   categories: string[];
   isNewlyWrittenMusic: boolean;
+  /** コラボ・タイアップの名前（マスタの musicCollaborations。「劇場版プロジェクトセカイ」も含む）。ほかの曲には無い。 */
+  collab?: string;
   jacketLink: string;
 }
 

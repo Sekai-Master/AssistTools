@@ -30,6 +30,7 @@ export function parseMusics(raw: unknown): BingoMusic[] {
       Unit: r.Unit,
       categories: r.categories.filter(isStr),
       isNewlyWrittenMusic: isBool(r.isNewlyWrittenMusic) ? r.isNewlyWrittenMusic : false,
+      collab: isStr(r.collab) ? r.collab : undefined,
       jacketLink: isStr(r.jacketLink) ? r.jacketLink : `jacket_s_${r.id}.webp`,
     });
   }

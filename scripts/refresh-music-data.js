@@ -28,6 +28,8 @@ const limitedTimeMusicsUrl = `${MASTER_DB_BASE}/limitedTimeMusics.json`;
 const musicDifficultiesUrl = `${MASTER_DB_BASE}/musicDifficulties.json`;
 // 曲のカテゴリ（MV の種類）。2026-08 下旬に musics.json から切り出された（#130）。
 const musicCategoriesUrl = `${MASTER_DB_BASE}/musicCategories.json`;
+// コラボ・タイアップの名前（「東方Projectコラボ」「劇場版プロジェクトセカイ」など）。お題ビンゴのお題に使う。
+const musicCollaborationsUrl = `${MASTER_DB_BASE}/musicCollaborations.json`;
 const jacketRemoteUrl = (id) =>
   `${SEKAI_BEST_BASE}/sekai-jp-assets/music/jacket/jacket_s_${id}/jacket_s_${id}.webp`;
 
@@ -50,7 +52,7 @@ async function toThumbnail(input) {
 }
 
 (async () => {
-  const [musics, artists, metas, limitedTimeMusics, musicDifficulties, musicCategories] = await Promise.all([
+  const [musics, artists, metas, limitedTimeMusics, musicDifficulties, musicCategories, musicCollaborations] = await Promise.all([
     fetchJson(musicsUrl),
     fetchJson(artistsUrl),
     fetchJson(metasUrl),
@@ -62,19 +64,27 @@ async function toThumbnail(input) {
       console.warn(`::warning::musicCategories.json が取れない（${err.message}）。カテゴリは直前の配信データから引き継ぐ`);
       return [];
     }),
+    // ★ コラボの名前もビンゴでしか使わないので、取れなくても止めない（その回はコラボのお題が出ないだけ）
+    fetchJson(musicCollaborationsUrl).catch((err) => {
+      console.warn(`::warning::musicCollaborations.json が取れない（${err.message}）。この回はコラボの名前を入れない`);
+      return [];
+    }),
   ]);
+  const collabLabelOf = new Map(musicCollaborations.map((c) => [c.id, c.label]));
 
-  // メドレー等の除外（調整候補の母集合から落とす）。
-  // 判定は limitedTimeMusics.json の「collaborationModeId を持たないエントリ」に一本化する。
+  const now = Date.now();
+  // 期間限定の曲の除外（調整候補の母集合から落とす）。判定は limitedTimeMusics.json に一本化する。
   //   - collaborationModeId 無し = イベント限定開催でソロ常設に無い（メドレー 674/675/676・
-  //     初音ミクの激唱 388）。これらは調整曲として選べないので published=false を焼き込む。
-  //   - collaborationModeId 有り = コラボ楽曲（707/708/709）で常設プレイ可なので残す。
+  //     初音ミクの激唱 388）。これらは調整曲として選べないので、いつでも published=false を焼き込む。
+  //   - collaborationModeId 有り = コラボの期間だけ遊べる曲（太鼓の達人タイアップ 707/708/709、
+  //     2026-02-21〜04-21）。期間（endAt）が過ぎたら外す。2026-07 に「常設」として残したのは誤りで、
+  //     期間の後は遊べない（Nori 2026-11-09）。
   // categories / Unit / isFullLength / タイトル文字列は判定不可・誤爆（380 スターダストメドレー
   // は limitedTimeMusics に無く published のまま）のため使わない。musicDifficulties での
   // 独立クロスチェックは検証済みだが、フェッチを増やさないため判定はここに一本化する。
   const limitedExcludedIds = new Set(
     limitedTimeMusics
-      .filter((e) => e && e.collaborationModeId === undefined)
+      .filter((e) => e && (e.collaborationModeId === undefined || e.endAt < now))
       .map((e) => String(e.musicId).padStart(3, '0'))
   );
 
@@ -98,7 +108,6 @@ async function toThumbnail(input) {
     6: '5_25',
     7: '9_oth',
   };
-  const now = Date.now();
 
   // ★ 公開日を過ぎた曲だけを扱う（scripts/lib/musicRelease.mjs）。公開前の曲は曲名もジャケットも出さない。
   //   ログにも件数だけ出す（この repo の Actions のログは誰でも読めるので、曲名を書くと漏れる）。
@@ -220,6 +229,8 @@ async function toThumbnail(input) {
       publishedAt: m.publishedAt,
       published,
       isNewlyWrittenMusic: m.isNewlyWrittenMusic,
+      // コラボ・タイアップの曲だけ名前を持たせる（ほかの曲には項目自体を書かない）
+      ...(collabLabelOf.has(m.musicCollaborationId) ? { collab: collabLabelOf.get(m.musicCollaborationId) } : {}),
       isFullLength: m.isFullLength,
       jacketLink: `jacket_s_${id}.webp`,
       music_time: meta ? meta.music_time : null,
