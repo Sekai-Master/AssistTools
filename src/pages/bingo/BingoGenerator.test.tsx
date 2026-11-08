@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { BingoMusic } from "./bingoLogic";
 import { parseMusics } from "./useBingoMusics";
-import { ODAI_THEMES, decodeOdaiSeed } from "./odaiLogic";
+import { ODAI_THEMES, buildOdaiCandidates, decodeOdaiSeed, odaiThemeFloor } from "./odaiLogic";
 import { BINGO_STORAGE_KEY } from "./bingoStorage";
 import BingoGenerator from "./BingoGenerator";
 
@@ -88,7 +88,8 @@ describe("テーマ（細かい設定）", () => {
     fireEvent.click(screen.getByRole("button", { name: "新しいカードを作る" }));
     const card = savedOdaiCard();
     const themed = card.filter((c) => c !== "FREE" && ODAI_THEMES[theme].kinds.includes(c.odai.kind)).length;
-    expect(themed).toBeGreaterThanOrEqual(ODAI_THEMES[theme].floor.normal);
+    expect(themed).toBeGreaterThanOrEqual(odaiThemeFloor(buildOdaiCandidates(mockMusics), "normal", theme));
+    expect(themed).toBeGreaterThan(0);
     // テーマはコードに入らないので、カードの枠の段と時間はいつもどおり
     expect(cardHeader()).toContain("NORMAL ・ 約1時間20分");
   });

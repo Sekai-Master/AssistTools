@@ -127,6 +127,32 @@ export const ODAI_THEMES: Record<OdaiTheme, OdaiThemeDef> = {
 export const ODAI_THEME_KEYS: readonly OdaiTheme[] = ["any", "singer", "title", "chart"];
 export const DEFAULT_ODAI_THEME: OdaiTheme = "any";
 
+/**
+ * テーマの種類から入れられるマスの数の上限（並べない組は数えない見積もり）。種類ごとに min(上限, 候補の数) を足し、
+ * ユニットの色の印を持つお題は色の数で頭打ちにする（同じユニットは 1 枚に 1 つまで）。
+ */
+function reachableThemed(pool: readonly Odai[], caps: Record<OdaiKind, number>, kinds: readonly OdaiKind[]): number {
+  const themed = pool.filter((o) => kinds.includes(o.kind));
+  const countOf = (list: readonly Odai[], kind: OdaiKind) => list.filter((o) => o.kind === kind).length;
+  const byCaps = kinds.reduce((acc, k) => acc + Math.min(caps[k], countOf(themed, k)), 0);
+  const plain = themed.filter((o) => o.unit === undefined);
+  const colors = new Set(themed.map((o) => o.unit).filter((u) => u !== undefined)).size;
+  const byColors = colors + kinds.reduce((acc, k) => acc + Math.min(caps[k], countOf(plain, k)), 0);
+  return Math.min(byCaps, byColors);
+}
+
+/**
+ * このテーマ・段で守るテーマのマスの下限。ODAI_THEMES の floor を、いまの候補で入れられる数で頭打ちにする。
+ * ★ 下限には余裕が無い（曲名・読みは長さの 2 つ、譜面・MV は作り手の 1 つを必ず使う）。曲が増えて候補が割合の範囲から
+ *   外れても、届かない下限を課さない（毎日の楽曲データの更新のテストも止めない）。
+ */
+export function odaiThemeFloor(candidates: readonly Odai[], level: OdaiLevel, theme: OdaiTheme): number {
+  const { minRate, caps } = ODAI_LEVELS[level];
+  const { kinds, floor } = ODAI_THEMES[theme];
+  if (floor[level] === 0) return 0;
+  return Math.min(floor[level], reachableThemed(candidates.filter((o) => o.rate >= minRate), caps, kinds));
+}
+
 const CELLS = 25;
 const CENTER = 12;
 
@@ -311,7 +337,7 @@ export function buildOdaiCard(
     throw new Error(`お題が足りません（必要 ${CELLS - 1} / 候補 ${pool.length}）。`);
   }
   const { kinds } = ODAI_THEMES[theme];
-  const floor = ODAI_THEMES[theme].floor[level];
+  const floor = odaiThemeFloor(candidates, level, theme);
   const inTheme = (o: Odai) => kinds.includes(o.kind);
   // 外れの量: 見積もりが目標から離れた分と、1 曲少なくても線を越えてしまう分（目安が段の曲数より少なく出る）。
   // テーマの下限に足りないマスは重く数える（合わせ込みと引き換えに、テーマのマスを手放さない）

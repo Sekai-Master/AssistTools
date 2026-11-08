@@ -27,6 +27,7 @@ import {
   groupOdaiSongs,
   hasBingo,
   isOdaiSeed,
+  odaiThemeFloor,
   listOdaiSongs,
   setOdaiCleared,
   odaiLevelOf,
@@ -500,26 +501,26 @@ describe("テーマつきのカード（ODAI_THEMES）", () => {
   const themedCount = (card: readonly OdaiCell[], theme: OdaiTheme) =>
     card.filter((c) => c !== "FREE" && ODAI_THEMES[theme].kinds.includes(c.odai.kind)).length;
 
-  it("テーマを渡さなければ、おまかせ（これまでと同じカード）", () => {
+  it("テーマを渡さなければおまかせ（\"any\" を渡したのと同じカード）。おまかせの下限は 0", () => {
     for (const level of ODAI_LEVEL_KEYS) {
       const a = buildOdaiCard(CANDIDATES, createRng(8), level);
       const b = buildOdaiCard(CANDIDATES, createRng(8), level, "any");
       expect(encodeOdaiSeed(b)).toBe(encodeOdaiSeed(a));
+      expect(odaiThemeFloor(CANDIDATES, level, "any")).toBe(0);
     }
   });
 
-  it("テーマの種類はどれも候補にあり、テーマどうしで重ならない。作者はどのテーマにも入れない", () => {
+  it("テーマどうしで種類は重ならず、作者はどのテーマにも入れない", () => {
     const kinds = THEMES.flatMap((t) => ODAI_THEMES[t].kinds);
     expect(new Set(kinds).size).toBe(kinds.length);
     expect(kinds).not.toContain("creator");
-    const present = new Set(CANDIDATES.map((o) => o.kind));
-    for (const k of kinds) expect(present).toContain(k);
   });
 
   it.each(COMBOS)("%s × %s: テーマのマスが下限以上で、上限・割合の下限・並べない組を守り、目安の曲数は段の曲数ちょうど", (theme, level) => {
     const def = ODAI_LEVELS[level];
-    const floor = ODAI_THEMES[theme].floor[level];
+    const floor = odaiThemeFloor(CANDIDATES, level, theme);
     expect(floor).toBeGreaterThan(0);
+    expect(floor).toBeLessThanOrEqual(ODAI_THEMES[theme].floor[level]);
     const rng = createRng(59);
     for (let t = 0; t < 100; t++) {
       const card = buildOdaiCard(CANDIDATES, rng, level, theme);
@@ -546,9 +547,24 @@ describe("テーマつきのカード（ODAI_THEMES）", () => {
     expect(median).toBeLessThanOrEqual(Math.ceil(target * 1.15));
   });
 
-  // ★ 上限と同じユニットの決まりを守ったまま入る最大: 曲名・読みは 12、歌う人は 11（下限は 9）、譜面・MV は 8
-  it("曲名・読みは、どの段でも 24 マスの半分（12）以上", () => {
-    for (const level of ODAI_LEVEL_KEYS) expect(ODAI_THEMES.title.floor[level]).toBeGreaterThanOrEqual(12);
+  // ★ 下限には余裕が無い。曲が増えて必ず使う候補が割合の範囲から外れても、届かない下限を課さない
+  it.each([
+    ["chart", ["kl"], 7, "作り手は「作詞と作曲が別」の 1 つだけ"],
+    ["title", ["l1"], 11, "長さは 2 つだけ"],
+    // 残るのはユニットの色の印を持つお題だけ。同じユニットは 1 枚に 1 つなので、色の数（6）まで
+    ["singer", ["u9", "om", "oc", "v6", "va"], 6, "色の印を持たないお題が全部外れる"],
+  ] as const)("%s: 候補から %j が外れたら、下限は %i に下がり、そのカードが作れる（%s）", (theme, keys, expected, _why) => {
+    const without = CANDIDATES.filter((o) => !(keys as readonly string[]).includes(o.key));
+    for (const level of ["easy", "master"] as const) {
+      const floor = odaiThemeFloor(without, level, theme);
+      expect(floor).toBe(expected);
+      const rng = createRng(61);
+      for (let t = 0; t < 20; t++) {
+        const card = buildOdaiCard(without, rng, level, theme);
+        expect(themedCount(card, theme)).toBeGreaterThanOrEqual(floor);
+        expect(odaiSongsToHalf(card)).toBe(ODAI_LEVELS[level].songs);
+      }
+    }
   });
 });
 

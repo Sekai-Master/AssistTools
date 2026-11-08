@@ -37,7 +37,8 @@ function SongRow({ music, hint, jacketBase }: { music: BingoMusic; hint: string 
 function SongGroup({ group, odai, jacketBase }: { group: OdaiSongGroup; odai: Odai; jacketBase: string }) {
   const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className="pt-3 first:pt-1">
+    // section にすると名前付きの region（ランドマーク）が 10 個並ぶので、まとまり（group）にする
+    <div role="group" aria-labelledby={headingId} className="pt-3 first:pt-1">
       <h3
         id={headingId}
         className="flex items-baseline justify-between gap-2 border-b border-slate-300 px-2 pb-1 text-xs font-bold text-slate-600"
@@ -50,7 +51,7 @@ function SongGroup({ group, odai, jacketBase }: { group: OdaiSongGroup; odai: Od
           <SongRow key={m.id} music={m} hint={odai.hint?.(m) ?? null} jacketBase={jacketBase} />
         ))}
       </ul>
-    </section>
+    </div>
   );
 }
 

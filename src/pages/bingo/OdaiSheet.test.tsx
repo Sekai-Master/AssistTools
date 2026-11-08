@@ -68,7 +68,7 @@ describe("コラボのお題の小窓（コラボごとに区切る）", () => {
   const odai = collab !== "FREE" ? collab.odai : null;
   const renderSheet = () =>
     render(<OdaiSheet odai={odai!} cleared={false} musics={MUSICS} jacketBase="/j/" onSetCleared={() => {}} onClose={() => {}} />);
-  const sections = () => within(screen.getByRole("dialog")).getAllByRole("region");
+  const sections = () => within(screen.getByRole("dialog")).getAllByRole("group");
 
   it("コラボごとの見出し（名前と曲数）の下に曲が並び、曲名の下にコラボの名前は出さない", () => {
     renderSheet();
