@@ -5,7 +5,7 @@ import transformedMusics from "../../../../public/MusicDatas/transformedMusics.j
  * 楽曲データ（transformedMusics.json）のメドレー除外の回帰（R6 §5）。
  *
  * scripts/refresh-music-data.js が limitedTimeMusics.json の
- * 「collaborationModeId を持たないエントリ」を published=false に焼き込む。
+ * 「collaborationModeId を持たないエントリ」と「期間が過ぎたコラボの曲」を published=false に焼き込む。
  * ランタイム（useAnalyzerMusics）は published===false を continue で弾くので、
  * ここでは静的JSONの published フラグだけを検証する（判定ロジックの最終成果物）。
  */
@@ -38,9 +38,9 @@ describe("transformedMusics — メドレー等の除外", () => {
     expect(byId("380").published).toBe(true);
   });
 
-  it("コラボ曲 707/708/709 は published のまま（collaborationModeId ありは常設扱い）", () => {
+  it("期間が過ぎたコラボの曲 707/708/709（太鼓の達人、〜2026-04-21）は published=false", () => {
     for (const id of ["707", "708", "709"]) {
-      expect(byId(id).published).toBe(true);
+      expect(byId(id).published).toBe(false);
     }
   });
 });

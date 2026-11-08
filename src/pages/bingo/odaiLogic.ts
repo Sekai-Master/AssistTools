@@ -11,7 +11,7 @@ import type { BingoMusic } from "./bingoLogic";
 import { UNIT_OPTIONS } from "./bingoConstants";
 import { BINGO_LINES, hasBingo, withCleared } from "./bingoProgress";
 
-export type OdaiKind = "unit" | "row" | "length" | "title" | "creator";
+export type OdaiKind = "unit" | "row" | "length" | "title" | "creator" | "origin";
 
 export interface Odai {
   /** シード値に入れる安定した鍵（ユニットのコード・行・creatorArtistId など）。 */
@@ -48,6 +48,7 @@ export const ODAI_KIND_CAPS: Record<OdaiKind, number> = {
   length: 2,
   title: 6,
   creator: 6,
+  origin: 3,
 };
 
 export type OdaiLevel = "easy" | "normal" | "hard" | "expert" | "master";
@@ -235,7 +236,58 @@ const titleDefs: OdaiDef[] = [
   titleDef("tm", "曲名に", ["「・」"], (t) => /[・･]/.test(t)),
 ];
 
-const FIXED_DEFS: readonly OdaiDef[] = [...unitDefs, ...rowDefs, ...lengthDefs, ...titleDefs];
+// ---- 曲の種類（ユニットの書き下ろし・劇場版・コラボ） ----
+
+/** ユニットの書き下ろし曲。書き下ろし全体だと 27% で易しすぎるので、ユニットごとに分ける（3〜4%）。 */
+const writtenDefs: OdaiDef[] = UNIT_OPTIONS.flatMap((o) =>
+  o.unit
+    ? [
+        {
+          key: `w${o.value[0]}`,
+          kind: "origin" as const,
+          // ★ 320px の 1 マスに収まるのは 4 字まで（「書き下ろし」は 5 字で折れる）
+          caption: "書下ろし",
+          text: o.label,
+          chunks: [o.label],
+          unit: o.unit,
+          test: (m: BingoMusic) => m.isNewlyWrittenMusic && m.Unit === o.value,
+        },
+      ]
+    : []
+);
+
+/** マスタの musicCollaborations の名前。名前が変わったらお題の割合が 0 になり、候補から外れるだけ。 */
+const MOVIE_LABEL = "劇場版プロジェクトセカイ";
+/** コラボに数えない名前（エイプリルフールの曲・期間限定のメドレー）。 */
+const NOT_COLLAB = /エイプリルフール|ボスラッシュ/;
+
+const originDefs: OdaiDef[] = [
+  {
+    key: "om",
+    kind: "origin",
+    caption: "曲の種類",
+    text: "劇場版",
+    chunks: ["劇場版"],
+    test: (m) => m.collab === MOVIE_LABEL,
+  },
+  {
+    key: "oc",
+    kind: "origin",
+    caption: "曲の種類",
+    text: "コラボ",
+    chunks: ["コラボ"],
+    test: (m) => m.collab !== undefined && m.collab !== MOVIE_LABEL && !NOT_COLLAB.test(m.collab),
+  },
+];
+
+const FIXED_DEFS: readonly OdaiDef[] = [
+  ...unitDefs,
+  ...rowDefs,
+  ...lengthDefs,
+  ...titleDefs,
+  ...writtenDefs,
+  ...originDefs,
+];
 
 const NAME_BREAK_AFTER = ".@*/・_";
 /** 開き括弧の前で区切り、閉じ括弧の前では区切らない（emon｜(Tes.)）。 */
