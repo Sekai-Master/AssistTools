@@ -212,6 +212,8 @@ const titleDefs: OdaiDef[] = [
 
 const FIXED_DEFS: readonly OdaiDef[] = [...unitDefs, ...rowDefs, ...lengthDefs, ...titleDefs];
 
+const NAME_BREAK_AFTER = ".@*/・_";
+
 function cjkScript(ch: string): "h" | "k" | "j" | null {
   if (HIRAGANA.test(ch)) return "h";
   if (KATAKANA.test(ch) || ch === "ー") return "k";
@@ -224,21 +226,18 @@ function cjkScript(ch: string): "h" | "k" | "j" | null {
  * （ナユタン｜星人）。英字の途中や、英字とかなの境目（みきと｜P）では区切らない。
  */
 function splitName(name: string): string[] {
-  return name
-    .split(/(?<=[.@*/・_])/)
-    .filter((s) => s !== "")
-    .flatMap((piece) => {
-      const out: string[] = [];
-      let prev: ReturnType<typeof cjkScript> = null;
-      for (const ch of piece) {
-        const cur = cjkScript(ch);
-        if (out.length > 0 && prev && cur && prev !== cur) out.push(ch);
-        else if (out.length > 0) out[out.length - 1] += ch;
-        else out.push(ch);
-        prev = cur;
-      }
-      return out;
-    });
+  // 後読みの正規表現は古い iOS Safari で構文エラーになるので、1 字ずつ見る
+  const out: string[] = [];
+  let prev: ReturnType<typeof cjkScript> = null;
+  let breakNext = false;
+  for (const ch of name) {
+    const cur = cjkScript(ch);
+    if (out.length === 0 || breakNext || (prev && cur && prev !== cur)) out.push(ch);
+    else out[out.length - 1] += ch;
+    breakNext = NAME_BREAK_AFTER.includes(ch);
+    prev = cur;
+  }
+  return out;
 }
 
 function creatorDef(id: number, musics: readonly BingoMusic[]): OdaiDef | null {
@@ -339,8 +338,13 @@ export const ODAI_SEED_PREFIX = "OD1:";
 const FREE_TOKEN = "F";
 const CLEARED_MARK = "*";
 
+/** 目印の大文字・小文字は問わない（手で打ち直したシードも読む）。 */
+function hasOdaiPrefix(seed: string): boolean {
+  return seed.slice(0, ODAI_SEED_PREFIX.length).toUpperCase() === ODAI_SEED_PREFIX;
+}
+
 export function isOdaiSeed(seed: string): boolean {
-  return seed.trim().startsWith(ODAI_SEED_PREFIX);
+  return hasOdaiPrefix(seed.trim());
 }
 
 /** 例: OD1:u1.ra*.c4.….F.…（マスごとにお題の鍵、埋めたマスは末尾に *）。 */
@@ -355,7 +359,8 @@ export function encodeOdaiSeed(card: readonly OdaiCell[]): string {
 function odaiFromKey(key: string, musics: readonly BingoMusic[]): Odai {
   const fixed = FIXED_DEFS.find((d) => d.key === key);
   if (fixed) return withRate(fixed, musics);
-  const m = /^c(\d+)$/.exec(key);
+  // c04 のような書き方は c4 と同じ作者になり重複を見逃すので、0 始まりは受けない
+  const m = /^c([1-9]\d*|0)$/.exec(key);
   if (m) {
     const def = creatorDef(Number(m[1]), musics);
     if (!def) throw new Error(`シード値の作者が楽曲データに見つかりません（${m[1]}）。`);
@@ -366,7 +371,7 @@ function odaiFromKey(key: string, musics: readonly BingoMusic[]): Odai {
 
 export function decodeOdaiSeed(seed: string, musics: readonly BingoMusic[]): OdaiCell[] {
   const trimmed = seed.trim();
-  if (!trimmed.startsWith(ODAI_SEED_PREFIX)) throw new Error("お題ビンゴのシード値ではありません。");
+  if (!hasOdaiPrefix(trimmed)) throw new Error("お題ビンゴのシード値ではありません。");
   const tokens = trimmed.slice(ODAI_SEED_PREFIX.length).split(".");
   if (tokens.length !== CELLS) throw new Error(`シード値のマスの数が不正です（${CELLS}マス）。`);
   const seen = new Set<string>();

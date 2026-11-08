@@ -145,9 +145,7 @@ export default function BingoGenerator() {
       setKind(target);
       setBorderColor(pickBorderColor());
     } catch (e) {
-      if (target === "odai") setOdaiCard(null);
-      else setCard(null);
-      setKind(target);
+      // 失敗しても今のカード（埋めた途中の状態）と種類はそのまま残す
       setError(e instanceof Error ? e.message : "生成に失敗しました。");
     }
   };
@@ -236,7 +234,11 @@ export default function BingoGenerator() {
             { value: "song", label: "曲名ビンゴ" },
           ]}
           value={kind}
-          onChange={setKind}
+          onChange={(k) => {
+            setKind(k);
+            setError(null);
+            setNotice(null);
+          }}
         />
         <SegmentedControl
           className="mt-4"

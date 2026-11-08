@@ -208,6 +208,10 @@ describe("お題のシード値", () => {
     expect(isOdaiSeed(seed)).toBe(true);
     expect(isOdaiSeed(` ${seed} `)).toBe(true);
     expect(isOdaiSeed("A".repeat(50))).toBe(false);
+    // 目印の大文字・小文字は問わない
+    const lower = seed.replace("OD1:", "od1:");
+    expect(isOdaiSeed(lower)).toBe(true);
+    expect(decodeOdaiSeed(lower, MUSICS)).toHaveLength(25);
   });
 
   it("往復で同じお題・同じ埋めた状態に戻る", () => {
@@ -252,6 +256,8 @@ describe("お題のシード値", () => {
     const withCell1 = (token: string) => [parts[0], token, ...parts.slice(2)].join(".");
     expect(() => decodeOdaiSeed(withCell1("zz"), MUSICS)).toThrow(/お題/);
     expect(() => decodeOdaiSeed(withCell1("c999999"), MUSICS)).toThrow(/作者/);
+    // c04 は c4 と同じ作者に解決されて重複を見逃すので受けない
+    expect(() => decodeOdaiSeed(withCell1("c04"), MUSICS)).toThrow(/お題/);
     // FREE は中央だけ
     const movedFree = [...parts];
     movedFree[1] = "F";
