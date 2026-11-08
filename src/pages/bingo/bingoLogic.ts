@@ -67,11 +67,11 @@ export function decodeSeed(seed: string, musics: readonly BingoMusic[]): Cell[] 
   const byId = new Map(musics.map((m) => [m.id, m]));
   const card: Cell[] = [];
   const trimmed = seed.trim();
-  if (trimmed.length !== 50) throw new Error("シード値の長さが不正です（50文字）。");
+  if (trimmed.length !== 50) throw new Error("コードの長さが不正です（50文字）。");
   for (let i = 0; i < 50; i += 2) {
     const hi = BASE64.indexOf(trimmed[i]);
     const lo = BASE64.indexOf(trimmed[i + 1]);
-    if (hi < 0 || lo < 0) throw new Error("シード値に不正な文字が含まれています。");
+    if (hi < 0 || lo < 0) throw new Error("コードに不正な文字が含まれています。");
     const raw = hi * 64 + lo;
     if (raw === 0) {
       card.push("FREE");
@@ -80,7 +80,7 @@ export function decodeSeed(seed: string, musics: readonly BingoMusic[]): Cell[] 
     const cleared = raw >= CLEARED_OFFSET;
     const id = String(cleared ? raw - CLEARED_OFFSET : raw).padStart(3, "0");
     const music = byId.get(id);
-    if (!music) throw new Error(`未知の楽曲id: ${id}`);
+    if (!music) throw new Error(`コードに未知の曲があります（${id}）。`);
     card.push({ ...music, cleared });
   }
   return card;

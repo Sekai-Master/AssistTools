@@ -15,12 +15,15 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   className,
+  buttonClassName,
   compact = false,
 }: {
   options: Option<T>[];
   value: T;
   onChange: (value: T) => void;
   className?: string;
+  /** 各ボタンに足すクラス（タップの高さを 44px 取りたいときの min-h-11 など）。 */
+  buttonClassName?: string;
   /**
    * 詰めて描く。**5択や日本語5文字以上のラベル**でないと使わないこと。
    * ★ 既定のままだと 390px で「持って/いない」のように**単語の途中で折れる**。
@@ -62,7 +65,8 @@ export function SegmentedControl<T extends string>({
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
             value === o.value
               ? "text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]"
-              : "text-slate-500 hover:text-slate-700"
+              : "text-slate-500 hover:text-slate-700",
+            buttonClassName
           )}
         >
           {o.label}

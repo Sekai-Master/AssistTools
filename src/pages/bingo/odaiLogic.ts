@@ -8,6 +8,7 @@
 import type { UnitKey } from "../../lib/units";
 import type { BingoMusic } from "./bingoLogic";
 import { UNIT_OPTIONS } from "./bingoConstants";
+import { BINGO_LINES, hasBingo, withCleared } from "./bingoProgress";
 
 export type OdaiKind = "unit" | "row" | "length" | "title" | "creator";
 
@@ -59,17 +60,7 @@ const MAX_LATIN_RUN = 7;
 const CELLS = 25;
 const CENTER = 12;
 
-export const BINGO_LINES: readonly (readonly number[])[] = [
-  ...[0, 1, 2, 3, 4].map((r) => [0, 1, 2, 3, 4].map((c) => r * 5 + c)),
-  ...[0, 1, 2, 3, 4].map((c) => [0, 1, 2, 3, 4].map((r) => r * 5 + c)),
-  [0, 6, 12, 18, 24],
-  [4, 8, 12, 16, 20],
-];
-
-/** 縦・横・斜めのどれか 1 本がそろっているか。 */
-export function hasBingo(filled: readonly boolean[]): boolean {
-  return BINGO_LINES.some((line) => line.every((i) => filled[i]));
-}
+export { BINGO_LINES, hasBingo };
 
 /** 決定的な乱数（mulberry32）。テストとシミュレーションで使う。 */
 export function createRng(seed: number): () => number {
@@ -363,17 +354,17 @@ function odaiFromKey(key: string, musics: readonly BingoMusic[]): Odai {
   const m = /^c([1-9]\d*|0)$/.exec(key);
   if (m) {
     const def = creatorDef(Number(m[1]), musics);
-    if (!def) throw new Error(`シード値の作者が楽曲データに見つかりません（${m[1]}）。`);
+    if (!def) throw new Error(`コードの作者が楽曲データに見つかりません（${m[1]}）。`);
     return withRate(def, musics);
   }
-  throw new Error(`シード値に未知のお題があります（${key}）。`);
+  throw new Error(`コードに未知のお題があります（${key}）。`);
 }
 
 export function decodeOdaiSeed(seed: string, musics: readonly BingoMusic[]): OdaiCell[] {
   const trimmed = seed.trim();
-  if (!hasOdaiPrefix(trimmed)) throw new Error("お題ビンゴのシード値ではありません。");
+  if (!hasOdaiPrefix(trimmed)) throw new Error("お題ビンゴのコードではありません。");
   const tokens = trimmed.slice(ODAI_SEED_PREFIX.length).split(".");
-  if (tokens.length !== CELLS) throw new Error(`シード値のマスの数が不正です（${CELLS}マス）。`);
+  if (tokens.length !== CELLS) throw new Error(`コードのマスの数が不正です（${CELLS}マス）。`);
   const seen = new Set<string>();
   return tokens.map((token, i) => {
     if (token === FREE_TOKEN || i === CENTER) {
@@ -382,7 +373,7 @@ export function decodeOdaiSeed(seed: string, musics: readonly BingoMusic[]): Oda
     }
     const cleared = token.endsWith(CLEARED_MARK);
     const key = cleared ? token.slice(0, -CLEARED_MARK.length) : token;
-    if (seen.has(key)) throw new Error(`シード値のお題が重複しています（${key}）。`);
+    if (seen.has(key)) throw new Error(`コードのお題が重複しています（${key}）。`);
     seen.add(key);
     return { odai: odaiFromKey(key, musics), cleared };
   });
@@ -392,7 +383,7 @@ export function decodeOdaiSeed(seed: string, musics: readonly BingoMusic[]): Oda
 
 /** 指定したマスを埋める／戻す（新しいカードを返す）。FREE は変えない。 */
 export function setOdaiCleared(card: readonly OdaiCell[], index: number, cleared: boolean): OdaiCell[] {
-  return card.map((c, i) => (i === index && c !== "FREE" ? { ...c, cleared } : c));
+  return withCleared(card, index, cleared);
 }
 
 /** カタカナをひらがなに（読みの検索で、どちらで打っても当たるように）。 */

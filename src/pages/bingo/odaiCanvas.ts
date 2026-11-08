@@ -3,9 +3,9 @@ import {
   CANVAS_SIZE,
   CELL,
   MARGIN,
-  drawClearedOverlay,
+  drawFilledMark,
+  drawFinish,
   drawFree,
-  drawSignatureAndFrame,
   loadImage,
 } from "./bingoCanvas";
 import type { OdaiCell } from "./odaiLogic";
@@ -71,7 +71,13 @@ export function fitOdaiText(
   return { size, lines: layoutChunks(chunks, maxWidth, measureAt(size)) };
 }
 
-function drawOdaiCell(ctx: CanvasRenderingContext2D, x: number, y: number, cell: Exclude<OdaiCell, "FREE">) {
+function drawOdaiCell(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  cell: Exclude<OdaiCell, "FREE">,
+  markColor: string
+) {
   const { odai } = cell;
   ctx.fillStyle = "#f8fafc";
   ctx.fillRect(x, y, CELL, CELL);
@@ -102,7 +108,7 @@ function drawOdaiCell(ctx: CanvasRenderingContext2D, x: number, y: number, cell:
     ctx.fillText(line, x + CELL / 2, top + CAPTION_SIZE + captionGap + i * fit.size * LINE_HEIGHT, maxWidth);
   });
 
-  if (cell.cleared) drawClearedOverlay(ctx, x, y);
+  if (cell.cleared) drawFilledMark(ctx, x, y, markColor);
 }
 
 function drawGridLines(ctx: CanvasRenderingContext2D) {
@@ -132,6 +138,7 @@ async function loadFonts(card: readonly OdaiCell[]) {
 export interface OdaiDrawOptions {
   freeIconUrl: string;
   borderColor: string;
+  markColor: string;
 }
 
 /** お題カードを canvas に描く。isCancelled は bingoCanvas の drawBingoCard と同じ。 */
@@ -154,8 +161,8 @@ export async function drawOdaiCard(
     const x = MARGIN + (i % 5) * CELL;
     const y = MARGIN + Math.floor(i / 5) * CELL;
     if (cell === "FREE") drawFree(ctx, x, y, freeIcon);
-    else drawOdaiCell(ctx, x, y, cell);
+    else drawOdaiCell(ctx, x, y, cell, opts.markColor);
   });
   drawGridLines(ctx);
-  drawSignatureAndFrame(ctx, opts.borderColor);
+  drawFinish(ctx, card, opts);
 }

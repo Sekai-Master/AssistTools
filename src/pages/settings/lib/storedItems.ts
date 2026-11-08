@@ -15,6 +15,7 @@
  */
 import { MOTION_LABEL, MOTION_SETTINGS, type MotionSetting } from "../../../motion/plan";
 import { THEME_LABEL, THEMES, type Theme } from "../../../lib/theme";
+import { BINGO_STORAGE_KEY, summarizeSavedBingo } from "../../bingo/bingoStorage";
 
 export interface StoredItem {
   key: string;
@@ -205,6 +206,12 @@ export const STORED_ITEMS: StoredItem[] = [
     label: "周回ラップ計測の保存した記録",
     note: "「周回ラップ計測」で終了して保存した1回ぶんの記録（開始・終了時刻とラップ）",
     summarize: countEntries("件"),
+  },
+  {
+    key: BINGO_STORAGE_KEY,
+    label: "BINGOカードの途中経過",
+    note: "「BINGOカードジェネレーター」で作ったカードと、埋めたマス（お題ビンゴ・曲名ビンゴ 1 枚ずつ）",
+    summarize: (raw) => summarizeSavedBingo(raw, BROKEN),
   },
   {
     key: "sekaimaster:motion:v1",
