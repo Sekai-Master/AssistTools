@@ -10,6 +10,14 @@ import {
   tableShare,
 } from './lib/musicCategories.mjs';
 import { auditUnreleased, splitByRelease } from './lib/musicRelease.mjs';
+import {
+  difficultyFields,
+  indexVocals,
+  musicFields,
+  previousVocalsFrom,
+  resolveVocals,
+  stringifyCompactNumbers,
+} from './lib/musicBingoFields.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,6 +38,8 @@ const musicDifficultiesUrl = `${MASTER_DB_BASE}/musicDifficulties.json`;
 const musicCategoriesUrl = `${MASTER_DB_BASE}/musicCategories.json`;
 // コラボ・タイアップの名前（「東方Projectコラボ」「劇場版プロジェクトセカイ」など）。お題ビンゴのお題に使う。
 const musicCollaborationsUrl = `${MASTER_DB_BASE}/musicCollaborations.json`;
+// 歌唱 ver.（歌うキャラ・人数・エイプリルフール ver.）。お題ビンゴのお題に使う（scripts/lib/musicBingoFields.mjs）。
+const musicVocalsUrl = `${MASTER_DB_BASE}/musicVocals.json`;
 const jacketRemoteUrl = (id) =>
   `${SEKAI_BEST_BASE}/sekai-jp-assets/music/jacket/jacket_s_${id}/jacket_s_${id}.webp`;
 
@@ -37,6 +47,8 @@ const jacketRemoteUrl = (id) =>
 const JACKET_WIDTH = 256;
 const JACKET_QUALITY = 80;
 const JACKET_SMALL_BYTES = 60_000; // これ以下は縮小済みとみなす
+// 歌うキャラがある公開曲がこの割合を切ったら警告する（2026-11-09 は 95%）。
+const MIN_SINGERS_SHARE = 0.85;
 
 async function fetchJson(url) {
   const res = await fetch(url);
@@ -52,7 +64,7 @@ async function toThumbnail(input) {
 }
 
 (async () => {
-  const [musics, artists, metas, limitedTimeMusics, musicDifficulties, musicCategories, musicCollaborations] = await Promise.all([
+  const [musics, artists, metas, limitedTimeMusics, musicDifficulties, musicCategories, musicCollaborations, musicVocals] = await Promise.all([
     fetchJson(musicsUrl),
     fetchJson(artistsUrl),
     fetchJson(metasUrl),
@@ -67,6 +79,11 @@ async function toThumbnail(input) {
     // ★ コラボの名前もビンゴでしか使わないので、取れなくても止めない（直前の配信データの名前を引き継ぐ）
     fetchJson(musicCollaborationsUrl).catch((err) => {
       console.warn(`::warning::musicCollaborations.json が取れない（${err.message}）。コラボの名前は直前の配信データから引き継ぐ`);
+      return [];
+    }),
+    // ★ 歌唱 ver. もビンゴでしか使わないので、取れなくても止めない（直前の配信データの値を引き継ぐ）
+    fetchJson(musicVocalsUrl).catch((err) => {
+      console.warn(`::warning::musicVocals.json が取れない（${err.message}）。歌うキャラ・人数は直前の配信データから引き継ぐ`);
       return [];
     }),
   ]);
@@ -215,6 +232,10 @@ async function toThumbnail(input) {
   );
   const collabOf = (m) =>
     collabLabelOf.size > 0 ? collabLabelOf.get(m.musicCollaborationId) : previousCollabOf.get(m.id);
+  // 歌唱の表が取れなかった日も、直前の配信データの値を使う（コラボの名前と同じ理由）
+  const vocalIndex = indexVocals(musicVocals);
+  const previousVocals = previousVocalsFrom(previousSnapshot);
+  const vocalOf = new Map(releasedMusics.map((m) => [m.id, resolveVocals(m.id, vocalIndex, previousVocals)]));
   const categoryOf = new Map(
     releasedMusics.map((m) => [m.id, resolveCategories(m, categoryIndex, previousCategories)])
   );
@@ -249,6 +270,10 @@ async function toThumbnail(input) {
       jacketLink: `jacket_s_${id}.webp`,
       music_time: meta ? meta.music_time : null,
       event_rate: meta ? meta.event_rate : null,
+      // お題ビンゴ用（歌うキャラ・歌唱 ver.・3DMV の人数・作詞と作曲・譜面）。値が無い・偽の項目は書かない
+      ...vocalOf.get(m.id).fields,
+      ...musicFields(m),
+      ...difficultyFields(diffByMusic.get(m.id)),
     };
   });
 
@@ -322,6 +347,21 @@ async function toThumbnail(input) {
         (keptIds.length > 20 ? `${shown} ほか` : shown)
     );
   }
+  // 歌唱の項目の取り先。ゲームのキャラが歌わない曲（ゲームの外の歌い手だけ・インストのタイアップ）は
+  // 2026-11-09 時点で公開曲の 5% ほどある。それより大きく増えたら、上流の形が変わった合図
+  const vocalResults = [...vocalOf.values()];
+  const byVocalSource = (s) => vocalResults.filter((r) => r.source === s).length;
+  const published = transformed.filter((m) => m.published);
+  const withSingers = published.filter((m) => m.singers).length;
+  console.log(
+    `歌唱: 表 ${byVocalSource('table')} / 引き継ぎ ${byVocalSource('previous')} / なし ${byVocalSource('none')}` +
+      ` ・ 歌うキャラがある公開曲 ${withSingers}/${published.length}`
+  );
+  if (published.length > 0 && withSingers / published.length < MIN_SINGERS_SHARE) {
+    console.warn(
+      `::warning::歌うキャラがある公開曲が ${withSingers}/${published.length} 曲しかない。上流（musicVocals.json）の形が変わった可能性がある`
+    );
+  }
   const noCategory = transformed.filter((m) => m.published && m.categories.length === 0);
   if (noCategory.length > 0) {
     console.warn(
@@ -330,11 +370,8 @@ async function toThumbnail(input) {
     );
   }
 
-  fs.writeFileSync(
-    path.join(DATA_DIR, 'transformedMusics.json'),
-    JSON.stringify(transformed, null, 2),
-    'utf-8'
-  );
+  // 整形して書く。歌うキャラ（数の配列）だけは 1 行に詰める（ほぼ全ツールが読むので膨らませない）
+  fs.writeFileSync(path.join(DATA_DIR, 'transformedMusics.json'), stringifyCompactNumbers(transformed), 'utf-8');
   // ランキングでしか使わないので整形せずに書く（転送量を優先）。
   fs.writeFileSync(
     path.join(DATA_DIR, 'musicScoreData.json'),
