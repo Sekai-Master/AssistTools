@@ -580,6 +580,32 @@ export function derive(src, now) {
 }
 
 /**
+ * 画像がまだ配信されていない家具を外す（公開前の家具を出さない関所）。
+ *
+ * ★ 家具の表には公開日が無いので、画像（アセット）の配信を公開の目安にする。
+ *   以前はこの判定をテスト（fixtures.real.test.ts の「参照している画像がすべて存在する」）に任せていて、
+ *   公開前の家具が 1 つあるだけで更新全体が止まり、毎日失敗が飛んだ
+ *   （2026-10-31 の 26 件、2026-11-06〜 の彰人の誕生日 5 件。止まっているあいだは他の家具の更新も入らない）。
+ *   画像が配信されれば、次の回で自然に入る。テストは最後の確かめとして残す。
+ *
+ * 外した家具を指す talkLinks と、家具が無くなったジャンルも外す（存在しないものを指さない）。
+ * @param {ReturnType<typeof derive>} out
+ * @param {(im: string) => boolean} hasThumb 保存名の画像が手元にあるか
+ */
+export function withoutUnreleased(out, hasThumb) {
+  const fixtures = out.fixtures.filter((f) => !f.im || hasThumb(f.im));
+  if (fixtures.length === out.fixtures.length) return { out, dropped: [] };
+  const kept = new Set(fixtures.map((f) => f.id));
+  const dropped = out.fixtures.filter((f) => !kept.has(f.id));
+  const talkLinks = out.talkLinks
+    .map((l) => ({ ...l, f: l.f.filter((id) => kept.has(id)) }))
+    .filter((l) => l.f.length >= 2);
+  const usedMainGenres = new Set(fixtures.map((f) => f.mg).filter((v) => v != null));
+  const genres = { ...out.genres, main: out.genres.main.filter((g) => usedMainGenres.has(g.id)) };
+  return { out: { ...out, genres, talkLinks, fixtures }, dropped };
+}
+
+/**
  * 出力の要約。件数が想定から大きくずれた回に気づくためのもの。
  *
  * ★ 未公開データの検算（deriveCardData.mjs の auditLeaks）はこの表では書けないので、
