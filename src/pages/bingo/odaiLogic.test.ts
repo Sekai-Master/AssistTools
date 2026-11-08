@@ -17,6 +17,8 @@ import {
   encodeOdaiSeed,
   hasBingo,
   isOdaiSeed,
+  listOdaiSongs,
+  setOdaiCleared,
   readingRow,
   titleKind,
 } from "./odaiLogic";
@@ -281,5 +283,45 @@ describe("お題のシード値", () => {
     const decoded = decodeSeed(legacy, MUSICS);
     expect(decoded[12]).toBe("FREE");
     expect(decoded[0] !== "FREE" && decoded[0].id).toBe(MUSICS[0].id);
+  });
+});
+
+describe("listOdaiSongs（お題に当てはまる曲の一覧）", () => {
+  it("お題の判定そのものと同じ曲が、読み順で並ぶ", () => {
+    for (const o of CANDIDATES) {
+      const list = listOdaiSongs(o, MUSICS);
+      expect(list.map((m) => m.id).sort()).toEqual(MUSICS.filter((m) => o.test(m)).map((m) => m.id).sort());
+      for (let i = 1; i < list.length; i++) {
+        expect((list[i - 1].pronunciation ?? "").localeCompare(list[i].pronunciation ?? "", "ja")).toBeLessThanOrEqual(0);
+      }
+    }
+  });
+
+  it("曲名・読みで絞り込める（大文字小文字・カタカナの読みも問わない）", () => {
+    const deco = CANDIDATES.find((o) => o.key === "c4")!;
+    const all = listOdaiSongs(deco, MUSICS);
+    const byTitle = listOdaiSongs(deco, MUSICS, "ヴァンパイア");
+    expect(byTitle.map((m) => m.title)).toContain("ヴァンパイア");
+    expect(byTitle.length).toBeLessThan(all.length);
+    const target = all[0];
+    expect(listOdaiSongs(deco, MUSICS, target.title.toUpperCase()).map((m) => m.id)).toContain(target.id);
+    const reading = target.pronunciation!.slice(0, 3);
+    const kata = [...reading].map((c) => String.fromCharCode(c.charCodeAt(0) + 0x60)).join("");
+    expect(listOdaiSongs(deco, MUSICS, kata).map((m) => m.id)).toContain(target.id);
+    expect(listOdaiSongs(deco, MUSICS, "  ")).toHaveLength(all.length);
+    expect(listOdaiSongs(deco, MUSICS, "存在しない曲名xyz")).toHaveLength(0);
+  });
+});
+
+describe("setOdaiCleared", () => {
+  it("指定したマスだけ埋める／戻す（元のカードは変えない）。FREE は変えない", () => {
+    const card = buildOdaiCard(CANDIDATES, createRng(9));
+    const filled = setOdaiCleared(card, 0, true);
+    expect(filled[0] !== "FREE" && filled[0].cleared).toBe(true);
+    expect(card[0] !== "FREE" && card[0].cleared).toBe(false);
+    expect(encodeOdaiSeed(filled).split(".")[0].endsWith("*")).toBe(true);
+    const back = setOdaiCleared(filled, 0, false);
+    expect(encodeOdaiSeed(back)).toBe(encodeOdaiSeed(card));
+    expect(setOdaiCleared(card, 12, true)[12]).toBe("FREE");
   });
 });

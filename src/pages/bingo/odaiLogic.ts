@@ -387,3 +387,34 @@ export function decodeOdaiSeed(seed: string, musics: readonly BingoMusic[]): Oda
     return { odai: odaiFromKey(key, musics), cleared };
   });
 }
+
+// ---- 遊ぶときの操作 ----
+
+/** 指定したマスを埋める／戻す（新しいカードを返す）。FREE は変えない。 */
+export function setOdaiCleared(card: readonly OdaiCell[], index: number, cleared: boolean): OdaiCell[] {
+  return card.map((c, i) => (i === index && c !== "FREE" ? { ...c, cleared } : c));
+}
+
+/** カタカナをひらがなに（読みの検索で、どちらで打っても当たるように）。 */
+function toHiragana(s: string): string {
+  return s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
+}
+
+/**
+ * お題に当てはまる曲の一覧（読み順）。判定はお題の test そのものを使う。
+ * query があれば曲名・読みで絞る（大文字小文字・カタカナとひらがなを問わない）。
+ */
+export function listOdaiSongs(odai: Odai, musics: readonly BingoMusic[], query = ""): BingoMusic[] {
+  const q = query.trim().toLowerCase();
+  const qKana = toHiragana(q);
+  return musics
+    .filter((m) => odai.test(m))
+    .filter(
+      (m) =>
+        !q ||
+        m.title.toLowerCase().includes(q) ||
+        toHiragana(m.title.toLowerCase()).includes(qKana) ||
+        (m.pronunciation !== undefined && toHiragana(m.pronunciation).includes(qKana))
+    )
+    .sort((a, b) => (a.pronunciation ?? a.title).localeCompare(b.pronunciation ?? b.title, "ja"));
+}

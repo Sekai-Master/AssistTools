@@ -157,13 +157,6 @@ export default function BingoGenerator() {
         : prev
     );
 
-  const toggleOdaiCleared = (i: number) =>
-    setOdaiCard((prev) =>
-      prev
-        ? prev.map((c, j) => (j === i && c !== "FREE" ? { ...c, cleared: !c.cleared } : c))
-        : prev
-    );
-
   const replaceCell = (music: BingoMusic) => {
     if (editing === null) return;
     if (editing === "center") {
@@ -340,7 +333,12 @@ export default function BingoGenerator() {
           {kind === "odai" && odaiCard && (
             <>
               <p className="mb-4 text-sm text-slate-600">流れた曲が当てはまるお題を押す</p>
-              <OdaiCardGrid card={odaiCard} onToggleCleared={toggleOdaiCleared} />
+              <OdaiCardGrid
+                card={odaiCard}
+                musics={musics}
+                jacketBase={JACKET_BASE}
+                onChange={setOdaiCard}
+              />
             </>
           )}
           {/* お題はマスの一覧が画面の主役なので、画像（canvas）は書き出し用に隠して描く */}
