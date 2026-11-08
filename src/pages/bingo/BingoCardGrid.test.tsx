@@ -155,6 +155,11 @@ describe("遊んだ曲を入れる（お題）", () => {
     expect(filled).toEqual([first, second]);
   });
 
+  it("開いた直後はフォーカスを動かさない", () => {
+    render(<OdaiHarness onCard={() => {}} />);
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it("検索も小窓も Escape で閉じ、カードは変わらず、フォーカスはボタンに戻る", () => {
     const seen: OdaiCell[][] = [];
     render(<OdaiHarness onCard={(c) => seen.push(c)} />);

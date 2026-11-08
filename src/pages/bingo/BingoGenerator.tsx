@@ -20,6 +20,7 @@ import {
   odaiSongsToHalf,
 } from "./odaiLogic";
 import { progressOf } from "./bingoProgress";
+import { MINUTES_PER_SONG, playTimeText } from "./playTime";
 import {
   CARD_PARAM,
   type CardKind,
@@ -50,15 +51,6 @@ const KIND_HINT: Record<CardKind, string> = {
 };
 
 const LEVEL_OPTIONS = ODAI_LEVEL_KEYS.map((k) => ({ value: k, label: ODAI_LEVELS[k].label }));
-
-/** 半分の人が BINGO になる曲数。難易度の数字の意味を 1 行で言う。 */
-function HalfLine({ songs }: { songs: number }) {
-  return (
-    <>
-      半分の人が <span className="font-num font-bold">{songs}曲</span> でBINGO
-    </>
-  );
-}
 
 const DEFAULT_FILTERS: SongFilters = {
   units: new Set(ALL_UNIT_VALUES),
@@ -92,7 +84,10 @@ function BingoBoard({
   const drawn = useRef<Promise<void>>(Promise.resolve());
 
   const [kind, setKind] = useState<CardKind>(initial.kind);
-  const [level, setLevel] = useState<OdaiLevel>(DEFAULT_ODAI_LEVEL);
+  // 開き直したときは今のカードの段から（HARD に戻ると、MASTER のつもりで HARD のカードを作ってしまう）
+  const [level, setLevel] = useState<OdaiLevel>(() =>
+    initial.odai ? odaiLevelOf(initial.odai) : DEFAULT_ODAI_LEVEL
+  );
   const [odaiCard, setOdaiCard] = useState<OdaiCell[] | null>(initial.odai);
   const [songCard, setSongCard] = useState<Cell[] | null>(initial.song);
   const [filters, setFilters] = useState<SongFilters>(DEFAULT_FILTERS);
@@ -238,6 +233,7 @@ function BingoBoard({
             <p className="text-sm font-bold text-slate-700">難易度</p>
             <SegmentedControl
               compact
+              ariaLabel="難易度"
               options={LEVEL_OPTIONS}
               value={level}
               // ★ 320px では 1 つが約 50px で、NORMAL がやっと入る。カードの盤面と同じく左右の余白へ 8px ずつ広げ、
@@ -247,7 +243,10 @@ function BingoBoard({
               onChange={setLevel}
             />
             <p className="mt-2 text-sm text-slate-600">
-              <HalfLine songs={ODAI_LEVELS[level].songs} />
+              半分の人がBINGOになるまで <span className="font-bold">{playTimeText(ODAI_LEVELS[level].songs)}</span>
+              <span className="text-slate-500">
+                （<span className="font-num">{ODAI_LEVELS[level].songs}</span>曲・1曲{MINUTES_PER_SONG}分として）
+              </span>
             </p>
           </div>
         )}
@@ -297,7 +296,7 @@ function BingoBoard({
             <h2 className="text-base font-bold text-slate-700">カード</h2>
             {cardLevel && cardSongs !== null && (
               <p className="text-sm text-slate-600">
-                <span className="font-bold">{ODAI_LEVELS[cardLevel].label}</span> ・ <HalfLine songs={cardSongs} />
+                <span className="font-bold">{ODAI_LEVELS[cardLevel].label}</span> ・ {playTimeText(cardSongs)}
               </p>
             )}
           </div>

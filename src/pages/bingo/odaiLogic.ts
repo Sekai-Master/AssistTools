@@ -62,16 +62,20 @@ export interface OdaiLevelDef {
   caps: Record<OdaiKind, number>;
 }
 
-/** 曲数はプロセカの難易度の数字の幅に寄せてある（EASY 5〜9、MASTER 26〜37 くらい）。 */
+/**
+ * 1 曲 4 分として、EASY 約30分・NORMAL 約1時間20分・HARD 約2時間・EXPERT 約3時間・MASTER 約5時間。
+ * 難しい側は思い切って長くする（Nori、2026-11-09）。NORMAL がこれまでのカード（20 曲で半分）。
+ */
+const DEEP_CAPS: Record<OdaiKind, number> = { ...ODAI_KIND_CAPS, creator: 12 };
 export const ODAI_LEVELS: Record<OdaiLevel, OdaiLevelDef> = {
   easy: { label: "EASY", songs: 8, minRate: MIN_RATE, caps: ODAI_KIND_CAPS },
-  normal: { label: "NORMAL", songs: 14, minRate: MIN_RATE, caps: ODAI_KIND_CAPS },
-  hard: { label: "HARD", songs: 20, minRate: MIN_RATE, caps: ODAI_KIND_CAPS },
-  expert: { label: "EXPERT", songs: 28, minRate: DEEP_MIN_RATE, caps: { ...ODAI_KIND_CAPS, creator: 12 } },
-  master: { label: "MASTER", songs: 36, minRate: DEEP_MIN_RATE, caps: { ...ODAI_KIND_CAPS, creator: 12 } },
+  normal: { label: "NORMAL", songs: 20, minRate: MIN_RATE, caps: ODAI_KIND_CAPS },
+  hard: { label: "HARD", songs: 30, minRate: DEEP_MIN_RATE, caps: DEEP_CAPS },
+  expert: { label: "EXPERT", songs: 45, minRate: DEEP_MIN_RATE, caps: DEEP_CAPS },
+  master: { label: "MASTER", songs: 75, minRate: DEEP_MIN_RATE, caps: DEEP_CAPS },
 };
 export const ODAI_LEVEL_KEYS: readonly OdaiLevel[] = ["easy", "normal", "hard", "expert", "master"];
-export const DEFAULT_ODAI_LEVEL: OdaiLevel = "hard";
+export const DEFAULT_ODAI_LEVEL: OdaiLevel = "normal";
 
 /**
  * 段の曲数で見積もり（estimateBingoChance）がこの値に近づくまで、マスを入れ替える。
@@ -378,7 +382,8 @@ function replaceOne(
 
 /**
  * ランダムにお題カードを作る。中央は FREE。
- * ランダムな並びから始め、段の曲数での見積もりが目標に近づく入れ替えだけを受け入れる。
+ * ランダムな並びから始め、段の曲数での見積もりが目標の幅に近づく入れ替えだけを受け入れる。
+ * 1 曲少ないときは線に届かないことも条件にする（カードの枠に出す目安が段の曲数とずれないように）。
  */
 export function buildOdaiCard(
   candidates: readonly Odai[],
@@ -393,15 +398,18 @@ export function buildOdaiCard(
   const picked = pickWithCaps(pool, caps, rng);
   if (!picked) throw new Error("お題の組み合わせを作れませんでした。");
   let cells = toPositions(picked);
-  const gapOf = (c: readonly (Odai | null)[]) => Math.abs(estimateBingoChance(c, songs) - TARGET_ESTIMATE);
-  let gap = gapOf(cells);
-  for (let step = 0; step < MAX_STEPS && gap > TARGET_TOLERANCE; step++) {
+  // 外れの量: 見積もりが目標から離れた分と、1 曲少なくても線を越えてしまう分（目安が段の曲数より少なく出る）
+  const missOf = (c: readonly (Odai | null)[]) =>
+    Math.max(0, Math.abs(estimateBingoChance(c, songs) - TARGET_ESTIMATE) - TARGET_TOLERANCE) +
+    Math.max(0, estimateBingoChance(c, songs - 1) - HALF_ESTIMATE + 0.001);
+  let miss = missOf(cells);
+  for (let step = 0; step < MAX_STEPS && miss > 0; step++) {
     const next = rng() < 0.5 ? swapTwo(cells, rng) : replaceOne(cells, pool, caps, rng);
     if (!next) continue;
-    const g = gapOf(next);
-    if (g < gap) {
+    const m = missOf(next);
+    if (m < miss) {
       cells = next;
-      gap = g;
+      miss = m;
     }
   }
   return cells.map((o) => (o ? { odai: o, cleared: false } : "FREE"));

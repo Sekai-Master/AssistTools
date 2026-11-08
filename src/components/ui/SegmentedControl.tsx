@@ -17,6 +17,7 @@ export function SegmentedControl<T extends string>({
   className,
   buttonClassName,
   compact = false,
+  ariaLabel,
 }: {
   options: Option<T>[];
   value: T;
@@ -30,6 +31,8 @@ export function SegmentedControl<T extends string>({
    *   この部品は等幅なので、1つでも長いラベルがあると全体が割れる。
    */
   compact?: boolean;
+  /** 選択肢のまとまりの名前（スクリーンリーダー向け）。見出しが近くにあっても結び付かないときに渡す。 */
+  ariaLabel?: string;
 }) {
   const idx = Math.max(
     0,
@@ -38,6 +41,7 @@ export function SegmentedControl<T extends string>({
   return (
     <div
       role="radiogroup"
+      aria-label={ariaLabel}
       className={cn(
         "relative inline-flex w-full max-w-sm rounded-xl bg-neu p-1 shadow-neu-inset",
         className

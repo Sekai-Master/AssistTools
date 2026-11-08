@@ -360,12 +360,12 @@ function songsToBingo(card: readonly OdaiCell[], rng: () => number, max = 400): 
 }
 
 describe("難易度（ODAI_LEVELS）", () => {
-  it("段の曲数は EASY < NORMAL < HARD < EXPERT < MASTER。既定は HARD の 20 曲", () => {
+  it("段の曲数は EASY < NORMAL < HARD < EXPERT < MASTER。既定は NORMAL の 20 曲（これまでのカード）", () => {
     const songs = ODAI_LEVEL_KEYS.map((k) => ODAI_LEVELS[k].songs);
     expect([...songs].sort((a, b) => a - b)).toEqual(songs);
     expect(new Set(songs).size).toBe(songs.length);
-    expect(DEFAULT_ODAI_LEVEL).toBe("hard");
-    expect(ODAI_LEVELS.hard.songs).toBe(20);
+    expect(DEFAULT_ODAI_LEVEL).toBe("normal");
+    expect(ODAI_LEVELS.normal.songs).toBe(20);
   });
 
   it.each(ODAI_LEVEL_KEYS)("%s: 種類ごとの上限と、割合の下限を守る", (level) => {
@@ -385,11 +385,11 @@ describe("難易度（ODAI_LEVELS）", () => {
     }
   });
 
-  it.each(ODAI_LEVEL_KEYS)("%s: 作ったカードの目安の曲数は段の曲数（±1）で、段を当てられる", (level) => {
+  it.each(ODAI_LEVEL_KEYS)("%s: 作ったカードの目安の曲数は段の曲数ちょうどで、段を当てられる", (level) => {
     const rng = createRng(23);
-    for (let t = 0; t < 30; t++) {
+    for (let t = 0; t < 200; t++) {
       const card = buildOdaiCard(CANDIDATES, rng, level);
-      expect(Math.abs(odaiSongsToHalf(card) - ODAI_LEVELS[level].songs)).toBeLessThanOrEqual(1);
+      expect(odaiSongsToHalf(card)).toBe(ODAI_LEVELS[level].songs);
       expect(odaiLevelOf(card)).toBe(level);
     }
   });
