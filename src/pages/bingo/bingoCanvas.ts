@@ -1,11 +1,12 @@
 import type { Cell } from "./bingoLogic";
+import { BINGO_LINES, progressOf } from "./bingoProgress";
 
 /** カード描画の定数（現行 draw.js 準拠）。 */
-const CELL = 100;
-const MARGIN = 20;
+export const CELL = 100;
+export const MARGIN = 20;
 export const CANVAS_SIZE = CELL * 5 + MARGIN * 2; // 520
 
-function loadImage(src: string): Promise<HTMLImageElement> {
+export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
@@ -14,31 +15,35 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-function drawClearedOverlay(ctx: CanvasRenderingContext2D, x: number, y: number) {
+/**
+ * 埋めた印: 色で薄く覆い、丸を付ける。絵や文字が読める濃さにする
+ * （以前の赤い斜めの「CLEARED」判子は、絵と文字を隠してうるさかった）。
+ */
+export function drawFilledMark(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  color: string,
+  onJacket = false
+) {
   ctx.save();
-  ctx.globalAlpha = 0.7;
-  ctx.fillStyle = "#cccccc";
+  // ジャケットの上は絵が派手なので、覆いを濃くし、丸を不透明にして白い縁を付ける
+  ctx.globalAlpha = onJacket ? 0.52 : 0.28;
+  ctx.fillStyle = color;
   ctx.fillRect(x, y, CELL, CELL);
-  ctx.globalAlpha = 1;
-  ctx.translate(x + CELL / 2, y + CELL / 2);
-  ctx.rotate((-20 * Math.PI) / 180);
-  ctx.fillStyle = "#e01e5a";
-  ctx.font = "italic 20px 'Arial Black', sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("CLEARED", 0, 0);
-  ctx.strokeStyle = "#e01e5a";
-  ctx.lineWidth = 2;
-  for (const dy of [-15, 15]) {
+  ctx.globalAlpha = onJacket ? 1 : 0.6;
+  const strokes: [string, number][] = onJacket ? [["#ffffff", 12], [color, 8]] : [[color, 6]];
+  for (const [stroke, width] of strokes) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = width;
     ctx.beginPath();
-    ctx.moveTo(-CELL / 2, dy);
-    ctx.lineTo(CELL / 2, dy);
+    ctx.arc(x + CELL / 2, y + CELL / 2, 34, 0, Math.PI * 2);
     ctx.stroke();
   }
   ctx.restore();
 }
 
-function drawFree(ctx: CanvasRenderingContext2D, x: number, y: number, icon: HTMLImageElement | null) {
+export function drawFree(ctx: CanvasRenderingContext2D, x: number, y: number, icon: HTMLImageElement | null) {
   if (icon) {
     ctx.save();
     ctx.globalAlpha = 0.7;
@@ -80,6 +85,8 @@ export interface DrawOptions {
   jacketBase: string; // 例: /MusicDatas/jacket/
   freeIconUrl: string;
   borderColor: string;
+  /** 埋めた印と BINGO の線の色（ページの --unit-color を canvas が読める形にしたもの）。 */
+  markColor: string;
 }
 
 /**
@@ -93,6 +100,16 @@ export async function drawBingoCard(
   opts: DrawOptions,
   isCancelled: () => boolean = () => false
 ): Promise<void> {
+  // 画像を全部読んでから一度に描く（埋めるたびに描き直すので、途中の白い画面を見せない）
+  const [freeIcon, jackets] = await Promise.all([
+    loadImage(opts.freeIconUrl).catch(() => null),
+    Promise.all(
+      card.map((cell) =>
+        cell === "FREE" ? null : loadImage(`${opts.jacketBase}${cell.jacketLink}`).catch(() => null)
+      )
+    ),
+  ]);
+  if (isCancelled()) return;
   canvas.width = CANVAS_SIZE;
   canvas.height = CANVAS_SIZE;
   const ctx = canvas.getContext("2d");
@@ -100,40 +117,78 @@ export async function drawBingoCard(
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-  const freeIcon = await loadImage(opts.freeIconUrl).catch(() => null);
-  if (isCancelled()) return;
+  card.forEach((cell, i) => {
+    const x = MARGIN + (i % 5) * CELL;
+    const y = MARGIN + Math.floor(i / 5) * CELL;
+    if (cell === "FREE") {
+      drawFree(ctx, x, y, freeIcon);
+      return;
+    }
+    const img = jackets[i];
+    if (img) {
+      ctx.drawImage(img, x, y, CELL, CELL);
+    } else {
+      ctx.fillStyle = "#999999";
+      ctx.fillRect(x, y, CELL, CELL);
+    }
+    if (cell.cleared) drawFilledMark(ctx, x, y, opts.markColor, true);
+  });
 
-  await Promise.all(
-    card.map(async (cell, i) => {
-      const x = MARGIN + (i % 5) * CELL;
-      const y = MARGIN + Math.floor(i / 5) * CELL;
-      if (cell === "FREE") {
-        drawFree(ctx, x, y, freeIcon);
-        return;
-      }
-      try {
-        const img = await loadImage(`${opts.jacketBase}${cell.jacketLink}`);
-        if (isCancelled()) return;
-        ctx.drawImage(img, x, y, CELL, CELL);
-      } catch {
-        if (isCancelled()) return;
-        ctx.fillStyle = "#999999";
-        ctx.fillRect(x, y, CELL, CELL);
-      }
-      if (cell.cleared) drawClearedOverlay(ctx, x, y);
-    })
-  );
-  if (isCancelled()) return;
+  drawFinish(ctx, card, { ...opts, outline: true });
+}
 
-  // 署名
+/** そろった列の線・埋めた数・署名・枠（曲名・お題で共通）。 */
+export function drawFinish(
+  ctx: CanvasRenderingContext2D,
+  card: readonly ("FREE" | { cleared: boolean })[],
+  opts: { borderColor: string; markColor: string; outline?: boolean }
+) {
+  const progress = progressOf(card);
+  const center = (i: number) => [MARGIN + (i % 5) * CELL + CELL / 2, MARGIN + Math.floor(i / 5) * CELL + CELL / 2];
+  ctx.save();
+  ctx.lineCap = "round";
+  // お題は下の文字が読めるよう半透明に。ジャケットの上は白い縁を付けてほぼ不透明に
+  ctx.globalAlpha = opts.outline ? 0.95 : 0.65;
+  for (const li of progress.lines) {
+    const line = BINGO_LINES[li];
+    const [x1, y1] = center(line[0]);
+    const [x2, y2] = center(line[4]);
+    const strokes: [string, number][] = opts.outline ? [["#ffffff", 14], [opts.markColor, 8]] : [[opts.markColor, 8]];
+    for (const [color, width] of strokes) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+
+  // 左下に埋めた数。そろっていれば BINGO!
+  ctx.textAlign = "left";
+  ctx.textBaseline = "bottom";
+  ctx.font = "bold 14px sans-serif";
+  ctx.fillStyle = "#334155";
+  const base = `埋めたマス ${progress.filled}/${progress.total}`;
+  ctx.fillText(base, MARGIN, CANVAS_SIZE - 2);
+  if (progress.bingo) {
+    ctx.fillStyle = opts.markColor;
+    ctx.fillText("BINGO!", MARGIN + ctx.measureText(base).width + 8, CANVAS_SIZE - 2);
+  }
+
+  drawSignatureAndFrame(ctx, opts.borderColor);
+}
+
+/** 右下の署名と角丸の枠（曲名・お題で共通）。 */
+export function drawSignatureAndFrame(ctx: CanvasRenderingContext2D, borderColor: string) {
   ctx.fillStyle = "#000000";
   ctx.font = "14px sans-serif";
   ctx.textAlign = "right";
   ctx.textBaseline = "bottom";
   ctx.fillText("Created by Sekai-Master @YesNoritake", CANVAS_SIZE - 4, CANVAS_SIZE - 2);
 
-  // 角丸枠
-  ctx.strokeStyle = opts.borderColor;
+  ctx.strokeStyle = borderColor;
   ctx.lineWidth = 4;
   drawRoundedRect(ctx, MARGIN, MARGIN, CELL * 5, CELL * 5, 10);
   ctx.stroke();

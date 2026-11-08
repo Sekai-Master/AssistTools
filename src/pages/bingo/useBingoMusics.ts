@@ -7,9 +7,10 @@ export interface AliasEntry {
 }
 
 const isStr = (v: unknown): v is string => typeof v === "string";
+const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const isBool = (v: unknown): v is boolean => typeof v === "boolean";
 
-function parseMusics(raw: unknown): BingoMusic[] {
+export function parseMusics(raw: unknown): BingoMusic[] {
   if (!Array.isArray(raw)) return [];
   const out: BingoMusic[] = [];
   for (const item of raw) {
@@ -23,6 +24,8 @@ function parseMusics(raw: unknown): BingoMusic[] {
       title: r.title,
       pronunciation: isStr(r.pronunciation) ? r.pronunciation : undefined,
       artistName: isStr(r.artistName) ? r.artistName : undefined,
+      creatorArtistId: isNum(r.creatorArtistId) ? r.creatorArtistId : undefined,
+      musicTime: isNum(r.music_time) ? r.music_time : undefined,
       default: typeof r.default === "number" ? r.default : 0,
       Unit: r.Unit,
       categories: r.categories.filter(isStr),

@@ -1,315 +1,299 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { Panel } from "../../components/ui/Panel";
-import { NeuButton } from "../../components/ui/NeuButton";
 import { ActionButton } from "../../components/ui/ActionButton";
-import { NeuInput } from "../../components/ui/NeuInput";
+import { NeuButton } from "../../components/ui/NeuButton";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
-import { useBingoMusics } from "./useBingoMusics";
-import {
-  type BingoMusic,
-  type Cell,
-  type CenterMode,
-  buildRandomCard,
-  decodeSeed,
-  encodeSeed,
-  filterForGeneration,
-  pickBorderColor,
-} from "./bingoLogic";
-import { drawBingoCard } from "./bingoCanvas";
-import { BingoTable } from "./BingoTable";
 import { SongSearchModal } from "../../components/SongSearchModal";
+import { resolveColor } from "../../lib/canvasColor";
+import { useBingoMusics } from "./useBingoMusics";
+import { type Cell, buildRandomCard, filterForGeneration, pickBorderColor } from "./bingoLogic";
+import { type OdaiCell, buildOdaiCandidates, buildOdaiCard } from "./odaiLogic";
+import { progressOf } from "./bingoProgress";
 import {
-  ALL_CATEGORY_VALUES,
-  ALL_TYPE_VALUES,
-  ALL_UNIT_VALUES,
-  CATEGORY_OPTIONS,
-  TYPE_OPTIONS,
-  UNIT_OPTIONS,
-} from "./bingoConstants";
+  CARD_PARAM,
+  type CardKind,
+  type KindedCard,
+  cardCode,
+  cardLink,
+  decodeCardCode,
+  extractCode,
+  shareText,
+} from "./bingoShare";
+import { saveBingo } from "./bingoStorage";
+import { canReplaceSilently, errorText, restoreInitial } from "./bingoRestore";
+import { drawBingoCard } from "./bingoCanvas";
+import { drawOdaiCard } from "./odaiCanvas";
+import { BingoCardGrid } from "./BingoCardGrid";
+import { BingoSettings, type SongFilters } from "./BingoSettings";
+import { BingoShareBar } from "./BingoShareBar";
+import { ALL_CATEGORY_VALUES, ALL_TYPE_VALUES, ALL_UNIT_VALUES } from "./bingoConstants";
 
 const base = import.meta.env.BASE_URL;
 const JACKET_BASE = `${base}MusicDatas/jacket/`;
 const FREE_ICON = `${base}images/icon.webp`;
 
-/** トグルできるチップ群（複数選択）。 */
-function ToggleChips<T extends string | boolean>({
-  options,
-  selected,
-  onToggle,
-}: {
-  options: { value: T; label: string }[];
-  selected: Set<T>;
-  onToggle: (v: T) => void;
-}) {
+/** 種類ごとの 1 行の説明。曲名はほぼ埋まらない（1 曲が載る確率 24/740）ので、既定はお題。 */
+const KIND_HINT: Record<CardKind, string> = {
+  odai: "マスはお題。流れた曲が当てはまるお題を埋める",
+  song: "マスは曲。流れた曲のマスを埋める",
+};
+
+const DEFAULT_FILTERS: SongFilters = {
+  units: new Set(ALL_UNIT_VALUES),
+  categories: new Set(ALL_CATEGORY_VALUES),
+  types: new Set(ALL_TYPE_VALUES),
+  centerMode: "free",
+  centerSong: null,
+};
+
+export default function BingoGenerator() {
+  const data = useBingoMusics();
+  // 楽曲データが届いたら作り直す。途中経過とリンクのカードを state の初期値で戻すため
   return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((o) => (
-        <NeuButton
-          key={String(o.value)}
-          active={selected.has(o.value)}
-          onClick={() => onToggle(o.value)}
-          className="!px-3 !py-1 !text-xs"
-        >
-          {o.label}
-        </NeuButton>
-      ))}
-    </div>
+    <ToolPage morphKey="tool:bingo" title="BINGOカードジェネレーター" icon="grid_on">
+      <BingoBoard key={data.musics.length > 0 ? "ready" : "loading"} {...data} />
+    </ToolPage>
   );
 }
 
-export default function BingoGenerator() {
-  const { musics, aliases, loading, error: dataError } = useBingoMusics();
+function BingoBoard({
+  musics,
+  aliases,
+  loading,
+  error: dataError,
+}: ReturnType<typeof useBingoMusics>) {
+  const [initial] = useState(() =>
+    restoreInitial(musics, new URLSearchParams(window.location.search).get(CARD_PARAM))
+  );
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // 書き出し画像の描き終わり。共有・保存はこれを待ってから画像にする（埋めた直後でも最新の絵）
+  const drawn = useRef<Promise<void>>(Promise.resolve());
 
-  const [mode, setMode] = useState<"random" | "seed">("random");
-  const [units, setUnits] = useState(new Set(ALL_UNIT_VALUES));
-  const [categories, setCategories] = useState(new Set(ALL_CATEGORY_VALUES));
-  const [types, setTypes] = useState(new Set(ALL_TYPE_VALUES));
-  const [centerMode, setCenterMode] = useState<CenterMode>("free");
-  const [centerSong, setCenterSong] = useState<BingoMusic | null>(null);
-  const [seedInput, setSeedInput] = useState("");
-  const [card, setCard] = useState<Cell[] | null>(null);
-  const [borderColor, setBorderColor] = useState("#ff9900");
-  const [editing, setEditing] = useState<number | "center" | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [kind, setKind] = useState<CardKind>(initial.kind);
+  const [odaiCard, setOdaiCard] = useState<OdaiCell[] | null>(initial.odai);
+  const [songCard, setSongCard] = useState<Cell[] | null>(initial.song);
+  const [filters, setFilters] = useState<SongFilters>(DEFAULT_FILTERS);
+  const [pickingCenter, setPickingCenter] = useState(false);
+  const [borderColor, setBorderColor] = useState(pickBorderColor);
+  const [error, setError] = useState<string | null>(initial.error);
+  const [pendingLink, setPendingLink] = useState<KindedCard | null>(initial.pendingLink);
+  const ready = musics.length > 0;
 
-  // カード/枠線色が変わるたび Canvas を再描画。
-  // 非同期描画中に次の描画が始まったら古い方を中断する（レース防止）。
+  const odaiCandidates = useMemo(() => buildOdaiCandidates(musics), [musics]);
+
+  const applyCard = useCallback((kc: KindedCard) => {
+    if (kc.kind === "odai") setOdaiCard(kc.card);
+    else setSongCard(kc.card);
+    setKind(kc.kind);
+  }, []);
+
+  // リンクのカードを読んだ後はリンクを外す（開き直したときに、埋めた途中が人のカードで上書きされないように）。
+  // ★ ルーターの setSearchParams を使うと同じ /bingo でも画面遷移の演出が走るので、履歴を直接書き換える
   useEffect(() => {
-    if (!card || !canvasRef.current) return;
+    if (!ready) return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has(CARD_PARAM)) return;
+    url.searchParams.delete(CARD_PARAM);
+    window.history.replaceState(window.history.state, "", url);
+  }, [ready]);
+
+  // 途中経過を残す（楽曲データが届く前の空のカードで上書きしない）
+  useEffect(() => {
+    if (!ready) return;
+    saveBingo({
+      kind,
+      ...(odaiCard ? { odai: cardCode({ kind: "odai", card: odaiCard }) } : {}),
+      ...(songCard ? { song: cardCode({ kind: "song", card: songCard }) } : {}),
+    });
+  }, [ready, kind, odaiCard, songCard]);
+
+  const current = useMemo<KindedCard | null>(
+    () =>
+      kind === "odai"
+        ? odaiCard
+          ? { kind, card: odaiCard }
+          : null
+        : songCard
+          ? { kind, card: songCard }
+          : null,
+    [kind, odaiCard, songCard]
+  );
+
+  // 書き出し画像は隠した canvas に描いておく（共有・保存のとき使う）
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !current) return;
     let cancelled = false;
-    drawBingoCard(
-      canvasRef.current,
-      card,
-      { jacketBase: JACKET_BASE, freeIconUrl: FREE_ICON, borderColor },
-      () => cancelled
-    );
+    const isCancelled = () => cancelled;
+    const markColor = resolveColor(canvas, "var(--unit-color)", "#ff9900");
+    drawn.current =
+      current.kind === "odai"
+        ? drawOdaiCard(canvas, current.card, { freeIconUrl: FREE_ICON, borderColor, markColor }, isCancelled)
+        : drawBingoCard(
+            canvas,
+            current.card,
+            { jacketBase: JACKET_BASE, freeIconUrl: FREE_ICON, borderColor, markColor },
+            isCancelled
+          );
     return () => {
       cancelled = true;
     };
-  }, [card, borderColor]);
+  }, [current, borderColor]);
 
-  // 中央マス「指定」で曲が未選択なら生成できない（buildRandomCard も throw するが、
-  // その前に UI で無効化して無駄な操作＋既存カード消去を防ぐ）。
-  const centerSongMissing = mode === "random" && centerMode === "specified" && !centerSong;
+  const getImage = useCallback(async () => {
+    await drawn.current.catch(() => undefined);
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+  }, []);
 
-  const toggle = <T,>(set: Set<T>, setter: (s: Set<T>) => void, v: T) => {
-    const next = new Set(set);
-    if (next.has(v)) next.delete(v);
-    else next.add(v);
-    setter(next);
-  };
-
-  const handleGenerate = () => {
+  const newCard = () => {
+    if (current && progressOf(current.card).filled > 0 && !window.confirm("いまのカードを消して、新しく作りますか？")) {
+      return;
+    }
     setError(null);
-    setNotice(null);
     try {
-      if (mode === "seed") {
-        setCard(decodeSeed(seedInput, musics));
+      if (kind === "odai") {
+        setOdaiCard(buildOdaiCard(odaiCandidates));
       } else {
-        const pool = filterForGeneration(musics, units, categories, types);
-        setCard(buildRandomCard(pool, centerMode, centerSong));
+        const pool = filterForGeneration(musics, filters.units, filters.categories, filters.types);
+        setSongCard(buildRandomCard(pool, filters.centerMode, filters.centerSong));
       }
       setBorderColor(pickBorderColor());
     } catch (e) {
-      setCard(null);
-      setError(e instanceof Error ? e.message : "生成に失敗しました。");
+      setError(errorText(e, "カードを作れませんでした"));
     }
   };
 
-  const toggleCleared = (i: number) =>
-    setCard((prev) =>
-      prev
-        ? prev.map((c, j) => (j === i && c !== "FREE" ? { ...c, cleared: !c.cleared } : c))
-        : prev
-    );
-
-  const replaceCell = (music: BingoMusic) => {
-    if (editing === null) return;
-    if (editing === "center") {
-      setCenterSong(music);
-    } else {
-      const idx = editing;
-      setCard((prev) => (prev ? prev.map((c, j) => (j === idx ? { ...music, cleared: false } : c)) : prev));
-    }
-    setEditing(null);
-  };
-
-  const copyImage = async () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
-      try {
-        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-        setNotice("画像をクリップボードにコピーしました。");
-      } catch {
-        setError("コピーに失敗しました（ブラウザの権限をご確認ください）。");
-      }
-    }, "image/png");
-  };
-
-  const saveImage = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const a = document.createElement("a");
-    a.href = canvas.toDataURL("image/png");
-    a.download = "bingo_card.png";
-    a.click();
-  };
-
-  const issueSeed = async () => {
-    if (!card) return;
-    const seed = encodeSeed(card);
+  const openCode = (input: string) => {
     try {
-      await navigator.clipboard.writeText(seed);
-      setNotice(`シード値をコピーしました: ${seed}`);
-    } catch {
-      setNotice(`シード値: ${seed}`);
+      const kc = decodeCardCode(extractCode(input), musics);
+      const existing = kc.kind === "odai" ? odaiCard : songCard;
+      if (!canReplaceSilently(existing, kc) && !window.confirm("いまのカードを消して、このコードのカードを開きますか？")) {
+        return;
+      }
+      applyCard(kc);
+      setError(null);
+    } catch (e) {
+      setError(errorText(e, "コードを読めませんでした"));
     }
   };
+
+  // useModalA11y は onClose が変わるたびに掛け直すので、同じ関数を渡す
+  const closeCenterPicker = useCallback(() => setPickingCenter(false), []);
+
+  const centerMissing = kind === "song" && filters.centerMode === "specified" && !filters.centerSong;
+  const code = current ? cardCode(current) : "";
+  const link = typeof window === "undefined" ? "" : cardLink(`${window.location.origin}${base}`, code);
 
   return (
-    <ToolPage morphKey="tool:bingo" title="BINGOカードジェネレーター" icon="grid_on">
+    <>
       {dataError && (
         <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
           {dataError}
         </div>
       )}
-      <Panel title="生成モード">
+      <Panel>
         <SegmentedControl
           options={[
-            { value: "random", label: "ランダム" },
-            { value: "seed", label: "シード値" },
+            { value: "odai", label: "お題ビンゴ" },
+            { value: "song", label: "曲名ビンゴ" },
           ]}
-          value={mode}
-          onChange={setMode}
+          value={kind}
+          buttonClassName="min-h-11"
+          onChange={(k) => {
+            setKind(k);
+            setError(null);
+          }}
         />
-        {mode === "seed" && (
-          <NeuInput
-            className="mt-4"
-            value={seedInput}
-            onChange={(e) => setSeedInput(e.target.value)}
-            placeholder="50文字のシード値を貼り付け"
-          />
+        <p className="mt-2 text-sm text-slate-600">{KIND_HINT[kind]}</p>
+        <ActionButton
+          onClick={newCard}
+          disabled={loading || centerMissing}
+          className="mt-4 min-h-12 w-full text-base"
+        >
+          {loading ? "楽曲データ読込中…" : centerMissing ? "中央マスの曲を選んでください" : "新しいカードを作る"}
+        </ActionButton>
+        {error && (
+          <p className="mt-3 text-sm text-rose-600" role="alert">
+            {error}
+          </p>
         )}
-      </Panel>
-
-      {mode === "random" && (
-        <Panel title="絞り込み">
-          <div className="space-y-4">
-            <div>
-              <p className="mb-1 text-xs font-bold text-slate-500">ユニット</p>
-              <ToggleChips
-                options={UNIT_OPTIONS}
-                selected={units}
-                onToggle={(v) => toggle(units, setUnits, v)}
-              />
-            </div>
-            <div>
-              <p className="mb-1 text-xs font-bold text-slate-500">MV種別</p>
-              <ToggleChips
-                options={CATEGORY_OPTIONS}
-                selected={categories}
-                onToggle={(v) => toggle(categories, setCategories, v)}
-              />
-            </div>
-            <div>
-              <p className="mb-1 text-xs font-bold text-slate-500">曲種</p>
-              <ToggleChips
-                options={TYPE_OPTIONS}
-                selected={types}
-                onToggle={(v) => toggle(types, setTypes, v)}
-              />
-            </div>
-            <div>
-              <p className="mb-1 text-xs font-bold text-slate-500">中央マス</p>
-              <SegmentedControl
-                options={[
-                  { value: "free", label: "FREE" },
-                  { value: "random", label: "ランダム" },
-                  { value: "specified", label: "指定" },
-                ]}
-                value={centerMode}
-                onChange={setCenterMode}
-              />
-              {centerMode === "specified" && (
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-sm text-slate-600">
-                    {centerSong ? centerSong.title : "未選択"}
-                  </span>
-                  <NeuButton className="!px-3 !py-1 !text-xs" onClick={() => setEditing("center")}>
-                    曲を選択
-                  </NeuButton>
-                </div>
-              )}
+        {pendingLink && (
+          <div className="mt-4 rounded-lg border border-slate-300 p-4" role="status">
+            <p className="text-sm text-slate-700">リンクのカードを開きますか？いまのカードは消えます</p>
+            <div className="mt-3 flex gap-3">
+              <NeuButton
+                className="min-h-11 flex-1 !px-2"
+                onClick={() => {
+                  applyCard(pendingLink);
+                  setPendingLink(null);
+                }}
+              >
+                開く
+              </NeuButton>
+              <NeuButton className="min-h-11 flex-1 !px-2" onClick={() => setPendingLink(null)}>
+                いまのまま
+              </NeuButton>
             </div>
           </div>
+        )}
+        <BingoSettings
+          kind={kind}
+          filters={filters}
+          onFiltersChange={setFilters}
+          onPickCenter={() => setPickingCenter(true)}
+          onOpenCode={openCode}
+        />
+      </Panel>
+
+      {current && (
+        <Panel title="カード">
+          {current.kind === "odai" ? (
+            <BingoCardGrid
+              kind="odai"
+              card={current.card}
+              musics={musics}
+              aliases={aliases}
+              jacketBase={JACKET_BASE}
+              onChange={setOdaiCard}
+            />
+          ) : (
+            <BingoCardGrid
+              kind="song"
+              card={current.card}
+              musics={musics}
+              aliases={aliases}
+              jacketBase={JACKET_BASE}
+              onChange={setSongCard}
+            />
+          )}
+          <BingoShareBar
+            key={current.kind}
+            getImage={getImage}
+            link={link}
+            text={shareText(current.kind, progressOf(current.card))}
+            fileName={current.kind === "odai" ? "odai_bingo_card.png" : "bingo_card.png"}
+          />
         </Panel>
       )}
+      {/* 書き出し用。画面のカードは上のマスが主役なので、画像は隠して描く */}
+      <canvas ref={canvasRef} className="hidden" />
 
-      <ActionButton
-        onClick={handleGenerate}
-        disabled={loading || centerSongMissing}
-        className="w-full text-base"
-      >
-        {loading
-          ? "楽曲データ読込中…"
-          : centerSongMissing
-            ? "中央マスの曲を選択してください"
-            : "カードを生成"}
-      </ActionButton>
-
-      {error && (
-        <div className="neu-panel p-4 text-sm text-rose-600" role="alert">
-          {error}
-        </div>
-      )}
-      {notice && (
-        <div className="neu-panel p-4 text-sm text-slate-600 break-all" role="status">
-          {notice}
-        </div>
-      )}
-
-      {card && (
-        <>
-          <Panel title="カード">
-            <div className="flex justify-center">
-              <canvas
-                ref={canvasRef}
-                className="max-w-full h-auto rounded-lg"
-                style={{ width: 520 }}
-              />
-            </div>
-            <div className="mt-4 flex flex-wrap gap-3 justify-center">
-              <NeuButton onClick={copyImage}>画像をコピー</NeuButton>
-              <NeuButton onClick={saveImage}>画像を保存</NeuButton>
-              <NeuButton onClick={issueSeed}>シードを発行</NeuButton>
-            </div>
-          </Panel>
-
-          <Panel title="マス一覧（曲名で差し替え／状態でクリア切替）">
-            <BingoTable
-              card={card}
-              jacketBase={JACKET_BASE}
-              onToggleCleared={toggleCleared}
-              onEditCell={(i) => setEditing(i)}
-            />
-          </Panel>
-        </>
-      )}
-
-      {editing !== null && (
+      {pickingCenter && (
         <SongSearchModal
           musics={musics}
           aliases={aliases}
           jacketBase={JACKET_BASE}
-          onSelect={replaceCell}
-          onClose={() => setEditing(null)}
+          title="中央マスの曲を選ぶ"
+          onSelect={(m) => {
+            setFilters((f) => ({ ...f, centerSong: m }));
+            setPickingCenter(false);
+          }}
+          onClose={closeCenterPicker}
         />
       )}
-    </ToolPage>
+    </>
   );
 }
