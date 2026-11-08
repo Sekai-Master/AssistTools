@@ -19,17 +19,27 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
  * 埋めた印: 色で薄く覆い、丸を付ける。絵や文字が読める濃さにする
  * （以前の赤い斜めの「CLEARED」判子は、絵と文字を隠してうるさかった）。
  */
-export function drawFilledMark(ctx: CanvasRenderingContext2D, x: number, y: number, color: string) {
+export function drawFilledMark(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  color: string,
+  onJacket = false
+) {
   ctx.save();
-  ctx.globalAlpha = 0.28;
+  // ジャケットの上は絵が派手なので、覆いを濃くし、丸を不透明にして白い縁を付ける
+  ctx.globalAlpha = onJacket ? 0.52 : 0.28;
   ctx.fillStyle = color;
   ctx.fillRect(x, y, CELL, CELL);
-  ctx.globalAlpha = 0.6;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 6;
-  ctx.beginPath();
-  ctx.arc(x + CELL / 2, y + CELL / 2, 36, 0, Math.PI * 2);
-  ctx.stroke();
+  ctx.globalAlpha = onJacket ? 1 : 0.6;
+  const strokes: [string, number][] = onJacket ? [["#ffffff", 12], [color, 8]] : [[color, 6]];
+  for (const [stroke, width] of strokes) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.arc(x + CELL / 2, y + CELL / 2, 34, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -121,7 +131,7 @@ export async function drawBingoCard(
       ctx.fillStyle = "#999999";
       ctx.fillRect(x, y, CELL, CELL);
     }
-    if (cell.cleared) drawFilledMark(ctx, x, y, opts.markColor);
+    if (cell.cleared) drawFilledMark(ctx, x, y, opts.markColor, true);
   });
 
   drawFinish(ctx, card, { ...opts, outline: true });
@@ -137,8 +147,8 @@ export function drawFinish(
   const center = (i: number) => [MARGIN + (i % 5) * CELL + CELL / 2, MARGIN + Math.floor(i / 5) * CELL + CELL / 2];
   ctx.save();
   ctx.lineCap = "round";
-  // 下の絵や文字が読めるよう半透明に
-  ctx.globalAlpha = 0.65;
+  // お題は下の文字が読めるよう半透明に。ジャケットの上は白い縁を付けてほぼ不透明に
+  ctx.globalAlpha = opts.outline ? 0.95 : 0.65;
   for (const li of progress.lines) {
     const line = BINGO_LINES[li];
     const [x1, y1] = center(line[0]);

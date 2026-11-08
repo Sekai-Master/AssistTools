@@ -24,14 +24,30 @@ type Props = Common &
 const CELL_BASE =
   "relative flex items-center justify-center overflow-hidden rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]";
 
-/** 埋めた印: ページの色で薄く覆い、丸を付ける（絵や文字が読める濃さ）。 */
-function FilledMark() {
+/**
+ * 埋めた印: ページの色で覆い、丸を付ける。
+ * お題（文字のマス）は文字が読める薄さ。曲名（ジャケットの上）は絵が派手なので、
+ * 覆いを濃くし、丸を太く不透明にして白い縁を付ける（どんな絵の上でも埋めたと分かるように）。
+ */
+function FilledMark({ onJacket }: { onJacket: boolean }) {
   return (
     <span
       aria-hidden
-      className="pointer-events-none absolute inset-0 bg-[color:color-mix(in_srgb,var(--unit-color)_28%,transparent)]"
+      className={cn(
+        "pointer-events-none absolute inset-0",
+        onJacket
+          ? "bg-[color:color-mix(in_srgb,var(--unit-color)_52%,transparent)]"
+          : "bg-[color:color-mix(in_srgb,var(--unit-color)_28%,transparent)]"
+      )}
     >
-      <span className="absolute left-1/2 top-1/2 aspect-square w-4/5 max-w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-[color:var(--unit-color)] opacity-60" />
+      <span
+        className={cn(
+          "absolute left-1/2 top-1/2 aspect-square max-w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border-[color:var(--unit-color)]",
+          onJacket
+            ? "w-3/4 border-[6px] shadow-[0_0_0_2px_#fff,inset_0_0_0_2px_#fff]"
+            : "w-4/5 border-4 opacity-60"
+        )}
+      />
     </span>
   );
 }
@@ -79,7 +95,7 @@ function BingoLines({ lines, outline }: { lines: number[]; outline: boolean }) {
         const [x1, y1] = center(line[0]);
         const [x2, y2] = center(line[4]);
         return (
-          <g key={li} strokeLinecap="round" opacity={0.65}>
+          <g key={li} strokeLinecap="round" opacity={outline ? 0.95 : 0.65}>
             {outline && (
               <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#fff" strokeWidth={10} vectorEffect="non-scaling-stroke" />
             )}
@@ -167,7 +183,7 @@ export function BingoCardGrid(props: Props) {
                     "flex-col border border-slate-300 py-2 text-center leading-tight text-slate-700 hover:border-slate-400"
                   )}
                 >
-                  {cell.cleared && <FilledMark />}
+                  {cell.cleared && <FilledMark onJacket={false} />}
                   {odai.unit && (
                     <span
                       aria-hidden
@@ -195,7 +211,7 @@ export function BingoCardGrid(props: Props) {
                   loading="lazy"
                   onError={onJacketError}
                 />
-                {cell.cleared && <FilledMark />}
+                {cell.cleared && <FilledMark onJacket />}
               </button>
             );
           })}
