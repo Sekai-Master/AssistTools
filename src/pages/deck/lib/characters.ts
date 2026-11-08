@@ -145,6 +145,11 @@ export const RARITY_LABEL: Record<string, string> = {
 
 const BY_CH = new Map(CHARACTERS.map((c) => [c.ch, c]));
 
+/** 短い呼び名（CHARACTERS の givenName）。知らない ch は characterName と同じく「キャラ27」 */
+export function characterShort(ch: number): string {
+  return BY_CH.get(ch)?.givenName ?? `キャラ${ch}`;
+}
+
 /**
  * キャラ名。**知らない ch でも落ちない**（配信データが先に増える可能性があるため。
  * 新キャラが来たら「キャラ27」と出て、こちらの表を直す合図になる）。

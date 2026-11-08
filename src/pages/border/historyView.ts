@@ -88,12 +88,72 @@ export function parseFinals(raw: unknown): HistoryEvent[] {
   return out;
 }
 
+/** 箱イベ／混合イベの絞り込み。表の unit が "none" の回が混合、それ以外（ユニット名）が箱 */
+export type UnitFilter = "all" | "box" | "mixed";
+export const UNIT_FILTERS: readonly { value: UnitFilter; label: string }[] = [
+  { value: "all", label: "すべて" },
+  { value: "box", label: "箱" },
+  { value: "mixed", label: "混合" },
+];
+
+export const isMixed = (e: HistoryEvent): boolean => e.unit === "none";
+
+/** 回の id → その回のボーナスキャラ（ch）。VS はユニット違いも同じ ch にまとめてある */
+export type BonusChars = ReadonlyMap<number, ReadonlySet<number>>;
+
+export interface PoolFilter {
+  unit?: UnitFilter;
+  /** 選んだキャラ（ch）。全員がボーナスキャラに入っている回だけ残す */
+  chars?: readonly number[];
+  /** キャラで絞るときに使う。まだ無い（読み込み中・失敗）ならキャラでは絞らない */
+  bonus?: BonusChars | null;
+}
+
 /**
- * 比べる回の集まり。選んだ種別の回に、選んでいる回を必ず加える
- *（「マラソンだけと比べたら何位か」を見られるように。選んだ回の種別を外しても位置づけは消さない）
+ * 比べる回の集まり。選んだ条件の回に、選んでいる回を必ず加える
+ *（「マラソンだけと比べたら何位か」を見られるように。選んだ回が条件から外れても位置づけは消さない）
  */
-export function poolOf(all: HistoryEvent[], types: readonly string[], target: HistoryEvent | null): HistoryEvent[] {
-  return all.filter((e) => types.includes(e.type) || e.id === target?.id);
+export function poolOf(all: HistoryEvent[], types: readonly string[], target: HistoryEvent | null, filter: PoolFilter = {}): HistoryEvent[] {
+  const { unit = "all", chars = [], bonus = null } = filter;
+  const byChars = chars.length > 0 && bonus != null;
+  return all.filter((e) => {
+    if (e.id === target?.id) return true;
+    if (!types.includes(e.type)) return false;
+    if (unit === "box" && isMixed(e)) return false;
+    if (unit === "mixed" && !isMixed(e)) return false;
+    if (byChars) {
+      const got = bonus.get(e.id);
+      if (!got || !chars.every((c) => got.has(c))) return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * bonuses.json（編成ビルダーの配信データ）から、回ごとのボーナスキャラを作る。
+ * deckBonuses の unitCharacterId を unitCharacters で ch に直す（VS のユニット違い 27〜 は 21〜26 になる）。
+ * 形の合わない行は捨てる。
+ */
+export function parseBonusChars(raw: unknown): Map<number, Set<number>> {
+  const out = new Map<number, Set<number>>();
+  if (!raw || typeof raw !== "object") return out;
+  const { unitCharacters, deckBonuses } = raw as { unitCharacters?: unknown; deckBonuses?: unknown };
+  if (!Array.isArray(unitCharacters) || !Array.isArray(deckBonuses)) return out;
+  const chOf = new Map<number, number>();
+  for (const u of unitCharacters) {
+    const r = u as { id?: unknown; ch?: unknown } | null;
+    if (r && finite(r.id) && finite(r.ch)) chOf.set(r.id, r.ch);
+  }
+  for (const b of deckBonuses) {
+    const r = b as { eventId?: unknown; unitCharacterId?: unknown } | null;
+    if (!r || !finite(r.eventId) || !finite(r.unitCharacterId)) continue;
+    const ch = chOf.get(r.unitCharacterId);
+    if (ch == null) continue;
+    const set = out.get(r.eventId) ?? new Set<number>();
+    set.add(ch);
+    out.set(r.eventId, set);
+  }
+  return out;
 }
 
 export const perDay = (e: HistoryEvent, rank: HistoryRank): number => (e.finals[rank] / e.hours) * 24;
@@ -175,6 +235,32 @@ export function pickTypes(param: string | null): string[] {
   const known: readonly string[] = HISTORY_TYPES.map((t) => t.value);
   const got = (param ?? "").split(",").filter((t) => known.includes(t));
   return got.length > 0 ? got : [...DEFAULT_TYPES];
+}
+
+/** URL の ?unit= を読む（box・mixed）。それ以外は all */
+export function pickUnit(param: string | null): UnitFilter {
+  return param === "box" || param === "mixed" ? param : "all";
+}
+
+/** URL の ?chars= を読む（カンマ区切りの ch）。1〜maxCh の整数だけ・重複なし・小さい順 */
+export function pickChars(param: string | null, maxCh = 26): number[] {
+  const got = (param ?? "")
+    .split(",")
+    .filter((x) => /^\d+$/.test(x))
+    .map(Number)
+    .filter((n) => n >= 1 && n <= maxCh);
+  return [...new Set(got)].sort((a, b) => a - b);
+}
+
+/**
+ * 絞り込みの条件を1行で（例「マラソン・混合・ミク」）。種別が全部なら「全種別」。
+ * nameOf はキャラの短い名前
+ */
+export function filterLabel(types: readonly string[], unit: UnitFilter, chars: readonly number[], nameOf: (ch: number) => string): string {
+  const typePart =
+    types.length === HISTORY_TYPES.length ? ["全種別"] : HISTORY_TYPES.filter((t) => types.includes(t.value)).map((t) => t.label);
+  const unitPart = unit === "all" ? [] : [unit === "box" ? "箱" : "混合"];
+  return [...typePart, ...unitPart, ...chars.map(nameOf)].join("・");
 }
 
 /** 回の番号を「87・90・93…ほか11回」のように縮めて書く */

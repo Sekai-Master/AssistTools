@@ -212,6 +212,25 @@ export async function allShapes(db: D1Database): Promise<Shape[]> {
   return r.results.map((x) => ({ eventId: x.event_id, rank: x.rank, final: x.final, share: JSON.parse(x.share) as (number | null)[] }))
 }
 
+/** 1回ぶんの形（順位ごとに1行・最大6行）。歴代ボーダーの推移のグラフが読む（主キーで引くので読み取りは行数ぶんだけ） */
+export async function shapesOf(db: D1Database, eventId: number): Promise<Shape[]> {
+  const r = await db.prepare('SELECT event_id, rank, final, share FROM shapes WHERE event_id = ?1 ORDER BY rank').bind(eventId).all<{
+    event_id: number
+    rank: number
+    final: number
+    share: string
+  }>()
+  // 公開の道から読むので、1行壊れていても回ごと 500 にしない。壊れた行は捨てる（#189 レビュー L3）
+  return r.results.flatMap((x) => {
+    try {
+      const share = JSON.parse(x.share) as unknown
+      return Array.isArray(share) ? [{ eventId: x.event_id, rank: x.rank, final: x.final, share: share as (number | null)[] }] : []
+    } catch {
+      return []
+    }
+  })
+}
+
 export async function upsertShapes(db: D1Database, shapes: readonly Shape[], now: number): Promise<void> {
   if (shapes.length === 0) return
   const stmt = db.prepare(
