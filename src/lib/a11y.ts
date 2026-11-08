@@ -29,7 +29,7 @@ export function clickableProps(onClick?: () => void) {
 /**
  * モーダルの共通アクセシビリティ。
  *  - Escape で閉じる
- *  - 背景スクロールをロック
+ *  - 背景スクロールをロック（PC はスクロールバーが消えた幅を右の余白で埋め、画面を左右にずらさない）
  *  - Tab をモーダル内で巡回させるフォーカストラップ
  *  - 開いたら先頭要素にフォーカス、閉じたら元の要素へ戻す
  * containerRef はダイアログ本体の要素。
@@ -43,7 +43,10 @@ export function useModalA11y(
     if (!isOpen) return;
     const container = containerRef.current;
     const prevFocus = document.activeElement as HTMLElement | null;
+    // スクロールバーの幅は止める前に測る（止めると消えて 0 になる）。スマホは重なる表示なので 0
+    const scrollbar = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = "hidden";
+    if (scrollbar > 0) document.body.style.paddingRight = `${scrollbar}px`;
 
     const focusables = (): HTMLElement[] => {
       if (!container) return [];
@@ -87,6 +90,7 @@ export function useModalA11y(
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
+      document.body.style.paddingRight = "";
       prevFocus?.focus?.();
     };
   }, [isOpen, onClose, containerRef]);
