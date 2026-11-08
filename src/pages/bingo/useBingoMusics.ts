@@ -9,6 +9,25 @@ export interface AliasEntry {
 const isStr = (v: unknown): v is string => typeof v === "string";
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const isBool = (v: unknown): v is boolean => typeof v === "boolean";
+const isCount = (v: unknown): v is number => isNum(v) && Number.isInteger(v) && v > 0;
+const count = (v: unknown): number | undefined => (isCount(v) ? v : undefined);
+
+/** お題ビンゴ用の項目（無い・型の違う値は「無い」にする）。 */
+function bingoFields(r: Record<string, unknown>): Partial<BingoMusic> {
+  const singers = Array.isArray(r.singers) ? r.singers.filter(isCount) : [];
+  return {
+    publishedAt: isNum(r.publishedAt) ? r.publishedAt : undefined,
+    singers: singers.length > 0 ? singers : undefined,
+    maxSingers: count(r.maxSingers),
+    hasAprilFool: r.hasAprilFool === true,
+    dancerCount: count(r.dancerCount),
+    lyricsByOther: r.lyricsByOther === true,
+    expertLevel: count(r.expertLevel),
+    masterLevel: count(r.masterLevel),
+    appendLevel: count(r.appendLevel),
+    masterNotes: count(r.masterNotes),
+  };
+}
 
 export function parseMusics(raw: unknown): BingoMusic[] {
   if (!Array.isArray(raw)) return [];
@@ -32,6 +51,7 @@ export function parseMusics(raw: unknown): BingoMusic[] {
       isNewlyWrittenMusic: isBool(r.isNewlyWrittenMusic) ? r.isNewlyWrittenMusic : false,
       collab: isStr(r.collab) ? r.collab : undefined,
       jacketLink: isStr(r.jacketLink) ? r.jacketLink : `jacket_s_${r.id}.webp`,
+      ...bingoFields(r),
     });
   }
   out.sort((a, b) => a.default - b.default);

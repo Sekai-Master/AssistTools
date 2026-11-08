@@ -14,18 +14,6 @@ interface Props {
   onClose: () => void;
 }
 
-const formatTime = (sec: number) =>
-  `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
-
-/** 判定しにくいお題（読みの頭・長さ・コラボ）は、判定に使う値を曲名の下に出す。 */
-function judgeHint(odai: Odai, m: BingoMusic): string | null {
-  if (odai.kind === "row") return m.pronunciation ?? null;
-  if (odai.kind === "length") return m.musicTime !== undefined ? formatTime(m.musicTime) : null;
-  // コラボはどのコラボの曲かを添える（東方Projectコラボ など）
-  if (odai.key === "oc") return m.collab ?? null;
-  return null;
-}
-
 /**
  * お題の小窓。上で埋める／戻す、下で当てはまる曲を確かめる。
  * 「流れた曲が本当にそのお題に当てはまるか」を見てから埋めるためのもの。
@@ -65,7 +53,8 @@ export function OdaiSheet({ odai, cleared, musics, jacketBase, onSetCleared, onC
       ) : (
         <ul className="mt-3 min-h-0 flex-1 overflow-y-auto rounded-lg bg-neu p-1 shadow-neu-inset">
           {songs.map((m) => {
-            const hint = judgeHint(odai, m);
+            // 判定しにくいお題（読み・長さ・追加・譜面・コラボ）は、判定に使う値を曲名の下に出す（odaiDefs.ts の hint）
+            const hint = odai.hint?.(m) ?? null;
             return (
               <li key={m.id} className="flex items-center gap-3 rounded px-2 py-1">
                 <img
