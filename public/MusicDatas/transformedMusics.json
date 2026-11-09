@@ -747,7 +747,8 @@
     "expertLevel": 24,
     "masterLevel": 29,
     "appendLevel": 25,
-    "masterNotes": 863
+    "masterNotes": 863,
+    "bannerCharacterId": 16
   },
   {
     "id": "054",
@@ -799,7 +800,8 @@
     "dancerCount": 3,
     "expertLevel": 24,
     "masterLevel": 28,
-    "masterNotes": 895
+    "masterNotes": 895,
+    "bannerCharacterId": 10
   },
   {
     "id": "057",
@@ -900,7 +902,8 @@
     "dancerCount": 3,
     "expertLevel": 26,
     "masterLevel": 29,
-    "masterNotes": 767
+    "masterNotes": 767,
+    "bannerCharacterId": 18
   },
   {
     "id": "063",
@@ -952,7 +955,8 @@
     "expertLevel": 26,
     "masterLevel": 30,
     "appendLevel": 31,
-    "masterNotes": 1190
+    "masterNotes": 1190,
+    "bannerCharacterId": 2
   },
   {
     "id": "066",
@@ -1518,7 +1522,8 @@
     "expertLevel": 23,
     "masterLevel": 28,
     "appendLevel": 26,
-    "masterNotes": 918
+    "masterNotes": 918,
+    "bannerCharacterId": 8
   },
   {
     "id": "090",
@@ -1543,7 +1548,8 @@
     "dancerCount": 1,
     "expertLevel": 26,
     "masterLevel": 31,
-    "masterNotes": 849
+    "masterNotes": 849,
+    "bannerCharacterId": 19
   },
   {
     "id": "091",
@@ -1727,7 +1733,8 @@
     "dancerCount": 1,
     "expertLevel": 26,
     "masterLevel": 31,
-    "masterNotes": 1106
+    "masterNotes": 1106,
+    "bannerCharacterId": 3
   },
   {
     "id": "098",
@@ -1779,7 +1786,8 @@
     "expertLevel": 26,
     "masterLevel": 31,
     "appendLevel": 30,
-    "masterNotes": 1257
+    "masterNotes": 1257,
+    "bannerCharacterId": 7
   },
   {
     "id": "100",
@@ -1833,7 +1841,8 @@
     "expertLevel": 26,
     "masterLevel": 30,
     "appendLevel": 32,
-    "masterNotes": 1197
+    "masterNotes": 1197,
+    "bannerCharacterId": 12
   },
   {
     "id": "102",
@@ -1883,7 +1892,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 29,
-    "masterNotes": 1054
+    "masterNotes": 1054,
+    "bannerCharacterId": 15
   },
   {
     "id": "104",
@@ -1935,7 +1945,8 @@
     "expertLevel": 22,
     "masterLevel": 28,
     "appendLevel": 28,
-    "masterNotes": 871
+    "masterNotes": 871,
+    "bannerCharacterId": 14
   },
   {
     "id": "106",
@@ -2116,7 +2127,8 @@
     "dancerCount": 1,
     "expertLevel": 27,
     "masterLevel": 31,
-    "masterNotes": 1235
+    "masterNotes": 1235,
+    "bannerCharacterId": 5
   },
   {
     "id": "113",
@@ -2218,7 +2230,8 @@
     "expertLevel": 25,
     "masterLevel": 28,
     "appendLevel": 26,
-    "masterNotes": 1247
+    "masterNotes": 1247,
+    "bannerCharacterId": 20
   },
   {
     "id": "117",
@@ -2476,7 +2489,8 @@
     "expertLevel": 24,
     "masterLevel": 29,
     "appendLevel": 29,
-    "masterNotes": 800
+    "masterNotes": 800,
+    "bannerCharacterId": 11
   },
   {
     "id": "127",
@@ -2503,7 +2517,8 @@
     "expertLevel": 27,
     "masterLevel": 32,
     "appendLevel": 33,
-    "masterNotes": 1224
+    "masterNotes": 1224,
+    "bannerCharacterId": 13
   },
   {
     "id": "128",
@@ -2582,7 +2597,8 @@
     "lyricsByOther": true,
     "expertLevel": 24,
     "masterLevel": 28,
-    "masterNotes": 814
+    "masterNotes": 814,
+    "bannerCharacterId": 2
   },
   {
     "id": "131",
@@ -2634,7 +2650,8 @@
     "expertLevel": 23,
     "masterLevel": 27,
     "appendLevel": 28,
-    "masterNotes": 814
+    "masterNotes": 814,
+    "bannerCharacterId": 4
   },
   {
     "id": "133",
@@ -2842,7 +2859,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 27,
-    "masterNotes": 802
+    "masterNotes": 802,
+    "bannerCharacterId": 7
   },
   {
     "id": "141",
@@ -2895,7 +2913,8 @@
     "dancerCount": 1,
     "expertLevel": 22,
     "masterLevel": 26,
-    "masterNotes": 547
+    "masterNotes": 547,
+    "bannerCharacterId": 18
   },
   {
     "id": "143",
@@ -2946,7 +2965,8 @@
     "dancerCount": 1,
     "expertLevel": 22,
     "masterLevel": 26,
-    "masterNotes": 814
+    "masterNotes": 814,
+    "bannerCharacterId": 6
   },
   {
     "id": "145",
@@ -3075,7 +3095,8 @@
     "expertLevel": 22,
     "masterLevel": 26,
     "appendLevel": 24,
-    "masterNotes": 703
+    "masterNotes": 703,
+    "bannerCharacterId": 17
   },
   {
     "id": "150",
@@ -3253,7 +3274,8 @@
     "expertLevel": 25,
     "masterLevel": 29,
     "appendLevel": 28,
-    "masterNotes": 798
+    "masterNotes": 798,
+    "bannerCharacterId": 9
   },
   {
     "id": "157",
@@ -3330,7 +3352,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 30,
-    "masterNotes": 1156
+    "masterNotes": 1156,
+    "bannerCharacterId": 3
   },
   {
     "id": "160",
@@ -3357,7 +3380,8 @@
     "expertLevel": 25,
     "masterLevel": 31,
     "appendLevel": 31,
-    "masterNotes": 1063
+    "masterNotes": 1063,
+    "bannerCharacterId": 16
   },
   {
     "id": "161",
@@ -3507,7 +3531,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 30,
-    "masterNotes": 875
+    "masterNotes": 875,
+    "bannerCharacterId": 15
   },
   {
     "id": "167",
@@ -3687,7 +3712,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 31,
-    "masterNotes": 1123
+    "masterNotes": 1123,
+    "bannerCharacterId": 1
   },
   {
     "id": "174",
@@ -3816,7 +3842,8 @@
     "dancerCount": 1,
     "expertLevel": 27,
     "masterLevel": 31,
-    "masterNotes": 1195
+    "masterNotes": 1195,
+    "bannerCharacterId": 14
   },
   {
     "id": "179",
@@ -3868,7 +3895,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 28,
-    "masterNotes": 1281
+    "masterNotes": 1281,
+    "bannerCharacterId": 12
   },
   {
     "id": "181",
@@ -3921,7 +3949,8 @@
     "expertLevel": 24,
     "masterLevel": 29,
     "appendLevel": 30,
-    "masterNotes": 1083
+    "masterNotes": 1083,
+    "bannerCharacterId": 9
   },
   {
     "id": "183",
@@ -4047,7 +4076,8 @@
     "expertLevel": 26,
     "masterLevel": 31,
     "appendLevel": 30,
-    "masterNotes": 850
+    "masterNotes": 850,
+    "bannerCharacterId": 20
   },
   {
     "id": "188",
@@ -4101,7 +4131,8 @@
     "expertLevel": 23,
     "masterLevel": 26,
     "appendLevel": 25,
-    "masterNotes": 592
+    "masterNotes": 592,
+    "bannerCharacterId": 19
   },
   {
     "id": "190",
@@ -4202,7 +4233,8 @@
     "expertLevel": 24,
     "masterLevel": 28,
     "appendLevel": 29,
-    "masterNotes": 785
+    "masterNotes": 785,
+    "bannerCharacterId": 5
   },
   {
     "id": "194",
@@ -4283,7 +4315,8 @@
     "expertLevel": 21,
     "masterLevel": 26,
     "appendLevel": 24,
-    "masterNotes": 601
+    "masterNotes": 601,
+    "bannerCharacterId": 1
   },
   {
     "id": "197",
@@ -4459,7 +4492,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 28,
-    "masterNotes": 999
+    "masterNotes": 999,
+    "bannerCharacterId": 17
   },
   {
     "id": "204",
@@ -4560,7 +4594,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 28,
-    "masterNotes": 855
+    "masterNotes": 855,
+    "bannerCharacterId": 4
   },
   {
     "id": "208",
@@ -4612,7 +4647,8 @@
     "lyricsByOther": true,
     "expertLevel": 23,
     "masterLevel": 26,
-    "masterNotes": 685
+    "masterNotes": 685,
+    "bannerCharacterId": 8
   },
   {
     "id": "210",
@@ -4664,7 +4700,8 @@
     "expertLevel": 23,
     "masterLevel": 27,
     "appendLevel": 29,
-    "masterNotes": 1062
+    "masterNotes": 1062,
+    "bannerCharacterId": 6
   },
   {
     "id": "212",
@@ -4690,7 +4727,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 27,
-    "masterNotes": 821
+    "masterNotes": 821,
+    "bannerCharacterId": 15
   },
   {
     "id": "213",
@@ -4819,7 +4857,8 @@
     "dancerCount": 1,
     "expertLevel": 23,
     "masterLevel": 27,
-    "masterNotes": 769
+    "masterNotes": 769,
+    "bannerCharacterId": 10
   },
   {
     "id": "218",
@@ -4997,7 +5036,8 @@
     "expertLevel": 26,
     "masterLevel": 29,
     "appendLevel": 32,
-    "masterNotes": 1188
+    "masterNotes": 1188,
+    "bannerCharacterId": 13
   },
   {
     "id": "225",
@@ -5306,7 +5346,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 30,
-    "masterNotes": 1237
+    "masterNotes": 1237,
+    "bannerCharacterId": 4
   },
   {
     "id": "237",
@@ -5331,7 +5372,8 @@
     "dancerCount": 1,
     "expertLevel": 21,
     "masterLevel": 26,
-    "masterNotes": 662
+    "masterNotes": 662,
+    "bannerCharacterId": 20
   },
   {
     "id": "238",
@@ -5381,7 +5423,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 29,
-    "masterNotes": 1159
+    "masterNotes": 1159,
+    "bannerCharacterId": 11
   },
   {
     "id": "240",
@@ -5508,7 +5551,8 @@
     "expertLevel": 24,
     "masterLevel": 30,
     "appendLevel": 29,
-    "masterNotes": 884
+    "masterNotes": 884,
+    "bannerCharacterId": 10
   },
   {
     "id": "245",
@@ -5609,7 +5653,8 @@
     "expertLevel": 26,
     "masterLevel": 32,
     "appendLevel": 31,
-    "masterNotes": 1343
+    "masterNotes": 1343,
+    "bannerCharacterId": 18
   },
   {
     "id": "249",
@@ -5708,7 +5753,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 29,
-    "masterNotes": 1172
+    "masterNotes": 1172,
+    "bannerCharacterId": 5
   },
   {
     "id": "253",
@@ -5838,7 +5884,8 @@
     "expertLevel": 24,
     "masterLevel": 30,
     "appendLevel": 31,
-    "masterNotes": 1262
+    "masterNotes": 1262,
+    "bannerCharacterId": 2
   },
   {
     "id": "258",
@@ -5888,7 +5935,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 30,
-    "masterNotes": 1019
+    "masterNotes": 1019,
+    "bannerCharacterId": 1
   },
   {
     "id": "260",
@@ -6014,7 +6062,8 @@
     "lyricsByOther": true,
     "expertLevel": 25,
     "masterLevel": 30,
-    "masterNotes": 880
+    "masterNotes": 880,
+    "bannerCharacterId": 7
   },
   {
     "id": "265",
@@ -6092,7 +6141,8 @@
     "expertLevel": 23,
     "masterLevel": 28,
     "appendLevel": 28,
-    "masterNotes": 1186
+    "masterNotes": 1186,
+    "bannerCharacterId": 11
   },
   {
     "id": "268",
@@ -6424,7 +6474,8 @@
     "expertLevel": 23,
     "masterLevel": 27,
     "appendLevel": 30,
-    "masterNotes": 1112
+    "masterNotes": 1112,
+    "bannerCharacterId": 12
   },
   {
     "id": "281",
@@ -6475,7 +6526,8 @@
     "dancerCount": 1,
     "expertLevel": 23,
     "masterLevel": 29,
-    "masterNotes": 1159
+    "masterNotes": 1159,
+    "bannerCharacterId": 14
   },
   {
     "id": "283",
@@ -6601,7 +6653,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 27,
-    "masterNotes": 918
+    "masterNotes": 918,
+    "bannerCharacterId": 8
   },
   {
     "id": "288",
@@ -6804,7 +6857,8 @@
     "dancerCount": 1,
     "expertLevel": 23,
     "masterLevel": 27,
-    "masterNotes": 832
+    "masterNotes": 832,
+    "bannerCharacterId": 6
   },
   {
     "id": "296",
@@ -6931,7 +6985,8 @@
     "expertLevel": 25,
     "masterLevel": 30,
     "appendLevel": 30,
-    "masterNotes": 937
+    "masterNotes": 937,
+    "bannerCharacterId": 17
   },
   {
     "id": "301",
@@ -7034,7 +7089,8 @@
     "expertLevel": 26,
     "masterLevel": 31,
     "appendLevel": 33,
-    "masterNotes": 1066
+    "masterNotes": 1066,
+    "bannerCharacterId": 19
   },
   {
     "id": "305",
@@ -7136,7 +7192,8 @@
     "dancerCount": 1,
     "expertLevel": 26,
     "masterLevel": 31,
-    "masterNotes": 1187
+    "masterNotes": 1187,
+    "bannerCharacterId": 7
   },
   {
     "id": "309",
@@ -7187,7 +7244,8 @@
     "expertLevel": 24,
     "masterLevel": 29,
     "appendLevel": 30,
-    "masterNotes": 1088
+    "masterNotes": 1088,
+    "bannerCharacterId": 3
   },
   {
     "id": "311",
@@ -7339,7 +7397,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 28,
-    "masterNotes": 1305
+    "masterNotes": 1305,
+    "bannerCharacterId": 9
   },
   {
     "id": "317",
@@ -7542,7 +7601,8 @@
     "expertLevel": 23,
     "masterLevel": 27,
     "appendLevel": 29,
-    "masterNotes": 981
+    "masterNotes": 981,
+    "bannerCharacterId": 15
   },
   {
     "id": "325",
@@ -7766,7 +7826,8 @@
     "dancerCount": 1,
     "expertLevel": 26,
     "masterLevel": 31,
-    "masterNotes": 1497
+    "masterNotes": 1497,
+    "bannerCharacterId": 13
   },
   {
     "id": "334",
@@ -8068,7 +8129,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 28,
-    "masterNotes": 984
+    "masterNotes": 984,
+    "bannerCharacterId": 18
   },
   {
     "id": "346",
@@ -8219,7 +8281,8 @@
     "dancerCount": 1,
     "expertLevel": 22,
     "masterLevel": 26,
-    "masterNotes": 1232
+    "masterNotes": 1232,
+    "bannerCharacterId": 2
   },
   {
     "id": "352",
@@ -8269,7 +8332,8 @@
     "dancerCount": 1,
     "expertLevel": 28,
     "masterLevel": 31,
-    "masterNotes": 982
+    "masterNotes": 982,
+    "bannerCharacterId": 20
   },
   {
     "id": "354",
@@ -8346,7 +8410,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 29,
-    "masterNotes": 851
+    "masterNotes": 851,
+    "bannerCharacterId": 9
   },
   {
     "id": "357",
@@ -8751,7 +8816,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 30,
-    "masterNotes": 1245
+    "masterNotes": 1245,
+    "bannerCharacterId": 10
   },
   {
     "id": "374",
@@ -8776,7 +8842,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 30,
-    "masterNotes": 1090
+    "masterNotes": 1090,
+    "bannerCharacterId": 5
   },
   {
     "id": "375",
@@ -8803,7 +8870,8 @@
     "expertLevel": 24,
     "masterLevel": 28,
     "appendLevel": 27,
-    "masterNotes": 821
+    "masterNotes": 821,
+    "bannerCharacterId": 1
   },
   {
     "id": "376",
@@ -9003,7 +9071,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 28,
-    "masterNotes": 812
+    "masterNotes": 812,
+    "bannerCharacterId": 4
   },
   {
     "id": "384",
@@ -9081,7 +9150,8 @@
     "dancerCount": 1,
     "expertLevel": 23,
     "masterLevel": 27,
-    "masterNotes": 909
+    "masterNotes": 909,
+    "bannerCharacterId": 14
   },
   {
     "id": "387",
@@ -9334,7 +9404,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 29,
-    "masterNotes": 952
+    "masterNotes": 952,
+    "bannerCharacterId": 13
   },
   {
     "id": "398",
@@ -9515,7 +9586,8 @@
     "dancerCount": 1,
     "expertLevel": 23,
     "masterLevel": 27,
-    "masterNotes": 781
+    "masterNotes": 781,
+    "bannerCharacterId": 12
   },
   {
     "id": "405",
@@ -9643,7 +9715,8 @@
     "dancerCount": 1,
     "expertLevel": 22,
     "masterLevel": 25,
-    "masterNotes": 725
+    "masterNotes": 725,
+    "bannerCharacterId": 17
   },
   {
     "id": "410",
@@ -9923,7 +9996,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 28,
-    "masterNotes": 728
+    "masterNotes": 728,
+    "bannerCharacterId": 11
   },
   {
     "id": "422",
@@ -9949,7 +10023,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 28,
-    "masterNotes": 863
+    "masterNotes": 863,
+    "bannerCharacterId": 5
   },
   {
     "id": "423",
@@ -9976,7 +10051,8 @@
     "expertLevel": 26,
     "masterLevel": 29,
     "appendLevel": 30,
-    "masterNotes": 1014
+    "masterNotes": 1014,
+    "bannerCharacterId": 3
   },
   {
     "id": "424",
@@ -10129,7 +10205,8 @@
     "expertLevel": 24,
     "masterLevel": 29,
     "appendLevel": 29,
-    "masterNotes": 983
+    "masterNotes": 983,
+    "bannerCharacterId": 8
   },
   {
     "id": "430",
@@ -10461,7 +10538,8 @@
     "dancerCount": 1,
     "expertLevel": 23,
     "masterLevel": 26,
-    "masterNotes": 595
+    "masterNotes": 595,
+    "bannerCharacterId": 2
   },
   {
     "id": "443",
@@ -10667,7 +10745,8 @@
     "expertLevel": 26,
     "masterLevel": 30,
     "appendLevel": 31,
-    "masterNotes": 1198
+    "masterNotes": 1198,
+    "bannerCharacterId": 14
   },
   {
     "id": "451",
@@ -10719,7 +10798,8 @@
     "dancerCount": 1,
     "expertLevel": 27,
     "masterLevel": 30,
-    "masterNotes": 1014
+    "masterNotes": 1014,
+    "bannerCharacterId": 16
   },
   {
     "id": "454",
@@ -10823,7 +10903,8 @@
     "expertLevel": 24,
     "masterLevel": 28,
     "appendLevel": 27,
-    "masterNotes": 890
+    "masterNotes": 890,
+    "bannerCharacterId": 6
   },
   {
     "id": "458",
@@ -11156,7 +11237,8 @@
     "lyricsByOther": true,
     "expertLevel": 25,
     "masterLevel": 28,
-    "masterNotes": 769
+    "masterNotes": 769,
+    "bannerCharacterId": 9
   },
   {
     "id": "472",
@@ -11182,7 +11264,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 31,
-    "masterNotes": 1199
+    "masterNotes": 1199,
+    "bannerCharacterId": 13
   },
   {
     "id": "473",
@@ -11234,7 +11317,8 @@
     "expertLevel": 27,
     "masterLevel": 31,
     "appendLevel": 33,
-    "masterNotes": 1013
+    "masterNotes": 1013,
+    "bannerCharacterId": 7
   },
   {
     "id": "475",
@@ -11337,7 +11421,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 29,
-    "masterNotes": 930
+    "masterNotes": 930,
+    "bannerCharacterId": 11
   },
   {
     "id": "480",
@@ -11668,7 +11753,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 28,
-    "masterNotes": 918
+    "masterNotes": 918,
+    "bannerCharacterId": 19
   },
   {
     "id": "493",
@@ -11794,7 +11880,8 @@
     "dancerCount": 1,
     "expertLevel": 23,
     "masterLevel": 27,
-    "masterNotes": 948
+    "masterNotes": 948,
+    "bannerCharacterId": 10
   },
   {
     "id": "498",
@@ -11820,7 +11907,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 29,
-    "masterNotes": 957
+    "masterNotes": 957,
+    "bannerCharacterId": 8
   },
   {
     "id": "499",
@@ -11872,7 +11960,8 @@
     "dancerCount": 1,
     "expertLevel": 21,
     "masterLevel": 25,
-    "masterNotes": 613
+    "masterNotes": 613,
+    "bannerCharacterId": 19
   },
   {
     "id": "501",
@@ -12057,7 +12146,8 @@
     "expertLevel": 24,
     "masterLevel": 29,
     "appendLevel": 30,
-    "masterNotes": 877
+    "masterNotes": 877,
+    "bannerCharacterId": 18
   },
   {
     "id": "508",
@@ -12083,7 +12173,8 @@
     "dancerCount": 1,
     "expertLevel": 26,
     "masterLevel": 30,
-    "masterNotes": 977
+    "masterNotes": 977,
+    "bannerCharacterId": 12
   },
   {
     "id": "509",
@@ -12458,7 +12549,8 @@
     "dancerCount": 1,
     "expertLevel": 26,
     "masterLevel": 30,
-    "masterNotes": 814
+    "masterNotes": 814,
+    "bannerCharacterId": 1
   },
   {
     "id": "525",
@@ -12760,7 +12852,8 @@
     "dancerCount": 1,
     "expertLevel": 26,
     "masterLevel": 30,
-    "masterNotes": 918
+    "masterNotes": 918,
+    "bannerCharacterId": 14
   },
   {
     "id": "539",
@@ -12786,7 +12879,8 @@
     "dancerCount": 1,
     "expertLevel": 23,
     "masterLevel": 27,
-    "masterNotes": 699
+    "masterNotes": 699,
+    "bannerCharacterId": 7
   },
   {
     "id": "540",
@@ -12812,7 +12906,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 29,
-    "masterNotes": 899
+    "masterNotes": 899,
+    "bannerCharacterId": 18
   },
   {
     "id": "541",
@@ -12963,7 +13058,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 29,
-    "masterNotes": 958
+    "masterNotes": 958,
+    "bannerCharacterId": 2
   },
   {
     "id": "547",
@@ -13014,7 +13110,8 @@
     "expertLevel": 24,
     "masterLevel": 28,
     "appendLevel": 27,
-    "masterNotes": 876
+    "masterNotes": 876,
+    "bannerCharacterId": 15
   },
   {
     "id": "549",
@@ -13039,7 +13136,8 @@
     "dancerCount": 1,
     "expertLevel": 27,
     "masterLevel": 31,
-    "masterNotes": 1003
+    "masterNotes": 1003,
+    "bannerCharacterId": 20
   },
   {
     "id": "550",
@@ -13320,7 +13418,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 29,
-    "masterNotes": 960
+    "masterNotes": 960,
+    "bannerCharacterId": 16
   },
   {
     "id": "561",
@@ -13521,7 +13620,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 29,
-    "masterNotes": 889
+    "masterNotes": 889,
+    "bannerCharacterId": 1
   },
   {
     "id": "571",
@@ -13572,7 +13672,8 @@
     "dancerCount": 1,
     "expertLevel": 22,
     "masterLevel": 27,
-    "masterNotes": 520
+    "masterNotes": 520,
+    "bannerCharacterId": 20
   },
   {
     "id": "573",
@@ -13829,7 +13930,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 28,
-    "masterNotes": 820
+    "masterNotes": 820,
+    "bannerCharacterId": 6
   },
   {
     "id": "583",
@@ -13856,7 +13958,8 @@
     "expertLevel": 26,
     "masterLevel": 31,
     "appendLevel": 32,
-    "masterNotes": 917
+    "masterNotes": 917,
+    "bannerCharacterId": 10
   },
   {
     "id": "584",
@@ -14184,7 +14287,8 @@
     "dancerCount": 1,
     "expertLevel": 26,
     "masterLevel": 31,
-    "masterNotes": 1276
+    "masterNotes": 1276,
+    "bannerCharacterId": 17
   },
   {
     "id": "597",
@@ -14210,7 +14314,8 @@
     "dancerCount": 1,
     "expertLevel": 22,
     "masterLevel": 26,
-    "masterNotes": 555
+    "masterNotes": 555,
+    "bannerCharacterId": 19
   },
   {
     "id": "600",
@@ -14236,7 +14341,8 @@
     "dancerCount": 1,
     "expertLevel": 23,
     "masterLevel": 28,
-    "masterNotes": 825
+    "masterNotes": 825,
+    "bannerCharacterId": 15
   },
   {
     "id": "601",
@@ -14338,7 +14444,8 @@
     "expertLevel": 24,
     "masterLevel": 28,
     "appendLevel": 29,
-    "masterNotes": 860
+    "masterNotes": 860,
+    "bannerCharacterId": 4
   },
   {
     "id": "606",
@@ -14440,7 +14547,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 31,
-    "masterNotes": 1106
+    "masterNotes": 1106,
+    "bannerCharacterId": 6
   },
   {
     "id": "611",
@@ -14953,7 +15061,8 @@
     "dancerCount": 1,
     "expertLevel": 23,
     "masterLevel": 28,
-    "masterNotes": 907
+    "masterNotes": 907,
+    "bannerCharacterId": 17
   },
   {
     "id": "631",
@@ -15053,7 +15162,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 28,
-    "masterNotes": 889
+    "masterNotes": 889,
+    "bannerCharacterId": 9
   },
   {
     "id": "635",
@@ -15079,7 +15189,8 @@
     "expertLevel": 24,
     "masterLevel": 28,
     "appendLevel": 28,
-    "masterNotes": 938
+    "masterNotes": 938,
+    "bannerCharacterId": 5
   },
   {
     "id": "636",
@@ -15231,7 +15342,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 28,
-    "masterNotes": 941
+    "masterNotes": 941,
+    "bannerCharacterId": 4
   },
   {
     "id": "643",
@@ -15332,7 +15444,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 29,
-    "masterNotes": 1027
+    "masterNotes": 1027,
+    "bannerCharacterId": 3
   },
   {
     "id": "647",
@@ -15410,7 +15523,8 @@
     "dancerCount": 1,
     "expertLevel": 26,
     "masterLevel": 30,
-    "masterNotes": 864
+    "masterNotes": 864,
+    "bannerCharacterId": 13
   },
   {
     "id": "650",
@@ -15634,7 +15748,8 @@
     "dancerCount": 1,
     "expertLevel": 21,
     "masterLevel": 25,
-    "masterNotes": 682
+    "masterNotes": 682,
+    "bannerCharacterId": 8
   },
   {
     "id": "660",
@@ -15659,7 +15774,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 29,
-    "masterNotes": 1064
+    "masterNotes": 1064,
+    "bannerCharacterId": 14
   },
   {
     "id": "661",
@@ -15711,7 +15827,8 @@
     "expertLevel": 22,
     "masterLevel": 27,
     "appendLevel": 27,
-    "masterNotes": 588
+    "masterNotes": 588,
+    "bannerCharacterId": 20
   },
   {
     "id": "663",
@@ -16113,7 +16230,8 @@
     "lyricsByOther": true,
     "expertLevel": 24,
     "masterLevel": 29,
-    "masterNotes": 1135
+    "masterNotes": 1135,
+    "bannerCharacterId": 10
   },
   {
     "id": "680",
@@ -16163,7 +16281,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 28,
-    "masterNotes": 1073
+    "masterNotes": 1073,
+    "bannerCharacterId": 3
   },
   {
     "id": "682",
@@ -16213,7 +16332,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 29,
-    "masterNotes": 1091
+    "masterNotes": 1091,
+    "bannerCharacterId": 7
   },
   {
     "id": "684",
@@ -16238,7 +16358,8 @@
     "dancerCount": 1,
     "expertLevel": 23,
     "masterLevel": 28,
-    "masterNotes": 826
+    "masterNotes": 826,
+    "bannerCharacterId": 11
   },
   {
     "id": "685",
@@ -16496,7 +16617,8 @@
     "dancerCount": 1,
     "expertLevel": 26,
     "masterLevel": 29,
-    "masterNotes": 1106
+    "masterNotes": 1106,
+    "bannerCharacterId": 2
   },
   {
     "id": "696",
@@ -17000,7 +17122,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 29,
-    "masterNotes": 754
+    "masterNotes": 754,
+    "bannerCharacterId": 12
   },
   {
     "id": "717",
@@ -17276,7 +17399,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 27,
-    "masterNotes": 827
+    "masterNotes": 827,
+    "bannerCharacterId": 6
   },
   {
     "id": "729",
@@ -17453,7 +17577,8 @@
     "expertLevel": 24,
     "masterLevel": 29,
     "appendLevel": 30,
-    "masterNotes": 888
+    "masterNotes": 888,
+    "bannerCharacterId": 16
   },
   {
     "id": "737",
@@ -17554,7 +17679,8 @@
     "expertLevel": 23,
     "masterLevel": 28,
     "appendLevel": 30,
-    "masterNotes": 859
+    "masterNotes": 859,
+    "bannerCharacterId": 9
   },
   {
     "id": "741",
@@ -17907,7 +18033,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 29,
-    "masterNotes": 853
+    "masterNotes": 853,
+    "bannerCharacterId": 19
   },
   {
     "id": "755",
@@ -17960,7 +18087,8 @@
     "expertLevel": 24,
     "masterLevel": 28,
     "appendLevel": 29,
-    "masterNotes": 834
+    "masterNotes": 834,
+    "bannerCharacterId": 5
   },
   {
     "id": "757",
@@ -18060,7 +18188,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 30,
-    "masterNotes": 1357
+    "masterNotes": 1357,
+    "bannerCharacterId": 13
   },
   {
     "id": "761",
@@ -18085,7 +18214,8 @@
     "dancerCount": 1,
     "expertLevel": 22,
     "masterLevel": 27,
-    "masterNotes": 748
+    "masterNotes": 748,
+    "bannerCharacterId": 17
   },
   {
     "id": "763",
@@ -18436,7 +18566,8 @@
     "dancerCount": 1,
     "expertLevel": 24,
     "masterLevel": 28,
-    "masterNotes": 1012
+    "masterNotes": 1012,
+    "bannerCharacterId": 1
   },
   {
     "id": "790",
@@ -18659,7 +18790,8 @@
     "dancerCount": 1,
     "expertLevel": 27,
     "masterLevel": 31,
-    "masterNotes": 1210
+    "masterNotes": 1210,
+    "bannerCharacterId": 11
   },
   {
     "id": "805",
@@ -18734,7 +18866,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 30,
-    "masterNotes": 1043
+    "masterNotes": 1043,
+    "bannerCharacterId": 15
   },
   {
     "id": "812",
@@ -18759,7 +18892,8 @@
     "dancerCount": 1,
     "expertLevel": 25,
     "masterLevel": 29,
-    "masterNotes": 1078
+    "masterNotes": 1078,
+    "bannerCharacterId": 3
   },
   {
     "id": "813",

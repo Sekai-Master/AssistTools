@@ -81,6 +81,76 @@ describe("歌う人の絞り込み", () => {
   });
 });
 
+describe("バナー曲だけ（持ち主の決定 2026-11-10: そのキャラがバナーの回のイベント曲）", () => {
+  // ★ PR2 では楽曲データを作り直さない（毎日の更新で入る）。届く前・届いた後のどちらでも通るよう、
+  //   配信中のデータのバナーを一度消してから、瑞希の曲のうち 3 曲にだけバナーを付けた形で試す
+  const PLAIN = MUSICS.map(({ bannerCharacterId: _drop, ...m }) => m);
+  const MIZUKI_BANNER = PLAIN.filter((m) => m.singers?.includes(MIZUKI)).slice(0, 3);
+  const BANNER_IDS = new Set(MIZUKI_BANNER.map((m) => m.id));
+  const WITH_BANNER = PLAIN.map((m) => (BANNER_IDS.has(m.id) ? { ...m, bannerCharacterId: MIZUKI } : m));
+  const toggle = () => within(dialog()).queryByRole("button", { name: "バナー曲だけ" });
+  const pickSinger = (ch: number) => fireEvent.change(singerSelect(), { target: { value: String(ch) } });
+
+  it("歌う人を選んでいないときは、切り替えを出さない", () => {
+    renderSingle({ musics: WITH_BANNER });
+    expect(toggle()).toBeNull();
+  });
+
+  it("バナー曲のある人を選ぶと切り替えが出て、押すとその人のバナー曲だけになる", () => {
+    renderSingle({ musics: WITH_BANNER });
+    pickSinger(MIZUKI);
+    expect(toggle()!.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(toggle()!);
+    expect(toggle()!.getAttribute("aria-pressed")).toBe("true");
+    expect(within(dialog()).getByText("瑞希のバナー曲 3曲", { exact: false })).toBeTruthy();
+    expect(rows().map((r) => MIZUKI_BANNER.find((m) => r.textContent?.startsWith(m.title))?.id)).toEqual(
+      MIZUKI_BANNER.map((m) => m.id)
+    );
+  });
+
+  it("もう一度押すと、その人が歌う曲に戻る", () => {
+    renderSingle({ musics: WITH_BANNER });
+    pickSinger(MIZUKI);
+    fireEvent.click(toggle()!);
+    fireEvent.click(toggle()!);
+    expect(within(dialog()).getByText(`瑞希が歌う ${sungBy(MIZUKI).length}曲`, { exact: false })).toBeTruthy();
+  });
+
+  it("バナー曲の無い人（ミク）を選ぶと切り替えを出さず、絞り込みも掛けない", () => {
+    renderSingle({ musics: WITH_BANNER });
+    pickSinger(MIZUKI);
+    fireEvent.click(toggle()!);
+    pickSinger(21);
+    expect(toggle()).toBeNull();
+    expect(within(dialog()).getByText(`ミクが歌う ${sungBy(21).length}曲`, { exact: false })).toBeTruthy();
+  });
+
+  it("楽曲データにバナーの項目が無ければ、だれを選んでも切り替えを出さない（データが届くまで）", () => {
+    renderSingle({ musics: PLAIN });
+    pickSinger(MIZUKI);
+    expect(toggle()).toBeNull();
+  });
+
+  it("検索とバナー曲は両方を満たす曲に絞る", () => {
+    renderSingle({ musics: WITH_BANNER });
+    pickSinger(MIZUKI);
+    fireEvent.click(toggle()!);
+    const target = MIZUKI_BANNER[1];
+    fireEvent.change(within(dialog()).getByRole("textbox"), { target: { value: target.title } });
+    const expected = searchSongs(MIZUKI_BANNER, [], target.title);
+    expect(rows()).toHaveLength(expected.length);
+    expect(within(dialog()).getByText(`当てはまる ${expected.length}曲`, { exact: false })).toBeTruthy();
+  });
+
+  // 横向きのスマホ（844×390）は一覧の高さが 114px しかない。行を増やさない（実際の高さは撮影で測る。jsdom では測れない）
+  it("切り替えは歌う人の欄と同じ行に置き、高さ 44px 以上", () => {
+    renderSingle({ musics: WITH_BANNER });
+    pickSinger(MIZUKI);
+    expect(toggle()!.parentElement).toBe(singerSelect().parentElement);
+    expect(toggle()!.className).toContain("min-h-11");
+  });
+});
+
 describe("一覧と検索", () => {
   it("検索の入力は 16px（iPhone で入力時に画面が拡大しない）", () => {
     renderSingle();
