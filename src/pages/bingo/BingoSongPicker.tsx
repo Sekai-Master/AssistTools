@@ -1,4 +1,5 @@
 import { type ReactNode, useMemo, useState } from "react";
+import { NeuButton } from "../../components/ui/NeuButton";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { onJacketError } from "../../lib/img";
 import { cn } from "../../lib/utils";
@@ -86,11 +87,21 @@ function SongRow({
   );
 }
 
-/** 見出しの下の行の曲数（「全 732曲」「瑞希が歌う 74曲」「当てはまる 2曲」）。 */
-function countText(count: number, singer: number | null, searching: boolean): string {
+/** 見出しの下の行の曲数（「全 732曲」「瑞希が歌う 74曲」「瑞希のバナー曲 7曲」「当てはまる 2曲」）。 */
+function countText(count: number, singer: number | null, banner: boolean, searching: boolean): string {
   if (searching) return `当てはまる ${count}曲`;
+  if (singer !== null && banner) return `${singerName(singer)}のバナー曲 ${count}曲`;
   if (singer !== null) return `${singerName(singer)}が歌う ${count}曲`;
   return `全 ${count}曲`;
+}
+
+/**
+ * 歌う人で絞った曲。banner なら、その人がバナーの回のイベント曲（楽曲データの bannerCharacterId）だけ。
+ * バナー曲はそのキャラのユニットの書き下ろしで、2026-11-10 のマスタで数えた 134 曲すべてでバナーのキャラが歌う。
+ */
+function narrowBySinger(musics: readonly BingoMusic[], singer: number | null, banner: boolean): readonly BingoMusic[] {
+  if (singer === null) return musics;
+  return musics.filter((m) => (banner ? m.bannerCharacterId === singer : sungBy(m, singer)));
 }
 
 /**
@@ -117,10 +128,18 @@ export function BingoSongPicker({
 }: Props) {
   const [query, setQuery] = useState("");
   const [singer, setSinger] = useState<number | null>(null);
+  const [bannerOnly, setBannerOnly] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  // ★ 切り替えは、選んだ人のバナー曲が楽曲データにあるときだけ出す（VIRTUAL SINGER・データが届く前は出さない）。
+  //   押したまま別の人に替えても、その人にバナー曲が無ければ絞らない
+  const hasBanner = useMemo(
+    () => singer !== null && musics.some((m) => m.bannerCharacterId === singer),
+    [musics, singer]
+  );
+  const banner = bannerOnly && hasBanner;
   const results = useMemo(
-    () => searchSongs(singer === null ? musics : musics.filter((m) => sungBy(m, singer)), aliases, query),
-    [musics, aliases, query, singer]
+    () => searchSongs(narrowBySinger(musics, singer, banner), aliases, query),
+    [musics, aliases, query, singer, banner]
   );
   const multi = mode === "multi";
   const full = multi && selected.length >= max;
@@ -132,7 +151,7 @@ export function BingoSongPicker({
     if (unavailable?.has(m.id) || full) return "blocked";
     return "open";
   };
-  const count = countText(results.length, singer, query.trim() !== "");
+  const count = countText(results.length, singer, banner, query.trim() !== "");
   // ★ 390px で 2 行に折れるとき、文の途中（「選べま｜せん」）で割れないよう、まとまりごとに inline-block にする
   const head = multi ? (
     <>
@@ -176,16 +195,31 @@ export function BingoSongPicker({
           aria-label="曲を検索"
           className="min-w-0 flex-1 text-base"
         />
-        {/* 歌う人（PR2 でバナー曲の切り替えをこの行に並べる） */}
-        <div className="flex gap-2 sm:w-40">
+        {/* 歌う人とバナー曲の切り替え。★ 切り替えは同じ行に置き、行を増やさない
+            （横向きのスマホ 844×390 は、入れたい曲を選ぶとき一覧の高さが 114px＝約 2 行しかない）。
+            幅があるときは、検索欄が狭くなりすぎないよう歌う人の欄を 160px から 128px に詰める
+            （844×390 で検索欄は 296px → 212px。「曲名・読み・作者で検索」は収まる） */}
+        <div className={cn("flex gap-2", hasBanner ? "sm:w-auto" : "sm:w-40")}>
           <SingerSelect
             value={singer}
             onChange={(v) => {
               setSinger(v);
               setExpanded(false);
             }}
-            className="min-w-0 flex-1"
+            className={cn("min-w-0 flex-1", hasBanner && "sm:w-32 sm:flex-none")}
           />
+          {hasBanner && (
+            <NeuButton
+              active={banner}
+              onClick={() => {
+                setBannerOnly(!banner);
+                setExpanded(false);
+              }}
+              className="min-h-11 shrink-0 whitespace-nowrap !px-3"
+            >
+              バナー曲だけ
+            </NeuButton>
+          )}
         </div>
       </div>
       {results.length === 0 ? (

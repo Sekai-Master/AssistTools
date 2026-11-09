@@ -11,6 +11,9 @@ const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFin
 const isBool = (v: unknown): v is boolean => typeof v === "boolean";
 const isCount = (v: unknown): v is number => isNum(v) && Number.isInteger(v) && v > 0;
 const count = (v: unknown): number | undefined => (isCount(v) ? v : undefined);
+/** ゲームのキャラの番号（1〜26。VIRTUAL SINGER の 6 人を含む）。 */
+const MAX_CHARACTER_ID = 26;
+const characterId = (v: unknown): number | undefined => (isCount(v) && v <= MAX_CHARACTER_ID ? v : undefined);
 
 /** お題ビンゴ用の項目（無い・型の違う値は「無い」にする）。 */
 function bingoFields(r: Record<string, unknown>): Partial<BingoMusic> {
@@ -26,6 +29,7 @@ function bingoFields(r: Record<string, unknown>): Partial<BingoMusic> {
     masterLevel: count(r.masterLevel),
     appendLevel: count(r.appendLevel),
     masterNotes: count(r.masterNotes),
+    bannerCharacterId: characterId(r.bannerCharacterId),
   };
 }
 
