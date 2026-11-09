@@ -133,18 +133,25 @@ export function BingoSongPicker({
     return "open";
   };
   const count = countText(results.length, singer, query.trim() !== "");
+  // ★ 390px で 2 行に折れるとき、文の途中（「選べま｜せん」）で割れないよう、まとまりごとに inline-block にする
   const head = multi ? (
     <>
-      選んだ曲{" "}
-      <span className="font-num font-bold">
-        {selected.length}/{max}
+      <span className="inline-block">
+        選んだ曲{" "}
+        <span className="font-num font-bold">
+          {selected.length}/{max}
+        </span>
       </span>{" "}
-      ・ {count}
+      ・ <span className="inline-block">{count}</span>
     </>
   ) : (
     <>
-      {count}
-      {sub && <> ・ {sub}</>}
+      <span className="inline-block">{count}</span>
+      {sub && (
+        <>
+          {" "}・ <span className="inline-block">{sub}</span>
+        </>
+      )}
     </>
   );
 

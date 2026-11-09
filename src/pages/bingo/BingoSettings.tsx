@@ -64,15 +64,17 @@ function summaryText(kind: CardKind, odaiPins: number, filters: SongFilters, son
     ) : null;
   }
   if (song.pins.length === 0 && !narrowed(filters)) return null;
+  // ★ 320px では 2 行に折れるので、まとまりごとに inline-block にして「・」の後ろでだけ折る
   return (
     <>
-      （
       {song.pins.length > 0 && (
-        <>
-          入れたい曲 <span className="font-num">{song.pins.length}</span>曲・
-        </>
+        <span className="inline-block">
+          （入れたい曲 <span className="font-num">{song.pins.length}</span>曲・
+        </span>
       )}
-      条件に合う <span className="font-num">{song.matched}</span>曲）
+      <span className="inline-block">
+        {song.pins.length > 0 ? "" : "（"}条件に合う <span className="font-num">{song.matched}</span>曲）
+      </span>
     </>
   );
 }
@@ -275,7 +277,8 @@ export function BingoSettings({
 
   return (
     <details className="mt-4 rounded-lg border border-slate-300">
-      <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-4 text-sm font-bold text-slate-600">
+      {/* ★ 要約が長いと 320px で「細かい｜設定」と見出しの語が割れたので、折り返しは要約ごと次の行へ送る（flex-wrap） */}
+      <summary className="flex min-h-11 cursor-pointer flex-wrap items-center gap-x-2 px-4 py-2 text-sm font-bold text-slate-600">
         細かい設定
         {summary !== null && <span className="font-normal text-slate-500">{summary}</span>}
       </summary>
