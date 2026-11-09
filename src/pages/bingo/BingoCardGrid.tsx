@@ -24,8 +24,9 @@ interface Common {
   /**
    * まとめて遊ぶの盤面として描く（幅と文字の段は boardLayout.ts）。このときは「遊んだ曲を入れる」と
    * 進み具合の行を出さない（盤面の外の操作の列と、カードの見出しが受け持つ）。
+   * dimmed は休止中: 盤面の枠だけを薄くし（マスの小窓は薄くしない）、マスを押せなくする。
    */
-  board?: { width: number; step: FontStep };
+  board?: { width: number; step: FontStep; dimmed?: boolean };
 }
 
 /** 字の段の規約（20・16・14・12）の大きさから Tailwind のクラス。 */
@@ -314,7 +315,7 @@ export function BingoCardGrid(props: Props) {
         </>
       )}
       <div
-        className={board ? "relative mx-auto w-full" : "relative -mx-2 sm:mx-auto sm:max-w-lg"}
+        className={board ? cn("relative mx-auto w-full", board.dimmed && "opacity-50") : "relative -mx-2 sm:mx-auto sm:max-w-lg"}
         style={board ? { maxWidth: board.width } : undefined}
       >
         <div ref={grid} className={cn("grid grid-cols-5", board ? (cellGapOf(board.width) === 8 ? "gap-2" : "gap-1") : "gap-1 sm:gap-2")}>
@@ -336,6 +337,8 @@ export function BingoCardGrid(props: Props) {
             const common = {
               type: "button" as const,
               "aria-pressed": cell.cleared,
+              // 休止中の盤面は押せない（休止中のカードでは遊ばない。持ち主の決定 2）。読み上げでは押せないマスとして残す
+              disabled: board?.dimmed === true,
               onClick: () => setOpenIndex(i),
             };
             if ("odai" in cell) {
@@ -354,7 +357,8 @@ export function BingoCardGrid(props: Props) {
                     square,
                     // 盤面の段の文字の大きさは、上下の余白 4px ずつ・札と文言の間 2px・枠線で、3 行（長い名前は 4 行）が正方形に入るように決めてある（boardLayout.ts）
                     stepText ? "py-1" : "py-2",
-                    "flex-col border border-slate-300 text-center leading-tight text-slate-700 hover:border-slate-400"
+                    // 枠を濃くするのは押せるマスだけ（休止中の盤面で、押せないマスが押せそうに見えないように）
+                    "flex-col border border-slate-300 text-center leading-tight text-slate-700 enabled:hover:border-slate-400"
                   )}
                 >
                   {cell.cleared && <FilledMark onJacket={false} />}

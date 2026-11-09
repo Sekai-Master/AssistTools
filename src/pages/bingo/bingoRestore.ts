@@ -14,8 +14,13 @@ export interface Initial {
   odai: OdaiCell[] | null;
   song: Cell[] | null;
   error: string | null;
-  /** 埋めた途中のカードと同じ種類のリンクを開いたとき。確かめてから置き換える。 */
-  pendingLink: KindedCard | null;
+  /**
+   * 埋めた途中のカードと同じ種類のリンクを開いたとき、そのリンクのカード。保存せずに「見るだけ」で出し、
+   * 入れ替える・まとめて遊ぶに足すは本人が選ぶ（持ち主の決定 2。前は「いまのカードは消えます」で入れ替えるしかなかった）。
+   */
+  viewing: KindedCard | null;
+  /** リンクのカードを読めたときの種類（見るだけ・そのまま開いた のどちらも）。開いたことを 1 行で知らせる。 */
+  linked: CardKind | null;
 }
 
 /** 同じ種類の今のカードを、確かめずに置き換えてよいか（埋めたマスが無い・同じカード）。 */
@@ -26,6 +31,7 @@ export function canReplaceSilently(existing: KindedCard["card"] | null, next: Ki
 
 /**
  * 開いたときのカード: この端末の途中経過を戻し、リンク（?card=）があればそれを出す。
+ * 埋めた途中の同じ種類のカードがあれば、リンクのカードは置き換えずに「見るだけ」（viewing）にする。
  * 壊れた・古い保存は黙って捨てる。読めないリンクは文言を出し、新しいカードを作れる状態にする。
  * どちらも無い（初めて開いた）ときは、すぐ遊べるようにお題ビンゴのカードを 1 枚作っておく。
  */
@@ -34,7 +40,7 @@ export function restoreInitial(
   linked: string | null,
   saved: SavedBingo | null = loadBingo()
 ): Initial {
-  const init: Initial = { kind: "odai", odai: null, song: null, error: null, pendingLink: null };
+  const init: Initial = { kind: "odai", odai: null, song: null, error: null, viewing: null, linked: null };
   if (musics.length === 0) return init;
   const put = (kc: KindedCard) => {
     if (kc.kind === "odai") init.odai = kc.card;
@@ -55,8 +61,9 @@ export function restoreInitial(
     try {
       const kc = decodeCardCode(linked, musics);
       if (canReplaceSilently(kc.kind === "odai" ? init.odai : init.song, kc)) put(kc);
-      else init.pendingLink = kc;
+      else init.viewing = kc;
       init.kind = kc.kind;
+      init.linked = kc.kind;
     } catch (e) {
       init.error = `リンクのカードを読めませんでした。${errorText(e, "コードの形が違います。")}`;
     }

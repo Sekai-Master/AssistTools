@@ -49,6 +49,7 @@ import { drawOdaiCard } from "./odaiCanvas";
 import { BingoCardGrid } from "./BingoCardGrid";
 import { BingoSettings, type SongFilters } from "./BingoSettings";
 import { BingoShareBar } from "./BingoShareBar";
+import { LinkBand } from "./LinkBand";
 import { ALL_CATEGORY_VALUES, ALL_TYPE_VALUES, ALL_UNIT_VALUES } from "./bingoConstants";
 
 const base = import.meta.env.BASE_URL;
@@ -94,19 +95,8 @@ function BingoBoard({
   error: dataError,
   onFullChange,
 }: ReturnType<typeof useBingoMusics> & { onFullChange: (full: boolean) => void }) {
-  const {
-    initial,
-    kind,
-    setKind,
-    odaiCard,
-    setOdaiCard,
-    songCard,
-    setSongCard,
-    pendingLink,
-    setPendingLink,
-    applyCard,
-    current,
-  } = useSingleCards(musics);
+  const { initial, kind, setKind, odaiCard, songCard, own, current, viewing, linkShown, changeCard, applyCard, dismissLink } =
+    useSingleCards(musics);
   // まとめて遊ぶ（5 枚まで）のセット。1 枚で遊ぶとは保存を分ける
   const multi = useMultiSet(musics);
   useEffect(() => onFullChange(multi.open), [multi.open, onFullChange]);
@@ -199,8 +189,9 @@ function BingoBoard({
 
   /** 今の設定でカードを作る。作れたら true（確かめてやめた・作れなかったときは false）。 */
   const newCard = (): boolean => {
-    // まとめて遊ぶでは、作ったカードをセットに足す（今のカードは消さないので確かめない）
-    if (!multi.open && current && progressOf(current.card).filled > 0 && !window.confirm("いまのカードを消して、新しく作りますか？")) {
+    // まとめて遊ぶでは、作ったカードをセットに足す（今のカードは消さないので確かめない）。
+    // 見るだけの間も、消えるのは自分のカード（own）なので、見ているリンクのカードではなく自分のカードで確かめる
+    if (!multi.open && own && progressOf(own.card).filled > 0 && !window.confirm("いまのカードを消して、新しく作りますか？")) {
       return false;
     }
     setError(null);
@@ -255,6 +246,18 @@ function BingoBoard({
     } catch (e) {
       setError(errorText(e, "コードを読めませんでした"));
     }
+  };
+
+  /**
+   * リンクのカードを、まとめて遊ぶに足して開く。1 枚で遊ぶの保存は変えない。
+   * 見るだけのとき、まとめて遊ぶが空なら自分のカードを先に入れて並べる（自分のカードを 1 枚で遊ぶに置き去りにしない）。
+   * そのまま開いたとき（自分のカード＝リンクのカード）は、同じカードを 2 枚入れないよう足すだけ。
+   */
+  const addLinkToMulti = () => {
+    if (!current || multi.full) return;
+    multi.setOpen(true, viewing ? own : null);
+    multi.addCard(current);
+    dismissLink();
   };
 
   // useModalA11y は onClose が変わるたびに掛け直すので、同じ関数を渡す
@@ -350,25 +353,6 @@ function BingoBoard({
             {error}
           </p>
         )}
-        {pendingLink && (
-          <div className="mt-4 rounded-lg border border-slate-300 p-4" role="status">
-            <p className="text-sm text-slate-700">リンクのカードを開きますか？いまのカードは消えます</p>
-            <div className="mt-3 flex gap-3">
-              <NeuButton
-                className="min-h-11 flex-1 !px-2"
-                onClick={() => {
-                  applyCard(pendingLink);
-                  setPendingLink(null);
-                }}
-              >
-                開く
-              </NeuButton>
-              <NeuButton className="min-h-11 flex-1 !px-2" onClick={() => setPendingLink(null)}>
-                いまのまま
-              </NeuButton>
-            </div>
-          </div>
-        )}
         <BingoSettings
           kind={kind}
           filters={filters}
@@ -415,6 +399,16 @@ function BingoBoard({
               作り直す
             </NeuButton>
           </div>
+          {linkShown && (
+            <LinkBand
+              progress={progressOf(current.card)}
+              viewOnly={viewing !== null}
+              multiFull={multi.full}
+              onPlay={() => applyCard(current)}
+              onAdd={addLinkToMulti}
+              onClose={dismissLink}
+            />
+          )}
           {current.kind === "odai" ? (
             <BingoCardGrid
               kind="odai"
@@ -422,7 +416,7 @@ function BingoBoard({
               musics={musics}
               aliases={aliases}
               jacketBase={JACKET_BASE}
-              onChange={setOdaiCard}
+              onChange={(card) => changeCard({ kind: "odai", card })}
               pickable={pickable}
             />
           ) : (
@@ -432,7 +426,7 @@ function BingoBoard({
               musics={musics}
               aliases={aliases}
               jacketBase={JACKET_BASE}
-              onChange={setSongCard}
+              onChange={(card) => changeCard({ kind: "song", card })}
             />
           )}
           <BingoShareBar
@@ -444,10 +438,17 @@ function BingoBoard({
           />
         </Panel>
       )}
-      {/* まとめて遊ぶへの入口。最初の画面に切り替えを足さず、1 枚のカードの後ろに置く（計画のレビュー G-31） */}
-      {!multi.open && (
+      {/* まとめて遊ぶへの入口。最初の画面に切り替えを足さず、1 枚のカードの後ろに置く（計画のレビュー G-31）。
+          見るだけの間は出さない（見ているリンクのカードが 1 枚目に入る。足すのはリンクの知らせの［まとめて遊ぶに足す］） */}
+      {!multi.open && !viewing && (
         <div className="flex justify-center">
-          <NeuButton className="min-h-11 !px-4" onClick={() => multi.setOpen(true, current)}>
+          <NeuButton
+            className="min-h-11 !px-4"
+            onClick={() => {
+              multi.setOpen(true, current);
+              dismissLink();
+            }}
+          >
             ほかのカードと並べて遊ぶ（{MAX_MULTI_CARDS}枚まで）
           </NeuButton>
         </div>

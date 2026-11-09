@@ -69,15 +69,36 @@ export function cleanCardName(v: unknown): string {
   return [...v.replace(UNSAFE_CHARS, "").trim()].slice(0, MAX_CARD_NAME).join("");
 }
 
+/**
+ * 休止の区間を読む。新しい MAX_PAUSES 件だけ（古い方を落とす。今の休止は最後にあるので残る）。
+ * 終わりが null の区間は最後の 1 件だけ。途中にあると、遊んだ曲の一覧から埋めるときにそこから先がずっと休止になる。
+ */
 function parsePauses(v: unknown): PauseRange[] {
   if (!Array.isArray(v)) return [];
   const out: PauseRange[] = [];
-  for (const r of v.slice(0, MAX_PAUSES)) {
+  for (const r of v.slice(-MAX_PAUSES)) {
     if (!Array.isArray(r) || !isTime(r[0])) continue;
     if (r[1] === null) out.push([r[0], null]);
     else if (isTime(r[1]) && r[1] >= r[0]) out.push([r[0], r[1]]);
   }
-  return out;
+  return out.filter((r, i) => r[1] !== null || i === out.length - 1);
+}
+
+/** いま休止しているか（最後の区間の終わりが null）。 */
+export function isPaused(c: Pick<SavedMultiCard, "paused">): boolean {
+  const last = c.paused.at(-1);
+  return last !== undefined && last[1] === null;
+}
+
+/**
+ * 休止する／再開する。休止は終わりが null の区間を足し、再開はその区間を now で閉じる。同じ状態なら同じものを返す。
+ * ★ 時計が戻っていても、終わりを始まりより前にしない（読む側が「終わり ≥ 始まり」でない区間を落とすため）。
+ */
+export function withPaused(c: SavedMultiCard, paused: boolean, now: number): SavedMultiCard {
+  if (isPaused(c) === paused) return c;
+  if (paused) return { ...c, paused: [...c.paused, [now, null] as const].slice(-MAX_PAUSES) };
+  const [start] = c.paused[c.paused.length - 1];
+  return { ...c, paused: [...c.paused.slice(0, -1), [start, Math.max(now, start)] as const] };
 }
 
 function parseCard(v: unknown): SavedMultiCard | null {

@@ -105,6 +105,21 @@ describe("カードを足す", () => {
     fireEvent.click(screen.getByRole("button", { name: "開く" }));
     expect(savedSet().cards.map((c) => c.code)).toEqual([encodeOdaiSeed(ODAI_A), encodeSeed(SONG)]);
   });
+
+  // 検分 #228 低-1: 1 枚で遊ぶのカードは消えないので、まとめて遊ぶで足すときは確かめない（newCard の !multi.open を守る）
+  it("1 枚で遊ぶのカードに埋めたマスがあっても、まとめて遊ぶでカードを足すときは確かめず、1 枚の保存も変えない", () => {
+    const filled = ODAI_A.map((c, i) => (i === 0 && c !== "FREE" ? { ...c, cleared: true } : c));
+    const single = JSON.stringify({ kind: "odai", odai: encodeOdaiSeed(filled) });
+    localStorage.setItem(BINGO_STORAGE_KEY, single);
+    saveSet([entry("a1", encodeOdaiSeed(ODAI_B))]);
+    const confirm = vi.spyOn(window, "confirm");
+    render(<BingoGenerator />);
+    fireEvent.click(screen.getByRole("button", { name: "カードを足す（1/5）" }));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(savedSet().cards).toHaveLength(2);
+    expect(localStorage.getItem(BINGO_STORAGE_KEY)).toBe(single);
+    confirm.mockRestore();
+  });
 });
 
 describe("遊んだ曲を全部のカードに反映", () => {

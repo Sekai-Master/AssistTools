@@ -1,3 +1,5 @@
+import { useId } from "react";
+import { cn } from "../../lib/utils";
 import type { BingoMusic } from "./bingoLogic";
 import type { CardKind } from "./bingoShare";
 import { CellSheetFrame } from "./CellSheetFrame";
@@ -9,6 +11,8 @@ export interface PlayedGroup {
   name: string;
   kind: CardKind;
   matches: PlayedMatch[];
+  /** 休止中（反映しない。下に薄く並べる）。 */
+  paused: boolean;
 }
 
 interface Props {
@@ -52,11 +56,15 @@ function GroupItem({ group }: { group: PlayedGroup }) {
 /**
  * まとめて遊ぶの、遊んだ曲の小窓。入れた曲で埋まるマスをカードごとに見せ、「まとめて埋める」で全部のカードを一度に埋める。
  * 1 枚で遊ぶの PlayedSongSheet と同じ作り（押しただけでは埋めない・別の曲を選び直せる）。
+ * 休止中のカードは数に入れず、下に「休止中（反映しません）」として薄く並べる（どのカードが止まっているか分かるように）。
  */
 export function MultiPlayedSheet({ music, groups, onFill, onPickAgain, onClose }: Props) {
-  const hitCards = groups.filter((g) => g.matches.length > 0).length;
-  const total = groups.reduce((n, g) => n + g.matches.length, 0);
-  const open = groups.reduce((n, g) => n + g.matches.filter((m) => !m.cleared).length, 0);
+  const playing = groups.filter((g) => !g.paused);
+  const paused = groups.filter((g) => g.paused);
+  const hitCards = playing.filter((g) => g.matches.length > 0).length;
+  const total = playing.reduce((n, g) => n + g.matches.length, 0);
+  const open = playing.reduce((n, g) => n + g.matches.filter((m) => !m.cleared).length, 0);
+  const pausedId = useId();
   const sub =
     total === 0 ? (
       "当てはまるマスはありません"
@@ -69,11 +77,26 @@ export function MultiPlayedSheet({ music, groups, onFill, onPickAgain, onClose }
 
   return (
     <CellSheetFrame caption="遊んだ曲" title={music.title} sub={sub} onClose={onClose} className="max-h-[90dvh]">
-      <ul className="mt-4 min-h-0 divide-y divide-slate-300 overflow-y-auto rounded-lg border border-slate-300">
-        {groups.map((g) => (
-          <GroupItem key={g.id} group={g} />
-        ))}
-      </ul>
+      <div className="mt-4 min-h-0 overflow-y-auto rounded-lg border border-slate-300">
+        <ul className="divide-y divide-slate-300">
+          {playing.map((g) => (
+            <GroupItem key={g.id} group={g} />
+          ))}
+        </ul>
+        {paused.length > 0 && (
+          // 見出しは薄くしない（12px を薄くすると読めない）。薄くするのはカードの行だけ
+          <div className={cn(playing.length > 0 && "border-t border-slate-300")}>
+            <p id={pausedId} className="px-3 pt-2 text-xs font-bold text-slate-600">
+              休止中（反映しません）
+            </p>
+            <ul aria-labelledby={pausedId} className="divide-y divide-slate-300 opacity-50">
+              {paused.map((g) => (
+                <GroupItem key={g.id} group={g} />
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
       {open > 0 ? (
         <button
           type="button"

@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   EMPTY_MULTI,
   MULTI_STORAGE_KEY,
+  type SavedMultiCard,
   cleanCardName,
+  isPaused,
   loadMulti,
   parseMultiObject,
   parseSavedMulti,
   saveMulti,
   summarizeSavedMulti,
+  withPaused,
 } from "./multiStorage";
 
 const card = (over: Record<string, unknown> = {}) => ({
@@ -115,6 +118,57 @@ describe("loadMulti / saveMulti", () => {
     expect(loadMulti(s)).toEqual(EMPTY_MULTI);
     expect(() => saveMulti(EMPTY_MULTI, s)).not.toThrow();
     expect(loadMulti(null)).toEqual(EMPTY_MULTI);
+  });
+});
+
+describe("休止の区間（isPaused・withPaused）", () => {
+  const base = card() as SavedMultiCard;
+
+  it("休止すると終わりが null の区間を足し、再開するとその区間を閉じる。前の区間は残す", () => {
+    const paused = withPaused(base, true, 1000);
+    expect(paused.paused).toEqual([[1000, null]]);
+    expect(isPaused(paused)).toBe(true);
+    const resumed = withPaused(paused, false, 5000);
+    expect(resumed.paused).toEqual([[1000, 5000]]);
+    expect(isPaused(resumed)).toBe(false);
+    expect(withPaused(resumed, true, 9000).paused).toEqual([
+      [1000, 5000],
+      [9000, null],
+    ]);
+    // 元のカードは変えない
+    expect(base.paused).toEqual([]);
+  });
+
+  it("同じ状態にするだけなら何も変えない（同じものを返す）", () => {
+    expect(withPaused(base, false, 1000)).toBe(base);
+    const paused = withPaused(base, true, 1000);
+    expect(withPaused(paused, true, 2000)).toBe(paused);
+  });
+
+  it("時計が戻っていても、閉じた区間の終わりは始まりより前にしない（読み直して落ちないように）", () => {
+    const resumed = withPaused(withPaused(base, true, 5000), false, 3000);
+    expect(resumed.paused).toEqual([[5000, 5000]]);
+    expect(parseSavedMulti(JSON.stringify({ cards: [resumed] })).cards[0].paused).toEqual([[5000, 5000]]);
+  });
+
+  it("区間は新しい 200 件まで。読むときも新しい方を残し、今の休止を落とさない", () => {
+    const many = Array.from({ length: 200 }, (_, i) => [i * 10 + 1, i * 10 + 5] as const);
+    const paused = withPaused({ ...base, paused: many }, true, 99_999);
+    expect(paused.paused).toHaveLength(200);
+    expect(paused.paused.at(-1)).toEqual([99_999, null]);
+    expect(paused.paused[0]).toEqual([11, 15]);
+    const longer = { ...base, paused: [...many, [99_999, null]] };
+    const read = parseSavedMulti(JSON.stringify({ cards: [longer] })).cards[0];
+    expect(read.paused).toHaveLength(200);
+    expect(isPaused(read)).toBe(true);
+  });
+
+  it("終わりが null の区間は最後の 1 件だけ読む（途中にあると、そこから先がずっと休止になる）", () => {
+    const read = parseSavedMulti(JSON.stringify({ cards: [card({ paused: [[1, null], [3, 4], [6, null]] })] })).cards[0];
+    expect(read.paused).toEqual([
+      [3, 4],
+      [6, null],
+    ]);
   });
 });
 

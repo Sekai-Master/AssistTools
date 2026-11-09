@@ -36,13 +36,27 @@ describe("restoreInitial（開いたときのカード）", () => {
   it("リンクがあればリンクのカードを出す（初めてでも作らない）", () => {
     const init = restoreInitial(MUSICS, CODE, null);
     expect(cardCode({ kind: "odai", card: init.odai! })).toBe(CODE);
-    expect(init.pendingLink).toBeNull();
+    expect(init.viewing).toBeNull();
+    expect(init.linked).toBe("odai");
+  });
+
+  it("埋めたマスのある同じ種類のカードがあれば、リンクのカードは「見るだけ」にし、今のカードは変えない", () => {
+    const own = buildOdaiCard(buildOdaiCandidates(MUSICS), createRng(9));
+    const first = own.findIndex((c) => c !== "FREE");
+    own[first] = { ...(own[first] as Exclude<(typeof own)[number], "FREE">), cleared: true };
+    const ownCode = cardCode({ kind: "odai", card: own });
+    const init = restoreInitial(MUSICS, CODE, { kind: "song", odai: ownCode });
+    expect(cardCode({ kind: "odai", card: init.odai! })).toBe(ownCode);
+    expect(init.viewing && cardCode(init.viewing)).toBe(CODE);
+    expect(init.linked).toBe("odai");
+    expect(init.kind).toBe("odai");
   });
 
   it("読めないリンクなら文言を出し、カードは作らない", () => {
     const init = restoreInitial(MUSICS, "OD1:broken", null);
     expect(init.error).toMatch(/リンク/);
     expect(init.odai).toBeNull();
+    expect(init.linked).toBeNull();
   });
 
   it("楽曲データが届く前は何もしない", () => {
