@@ -15,11 +15,37 @@ import { OdaiPicker } from "./OdaiPicker";
 import { PlayedSongSheet, type PlayedMatch } from "./PlayedSongSheet";
 import { SongCellSheet } from "./SongCellSheet";
 import { BingoSongPicker } from "./BingoSongPicker";
+import { type FontStep, type TextPx, STEP_PX, cellGapOf, longTextPxOf, longTextTight } from "./boardLayout";
 
 interface Common {
   musics: BingoMusic[];
   aliases: AliasEntry[];
   jacketBase: string;
+  /**
+   * まとめて遊ぶの盤面として描く（幅と文字の段は boardLayout.ts）。このときは「遊んだ曲を入れる」と
+   * 進み具合の行を出さない（盤面の外の操作の列と、カードの見出しが受け持つ）。
+   */
+  board?: { width: number; step: FontStep };
+}
+
+/** 字の段の規約（20・16・14・12）の大きさから Tailwind のクラス。 */
+const TEXT_CLASS: Record<TextPx, string> = { 20: "text-xl", 16: "text-base", 14: "text-sm", 12: "text-xs" };
+
+/**
+ * まとめて遊ぶの盤面の、札・文言・名前の長い作者の文言のクラス（大きさは boardLayout.ts の STEP_PX・longTextPxOf）。
+ * ★ 行の高さは span ごとに leading-tight（1.25 倍）にそろえる。Tailwind v4 の text-* は自分の行の高さを持ち、
+ *   マスの leading-tight を上書きするので、マスに付けただけでは効かない（検分 M1 高-1。560px の盤面で長い名前が切れた）。
+ *   leading-tight は text-* の後ろに書く。前に書くと cn（tailwind-merge）が text-* と競合するとみなして落とす
+ */
+function boardText(board: { width: number; step: FontStep }) {
+  const px = STEP_PX[board.step];
+  // 12px まで下げても長い名前の 4 行が入らない盤面は、字の間を詰める
+  const tight = longTextTight(board.width, board.step) ? " tracking-tighter" : "";
+  return {
+    caption: `${TEXT_CLASS[px.caption]} leading-tight`,
+    text: `${TEXT_CLASS[px.text]} leading-tight`,
+    long: `${TEXT_CLASS[longTextPxOf(board.width, board.step)]}${tight} leading-tight`,
+  };
 }
 
 type Props = Common &
@@ -259,22 +285,39 @@ export function BingoCardGrid(props: Props) {
     setPlayed(null);
   };
 
-  const square = props.kind === "song" ? "aspect-square" : "min-h-16 sm:aspect-square";
+  const { board } = props;
+  // まとめて遊ぶの盤面: 正方形にするかと文字の大きさは、画面の幅でなく盤面の幅の段で決める（boardLayout.ts）
+  const square =
+    props.kind === "song"
+      ? "aspect-square"
+      : board
+        ? board.step === "xs"
+          ? "min-h-16"
+          : "aspect-square"
+        : "min-h-16 sm:aspect-square";
+  const stepText = board ? boardText(board) : null;
   const open = openIndex !== null ? card[openIndex] : null;
 
   return (
     <>
-      <NeuButton
-        ref={playedButton}
-        onClick={() => setPlayed("picking")}
-        className="mb-4 flex min-h-12 w-full items-center justify-center gap-2 text-base"
+      {!board && (
+        <>
+          <NeuButton
+            ref={playedButton}
+            onClick={() => setPlayed("picking")}
+            className="mb-4 flex min-h-12 w-full items-center justify-center gap-2 text-base"
+          >
+            <span className="material-icons text-xl text-slate-500" aria-hidden data-icon="search" />
+            遊んだ曲を入れる
+          </NeuButton>
+          <ProgressLine progress={progress} />
+        </>
+      )}
+      <div
+        className={board ? "relative mx-auto w-full" : "relative -mx-2 sm:mx-auto sm:max-w-lg"}
+        style={board ? { maxWidth: board.width } : undefined}
       >
-        <span className="material-icons text-xl text-slate-500" aria-hidden data-icon="search" />
-        遊んだ曲を入れる
-      </NeuButton>
-      <ProgressLine progress={progress} />
-      <div className="relative -mx-2 sm:mx-auto sm:max-w-lg">
-        <div ref={grid} className="grid grid-cols-5 gap-1 sm:gap-2">
+        <div ref={grid} className={cn("grid grid-cols-5", board ? (cellGapOf(board.width) === 8 ? "gap-2" : "gap-1") : "gap-1 sm:gap-2")}>
           {card.map((cell, i) => {
             if (cell === "FREE") {
               return (
@@ -309,7 +352,9 @@ export function BingoCardGrid(props: Props) {
                   className={cn(
                     CELL_BASE,
                     square,
-                    "flex-col border border-slate-300 py-2 text-center leading-tight text-slate-700 hover:border-slate-400"
+                    // 盤面の段の文字の大きさは、上下の余白 4px ずつ・札と文言の間 2px・枠線で、3 行（長い名前は 4 行）が正方形に入るように決めてある（boardLayout.ts）
+                    stepText ? "py-1" : "py-2",
+                    "flex-col border border-slate-300 text-center leading-tight text-slate-700 hover:border-slate-400"
                   )}
                 >
                   {cell.cleared && <FilledMark onJacket={false} />}
@@ -320,11 +365,13 @@ export function BingoCardGrid(props: Props) {
                       style={{ background: UNIT_COLOR_VAR[odai.unit] }}
                     />
                   )}
-                  <span className="relative text-xs text-slate-500">{odai.caption}</span>
+                  <span className={cn("relative text-slate-500", stepText?.caption ?? "text-xs")}>{odai.caption}</span>
                   <span
                     className={cn(
-                      "relative mt-1 w-full text-xs font-bold [line-break:strict] [overflow-wrap:anywhere]",
-                      long ? "tracking-tighter" : "sm:text-sm"
+                      "relative w-full font-bold [line-break:strict] [overflow-wrap:anywhere]",
+                      stepText
+                        ? cn("mt-0.5", long ? stepText.long : stepText.text)
+                        : cn("mt-1 text-xs", long ? "tracking-tighter" : "sm:text-sm")
                     )}
                   >
                     {odai.chunks.map((chunk, j) =>

@@ -27,7 +27,19 @@ import { OdaiPicker } from "./OdaiPicker";
 import { BingoSongPicker } from "./BingoSongPicker";
 import { progressOf } from "./bingoProgress";
 import { MINUTES_PER_SONG, playTimeText } from "./playTime";
-import { type CardKind, cardCode, cardLink, decodeCardCode, extractCode, shareText } from "./bingoShare";
+import {
+  CARD_PARAM,
+  type CardKind,
+  type KindedCard,
+  cardCode,
+  cardLink,
+  decodeCardCode,
+  extractCode,
+  shareText,
+} from "./bingoShare";
+import { MAX_MULTI_CARDS, loadMulti } from "./multiStorage";
+import { useMultiSet } from "./useMultiSet";
+import { MultiBingo } from "./MultiBingo";
 import { canReplaceSilently, errorText } from "./bingoRestore";
 import { useSingleCards } from "./useSingleCards";
 import { useSongPins, useSongPool } from "./useSongPins";
@@ -62,10 +74,15 @@ const DEFAULT_FILTERS: SongFilters = {
 
 export default function BingoGenerator() {
   const data = useBingoMusics();
+  // まとめて遊ぶでは、盤面を並べるためにページを画面いっぱいの幅にする（持ち主 2026-11-10。docs/design-system.md 1 節の例外）。
+  // 最初の描画からその幅で出すよう、保存から読む（リンクから開いたときは 1 枚で遊ぶ。useMultiSet と同じ決まり）
+  const [full, setFull] = useState(
+    () => loadMulti().open && !new URLSearchParams(window.location.search).has(CARD_PARAM)
+  );
   // 楽曲データが届いたら作り直す。途中経過とリンクのカードを state の初期値で戻すため
   return (
-    <ToolPage morphKey="tool:bingo" title="BINGOカードジェネレーター" icon="grid_on">
-      <BingoBoard key={data.musics.length > 0 ? "ready" : "loading"} {...data} />
+    <ToolPage morphKey="tool:bingo" title="BINGOカードジェネレーター" icon="grid_on" full={full}>
+      <BingoBoard key={data.musics.length > 0 ? "ready" : "loading"} {...data} onFullChange={setFull} />
     </ToolPage>
   );
 }
@@ -75,7 +92,8 @@ function BingoBoard({
   aliases,
   loading,
   error: dataError,
-}: ReturnType<typeof useBingoMusics>) {
+  onFullChange,
+}: ReturnType<typeof useBingoMusics> & { onFullChange: (full: boolean) => void }) {
   const {
     initial,
     kind,
@@ -89,6 +107,9 @@ function BingoBoard({
     applyCard,
     current,
   } = useSingleCards(musics);
+  // まとめて遊ぶ（5 枚まで）のセット。1 枚で遊ぶとは保存を分ける
+  const multi = useMultiSet(musics);
+  useEffect(() => onFullChange(multi.open), [multi.open, onFullChange]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // 書き出し画像の描き終わり。共有・保存はこれを待ってから画像にする（埋めた直後でも最新の絵）
   const drawn = useRef<Promise<void>>(Promise.resolve());
@@ -167,19 +188,26 @@ function BingoBoard({
     return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   }, []);
 
+  /** 今の設定で新しいカードを作る（1 枚で遊ぶ・まとめて遊ぶで共通）。 */
+  const buildCard = (): KindedCard => {
+    if (kind === "odai") {
+      const pinned = resolvePinnedOdais(pinKeys, musics, odaiCandidates);
+      return { kind, card: buildOdaiCard(odaiCandidates, Math.random, level, theme, pinned) };
+    }
+    return { kind, card: buildSongCard(songPool.pool, songPins.pins, filters.centerMode, filters.centerSong) };
+  };
+
   /** 今の設定でカードを作る。作れたら true（確かめてやめた・作れなかったときは false）。 */
   const newCard = (): boolean => {
-    if (current && progressOf(current.card).filled > 0 && !window.confirm("いまのカードを消して、新しく作りますか？")) {
+    // まとめて遊ぶでは、作ったカードをセットに足す（今のカードは消さないので確かめない）
+    if (!multi.open && current && progressOf(current.card).filled > 0 && !window.confirm("いまのカードを消して、新しく作りますか？")) {
       return false;
     }
     setError(null);
     try {
-      if (kind === "odai") {
-        const pinned = resolvePinnedOdais(pinKeys, musics, odaiCandidates);
-        setOdaiCard(buildOdaiCard(odaiCandidates, Math.random, level, theme, pinned));
-      } else {
-        setSongCard(buildSongCard(songPool.pool, songPins.pins, filters.centerMode, filters.centerSong));
-      }
+      const kc = buildCard();
+      if (multi.open) multi.addCard(kc);
+      else applyCard(kc);
       setBorderColor(pickBorderColor());
       return true;
     } catch (e) {
@@ -212,6 +240,12 @@ function BingoBoard({
   const openCode = (input: string) => {
     try {
       const kc = decodeCardCode(extractCode(input), musics);
+      if (multi.open) {
+        if (multi.full) throw new Error(`カードは ${MAX_MULTI_CARDS} 枚までです。どれかを外してから開いてください。`);
+        multi.addCard(kc);
+        setError(null);
+        return;
+      }
       const existing = kc.kind === "odai" ? odaiCard : songCard;
       if (!canReplaceSilently(existing, kc) && !window.confirm("いまのカードを消して、このコードのカードを開きますか？")) {
         return;
@@ -229,7 +263,9 @@ function BingoBoard({
   const centerMissing = kind === "song" && filters.centerMode === "specified" && !filters.centerSong;
   // 条件の曲が足りないときは、作る前に止める（足りない数は細かい設定の曲数の行に出る）
   const songShort = kind === "song" && songPool.needs.need > songPool.needs.available;
-  // 上の「新しいカードを作る」とカードの枠の「作り直す」で同じ
+  const multiFull = multi.open && multi.full;
+  // 上の「新しいカードを作る」とカードの枠の「作り直す」で同じ。まとめて遊ぶの「カードを足す」は、5 枚で押せなくするのも足す
+  // （「作り直す」はカードの枠の見出しの行にあり、1 枚で遊ぶのときだけ出るので multiFull は要らない）
   const createDisabled = loading || centerMissing || songShort;
   const createLabel = loading
     ? "楽曲データ読込中…"
@@ -237,7 +273,13 @@ function BingoBoard({
       ? "中央マスの曲を選んでください"
       : songShort
         ? "条件に合う曲が足りません"
-        : "新しいカードを作る";
+        : multi.open
+          ? multiFull
+            ? `カードは ${MAX_MULTI_CARDS} 枚まで`
+            : `カードを足す（${multi.entries.length}/${MAX_MULTI_CARDS}）`
+          : "新しいカードを作る";
+  const linkOf = (kc: KindedCard) =>
+    typeof window === "undefined" ? "" : cardLink(`${window.location.origin}${base}`, cardCode(kc));
   // いまのカードの段（リンクや前の版のカードも、お題から数える）
   const cardLevel = current?.kind === "odai" ? odaiLevelOf(current.card) : null;
   const cardSongs = current?.kind === "odai" ? odaiSongsToHalf(current.card) : null;
@@ -251,7 +293,16 @@ function BingoBoard({
           {dataError}
         </div>
       )}
-      <Panel>
+      {/* まとめて遊ぶではページが画面いっぱいの幅になるので、作る所の枠は今の幅（768px）で真ん中に置く */}
+      <Panel className={multi.open ? "mx-auto w-full max-w-3xl" : undefined}>
+        {multi.open && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-base font-bold text-slate-700">まとめて遊ぶ（{MAX_MULTI_CARDS}枚まで）</p>
+            <NeuButton className="min-h-11 !px-3" onClick={() => multi.setOpen(false)}>
+              1 枚で遊ぶに戻る
+            </NeuButton>
+          </div>
+        )}
         <SegmentedControl
           options={[
             { value: "odai", label: "お題ビンゴ" },
@@ -289,7 +340,7 @@ function BingoBoard({
         )}
         <ActionButton
           onClick={newCard}
-          disabled={createDisabled}
+          disabled={createDisabled || multiFull}
           className="mt-4 min-h-12 w-full text-base"
         >
           {createLabel}
@@ -342,7 +393,7 @@ function BingoBoard({
         />
       </Panel>
 
-      {current && (
+      {current && !multi.open && (
         <Panel>
           {/* 見出しの行の右に「作り直す」。主役は盤面なので、枠のほかの副のボタン（遊んだ曲を入れる・画像を保存）と同じ浮き出しの灰色。
               ★ スマホの幅（390px 以下で実測）では段と時間が見出しの下へ折り返す。ボタンは縮めない（タップの領域 44px） */}
@@ -392,6 +443,24 @@ function BingoBoard({
             fileName={current.kind === "odai" ? "odai_bingo_card.png" : "bingo_card.png"}
           />
         </Panel>
+      )}
+      {/* まとめて遊ぶへの入口。最初の画面に切り替えを足さず、1 枚のカードの後ろに置く（計画のレビュー G-31） */}
+      {!multi.open && (
+        <div className="flex justify-center">
+          <NeuButton className="min-h-11 !px-4" onClick={() => multi.setOpen(true, current)}>
+            ほかのカードと並べて遊ぶ（{MAX_MULTI_CARDS}枚まで）
+          </NeuButton>
+        </div>
+      )}
+      {multi.open && ready && (
+        <MultiBingo
+          set={multi}
+          musics={musics}
+          aliases={aliases}
+          jacketBase={JACKET_BASE}
+          pickable={pickable}
+          linkOf={linkOf}
+        />
       )}
       {/* 書き出し用。画面のカードは上のマスが主役なので、画像は隠して描く */}
       <canvas ref={canvasRef} className="hidden" />
