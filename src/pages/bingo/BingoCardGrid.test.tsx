@@ -333,6 +333,33 @@ describe("曲名ビンゴの小窓", () => {
     expect(replaced.cleared).toBe(false);
   });
 
+  it("差し替えでは、カードにある曲は選べない（同じ曲が 2 マスに入らない）", () => {
+    const seen: Cell[][] = [];
+    render(<SongHarness onCard={(c) => seen.push(c)} />);
+    const onCard = SONG.filter((c): c is Exclude<Cell, "FREE"> => c !== "FREE");
+    // 曲名で検索して一意に引ける曲に限る（同じ文字で始まる別の曲があると押し分けられない）
+    const other = onCard.find((c) => MUSICS.filter((o) => o.title.startsWith(c.title)).length === 1)!;
+    fireEvent.click(cellButtons()[onCard.indexOf(other) === 1 ? 2 : 1]);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "曲を差し替える" }));
+    const search = screen.getByRole("dialog");
+    expect(within(search).getByText("カードにある曲は選べません", { exact: false })).toBeTruthy();
+    fireEvent.change(within(search).getByRole("textbox"), { target: { value: other.title } });
+    const row = within(search).getAllByRole("button").find((b) => b.textContent?.startsWith(other.title))!;
+    expect((row as HTMLButtonElement).disabled).toBe(true);
+    expect(row.textContent).toContain("カードにあります");
+    fireEvent.click(row);
+    expect(seen).toHaveLength(0);
+  });
+
+  it("差し替えの小窓で歌う人を選ぶと、その人が歌う曲に絞れる", () => {
+    render(<SongHarness onCard={() => {}} />);
+    fireEvent.click(cellButtons()[1]);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "曲を差し替える" }));
+    fireEvent.change(within(dialog()).getByRole("combobox", { name: "歌う人" }), { target: { value: "20" } });
+    const n = MUSICS.filter((m) => m.singers?.includes(20)).length;
+    expect(within(dialog()).getByText(`瑞希が歌う ${n}曲`, { exact: false })).toBeTruthy();
+  });
+
   it("FREE は押しても開かない", () => {
     render(<SongHarness onCard={() => {}} />);
     fireEvent.click(screen.getByText("FREE"));
