@@ -5,6 +5,7 @@
  */
 import { CHARACTERS } from "../deck/lib/characters";
 import type { BingoMusic } from "./bingoLogic";
+import { sameCreatorKey } from "./creatorMembers";
 import { type Odai, type OdaiKind, allOdaiDefs, toHiragana } from "./odaiDefs";
 
 /** 選ぶ小窓の 1 行。楽曲データで 1 曲以上当てはまるお題（割合の範囲・1 マスに収まるかでは絞らない）。 */
@@ -42,6 +43,18 @@ export function listPickableOdais(musics: readonly BingoMusic[]): PickableOdai[]
     const search = normalize([def.caption, def.text, FULL_NAME_BY_KEY.get(def.key) ?? ""].join(" "));
     return [{ ...def, rate: count / musics.length, count, search }];
   });
+}
+
+/**
+ * 保存した入れたいお題の鍵を、今の選べるお題に合わせる。表記違いの作者の鍵（c49 和田たけあき(くらげP)）は
+ * 同じ人の鍵（c36 和田たけあき）に置き換え、選べない鍵（楽曲データに無い）は落とす。重なれば 1 つに。
+ */
+export function resolveSavedPins(keys: readonly string[], pickable: ReadonlyMap<string, unknown>): string[] {
+  const resolved = keys.map((k) => {
+    const same = sameCreatorKey(k);
+    return same !== null && pickable.has(same) ? same : k;
+  });
+  return [...new Set(resolved.filter((k) => pickable.has(k)))];
 }
 
 export interface PickSection {
