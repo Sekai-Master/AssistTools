@@ -13,6 +13,8 @@
  *   書く側（usePlayedList）は、足す・消す直前に保存を読み直し、そこへ当ててから書く。
  */
 
+import { isTime } from "./multiStorage";
+
 export const PLAYED_STORAGE_KEY = "sekaimaster:bingo:played:v1";
 
 /** 一覧の上限。1 週間ちょっとの開催で 1 日 100 曲遊んでも収まる（計画 4 節。前提）。超えたら古いほうから落とす。 */
@@ -41,8 +43,6 @@ const MUSIC_ID = /^\d{1,4}$/;
 const CARD_REF = /^(?:[a-z0-9]{1,16}|(?:odai|song)@\d{1,15})$/i;
 /** 1 曲で埋めるカードは、1 枚で遊ぶ 2 枚（お題・曲名）とまとめて遊ぶ 5 枚まで。壊れた保存でタブを固めない上限。 */
 const MAX_CELL_GROUPS = 8;
-
-const isTime = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 
 function parseCells(v: unknown): PlayedCells[] {
   if (!Array.isArray(v)) return [];

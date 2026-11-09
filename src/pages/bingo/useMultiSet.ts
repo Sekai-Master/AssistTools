@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BingoMusic } from "./bingoLogic";
 import { progressOf } from "./bingoProgress";
 import { CARD_PARAM, type KindedCard, cardCode, decodeCardCode } from "./bingoShare";
+import type { CardTimes } from "./bingoRestore";
 import {
   MAX_MULTI_CARDS,
   MULTI_STORAGE_KEY,
@@ -41,8 +42,17 @@ function decodeOrNull(code: string, musics: readonly BingoMusic[]): KindedCard |
   }
 }
 
-function newEntry(kc: KindedCard, now: number): SavedMultiCard {
-  return { id: newCardId(), name: "", code: cardCode(kc), addedAt: now, paused: [] };
+/** 新しく足す 1 件。times は 1 枚で遊ぶから写すカードの時刻（同じカードなので、足した時刻・プレイ開始を持ち越す）。 */
+function newEntry(kc: KindedCard, now: number, times?: CardTimes | null): SavedMultiCard {
+  const addedAt = times && times.addedAt > 0 ? times.addedAt : now;
+  return {
+    id: newCardId(),
+    name: "",
+    code: cardCode(kc),
+    addedAt,
+    ...(times?.startedAt !== undefined ? { startedAt: times.startedAt } : {}),
+    paused: [],
+  };
 }
 
 /** カードを替えた後の保存の 1 件。最初に埋めたとき（埋めたマスが 0 から増えた）にプレイ開始の時刻を付ける。 */
@@ -99,12 +109,15 @@ export function useMultiSet(musics: BingoMusic[]) {
     [saved.cards, musics, ready]
   );
 
-  /** まとめて遊ぶを開く／閉じる。初めて開いたとき（セットが空）は、1 枚で遊ぶで見ていたカードを 1 枚目に写す。 */
-  const setOpen = useCallback((open: boolean, seed: KindedCard | null = null) => {
+  /**
+   * まとめて遊ぶを開く／閉じる。初めて開いたとき（セットが空）は、1 枚で遊ぶで見ていたカードを 1 枚目に写す。
+   * seedTimes はそのカードの時刻（プレイ開始の印が、まとめて遊ぶに移っても消えないように）。
+   */
+  const setOpen = useCallback((open: boolean, seed: KindedCard | null = null, seedTimes: CardTimes | null = null) => {
     setSaved((s) => ({
       ...s,
       open,
-      cards: open && s.cards.length === 0 && seed ? [newEntry(seed, Date.now())] : s.cards,
+      cards: open && s.cards.length === 0 && seed ? [newEntry(seed, Date.now(), seedTimes)] : s.cards,
     }));
   }, []);
 
@@ -168,6 +181,26 @@ export function useMultiSet(musics: BingoMusic[]) {
     [musics]
   );
 
+  /**
+   * 1 枚だけに変え方（fn）を当てる（遊んだ曲の一覧から埋める・戻す）。applyToCards と同じく当てる時点の保存を読み直す。
+   * 休止中でも当てる（休止中のカードを相手にするかは呼ぶ側が決める。一覧から 1 曲消してマスを戻すのは、休止中のカードにも当てる）。
+   */
+  const applyToCard = useCallback(
+    (id: string, fn: (kc: KindedCard) => KindedCard | null) => {
+      const now = Date.now();
+      setSaved((s) => ({
+        ...s,
+        cards: s.cards.map((c) => {
+          if (c.id !== id) return c;
+          const kc = decodeOrNull(c.code, musics);
+          const next = kc ? fn(kc) : null;
+          return next ? withCard(c, next, now) : c;
+        }),
+      }));
+    },
+    [musics]
+  );
+
   /** 休止する／再開する（区間を保存に足す・閉じる）。 */
   const setPaused = useCallback((id: string, paused: boolean) => {
     const now = Date.now();
@@ -202,6 +235,7 @@ export function useMultiSet(musics: BingoMusic[]) {
     renameCard,
     updateCards,
     applyToCards,
+    applyToCard,
     setPaused,
     replaceAll,
   };

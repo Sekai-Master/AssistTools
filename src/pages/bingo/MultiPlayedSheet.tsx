@@ -3,7 +3,7 @@ import { cn } from "../../lib/utils";
 import type { BingoMusic } from "./bingoLogic";
 import type { CardKind } from "./bingoShare";
 import { CellSheetFrame } from "./CellSheetFrame";
-import type { PlayedMatch } from "./PlayedSongSheet";
+import { PRIMARY, type PlayedMatch } from "./PlayedSongSheet";
 
 export interface PlayedGroup {
   id: string;
@@ -19,6 +19,8 @@ interface Props {
   music: BingoMusic;
   groups: readonly PlayedGroup[];
   onFill: () => void;
+  /** 埋めるマスが無い曲を、遊んだ曲の一覧にだけ入れる（PlayedSongSheet と同じ）。 */
+  onRecord?: () => void;
   onPickAgain: () => void;
   onClose: () => void;
 }
@@ -58,7 +60,7 @@ function GroupItem({ group }: { group: PlayedGroup }) {
  * 1 枚で遊ぶの PlayedSongSheet と同じ作り（押しただけでは埋めない・別の曲を選び直せる）。
  * 休止中のカードは数に入れず、下に「休止中（反映しません）」として薄く並べる（どのカードが止まっているか分かるように）。
  */
-export function MultiPlayedSheet({ music, groups, onFill, onPickAgain, onClose }: Props) {
+export function MultiPlayedSheet({ music, groups, onFill, onRecord, onPickAgain, onClose }: Props) {
   const playing = groups.filter((g) => !g.paused);
   const paused = groups.filter((g) => g.paused);
   const hitCards = playing.filter((g) => g.matches.length > 0).length;
@@ -98,15 +100,21 @@ export function MultiPlayedSheet({ music, groups, onFill, onPickAgain, onClose }
         )}
       </div>
       {open > 0 ? (
-        <button
-          type="button"
-          onClick={onFill}
-          className={`neu-cta mt-4 min-h-12 w-full shrink-0 rounded-xl text-base font-bold ${BUTTON_FOCUS}`}
-        >
-          まとめて埋める（<span className="font-num">{open}</span>マス）
-        </button>
+        <>
+          <button type="button" onClick={onFill} className={PRIMARY}>
+            まとめて埋める（<span className="font-num">{open}</span>マス）
+          </button>
+          {onRecord && <p className="mt-2 shrink-0 text-center text-xs text-slate-500">埋めると、遊んだ曲の一覧にも入ります</p>}
+        </>
       ) : (
-        total > 0 && <p className="mt-4 text-center text-sm text-slate-600">もう埋まっています</p>
+        <>
+          {total > 0 && <p className="mt-4 text-center text-sm text-slate-600">もう埋まっています</p>}
+          {onRecord && (
+            <button type="button" onClick={onRecord} className={PRIMARY}>
+              遊んだ曲に入れる
+            </button>
+          )}
+        </>
       )}
       <button
         type="button"

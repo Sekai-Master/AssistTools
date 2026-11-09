@@ -50,6 +50,11 @@ import { BingoCardGrid } from "./BingoCardGrid";
 import { BingoSettings, type SongFilters } from "./BingoSettings";
 import { BingoShareBar } from "./BingoShareBar";
 import { LinkBand } from "./LinkBand";
+import { PlayStartLine } from "./PlayStartLine";
+import { usePlayedList } from "./usePlayedList";
+import { usePlayedSlots } from "./usePlayedSlots";
+import { PlayedListSheet } from "./PlayedListSheet";
+import { PlayedListButton } from "./PlayedListButton";
 import { ALL_CATEGORY_VALUES, ALL_TYPE_VALUES, ALL_UNIT_VALUES } from "./bingoConstants";
 
 const base = import.meta.env.BASE_URL;
@@ -95,10 +100,16 @@ function BingoBoard({
   error: dataError,
   onFullChange,
 }: ReturnType<typeof useBingoMusics> & { onFullChange: (full: boolean) => void }) {
-  const { initial, kind, setKind, odaiCard, songCard, own, current, viewing, linkShown, changeCard, applyCard, dismissLink } =
-    useSingleCards(musics);
+  const single = useSingleCards(musics);
+  const { initial, kind, setKind, odaiCard, songCard, own, current, viewing, linkShown, changeCard, applyCard, dismissLink } = single;
   // まとめて遊ぶ（5 枚まで）のセット。1 枚で遊ぶとは保存を分ける
   const multi = useMultiSet(musics);
+  // 遊んだ曲の一覧（1 枚で遊ぶ・まとめて遊ぶで 1 つ）と、一覧から埋める・戻す相手のカード
+  const played = usePlayedList();
+  const slots = usePlayedSlots(musics, single, multi, played);
+  const [listOpen, setListOpen] = useState(false);
+  const closeList = useCallback(() => setListOpen(false), []);
+  const listButton = <PlayedListButton count={slots.count} onClick={() => setListOpen(true)} />;
   useEffect(() => onFullChange(multi.open), [multi.open, onFullChange]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // 書き出し画像の描き終わり。共有・保存はこれを待ってから画像にする（埋めた直後でも最新の絵）
@@ -255,7 +266,7 @@ function BingoBoard({
    */
   const addLinkToMulti = () => {
     if (!current || multi.full) return;
-    multi.setOpen(true, viewing ? own : null);
+    multi.setOpen(true, viewing ? own : null, viewing && own ? single.meta[own.kind] : null);
     multi.addCard(current);
     dismissLink();
   };
@@ -389,6 +400,13 @@ function BingoBoard({
                   <span className="font-bold">{ODAI_LEVELS[cardLevel].label}</span> ・ {playTimeText(cardSongs)}
                 </p>
               )}
+              {/* プレイ開始は見出しの下の 1 行（basis-full で折り返す。高さはいつも取っておく） */}
+              <PlayStartLine
+                startedAt={single.meta[current.kind]?.startedAt}
+                filled={progressOf(current.card).filled}
+                fresh={(single.meta[current.kind]?.startedAt ?? 0) >= slots.mountedAt}
+                hidden={viewing !== null}
+              />
             </div>
             <NeuButton
               onClick={regenerate}
@@ -418,6 +436,8 @@ function BingoBoard({
               jacketBase={JACKET_BASE}
               onChange={(card) => changeCard({ kind: "odai", card })}
               pickable={pickable}
+              onPlayed={viewing ? undefined : slots.recordSingle}
+              listButton={listButton}
             />
           ) : (
             <BingoCardGrid
@@ -427,6 +447,8 @@ function BingoBoard({
               aliases={aliases}
               jacketBase={JACKET_BASE}
               onChange={(card) => changeCard({ kind: "song", card })}
+              onPlayed={viewing ? undefined : slots.recordSingle}
+              listButton={listButton}
             />
           )}
           <BingoShareBar
@@ -445,7 +467,7 @@ function BingoBoard({
           <NeuButton
             className="min-h-11 !px-4"
             onClick={() => {
-              multi.setOpen(true, current);
+              multi.setOpen(true, current, current ? single.meta[current.kind] : null);
               dismissLink();
             }}
           >
@@ -461,6 +483,24 @@ function BingoBoard({
           jacketBase={JACKET_BASE}
           pickable={pickable}
           linkOf={linkOf}
+          played={played}
+          freshSince={slots.mountedAt}
+          listButton={listButton}
+        />
+      )}
+      {listOpen && (
+        <PlayedListSheet
+          entries={played.list}
+          musicById={slots.musicById}
+          jacketBase={JACKET_BASE}
+          targets={slots.targets}
+          noTargetNote={slots.noTargetNote}
+          slots={slots.all}
+          starts={slots.starts}
+          onRemove={slots.remove}
+          onClear={played.clear}
+          onFill={slots.fill}
+          onClose={closeList}
         />
       )}
       {/* 書き出し用。画面のカードは上のマスが主役なので、画像は隠して描く */}

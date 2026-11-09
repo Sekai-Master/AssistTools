@@ -13,6 +13,8 @@ export interface PlayedRow {
   no: number;
   at: number;
   music: BingoMusic;
+  /** もとの 1 件（一覧から消すときに使う）。 */
+  entry: PlayedEntry;
 }
 
 /** 一覧を画面・書き出し用の行にする。楽曲データに無い曲（配信が止まった など）は落とす（保存には残す）。 */
@@ -20,7 +22,7 @@ export function playedRows(entries: readonly PlayedEntry[], musicById: ReadonlyM
   return entries
     .flatMap((e) => {
       const music = musicById.get(e.id);
-      return music ? [{ at: e.at, music }] : [];
+      return music ? [{ at: e.at, music, entry: e }] : [];
     })
     .map((r, i) => ({ no: i + 1, ...r }));
 }
@@ -75,4 +77,9 @@ export function playedCsv(rows: readonly PlayedRow[]): string {
 /** CSV のファイル名（bingo_played_YYYYMMDD.csv。この端末の日付）。 */
 export function playedCsvFileName(now: Date): string {
   return `bingo_played_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}.csv`;
+}
+
+/** プレイ開始の文（「プレイ開始 11/12 15:03」）。fresh はこの画面を開いてから付いた時刻で、そのときだけ「！」を付ける。 */
+export function playStartText(at: number, fresh: boolean): string {
+  return `プレイ開始${fresh ? "！" : ""} ${shortTime(at)}`;
 }
