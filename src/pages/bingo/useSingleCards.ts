@@ -20,12 +20,24 @@ export function useSingleCards(musics: BingoMusic[]) {
   const [kind, setKind] = useState<CardKind>(initial.kind);
   const [odaiCard, setOdaiCard] = useState<OdaiCell[] | null>(initial.odai);
   const [songCard, setSongCard] = useState<Cell[] | null>(initial.song);
-  const [pendingLink, setPendingLink] = useState<KindedCard | null>(initial.pendingLink);
+  // リンクのカードを「見るだけ」で出しているとき、そのカード（見る間に埋めたマスごと）。保存には入れない
+  const [viewing, setViewing] = useState<KindedCard | null>(initial.viewing);
+  // リンクのカードを開いた知らせを出す種類（閉じる・入れ替える・作るで消える）
+  const [linked, setLinked] = useState<CardKind | null>(initial.linked);
 
+  /** 自分のカードにする（作る・コードから開く・見ていたリンクのカードで遊ぶ）。リンクの知らせと「見るだけ」は終える。 */
   const applyCard = useCallback((kc: KindedCard) => {
     if (kc.kind === "odai") setOdaiCard(kc.card);
     else setSongCard(kc.card);
     setKind(kc.kind);
+    setViewing(null);
+    setLinked(null);
+  }, []);
+
+  /** リンクの知らせを閉じる（「見るだけ」なら見るのをやめて、自分のカードに戻る）。 */
+  const dismissLink = useCallback(() => {
+    setViewing(null);
+    setLinked(null);
   }, []);
 
   // リンクのカードを読んだ後はリンクを外す（開き直したときに、埋めた途中が人のカードで上書きされないように）。
@@ -38,7 +50,8 @@ export function useSingleCards(musics: BingoMusic[]) {
     window.history.replaceState(window.history.state, "", url);
   }, [ready]);
 
-  // 途中経過を残す（楽曲データが届く前の空のカードで上書きしない）
+  // 途中経過を残す（楽曲データが届く前の空のカードで上書きしない）。
+  // ★ 見るだけのカード（viewing）はここに入らない。見る間に埋めても、自分のカード（odaiCard・songCard）は変わらない
   useEffect(() => {
     if (!ready) return;
     saveBingo({
@@ -48,10 +61,23 @@ export function useSingleCards(musics: BingoMusic[]) {
     });
   }, [ready, kind, odaiCard, songCard]);
 
-  const current = useMemo<KindedCard | null>(() => {
+  /** 自分のカード（見ている種類の）。 */
+  const own = useMemo<KindedCard | null>(() => {
     if (kind === "odai") return odaiCard ? { kind, card: odaiCard } : null;
     return songCard ? { kind, card: songCard } : null;
   }, [kind, odaiCard, songCard]);
+  // 種類を切り替えると見るだけのカードは隠れ、戻すとまた出る
+  const viewingNow = viewing && viewing.kind === kind ? viewing : null;
+
+  /** 画面のカードを替える（埋める・戻す・差し替え）。見るだけの間は、見ているカードだけを替える（保存しない）。 */
+  const changeCard = useCallback(
+    (kc: KindedCard) => {
+      if (viewingNow) setViewing(kc);
+      else if (kc.kind === "odai") setOdaiCard(kc.card);
+      else setSongCard(kc.card);
+    },
+    [viewingNow]
+  );
 
   return {
     /** 開いたときに決めたもの（読めなかったリンクの文言・段の初期値に使う）。 */
@@ -59,12 +85,16 @@ export function useSingleCards(musics: BingoMusic[]) {
     kind,
     setKind,
     odaiCard,
-    setOdaiCard,
     songCard,
-    setSongCard,
-    pendingLink,
-    setPendingLink,
+    own,
+    /** 画面に出すカード（見るだけのカードがあればそれ、無ければ自分のカード）。 */
+    current: viewingNow ?? own,
+    /** 見るだけで出しているリンクのカード（この種類のとき）。 */
+    viewing: viewingNow,
+    /** リンクのカードを開いた知らせを、いまの種類で出すか。 */
+    linkShown: linked === kind,
+    changeCard,
     applyCard,
-    current,
+    dismissLink,
   };
 }
