@@ -109,7 +109,10 @@ function BingoBoard({
   const slots = usePlayedSlots(musics, single, multi, played);
   const [listOpen, setListOpen] = useState(false);
   const closeList = useCallback(() => setListOpen(false), []);
-  const listButton = <PlayedListButton count={slots.count} onClick={() => setListOpen(true)} />;
+  // 1 枚で遊ぶでは「遊んだ曲を入れる」の横で伸ばす（320px で折り返したとき幅いっぱいになるように）。まとめて遊ぶの操作の列では伸ばさない
+  const listButton = (grow: boolean) => (
+    <PlayedListButton count={slots.count} onClick={() => setListOpen(true)} className={grow ? "grow" : undefined} />
+  );
   useEffect(() => onFullChange(multi.open), [multi.open, onFullChange]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // 書き出し画像の描き終わり。共有・保存はこれを待ってから画像にする（埋めた直後でも最新の絵）
@@ -437,7 +440,7 @@ function BingoBoard({
               onChange={(card) => changeCard({ kind: "odai", card })}
               pickable={pickable}
               onPlayed={viewing ? undefined : slots.recordSingle}
-              listButton={listButton}
+              listButton={listButton(true)}
             />
           ) : (
             <BingoCardGrid
@@ -448,7 +451,7 @@ function BingoBoard({
               jacketBase={JACKET_BASE}
               onChange={(card) => changeCard({ kind: "song", card })}
               onPlayed={viewing ? undefined : slots.recordSingle}
-              listButton={listButton}
+              listButton={listButton(true)}
             />
           )}
           <BingoShareBar
@@ -485,7 +488,7 @@ function BingoBoard({
           linkOf={linkOf}
           played={played}
           freshSince={slots.mountedAt}
-          listButton={listButton}
+          listButton={listButton(false)}
         />
       )}
       {listOpen && (
