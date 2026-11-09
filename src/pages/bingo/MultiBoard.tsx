@@ -1,4 +1,5 @@
 import type { AliasEntry } from "../../lib/songSearch";
+import { cn } from "../../lib/utils";
 import type { BingoMusic } from "./bingoLogic";
 import { progressOf } from "./bingoProgress";
 import type { KindedCard } from "./bingoShare";
@@ -21,6 +22,8 @@ interface Props {
   paused: boolean;
   /** この画面を開いた時刻（これより後に付いたプレイ開始は「プレイ開始！」と太字）。 */
   freshSince: number;
+  /** 切り替え式（スマホ）で 1 枚だけ出しているか。見出しの 2 行目を折り返してよい（並べた盤面の段がずれる心配が無い）。 */
+  single?: boolean;
   onChange: (card: KindedCard) => void;
   onSettings: () => void;
   onResume: () => void;
@@ -41,12 +44,15 @@ function BoardHeader({
   kc,
   startedAt,
   fresh,
+  wrap,
   onSettings,
 }: {
   name: string;
   kc: KindedCard | null;
   startedAt: number | undefined;
   fresh: boolean;
+  /** 2 行目を折り返す（切り替え式で 1 枚だけ出しているとき。並べたときは 1 行に収めて段をそろえる）。 */
+  wrap: boolean;
   onSettings: () => void;
 }) {
   const p = kc ? progressOf(kc.card) : null;
@@ -55,7 +61,7 @@ function BoardHeader({
       <div className="min-w-0 flex-1">
         <h3 className="truncate text-base font-bold text-slate-700">{name}</h3>
         {kc && p && (
-          <p className="truncate text-xs text-slate-500">
+          <p className={cn("text-xs text-slate-500", !wrap && "truncate")}>
             {kindLabel(kc)} ・ 埋めた{" "}
             <span className="font-num font-bold text-slate-600">
               {p.filled}/{p.total}
@@ -105,7 +111,21 @@ function PausedBand({ onResume }: { onResume: () => void }) {
  * 読めないカード（楽曲データの側が変わった など）は盤面の代わりに 1 行で出し、消すのは設定から（黙って落とさない）。
  * 休止中は盤面を薄くして「休止中」の帯を重ねる（並びからは外さない。持ち主 2026-11-10）。
  */
-export function MultiBoard({ entry, name, musics, aliases, jacketBase, pickable, board, paused, freshSince, onChange, onSettings, onResume }: Props) {
+export function MultiBoard({
+  entry,
+  name,
+  musics,
+  aliases,
+  jacketBase,
+  pickable,
+  board,
+  paused,
+  freshSince,
+  single = false,
+  onChange,
+  onSettings,
+  onResume,
+}: Props) {
   const kc = entry.card;
   return (
     <section aria-label={name} className="min-w-0">
@@ -114,6 +134,7 @@ export function MultiBoard({ entry, name, musics, aliases, jacketBase, pickable,
         kc={kc}
         startedAt={entry.startedAt}
         fresh={(entry.startedAt ?? 0) >= freshSince}
+        wrap={single}
         onSettings={onSettings}
       />
       {!kc ? (

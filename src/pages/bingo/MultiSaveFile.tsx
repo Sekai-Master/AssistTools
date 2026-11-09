@@ -124,7 +124,7 @@ export function MultiSaveFile({ set, played }: { set: MultiSet; played: PlayedLi
         }}
       />
       {message && (
-        <div className="absolute inset-x-0 top-full z-20 mt-1 flex items-start gap-2 rounded-lg bg-neu py-1 pl-3 shadow-neu-sm">
+        <div className="absolute inset-x-0 top-full z-20 mt-1 flex items-start gap-2 rounded-lg bg-neu py-1 pl-3 shadow-neu-sm sm:left-auto sm:w-full sm:max-w-md">
           <p
             role={message.kind === "error" ? "alert" : "status"}
             className={`min-w-0 flex-1 py-2 text-sm ${message.kind === "error" ? "text-rose-600" : "text-slate-600"}`}

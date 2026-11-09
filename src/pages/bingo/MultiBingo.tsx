@@ -147,7 +147,7 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf,
   const playable = entries.some((e) => e.card && !isPaused(e));
   const settingsEntry = entries.find((e) => e.id === settingsId) ?? null;
   const active = Math.min(set.active, Math.max(0, entries.length - 1));
-  const renderBoard = (e: MultiEntry, i: number, board: { width: number; step: ReturnType<typeof fontStepOf> }) => (
+  const renderBoard = (e: MultiEntry, i: number, board: { width: number; step: ReturnType<typeof fontStepOf> }, single = false) => (
     <MultiBoard
       key={e.id}
       entry={e}
@@ -159,6 +159,7 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf,
       board={board}
       paused={isPaused(e)}
       freshSince={freshSince}
+      single={single}
       onChange={(kc) => set.updateCards(new Map([[e.id, kc]]))}
       onSettings={() => setSettingsId(e.id)}
       onResume={() => set.setPaused(e.id, false)}
@@ -203,7 +204,7 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf,
         ) : layout.mode === "tabs" ? (
           <>
             <MultiTabs entries={entries} active={active} onSelect={set.setActive} />
-            {renderBoard(entries[active], active, { width: Math.max(width, 1), step: fontStepOf(width) })}
+            {renderBoard(entries[active], active, { width: Math.max(width, 1), step: fontStepOf(width) }, true)}
           </>
         ) : (
           <div className="grid" style={{ gridTemplateColumns: `repeat(${layout.cols}, minmax(0, 1fr))`, gap: BOARD_GAP }}>

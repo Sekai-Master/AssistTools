@@ -39,7 +39,7 @@ export function RemoveView({ entry, title, groups, onRevert, onRemoveOnly, onCan
       {cells > 0 && (
         <>
           <p className="mt-2 text-sm text-slate-600">この曲で埋めたマスを戻しますか？</p>
-          <ul className="mt-2 min-h-0 flex-1 divide-y divide-slate-300 overflow-y-auto rounded-lg border border-slate-300">
+          <ul className="mt-2 min-h-0 divide-y divide-slate-300 overflow-y-auto rounded-lg border border-slate-300">
             {groups
               .filter((g) => g.cells.length > 0)
               .map((g) => (
@@ -60,6 +60,8 @@ export function RemoveView({ entry, title, groups, onRevert, onRemoveOnly, onCan
           一覧のほかの曲でも当てはまる <span className="font-num">{kept}</span> マスは、埋めたまま残します
         </p>
       )}
+      {/* ボタンは小窓の下にそろえる（一覧のときと同じ位置） */}
+      <div className="flex-1" />
       {cells > 0 ? (
         <>
           <button type="button" onClick={onRevert} className={PRIMARY}>
