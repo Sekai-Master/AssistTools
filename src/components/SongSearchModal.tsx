@@ -2,19 +2,13 @@ import { useId, useMemo, useRef, useState } from "react";
 import { NeuInput } from "./ui/NeuInput";
 import { useModalA11y } from "../lib/a11y";
 import { onJacketError } from "../lib/img";
+import { type AliasEntry, type SearchableSong, searchSongs } from "../lib/songSearch";
 
-export interface SearchableSong {
-  id: string;
-  title: string;
-  jacketLink: string;
-  pronunciation?: string;
-  artistName?: string;
-}
+// 型は検索の処理と一緒に lib/songSearch.ts へ移した。ここから読んでいる所のために出し直す
+export type { AliasEntry, SearchableSong };
 
-export interface AliasEntry {
-  alias: string;
-  songIds: string[];
-}
+/** 結果の一覧に出す曲数の上限（入力中に一覧が重くならないように）。 */
+const RESULT_LIMIT = 80;
 
 interface Props<T extends SearchableSong> {
   musics: T[];
@@ -47,23 +41,10 @@ export function SongSearchModal<T extends SearchableSong>({
   const titleId = useId();
   useModalA11y(true, onClose, dialogRef);
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return musics.slice(0, 80);
-    const aliasIds = new Set<string>();
-    for (const a of aliases) {
-      if (a.alias.toLowerCase().includes(q)) a.songIds.forEach((id) => aliasIds.add(id));
-    }
-    return musics
-      .filter(
-        (m) =>
-          aliasIds.has(m.id) ||
-          m.title.toLowerCase().includes(q) ||
-          m.pronunciation?.includes(q) ||
-          m.artistName?.toLowerCase().includes(q)
-      )
-      .slice(0, 80);
-  }, [query, musics, aliases]);
+  const results = useMemo(
+    () => searchSongs(musics, aliases, query).slice(0, RESULT_LIMIT),
+    [query, musics, aliases]
+  );
 
   return (
     <div
