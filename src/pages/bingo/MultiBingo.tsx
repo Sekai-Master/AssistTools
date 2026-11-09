@@ -61,21 +61,13 @@ function playedGroups(entries: readonly MultiEntry[], music: BingoMusic): Played
   });
 }
 
-/** 遊んだ曲で埋めたあとのカード（当てはまるマスがあるカードだけ）。 */
-function filledByPlayed(entries: readonly MultiEntry[], music: BingoMusic): Map<string, KindedCard> {
-  const updates = new Map<string, KindedCard>();
-  for (const e of entries) {
-    if (!e.card) continue;
-    const indices = matchingCells(e.card.card, music);
-    if (indices.length === 0) continue;
-    updates.set(
-      e.id,
-      e.card.kind === "odai"
-        ? { kind: "odai", card: withClearedAll(e.card.card, indices) }
-        : { kind: "song", card: withClearedAll(e.card.card, indices) }
-    );
-  }
-  return updates;
+/** 遊んだ曲で埋めたあとのカード。当てはまるマスが無ければ null（変えない）。 */
+function filledByPlayed(kc: KindedCard, music: BingoMusic): KindedCard | null {
+  const indices = matchingCells(kc.card, music);
+  if (indices.length === 0) return null;
+  return kc.kind === "odai"
+    ? { kind: "odai", card: withClearedAll(kc.card, indices) }
+    : { kind: "song", card: withClearedAll(kc.card, indices) };
 }
 
 /** スマホの切り替え: 番号と BINGO の印だけ（名前は下の見出しに全部出す。320px でも 5 つが 44px 以上で入る）。 */
@@ -147,6 +139,8 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf 
 
   return (
     <Panel>
+      {/* 見出しの段を飛ばさない（ページの見出し h1 → この区画 → カードごとの h3） */}
+      <h2 className="sr-only">並べたカード</h2>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <NeuButton
           ref={playedButton}
@@ -192,6 +186,8 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf 
 
       {settingsEntry && (
         <MultiCardSheet
+          // 名前の下書きはカードごと（別のカードの設定を開いたときに前の下書きを持ち越さない）
+          key={settingsEntry.id}
           entry={settingsEntry}
           name={entryName(settingsEntry, entries.indexOf(settingsEntry))}
           link={settingsEntry.card ? linkOf(settingsEntry.card) : ""}
@@ -220,7 +216,7 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf 
           music={played}
           groups={playedGroups(entries, played)}
           onFill={() => {
-            set.updateCards(filledByPlayed(entries, played));
+            set.applyToCards((kc) => filledByPlayed(kc, played));
             setPlayed(null);
           }}
           onPickAgain={() => setPlayed("picking")}
