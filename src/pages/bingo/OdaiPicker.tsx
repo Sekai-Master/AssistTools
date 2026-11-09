@@ -157,7 +157,7 @@ export function OdaiPicker({
     <CellSheetFrame caption={caption} title={title} sub={sub} onClose={onClose} className="h-[85dvh] max-h-[720px]">
       {full && (
         <p className="mt-2 shrink-0 text-sm font-bold text-slate-700" role="status">
-          {max}つまで選べます。ほかのお題にするときは、選んだお題を押して外してください
+          {max}つまで選べます。選んだお題を押して外すと、ほかを選べます
         </p>
       )}
       {/* 16px 未満だと iOS が入力時に画面を拡大する */}

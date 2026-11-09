@@ -239,7 +239,9 @@ export function BingoCardGrid(props: Props) {
             if ("odai" in cell) {
               const { odai } = cell;
               // 入れたお題・差し替えで選んだ長い名前（1640mP（164×40mP）・Orangestar など）は、PC でも 12px にし、
-              // 字の間を詰める。スマホは 12px が最小（docs/design-system.md 2 節）なので、長い英字は語の途中で折る
+              // 字の間を詰める。スマホは 12px が最小（docs/design-system.md 2 節）なので、長い英字は語の途中で折る。
+              // ★ 区切りを inline-block にすると、中で折り返した区切りの後ろに次の区切りが続けられず 1 行増える
+              //   （PC の正方形のマスで「Ado×Giga、TeddyLoid & DECO*｜27」が 4 行になり切れた）。長い名前は続けて流す
               const long = !fitsCell(odai);
               return (
                 <button
@@ -266,11 +268,18 @@ export function BingoCardGrid(props: Props) {
                       long ? "tracking-tighter" : "sm:text-sm"
                     )}
                   >
-                    {odai.chunks.map((chunk, j) => (
-                      <span key={j} className="inline-block max-w-full">
-                        {chunk}
-                      </span>
-                    ))}
+                    {odai.chunks.map((chunk, j) =>
+                      long ? (
+                        <span key={j}>
+                          {chunk}
+                          <wbr />
+                        </span>
+                      ) : (
+                        <span key={j} className="inline-block max-w-full">
+                          {chunk}
+                        </span>
+                      )
+                    )}
                   </span>
                 </button>
               );
@@ -311,7 +320,7 @@ export function BingoCardGrid(props: Props) {
           mode="single"
           caption={replacingCaption(props.card[replacing])}
           title="替えるお題を選ぶ"
-          sub="カードにあるお題は選べません。替えたマスは埋めていない状態に戻ります"
+          sub="カードにあるお題は選べません。埋めた印は外れます"
           items={props.pickable}
           unavailable={onCard}
           unavailableNote="カードにあります"

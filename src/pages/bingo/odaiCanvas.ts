@@ -31,30 +31,72 @@ const CAPTION_SIZE = 13;
 const MAIN_SIZES = [22, 20, 18, 16, 14, 13, 12];
 const MAX_LINES = 3;
 const LINE_HEIGHT = 1.2;
+const CAPTION_GAP = 6;
+/** 札・文言を置ける高さ（上端の帯と上下の余白を除く）。 */
+const BODY_HEIGHT = CELL - STRIPE - PAD * 2;
+/**
+ * 12px でも 3 行に収まらない長い名前（入れたいお題・差し替えで選べる作者。「雄之助 & CircusP feat. Hatsune Miku」など）だけに使う
+ * 小さい字。画像は 520px の絵で、画面の字の決まり（12px より小さくしない）とは別。行の数はマスの高さに収まるだけ。
+ */
+const LONG_SIZES = [11, 10, 9, 8];
+const LONG_MIN_SIZE = LONG_SIZES[LONG_SIZES.length - 1];
 
-/** 区切りの中では折らずに行へ詰める。1 つの区切りが幅を超えるときだけ字の単位で折る。 */
+/** 幅を超える区切りの中で、この字の後ろでは折ってよい（空白・読点・連名の × ＋ &）。 */
+const WORD_BREAK_AFTER = /[\s、，,×＋&]/;
+
+/** 1 つの区切りを、空白などの後ろで分ける（「OSTER project feat.」→「OSTER 」「project 」「feat.」）。 */
+function splitAtSpaces(chunk: string): string[] {
+  // 後読みの正規表現は古い iOS Safari で構文エラーになるので、1 字ずつ見る
+  const out: string[] = [];
+  let cur = "";
+  for (const ch of chunk) {
+    cur += ch;
+    if (WORD_BREAK_AFTER.test(ch)) {
+      out.push(cur);
+      cur = "";
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/**
+ * 区切りの中では折らずに行へ詰める。1 つの区切りが幅を超えるときは空白の後ろで、それでも超える語だけ字の単位で折る
+ * （長い英字の続きは途中で折る）。行の端の空白は描かないので外す。
+ */
 export function layoutChunks(chunks: readonly string[], maxWidth: number, measure: (s: string) => number): string[] {
   const lines: string[] = [];
   let line = "";
   const push = (piece: string) => {
-    if (line && measure(line + piece) > maxWidth) {
-      lines.push(line);
+    if (line && measure((line + piece).trimEnd()) > maxWidth) {
+      lines.push(line.trimEnd());
       line = "";
     }
-    line += piece;
+    line += line === "" ? piece.trimStart() : piece;
   };
   for (const chunk of chunks) {
-    if (measure(chunk) <= maxWidth) {
+    if (measure(chunk.trim()) <= maxWidth) {
       push(chunk);
       continue;
     }
-    for (const ch of chunk) push(ch);
+    for (const word of splitAtSpaces(chunk)) {
+      if (measure(word.trim()) <= maxWidth) push(word);
+      else for (const ch of word) push(ch);
+    }
   }
-  if (line) lines.push(line);
+  if (line.trim()) lines.push(line.trimEnd());
   return lines;
 }
 
-/** 2 行以内（だめなら 3 行以内）に収まるいちばん大きい字の大きさと、その行分け。 */
+/** maxLines 行以内に、どの行も幅に収まるか。 */
+function fits(lines: readonly string[], maxLines: number, maxWidth: number, measure: (s: string) => number): boolean {
+  return lines.length <= maxLines && lines.every((l) => measure(l) <= maxWidth);
+}
+
+/**
+ * 2 行以内（だめなら 3 行以内）に収まるいちばん大きい字の大きさと、その行分け。12px でも 3 行に収まらない長い名前は、
+ * さらに小さい字（LONG_SIZES）で、マスの高さに収まる行の数まで使う。
+ */
 export function fitOdaiText(
   chunks: readonly string[],
   maxWidth: number,
@@ -64,11 +106,20 @@ export function fitOdaiText(
     for (const size of MAIN_SIZES) {
       const measure = measureAt(size);
       const lines = layoutChunks(chunks, maxWidth, measure);
-      if (lines.length <= maxLines && lines.every((l) => measure(l) <= maxWidth)) return { size, lines };
+      if (fits(lines, maxLines, maxWidth, measure)) return { size, lines };
     }
   }
-  const size = MAIN_SIZES[MAIN_SIZES.length - 1];
-  return { size, lines: layoutChunks(chunks, maxWidth, measureAt(size)) };
+  for (const size of LONG_SIZES) {
+    const measure = measureAt(size);
+    const lines = layoutChunks(chunks, maxWidth, measure);
+    if (fits(lines, maxLinesAt(size), maxWidth, measure)) return { size, lines };
+  }
+  return { size: LONG_MIN_SIZE, lines: layoutChunks(chunks, maxWidth, measureAt(LONG_MIN_SIZE)) };
+}
+
+/** この字の大きさで、札の下に置ける行の数。 */
+export function maxLinesAt(size: number): number {
+  return Math.floor((BODY_HEIGHT - CAPTION_SIZE - CAPTION_GAP) / (size * LINE_HEIGHT));
 }
 
 function drawOdaiCell(
@@ -91,10 +142,11 @@ function drawOdaiCell(
     ctx.font = `bold ${size}px ${FONT_FAMILY}`;
     return (s) => ctx.measureText(s).width;
   });
-  const captionGap = 6;
+  const captionGap = CAPTION_GAP;
   const mainHeight = fit.lines.length * fit.size * LINE_HEIGHT;
   const blockHeight = CAPTION_SIZE + captionGap + mainHeight;
-  const top = y + STRIPE + (CELL - STRIPE - blockHeight) / 2;
+  // 高さに収まらないとき（来ないはずだが）も、上端の帯の下から描き始める
+  const top = y + STRIPE + Math.max(0, (CELL - STRIPE - blockHeight) / 2);
 
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
