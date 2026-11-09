@@ -47,12 +47,12 @@ export function cardLink(base: string, code: string): string {
   return `${root}bingo?${CARD_PARAM}=${encodeURIComponent(code)}`;
 }
 
-/** 共有に添える短い文。ハッシュタグは #プロセカ だけ。 */
+/** 共有に添える短い文。ハッシュタグは #チアフルビンゴ と #SekaiMaster（Nori 2026-11-09。前は #プロセカ）。 */
 /** levelLabel はお題ビンゴの難易度（「MASTER」など）。 */
 export function shareText(kind: CardKind, p: Progress, levelLabel?: string): string {
   const state = p.bingo ? "・BINGO!" : p.reach > 0 ? `・リーチ ${p.reach}` : "";
   const name = levelLabel ? `${KIND_LABEL[kind]} ${levelLabel}` : KIND_LABEL[kind];
-  return `チアフルカーニバルの${name}（埋めたマス ${p.filled}/${p.total}${state}）#プロセカ`;
+  return `チアフルカーニバルの${name}（埋めたマス ${p.filled}/${p.total}${state}）#チアフルビンゴ #SekaiMaster`;
 }
 
 export type ShareResult = "shared" | "copied" | "saved" | "cancelled";

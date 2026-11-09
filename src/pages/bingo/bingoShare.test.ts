@@ -53,12 +53,12 @@ describe("カードのコードとリンク", () => {
 });
 
 describe("共有の文", () => {
-  it("種類と埋めたマスを短く。ハッシュタグは #プロセカ だけ", () => {
+  it("種類と埋めたマスを短く。ハッシュタグは #チアフルビンゴ と #SekaiMaster", () => {
     const t = shareText("odai", { filled: 12, total: 24, reach: 1, bingo: true, lines: [0] });
     expect(t).toContain("お題ビンゴ");
     expect(t).toContain("12/24");
     expect(t).toContain("BINGO");
-    expect(t.match(/#\S+/g)).toEqual(["#プロセカ"]);
+    expect(t.match(/#\S+/g)).toEqual(["#チアフルビンゴ", "#SekaiMaster"]);
     expect(shareText("song", { filled: 3, total: 24, reach: 2, bingo: false, lines: [] })).toContain("リーチ 2");
   });
 
@@ -70,7 +70,7 @@ describe("共有の文", () => {
 
 describe("shareCard（端末に合わせて切り替える）", () => {
   const blob = new Blob(["png"], { type: "image/png" });
-  const meta = { text: "お題ビンゴ #プロセカ", url: "https://x/bingo?card=a", fileName: "bingo.png" };
+  const meta = { text: "お題ビンゴ #チアフルビンゴ #SekaiMaster", url: "https://x/bingo?card=a", fileName: "bingo.png" };
 
   it("画像を送れる端末では share に画像・文・リンクを渡す", async () => {
     const share = vi.fn().mockResolvedValue(undefined);
