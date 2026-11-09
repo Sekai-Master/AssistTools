@@ -1,8 +1,11 @@
 /**
  * 答え合わせのレポート（純粋関数）。予測ログを実測の終値で採点する。
+ * analyze.ts は import しただけで解析ジョブ全体が走るので、テストする関数はこちらに置く
  */
 import type { ModelSummary } from '../../workers/border/src/fit.ts'
 import { RANKS, durationHours, type EventMeta } from '../../workers/border/src/model.ts'
+import type { ResultRank } from '../../workers/border/src/posts.ts'
+import type { ResultPostRank } from '../../workers/border/src/snapshot.ts'
 
 /** Worker の /admin/predictions が返す1行 */
 export interface PredictionLog {
@@ -19,9 +22,15 @@ export interface PredictionLog {
   visible: number
 }
 
-/** 採点する時点（経過率）。この時点までに出ていた最新の予測を使う */
+/**
+ * 採点する時点（経過率）。各時点で「経過がその時点以上の最初の予測」を使う（どの時点も同じ決まり）。
+ * Worker が節目（経過50%・85%）の投稿に使うのも、節目を越えた最初の値（collect.ts の MILESTONES: 前の値 < 節目 ≤ この値）。
+ * 同じ行を選べば、答え合わせ（X とサイト）の予測が投稿した予測と同じ値になる。
+ * 2026-11-09 まで「progress ≤ 時点 + 0.005 の最新」を使っていて、予測が30分ごとなので長い回（30分＝経過0.2〜0.3%）では
+ * 投稿の次の行を選び、219・220・223 で投稿と答え合わせの値がずれた（経過50%・85% とも）
+ */
 export const REPORT_CHECKPOINTS = [0.5, 0.7, 0.85, 0.95] as const
-/** 時点より前の予測がこれ以上古ければ「その時点の予測は無かった」とする */
+/** 時点を越えた最初の予測が、時点よりこれ以上後なら「その時点の予測は無かった」とする（止まっていた回など） */
 const MAX_STALENESS = 0.08
 
 export interface ProspectiveScore {
@@ -66,12 +75,12 @@ export function buildReport(
   for (const rank of RANKS) {
     const final = finals.get(`${e.id}:${rank}`)
     if (final == null) continue
-    const mine = preds.filter((p) => p.rank === rank).sort((a, b) => a.ts - b.ts)
+    // 経過が数でない行は使わない（文字列は比べると数に化けて「越えた」に入る）
+    const mine = preds.filter((p) => p.rank === rank && typeof p.progress === 'number' && Number.isFinite(p.progress)).sort((a, b) => a.ts - b.ts)
     const prospective: ProspectiveScore[] = []
     for (const c of REPORT_CHECKPOINTS) {
-      const before = mine.filter((p) => p.progress <= c + 0.005)
-      const p = before[before.length - 1]
-      if (!p || c - p.progress > MAX_STALENESS) continue
+      const p = mine.find((x) => x.progress >= c)
+      if (!p || p.progress - c > MAX_STALENESS) continue
       prospective.push({
         checkpoint: c,
         progress: p.progress,
@@ -103,4 +112,18 @@ export function buildReport(
     modelVersions: [...new Set(preds.map((p) => p.model_version))],
     ranks,
   }
+}
+
+/**
+ * 答え合わせの代表の値（X の答え合わせの投稿と、その payload。サイトの答え合わせ欄は保存したレポートの checkpoint 0.85 を読む）。
+ * 経過85% の予測を使う。buildReport が節目を越えた最初の予測を選ぶので、開催中に投稿した経過85% の予測と同じ値になる
+ */
+export function resultRanks(report: Report): (ResultRank & ResultPostRank)[] {
+  const out: (ResultRank & ResultPostRank)[] = []
+  for (const r of report.ranks) {
+    const at = r.prospective.find((x) => x.checkpoint === 0.85) ?? r.prospective[r.prospective.length - 1]
+    if (!at || !at.visible) continue
+    out.push({ rank: r.rank, final: r.final, predicted: at.predicted, progress: at.progress, error: at.error, inBand: at.inBand, low: at.low, high: at.high })
+  }
+  return out
 }
