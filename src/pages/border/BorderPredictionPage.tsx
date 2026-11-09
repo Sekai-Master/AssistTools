@@ -22,6 +22,8 @@ import {
   type Report,
   type Snapshot,
 } from "./borderView";
+import { toolShelf } from "./toolShelf";
+import { ToolShelfPanel } from "./ToolShelfPanel";
 import { useBorderData } from "./useBorderData";
 
 /*
@@ -30,6 +32,7 @@ import { useBorderData } from "./useBorderData";
 
 export default function BorderPredictionPage() {
   const { current, record, history, loading, error, now } = useBorderData();
+  const shelf = toolShelf(current, now);
   return (
     <ToolPage morphKey="tool:border" title="ボーダー予測" icon="insights" wide>
       {/* ★ 広い幅に移した（docs/design-system.md の 1 節）。グラフは 3 列に増やし、説明の文だけ 1 行 40 字前後で止める */}
@@ -50,6 +53,9 @@ export default function BorderPredictionPage() {
         </Panel>
       )}
       {!loading && current && <CurrentPanel snap={current} model={record?.model ?? null} now={now} />}
+      {/* ★ その時期に使うツールへの入口（toolShelf.ts）。6 順位の予測を下へ押しやらないよう、開催中のイベントの枠の後・推移の前に置く。
+            開催中の回が無い・終わった後は枠ごと出さない */}
+      {!loading && shelf && <ToolShelfPanel shelf={shelf} />}
       {!loading && current && history.size > 0 && (
         // id は X の告知で Bot がここまでスクロールして撮るための目印（sekaimaster-bot の feat/page-anchor。未マージで、いまの Bot は使っていない）
         <section id="trend" className="scroll-mt-20">
