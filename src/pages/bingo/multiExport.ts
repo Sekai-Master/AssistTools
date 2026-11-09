@@ -31,7 +31,7 @@ export type ImportResult =
       multi: SavedMulti;
       /** 書き出した時刻。読めなければ null。 */
       exportedAt: number | null;
-      /** 形の合わないカードを落とした数（黙って捨てずに画面で知らせる）。 */
+      /** 形の合わない・6 枚目より後のカードを落とした数（黙って捨てずに画面で知らせる）。 */
       dropped: number;
     }
   | { ok: false; error: string };

@@ -89,17 +89,22 @@ export function MultiCardSheet({ entry, name, link, paused, onRename, onPause, o
       <button type="button" onClick={copyLink} className={SUB_BUTTON}>
         {entry.card ? "リンクをコピー" : "コードをコピー"}
       </button>
-      <button
-        type="button"
-        onClick={() => {
-          commit();
-          onPause(!paused);
-        }}
-        className={SUB_BUTTON}
-      >
-        {paused ? "再開する" : "休止する"}
-      </button>
-      <p className="mt-1 text-center text-xs text-slate-500">休止中のカードには、遊んだ曲を入れても反映しません</p>
+      {/* 読めないカードは盤面が無く、休止しても見た目が変わらないので出さない（休止中のまま読めなくなったときは戻せるように残す） */}
+      {(entry.card || paused) && (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              commit();
+              onPause(!paused);
+            }}
+            className={SUB_BUTTON}
+          >
+            {paused ? "再開する" : "休止する"}
+          </button>
+          <p className="mt-1 text-center text-xs text-slate-500">休止中のカードには、遊んだ曲を入れても反映しません</p>
+        </>
+      )}
       <button type="button" onClick={remove} className={SUB_BUTTON}>
         このカードを外す
       </button>

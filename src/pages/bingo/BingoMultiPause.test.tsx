@@ -143,6 +143,13 @@ describe("休止", () => {
     expect(filledOf(c.code)).toEqual([]);
   });
 
+  it("読めないカードの設定には休止を出さない（盤面が無く、休止しても見た目が変わらないため）", () => {
+    saveSet([entry("x9", `fQ${encodeSeed(SONG).slice(2)}`, { name: "前のカード" })]);
+    render(<BingoGenerator />);
+    fireEvent.click(screen.getByRole("button", { name: "前のカードの設定" }));
+    expect(within(dialog()).queryByRole("button", { name: "休止する" })).toBeNull();
+  });
+
   it("全部を休止したら「遊んだ曲を入れる」を押せない", () => {
     saveSet([entry("a1", encodeOdaiSeed(ODAI_A), { paused: PAUSED }), entry("c3", encodeSeed(SONG), { paused: PAUSED })]);
     render(<BingoGenerator />);

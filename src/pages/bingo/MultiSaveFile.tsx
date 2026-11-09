@@ -22,6 +22,11 @@ const BUTTON = "min-h-11 !px-3 text-sm";
 export function MultiSaveFile({ set }: { set: MultiSet }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<Message | null>(null);
+  // ファイルを読み終えた時点のセットで確かめる（読んでいる間にほかのタブが変えても、古いセットで決めない）
+  const entriesRef = useRef(set.entries);
+  useEffect(() => {
+    entriesRef.current = set.entries;
+  }, [set.entries]);
   useEffect(() => {
     if (message?.kind !== "ok") return;
     const t = setTimeout(() => setMessage(null), OK_MESSAGE_MS);
@@ -35,8 +40,11 @@ export function MultiSaveFile({ set }: { set: MultiSet }) {
     const a = document.createElement("a");
     a.href = url;
     a.download = exportFileName(now);
+    // ★ ページに付けてから押し、URL は次の順番で消す（押した直後に消すと、保存が始まる前に無効になるブラウザがある）
+    document.body.append(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
     setMessage({ kind: "ok", text: "書き出しました。「書き出しを読み込む」で、この続きから遊べます" });
   };
 
@@ -59,9 +67,10 @@ export function MultiSaveFile({ set }: { set: MultiSet }) {
       return;
     }
     const n = r.multi.cards.length;
+    const entries = entriesRef.current;
     if (
-      worthKeeping(set.entries) &&
-      !window.confirm(`いまのカード（${set.entries.length}枚）を、書き出しのカード（${n}枚）に置き換えますか？埋めたマスも置き換わります`)
+      worthKeeping(entries) &&
+      !window.confirm(`いまのカード（${entries.length}枚）を、書き出しのカード（${n}枚）に置き換えますか？埋めたマスも置き換わります`)
     ) {
       setMessage(null);
       return;
@@ -70,7 +79,7 @@ export function MultiSaveFile({ set }: { set: MultiSet }) {
     const when = r.exportedAt === null ? "書き出しの" : `${shortTime(r.exportedAt)} に書き出した`;
     const notes = [
       unreadable > 0 && `読めないカードが ${unreadable} 枚あります（配信が止まった曲などが入っています）`,
-      r.dropped > 0 && `形の合わないカード ${r.dropped} 枚は読みませんでした`,
+      r.dropped > 0 && `形が合わない・6 枚目より後のカード ${r.dropped} 枚は読みませんでした`,
     ].filter(Boolean);
     setMessage({ kind: "ok", text: [`${when}カード ${n} 枚を読み込みました`, ...notes].join("。") });
   };

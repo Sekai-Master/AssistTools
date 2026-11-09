@@ -64,14 +64,14 @@ function BoardHeader({ name, kc, onSettings }: { name: string; kc: KindedCard | 
 
 /**
  * 休止中の帯。盤面の頭に重ね、盤面の大きさと位置は動かさない（画面共有の相手から見て盤面が跳ねない）。
- * ★ 帯そのものは押せない（下のマスに通す）。休止中でもマスの小窓から手で埋められる（直し用）ので、
- *   帯が上の段のマスをふさがないよう、押せるのは［再開する］だけにする。
+ * ★ 帯の上の押下は帯で受ける（下のマスに通さない）。通すと、帯で隠れて見えない 1 段目のマスの小窓が開く。
+ *   休止中でもマスの小窓から手で埋められる（直し用）のは、見えている所のマスだけ。
  */
 function PausedBand({ onResume }: { onResume: () => void }) {
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex min-h-11 items-center justify-between gap-2 rounded-lg border border-slate-300 bg-neu pl-3 shadow-neu-sm">
+    <div className="absolute inset-x-0 top-0 z-10 flex min-h-11 items-center justify-between gap-2 rounded-lg border border-slate-300 bg-neu pl-3 shadow-neu-sm">
       <span className="text-sm font-bold text-slate-700">休止中</span>
-      <button type="button" onClick={onResume} className={`pointer-events-auto ${SETTINGS_BUTTON}`}>
+      <button type="button" onClick={onResume} className={SETTINGS_BUTTON}>
         再開する
       </button>
     </div>
