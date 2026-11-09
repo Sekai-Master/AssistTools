@@ -157,16 +157,79 @@ describe("休止", () => {
     expect(screen.getByText("全部のカードが休止中です")).toBeTruthy();
   });
 
-  it("休止中のカードも、マスを押して小窓から手で埋められる（直し用）", () => {
+  // 休止中のカードでは遊ばない（持ち主の決定 2）。前は帯で隠れていないマスだけ手で埋められ、スマホでは 1 段目の 7 割が隠れた
+  it("休止中のカードは盤面のマスを押せない（小窓が開かず、埋まらない）。押せるのは［再開する］だけ", () => {
+    saveSet([entry("a1", encodeOdaiSeed(ODAI_A), { paused: PAUSED }), entry("c3", encodeSeed(SONG), { paused: PAUSED })]);
+    render(<BingoGenerator />);
+    const before = savedSet().cards;
+    for (const name of ["カード1", "カード2"]) {
+      fireEvent.click(screen.getByRole("button", { name: `${name}（休止中）` }));
+      const board = screen.getByRole("region", { name });
+      const cells = [...board.querySelectorAll<HTMLButtonElement>(".grid-cols-5 button")];
+      expect(cells.length).toBeGreaterThan(0);
+      expect(cells.every((c) => c.disabled)).toBe(true);
+      fireEvent.click(cells[3]);
+      expect(screen.queryByRole("dialog")).toBeNull();
+      // 見出しの［設定］と帯の［再開する］は押せる
+      expect((within(board).getByRole("button", { name: `${name}の設定` }) as HTMLButtonElement).disabled).toBe(false);
+      expect((within(board).getByRole("button", { name: "再開する" }) as HTMLButtonElement).disabled).toBe(false);
+    }
+    // カードの中身（埋めた状態）は変わらない（選んでいるカードの番号だけは切り替えで変わる）
+    expect(savedSet().cards).toEqual(before);
+  });
+
+  it("再開すると、また押せる", () => {
     saveSet([entry("a1", encodeOdaiSeed(ODAI_A), { paused: PAUSED })]);
     render(<BingoGenerator />);
+    fireEvent.click(within(screen.getByRole("region", { name: "カード1" })).getByRole("button", { name: "再開する" }));
     const board = screen.getByRole("region", { name: "カード1" });
     const cell = within(board).getAllByRole("button", { pressed: false })[3];
+    expect((cell as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(cell);
     fireEvent.click(within(dialog()).getByRole("button", { name: "埋める" }));
     expect(filledOf(savedSet().cards[0].code)).toHaveLength(1);
-    // 休止はそのまま
-    expect(savedSet().cards[0].paused).toEqual(PAUSED);
+  });
+});
+
+// ★ 小窓の作法（useModalA11y）は onClose が変わるたびに掛け直し、フォーカスを小窓の先頭（閉じる）へ移す。
+//   描くたびに作る関数を渡すと 1 字ごとに欄から外れる（検分 M1b 新-高-1）。M2 で足した・触った所でも起きないことを見る
+describe("小窓の入力欄に続けて打てる（1 字ごとにフォーカスが欄から移らない）", () => {
+  const openFocused = (name: string) => {
+    const button = screen.getByRole("button", { name });
+    button.focus();
+    fireEvent.click(button);
+  };
+
+  it("休止中のカードの設定の名前の欄", () => {
+    saveSet([entry("a1", encodeOdaiSeed(ODAI_A), { paused: PAUSED })]);
+    render(<BingoGenerator />);
+    openFocused("カード1の設定");
+    const input = within(dialog()).getByRole("textbox") as HTMLInputElement;
+    input.focus();
+    for (const value of ["休", "休み", "休み中"]) {
+      fireEvent.change(input, { target: { value } });
+      expect(document.activeElement, `「${value}」のあと`).toBe(input);
+    }
+    fireEvent.click(within(dialog()).getByRole("button", { name: "再開する" }));
+    expect(savedSet().cards[0].name).toBe("休み中");
+    expect(savedSet().cards[0].paused[0][1]).not.toBeNull();
+  });
+
+  it("遊んだ曲の検索欄。打っている間にほかのタブが保存を変えて（休止など）画面が描き直されても外れない", () => {
+    saveSet([entry("b2", encodeOdaiSeed(ODAI_B)), entry("c3", encodeSeed(SONG))]);
+    render(<BingoGenerator />);
+    openFocused("遊んだ曲を入れる");
+    const input = within(dialog()).getByRole("textbox") as HTMLInputElement;
+    input.focus();
+    fireEvent.change(input, { target: { value: "ロ" } });
+    const next = JSON.stringify({ open: true, active: 0, cols: 0, cards: [entry("b2", encodeOdaiSeed(ODAI_B), { paused: PAUSED }), entry("c3", encodeSeed(SONG))] });
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: MULTI_STORAGE_KEY, newValue: next, storageArea: localStorage }));
+    });
+    expect(document.activeElement).toBe(input);
+    fireEvent.change(input, { target: { value: "ロウ" } });
+    expect(document.activeElement).toBe(input);
+    expect(input.value).toBe("ロウ");
   });
 });
 

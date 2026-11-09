@@ -64,8 +64,7 @@ function BoardHeader({ name, kc, onSettings }: { name: string; kc: KindedCard | 
 
 /**
  * 休止中の帯。盤面の頭に重ね、盤面の大きさと位置は動かさない（画面共有の相手から見て盤面が跳ねない）。
- * ★ 帯の上の押下は帯で受ける（下のマスに通さない）。通すと、帯で隠れて見えない 1 段目のマスの小窓が開く。
- *   休止中でもマスの小窓から手で埋められる（直し用）のは、見えている所のマスだけ。
+ * 休止中は盤面のマスを押せない（BingoCardGrid の dimmed）。押せるのは帯の［再開する］と見出しの［設定］だけ。
  */
 function PausedBand({ onResume }: { onResume: () => void }) {
   return (

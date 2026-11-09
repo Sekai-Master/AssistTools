@@ -149,6 +149,29 @@ describe("埋めたマスのある同じ種類のカードを持つ人が開い�
     expect(single().odai).not.toBe(LINKED);
   });
 
+  // ★ 小窓の作法（useModalA11y）は onClose が変わると掛け直し、フォーカスを小窓の先頭へ移す（検分 M1b 新-高-1）。
+  //   見るだけの間は、盤面を替える関数（changeCard）が見ているカードで変わるので、小窓の閉じ方に巻き込まないことを見る
+  it("見るだけの間も、遊んだ曲・お題の差し替えの検索欄に続けて打てる（1 字ごとにフォーカスが欄から移らない）", () => {
+    saveSingle(OWN);
+    openLink(LINKED);
+    const typeInto = (input: HTMLInputElement, values: string[]) => {
+      input.focus();
+      for (const value of values) {
+        fireEvent.change(input, { target: { value } });
+        expect(document.activeElement, `「${value}」のあと`).toBe(input);
+      }
+    };
+    const played = screen.getByRole("button", { name: "遊んだ曲を入れる" });
+    played.focus();
+    fireEvent.click(played);
+    typeInto(within(dialog()).getByRole("textbox") as HTMLInputElement, ["ロ", "ロウ", "ロウワ"]);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "閉じる" }));
+    // お題のマス → このお題を替える → 検索
+    fireEvent.click(screen.getAllByRole("button", { pressed: false })[0]);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "このお題を替える" }));
+    typeInto(within(dialog()).getByRole("searchbox") as HTMLInputElement, ["D", "DE", "DEC"]);
+  });
+
   it("種類を切り替えると隠れ、戻すとまた見るだけで出る", () => {
     saveSingle(OWN);
     openLink(LINKED);

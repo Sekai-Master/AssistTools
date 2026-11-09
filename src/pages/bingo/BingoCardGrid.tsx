@@ -24,7 +24,7 @@ interface Common {
   /**
    * まとめて遊ぶの盤面として描く（幅と文字の段は boardLayout.ts）。このときは「遊んだ曲を入れる」と
    * 進み具合の行を出さない（盤面の外の操作の列と、カードの見出しが受け持つ）。
-   * dimmed は休止中: 盤面の枠だけを薄くする（マスの小窓は薄くしない）。
+   * dimmed は休止中: 盤面の枠だけを薄くし（マスの小窓は薄くしない）、マスを押せなくする。
    */
   board?: { width: number; step: FontStep; dimmed?: boolean };
 }
@@ -337,6 +337,8 @@ export function BingoCardGrid(props: Props) {
             const common = {
               type: "button" as const,
               "aria-pressed": cell.cleared,
+              // 休止中の盤面は押せない（休止中のカードでは遊ばない。持ち主の決定 2）。読み上げでは押せないマスとして残す
+              disabled: board?.dimmed === true,
               onClick: () => setOpenIndex(i),
             };
             if ("odai" in cell) {

@@ -102,7 +102,7 @@ export function MultiCardSheet({ entry, name, link, paused, onRename, onPause, o
           >
             {paused ? "再開する" : "休止する"}
           </button>
-          <p className="mt-1 text-center text-xs text-slate-500">休止中のカードには、遊んだ曲を入れても反映しません</p>
+          <p className="mt-1 text-center text-xs text-slate-500">休止中は、遊んだ曲を反映せず、マスも押せません</p>
         </>
       )}
       <button type="button" onClick={remove} className={SUB_BUTTON}>
