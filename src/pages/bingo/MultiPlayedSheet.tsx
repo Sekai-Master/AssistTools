@@ -84,11 +84,12 @@ export function MultiPlayedSheet({ music, groups, onFill, onPickAgain, onClose }
           ))}
         </ul>
         {paused.length > 0 && (
-          <div className={cn("opacity-50", playing.length > 0 && "border-t border-slate-300")}>
+          // 見出しは薄くしない（12px を薄くすると読めない）。薄くするのはカードの行だけ
+          <div className={cn(playing.length > 0 && "border-t border-slate-300")}>
             <p id={pausedId} className="px-3 pt-2 text-xs font-bold text-slate-600">
               休止中（反映しません）
             </p>
-            <ul aria-labelledby={pausedId} className="divide-y divide-slate-300">
+            <ul aria-labelledby={pausedId} className="divide-y divide-slate-300 opacity-50">
               {paused.map((g) => (
                 <GroupItem key={g.id} group={g} />
               ))}
