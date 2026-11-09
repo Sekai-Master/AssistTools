@@ -2,7 +2,9 @@ import type { UnitKey } from "../../lib/units";
 import {
   CANVAS_SIZE,
   CELL,
+  FRAME_WIDTH,
   MARGIN,
+  clipToFrame,
   drawFilledMark,
   drawFinish,
   drawFree,
@@ -134,8 +136,10 @@ function drawOdaiCell(
   ctx.fillStyle = "#f8fafc";
   ctx.fillRect(x, y, CELL, CELL);
   if (odai.unit) {
+    // 上の段は外枠の線が内側に FRAME_WIDTH / 2 かかるので、帯をその下から描く（線に隠れて細く見えないように）
+    const stripeTop = y === MARGIN ? y + FRAME_WIDTH / 2 : y;
     ctx.fillStyle = UNIT_HEX[odai.unit];
-    ctx.fillRect(x, y, CELL, STRIPE);
+    ctx.fillRect(x, stripeTop, CELL, STRIPE);
   }
 
   const maxWidth = CELL - PAD * 2;
@@ -210,6 +214,8 @@ export async function drawOdaiCard(
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
+  ctx.save();
+  clipToFrame(ctx);
   card.forEach((cell, i) => {
     const x = MARGIN + (i % 5) * CELL;
     const y = MARGIN + Math.floor(i / 5) * CELL;
@@ -217,5 +223,6 @@ export async function drawOdaiCard(
     else drawOdaiCell(ctx, x, y, cell, opts.markColor);
   });
   drawGridLines(ctx);
+  ctx.restore();
   drawFinish(ctx, card, opts);
 }

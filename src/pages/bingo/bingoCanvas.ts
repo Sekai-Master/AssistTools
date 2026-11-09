@@ -5,6 +5,9 @@ import { BINGO_LINES, progressOf } from "./bingoProgress";
 export const CELL = 100;
 export const MARGIN = 20;
 export const CANVAS_SIZE = CELL * 5 + MARGIN * 2; // 520
+/** 外枠の線の太さと角の丸み。線は MARGIN の線の上に半分ずつ（内側に FRAME_WIDTH / 2）かかる。 */
+export const FRAME_WIDTH = 4;
+const FRAME_RADIUS = 10;
 
 export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -81,6 +84,17 @@ function drawRoundedRect(
   ctx.closePath();
 }
 
+/**
+ * 外枠の線の内側（丸い角も）で切り抜く。マスは角まで四角く描くので、切り抜かないと角のマスの
+ * ジャケットやユニットの色の帯が丸い角の外にはみ出す（2026-11-09 Nori 指摘、右上の帯が枠と重なった）。
+ * 呼んだ側で ctx.save() / ctx.restore() を挟む。
+ */
+export function clipToFrame(ctx: CanvasRenderingContext2D) {
+  const inset = FRAME_WIDTH / 2;
+  drawRoundedRect(ctx, MARGIN + inset, MARGIN + inset, CELL * 5 - inset * 2, CELL * 5 - inset * 2, FRAME_RADIUS - inset);
+  ctx.clip();
+}
+
 export interface DrawOptions {
   jacketBase: string; // 例: /MusicDatas/jacket/
   freeIconUrl: string;
@@ -117,6 +131,8 @@ export async function drawBingoCard(
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
+  ctx.save();
+  clipToFrame(ctx);
   card.forEach((cell, i) => {
     const x = MARGIN + (i % 5) * CELL;
     const y = MARGIN + Math.floor(i / 5) * CELL;
@@ -133,6 +149,7 @@ export async function drawBingoCard(
     }
     if (cell.cleared) drawFilledMark(ctx, x, y, opts.markColor, true);
   });
+  ctx.restore();
 
   drawFinish(ctx, card, { ...opts, outline: true });
 }
@@ -189,7 +206,7 @@ export function drawSignatureAndFrame(ctx: CanvasRenderingContext2D, borderColor
   ctx.fillText("Created by Sekai-Master @YesNoritake", CANVAS_SIZE - 4, CANVAS_SIZE - 2);
 
   ctx.strokeStyle = borderColor;
-  ctx.lineWidth = 4;
-  drawRoundedRect(ctx, MARGIN, MARGIN, CELL * 5, CELL * 5, 10);
+  ctx.lineWidth = FRAME_WIDTH;
+  drawRoundedRect(ctx, MARGIN, MARGIN, CELL * 5, CELL * 5, FRAME_RADIUS);
   ctx.stroke();
 }
