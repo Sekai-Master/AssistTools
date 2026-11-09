@@ -16,9 +16,9 @@ import path from 'node:path'
 import { fitModel, type ModelSummary } from '../../workers/border/src/fit.ts'
 import { RANKS, buildShape, durationHours, eventEndMs, type EventMeta, type Sample, type Shape } from '../../workers/border/src/model.ts'
 import { pacePoints } from '../../workers/border/src/pace.ts'
-import { resultText, type ResultRank } from '../../workers/border/src/posts.ts'
-import type { PostPayload, ResultPostRank } from '../../workers/border/src/snapshot.ts'
-import { buildReport, type PredictionLog, type Report } from './report.ts'
+import { resultText } from '../../workers/border/src/posts.ts'
+import type { PostPayload } from '../../workers/border/src/snapshot.ts'
+import { buildReport, resultRanks, type PredictionLog, type Report } from './report.ts'
 import { checkModel, scoreboard, scoreboardLines } from './guard.ts'
 import { FINAL_RANKS, announceAt, confirmedFinal, historyMeta, historyPostText, isTestEvent, mergeSeed, parseHistory, unknownMemories, type HistoryEvent, type MasterEvent } from './history.ts'
 import { addInsights } from '../claude/border-insight-run.ts'
@@ -190,17 +190,6 @@ async function collectShapes(events: readonly EventMeta[], have: readonly Shape[
     }
   }
   return fresh
-}
-
-function resultRanks(report: Report): (ResultRank & ResultPostRank)[] {
-  // 投稿には「経過85%前後で出していた予測」を使う（開催中に積んだマイルストーンと同じ時点）
-  const out: (ResultRank & ResultPostRank)[] = []
-  for (const r of report.ranks) {
-    const at = r.prospective.find((x) => x.checkpoint === 0.85) ?? r.prospective[r.prospective.length - 1]
-    if (!at || !at.visible) continue
-    out.push({ rank: r.rank, final: r.final, predicted: at.predicted, progress: at.progress, error: at.error, inBand: at.inBand, low: at.low, high: at.high })
-  }
-  return out
 }
 
 /**
