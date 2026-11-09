@@ -146,3 +146,10 @@ describe("summarizeSavedPlayed（設定画面とプライバシーポリシー�
     expect(item!.summarize("{")).toBe(BROKEN);
   });
 });
+
+describe("書き出しの一覧の読み込みで落とした数", () => {
+  it(`${MAX_PLAYED} 曲より古くて切った件も、落とした数に入れる`, () => {
+    const list = Array.from({ length: MAX_PLAYED + 2 }, (_, i) => e("1", T0 + i));
+    expect(parsePlayedArray([...list, null]).dropped).toBe(3);
+  });
+});

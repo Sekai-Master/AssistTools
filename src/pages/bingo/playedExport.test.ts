@@ -72,3 +72,10 @@ function unitLabel(unit: string): string {
   const labels: Record<string, string> = { "0_VS": "VS", "1_L/n": "L/n", "2_MMJ": "MMJ", "3_VBS": "VBS", "4_WxS": "WxS", "5_25": "25時", "9_oth": "その他" };
   return labels[unit] ?? unit;
 }
+
+describe("見出しの期間（時刻順でない一覧）", () => {
+  it("書き出しを読み込んだ一覧などで並びが時刻順でなくても、いちばん古い時刻からいちばん新しい時刻まで", () => {
+    const a = byTitle("Hello, Worker");
+    expect(playedText(playedRows([e(a.id, T2), e(a.id, T1)], BY_ID)).split("\n")[0]).toBe("遊んだ曲（2曲・11/9 21:03〜11/10 08:05）");
+  });
+});

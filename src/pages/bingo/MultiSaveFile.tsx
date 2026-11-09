@@ -94,7 +94,7 @@ export function MultiSaveFile({ set, played }: { set: MultiSet; played: PlayedLi
     const notes = [
       unreadable > 0 && `読めないカードが ${unreadable} 枚あります（配信が止まった曲などが入っています）`,
       r.dropped > 0 && `形が合わない・6 枚目より後のカード ${r.dropped} 枚は読みませんでした`,
-      r.droppedPlayed > 0 && `形が合わない遊んだ曲 ${r.droppedPlayed} 件は読みませんでした`,
+      r.droppedPlayed > 0 && `形が合わない・1000 曲より古い遊んだ曲 ${r.droppedPlayed} 件は読みませんでした`,
     ].filter(Boolean);
     const what = r.played !== null ? `カード ${n} 枚と遊んだ曲 ${r.played.length} 曲` : `カード ${n} 枚`;
     setMessage({ kind: "ok", text: [`${when}${what}を読み込みました`, ...notes].join("。") });

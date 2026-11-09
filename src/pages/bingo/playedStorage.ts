@@ -68,13 +68,14 @@ function parseEntry(v: unknown): PlayedEntry | null {
 
 /**
  * 解釈済みの値から一覧を作る（保存の読み込みと、中断用の書き出しの読み込みで共通）。
- * 配列でなければ空。1 件ずつ見て形の合わない件を落とし、新しい MAX_PLAYED 件だけ残す。dropped は落とした件数。
+ * 配列でなければ空。1 件ずつ見て形の合わない件を落とし、新しい MAX_PLAYED 件だけ残す。dropped は落とした件数（上限で切った件も含む）。
  */
 export function parsePlayedArray(v: unknown): { entries: PlayedEntry[]; dropped: number } {
   if (!Array.isArray(v)) return { entries: [], dropped: 0 };
   const entries = v.flatMap((item) => parseEntry(item) ?? []);
-  const dropped = v.length - entries.length;
-  return { entries: entries.slice(-MAX_PLAYED), dropped };
+  const kept = entries.slice(-MAX_PLAYED);
+  // 上限より古くて切った件も数える（書き出しの読み込みで黙って落とさない）
+  return { entries: kept, dropped: v.length - kept.length };
 }
 
 /** 保存された文字列を読む。読めなければ空の一覧。 */

@@ -30,8 +30,10 @@ export function playedRows(entries: readonly PlayedEntry[], musicById: ReadonlyM
 /** 見出しの期間（「11/9 21:03〜11/10 08:05」）。 */
 function spanText(rows: readonly PlayedRow[]): string {
   if (rows.length === 0) return "";
-  const first = shortTime(rows[0].at);
-  const last = shortTime(rows[rows.length - 1].at);
+  // 並びは遊んだ順だが、書き出しを読み込んだ一覧や時計の戻りで時刻順でないこともあるので、最小と最大で出す
+  const times = rows.map((r) => r.at);
+  const first = shortTime(Math.min(...times));
+  const last = shortTime(Math.max(...times));
   return first === last ? `・${first}` : `・${first}〜${last}`;
 }
 

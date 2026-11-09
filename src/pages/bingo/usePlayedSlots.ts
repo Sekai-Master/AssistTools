@@ -67,10 +67,21 @@ export function usePlayedSlots(
     played.remove(entry);
   };
 
-  /** この一覧でカードを埋める。埋めたマスは、どの曲で埋めたかを記録に足す（あとで 1 曲消すときに戻せるように）。 */
-  const fill = (slot: PlayedSlot, plan: ListFill) => {
-    applyToSlot(slot.ref, (kc) => withMarks(kc, plan.cells, true));
+  /**
+   * この一覧でカードを埋める。埋めたマスは、どの曲で埋めたかを記録に足す（あとで 1 曲消すときに戻せるように）。
+   * 埋めなかったときは false: 選ぶ画面を開いたあとに、ほかのタブでそのカードが休止された（レビュー M1。
+   * 休止中のカードには遊んだ曲を反映しない。記録にも足さない）。
+   */
+  const fill = (slot: PlayedSlot, plan: ListFill): boolean => {
+    const k = singleSlots.find((s) => s.ref === slot.ref)?.kc.kind;
+    if (k) {
+      updateOwn(k, (kc) => withMarks(kc, plan.cells, true));
+    } else {
+      if (multi.pausedNow(slot.ref)) return false;
+      multi.applyToCard(slot.ref, (kc) => withMarks(kc, plan.cells, true), true);
+    }
     played.credit(slot.ref, plan.credits);
+    return true;
   };
 
   const starts = multi.open

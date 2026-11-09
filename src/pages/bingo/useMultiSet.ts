@@ -183,15 +183,16 @@ export function useMultiSet(musics: BingoMusic[]) {
 
   /**
    * 1 枚だけに変え方（fn）を当てる（遊んだ曲の一覧から埋める・戻す）。applyToCards と同じく当てる時点の保存を読み直す。
-   * 休止中でも当てる（休止中のカードを相手にするかは呼ぶ側が決める。一覧から 1 曲消してマスを戻すのは、休止中のカードにも当てる）。
+   * skipPaused が偽なら休止中でも当てる（一覧から 1 曲消してマスを戻すのは、休止中のカードにも当てる）。
+   * 一覧から埋めるときは真にする（休止中のカードには遊んだ曲を反映しない。持ち主の決定 2）。
    */
   const applyToCard = useCallback(
-    (id: string, fn: (kc: KindedCard) => KindedCard | null) => {
+    (id: string, fn: (kc: KindedCard) => KindedCard | null, skipPaused = false) => {
       const now = Date.now();
       setSaved((s) => ({
         ...s,
         cards: s.cards.map((c) => {
-          if (c.id !== id) return c;
+          if (c.id !== id || (skipPaused && isPaused(c))) return c;
           const kc = decodeOrNull(c.code, musics);
           const next = kc ? fn(kc) : null;
           return next ? withCard(c, next, now) : c;
@@ -199,6 +200,18 @@ export function useMultiSet(musics: BingoMusic[]) {
       }));
     },
     [musics]
+  );
+
+  /**
+   * そのカードがいま休止しているか。ほかのタブの休止が storage の出来事で届く前でも分かるよう、保存を読み直して見る
+   * （保存が読めない・そのカードが無いときは、この画面の状態で見る）。
+   */
+  const pausedNow = useCallback(
+    (id: string) => {
+      const latest = loadMulti().cards.find((c) => c.id === id) ?? saved.cards.find((c) => c.id === id);
+      return latest !== undefined && isPaused(latest);
+    },
+    [saved.cards]
   );
 
   /** 休止する／再開する（区間を保存に足す・閉じる）。 */
@@ -236,6 +249,7 @@ export function useMultiSet(musics: BingoMusic[]) {
     updateCards,
     applyToCards,
     applyToCard,
+    pausedNow,
     setPaused,
     replaceAll,
   };

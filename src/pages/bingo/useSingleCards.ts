@@ -77,6 +77,8 @@ export function useSingleCards(musics: BingoMusic[]) {
   /**
    * 自分のカードを変える（埋める・戻す・差し替え・遊んだ曲の一覧から埋める／戻す）。見るだけの間でも自分のカードを変える。
    * fn は今の自分のカードを受け取り、変えないなら null。最初に埋めたときにプレイ開始の時刻が付く。
+   * ★ fn は setState の中で呼ぶので、純粋にする（StrictMode では 2 回呼ばれる。保存や記録は呼ぶ側で 1 回だけ）
+
    */
   const updateOwn = useCallback((k: CardKind, fn: (kc: KindedCard) => KindedCard | null) => {
     const now = Date.now();

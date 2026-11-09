@@ -148,6 +148,24 @@ describe("この一覧でカードを埋める（カードを 1 枚選ぶ）", (
   });
 });
 
+describe("この一覧でカードを埋める × ほかのタブの休止（レビュー M1）", () => {
+  it("選ぶ画面を開いたあとにほかのタブでそのカードを休止したら、埋めず、記録にも足さない", () => {
+    saveSet([entry("c3", encodeSeed(SONG), { name: "曲名" })]);
+    savePlayed([{ id: TARGET.id, at: T - 20 * MIN }]);
+    render(<BingoGenerator />);
+    const sheet = openList();
+    fireEvent.click(within(sheet).getByRole("button", { name: "この一覧でカードを埋める" }));
+    const fill = within(within(sheet).getByRole("region", { name: "曲名" })).getByRole("button", { name: "埋める（1マス）" });
+    // ほかのタブが休止した（storage の出来事が届く前に押した、という競合を、保存だけ先に変えて作る）
+    const paused = { open: true, active: 0, cols: 0, cards: [entry("c3", encodeSeed(SONG), { name: "曲名", paused: [[T - MIN, null]] })] };
+    localStorage.setItem(MULTI_STORAGE_KEY, JSON.stringify(paused));
+    fireEvent.click(fill);
+    expect(filledOf(savedSet().cards[0].code)).toEqual([]);
+    expect(played()[0].cells).toBeUndefined();
+    expect(sheet.textContent).toContain("曲名は休止中になったので、埋めませんでした");
+  });
+});
+
 describe("1 曲消す（まとめて遊ぶのカード）", () => {
   it("その曲で埋めたマスを、カードの名前ごとに見せて戻す。1 枚で遊ぶの画面から消しても戻る", () => {
     saveSet([entry("a1", encodeOdaiSeed(ODAI_A), { name: "わたし" }), entry("c3", encodeSeed(SONG), { name: "友だち" })]);

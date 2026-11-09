@@ -24,7 +24,8 @@ interface Props {
   /** 1 曲消す。groups は戻すマス（空なら一覧からだけ消す）。 */
   onRemove: (entry: PlayedEntry, groups: readonly RevertGroup[]) => void;
   onClear: () => void;
-  onFill: (slot: PlayedSlot, plan: ListFill) => void;
+  /** 一覧からカードを埋める。埋めなかった（ほかのタブで休止された）ときは false。 */
+  onFill: (slot: PlayedSlot, plan: ListFill) => boolean;
   onClose: () => void;
 }
 
@@ -154,8 +155,11 @@ export function PlayedListSheet(props: Props) {
             musicById={musicById}
             noTargetNote={props.noTargetNote}
             onFill={(slot, plan) => {
-              props.onFill(slot, plan);
-              setMessage(`${slot.name}の ${plan.cells.length} マスを埋めました`);
+              setMessage(
+                props.onFill(slot, plan)
+                  ? `${slot.name}の ${plan.cells.length} マスを埋めました`
+                  : `${slot.name}は休止中になったので、埋めませんでした`
+              );
               setView({ name: "list" });
             }}
             onBack={() => setView({ name: "list" })}
