@@ -2,7 +2,7 @@
  * お題ビンゴのお題の定義（鍵・札・文言・判定）。割合・カードの作り方・コードは odaiLogic.ts。
  *
  * ★ 鍵はコード（OD1:…）に入るので、一度出したら変えない。今の鍵の決まり:
- *   u<ユニット> ユニット ／ s<キャラ id> 歌う人 ／ v6・va 歌唱 ／ w<ユニット>・om・oc 曲の種類
+ *   u<ユニット> ユニット ／ s<キャラ id>・v6・va ボーカル ／ w<ユニット>・om・oc 曲の種類
  *   r<行> 読みの頭 ／ yi・yn・y4 読み ／ l0・l1 長さ ／ t? 曲名 ／ g? 曲名の語
  *   m2・mo・m3 MV ／ a<年>・a0 追加 ／ da・dm32・dm33・dl26・de28・dn7 譜面 ／ kl 作り手 ／ c<作者 id> 作者
  */
@@ -38,7 +38,7 @@ export interface OdaiDef {
   /** 折り返してよい区切り。区切りの中では折らない（スマホの 1 マスで語の途中で折れないように）。 */
   chunks: string[];
   /**
-   * ユニットの色の印（マスの上端の帯）。ユニット・書き下ろし・歌う人（そのキャラのユニット。VS の 6 人は VS）。
+   * ユニットの色の印（マスの上端の帯）。ユニット・書き下ろし・ボーカルのキャラ（そのキャラのユニット。VS の 6 人は VS）。
    * ★ 同じユニットのお題は 1 枚に 1 つまで（odaiLogic.ts の clashes）。
    */
   unit?: UnitKey;
@@ -122,7 +122,7 @@ export function mixesLatinAndJapanese(title: string): boolean {
 /** 空白を除いた文字数（サロゲートペアも 1 字）。 */
 const charCount = (s: string) => [...s.replace(/\s/g, "")].length;
 
-// ---- ユニット・歌う人・歌唱 ----
+// ---- ユニット・ボーカル ----
 
 const UNIT_KEY_BY_VALUE: Record<string, UnitKey | undefined> = Object.fromEntries(
   UNIT_OPTIONS.map((o) => [o.value, o.unit])
@@ -139,13 +139,13 @@ const unitDefs: OdaiDef[] = UNIT_OPTIONS.map((o) => ({
 }));
 
 /**
- * 歌う人: そのキャラがどれかの歌唱 ver.（アナザーボーカル込み）で歌う曲。文言は名前だけ。
+ * ボーカルのキャラ: そのキャラがどれかの歌唱 ver.（アナザーボーカル込み）で歌う曲。文言は名前だけ。
  * ミク（約 70%）・リン（約 22.5%）は割合の上限で自然に外れる。
  */
 const singerDefs: OdaiDef[] = CHARACTERS.map((c) => ({
   key: `s${c.ch}`,
   kind: "singer",
-  caption: "歌う人",
+  caption: "ボーカル",
   text: c.givenName,
   chunks: [c.givenName],
   unit: UNIT_KEY[c.unit],
@@ -156,7 +156,7 @@ const vocalDefs: OdaiDef[] = [
   {
     key: "v6",
     kind: "vocal",
-    caption: "歌う人",
+    caption: "ボーカル",
     text: "6人以上",
     chunks: ["6人", "以上"],
     test: (m) => (m.maxSingers ?? 0) >= 6,
@@ -164,7 +164,7 @@ const vocalDefs: OdaiDef[] = [
   {
     key: "va",
     kind: "vocal",
-    caption: "歌唱",
+    caption: "ボーカル",
     text: "エイプリルフール",
     // ★ 320px の 1 マスは全角 4 字まで。5 字の「エイプリル」で区切ると 3 行に割れる
     chunks: ["エイプリ", "ルフール"],

@@ -119,7 +119,7 @@ describe("新しいお題の割合（実データの数え上げ）", () => {
     if (cand) expect(cand.rate).toBeCloseTo(expected.length / PLAYABLE.length, 10);
   });
 
-  it("楽曲データに新しい項目が入っている（無いと歌う人・譜面のお題が全部 0 曲になる）", () => {
+  it("楽曲データに新しい項目が入っている（無いとボーカル・譜面のお題が全部 0 曲になる）", () => {
     expect(PLAYABLE.filter((m) => Array.isArray(m.singers)).length / PLAYABLE.length).toBeGreaterThan(0.85);
     expect(PLAYABLE.filter((m) => typeof m.masterLevel === "number").length / PLAYABLE.length).toBeGreaterThan(0.95);
     expect(PLAYABLE.some((m) => m.hasAprilFool)).toBe(true);
@@ -128,7 +128,7 @@ describe("新しいお題の割合（実データの数え上げ）", () => {
   });
 
   // ★ 割合が上限（22%）に近いお題（APPEND 20.5%・原曲 MV 21.9%・レン 18.9%）は、曲が増えると外れうるので名指ししない
-  it("歌う人・譜面・追加・MV・曲名の語などがお題の候補に入る（ミク（約 70%）は易しすぎて外れる）", () => {
+  it("ボーカル・譜面・追加・MV・曲名の語などがお題の候補に入る（ミク（約 70%）は易しすぎて外れる）", () => {
     const kinds = new Set(CANDIDATES.map((o) => o.kind));
     for (const k of ["singer", "vocal", "mv", "added", "chart", "maker", "word", "reading"]) expect(kinds).toContain(k);
     const keys = CANDIDATES.map((o) => o.key);
@@ -212,16 +212,19 @@ describe("曲名・読みの判定", () => {
     expect(def("y4").test(song({ pronunciation: undefined }))).toBe(false);
   });
 
-  it("歌う人は、どれかの ver. で歌うキャラ。項目が無い曲は当てはまらない", () => {
+  it("ボーカルのキャラは、どれかの ver. で歌うキャラ。項目が無い曲は当てはまらない", () => {
     expect(def("s1").test(song({ singers: [1, 21] }))).toBe(true);
     expect(def("s1").test(song({ singers: [2] }))).toBe(false);
     expect(def("s1").test(song({}))).toBe(false);
-    expect(def("s1").caption).toBe("歌う人");
+    expect(def("s1").caption).toBe("ボーカル");
+    // 人数・ver. のお題も同じ札にそろえる（Nori 2026-11-09）
+    expect(def("v6").caption).toBe("ボーカル");
+    expect(def("va").caption).toBe("ボーカル");
     expect(def("s18").text).toBe("まふゆ");
     expect(def("s26").text).toBe("KAITO");
   });
 
-  it("歌う人の色の帯はキャラのユニット（VS の 6 人は VS）", () => {
+  it("ボーカルのキャラの色の帯はキャラのユニット（VS の 6 人は VS）", () => {
     expect(def("s1").unit).toBe("ln");
     expect(def("s20").unit).toBe("n25");
     expect(def("s23").unit).toBe("vs");
