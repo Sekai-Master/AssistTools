@@ -16,6 +16,7 @@
 import { MOTION_LABEL, MOTION_SETTINGS, type MotionSetting } from "../../../motion/plan";
 import { THEME_LABEL, THEMES, type Theme } from "../../../lib/theme";
 import { BINGO_STORAGE_KEY, summarizeSavedBingo } from "../../bingo/bingoStorage";
+import { ODAI_PINS_STORAGE_KEY, summarizeSavedPins } from "../../bingo/odaiPinStorage";
 
 export interface StoredItem {
   key: string;
@@ -212,6 +213,12 @@ export const STORED_ITEMS: StoredItem[] = [
     label: "BINGOカードの途中経過",
     note: "「BINGOカードジェネレーター」で作ったカードと、埋めたマス（お題ビンゴ・曲名ビンゴ 1 枚ずつ）",
     summarize: (raw) => summarizeSavedBingo(raw, BROKEN),
+  },
+  {
+    key: ODAI_PINS_STORAGE_KEY,
+    label: "BINGOの入れたいお題",
+    note: "「BINGOカードジェネレーター」のお題ビンゴで、作るカードに必ず入れるように選んだお題（5 つまで）",
+    summarize: (raw) => summarizeSavedPins(raw, BROKEN),
   },
   {
     key: "sekaimaster:motion:v1",
