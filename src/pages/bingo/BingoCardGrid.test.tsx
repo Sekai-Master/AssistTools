@@ -11,7 +11,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { parseMusics } from "./useBingoMusics";
 import { type Cell, buildRandomCard, encodeSeed } from "./bingoLogic";
-import { type OdaiCell, buildOdaiCandidates, buildOdaiCard, createRng, encodeOdaiSeed } from "./odaiLogic";
+import { type OdaiCell, buildOdaiCandidates, buildOdaiCard, createRng, encodeOdaiSeed, setOdaiCleared } from "./odaiLogic";
+import { listPickableOdais } from "./odaiPins";
 import { BingoCardGrid } from "./BingoCardGrid";
 
 afterEach(cleanup);
@@ -21,9 +22,10 @@ const MUSICS = parseMusics(
 );
 const ODAI = buildOdaiCard(buildOdaiCandidates(MUSICS), createRng(3));
 const SONG = buildRandomCard(MUSICS, "free", null);
+const PICKABLE = listPickableOdais(MUSICS);
 
-function OdaiHarness({ onCard }: { onCard: (card: OdaiCell[]) => void }) {
-  const [card, setCard] = useState<OdaiCell[]>(ODAI);
+function OdaiHarness({ onCard, initial = ODAI }: { onCard: (card: OdaiCell[]) => void; initial?: OdaiCell[] }) {
+  const [card, setCard] = useState<OdaiCell[]>(initial);
   return (
     <BingoCardGrid
       kind="odai"
@@ -31,6 +33,7 @@ function OdaiHarness({ onCard }: { onCard: (card: OdaiCell[]) => void }) {
       musics={MUSICS}
       aliases={[]}
       jacketBase="/MusicDatas/jacket/"
+      pickable={PICKABLE}
       onChange={(next) => {
         setCard(next);
         onCard(next);
@@ -106,6 +109,66 @@ describe("お題の小窓", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(seen).toHaveLength(0);
+  });
+});
+
+describe("このお題を替える（お題のマスの差し替え）", () => {
+  const keyOf = (c: OdaiCell) => (c === "FREE" ? "F" : c.odai.key);
+  /** 選ぶ小窓の、文言で引いた行のボタン。 */
+  const rowButton = (text: string) =>
+    within(dialog())
+      .getAllByRole("button")
+      .find((b) => b.querySelector(".font-bold")?.textContent === text)!;
+
+  it("検索で選んだお題にそのマスだけが替わり、埋めた印が外れ、コードが変わる。フォーカスはそのマスに戻る", () => {
+    const seen: OdaiCell[][] = [];
+    const start = setOdaiCleared(ODAI, 1, true);
+    render(<OdaiHarness initial={start} onCard={(c) => seen.push(c)} />);
+    const cell = cellButtons()[1];
+    cell.focus();
+    fireEvent.click(cell);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "このお題を替える" }));
+    expect(within(dialog()).getByRole("heading", { name: "替えるお題を選ぶ" })).toBeTruthy();
+    // 1 マスに収まらない長い名前の作者（候補には出ない）にも替えられる
+    fireEvent.change(within(dialog()).getByRole("searchbox"), { target: { value: "1640mP" } });
+    fireEvent.click(rowButton("1640mP（164×40mP）"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    const next = seen.at(-1)!;
+    expect(next[1] !== "FREE" && next[1].odai.text).toBe("1640mP（164×40mP）");
+    expect(next[1] !== "FREE" && next[1].cleared).toBe(false);
+    next.forEach((c, i) => {
+      if (i !== 1) expect(keyOf(c)).toBe(keyOf(start[i]));
+    });
+    expect(encodeOdaiSeed(next)).not.toBe(encodeOdaiSeed(start));
+    expect(cellButtons()[1].textContent).toContain("1640mP");
+    expect(document.activeElement).toBe(cellButtons()[1]);
+  });
+
+  it("カードにあるお題は選べない（「カードにあります」と出る）", () => {
+    render(<OdaiHarness onCard={() => {}} />);
+    fireEvent.click(cellButtons()[0]);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "このお題を替える" }));
+    const other = ODAI[2] as Exclude<OdaiCell, "FREE">;
+    fireEvent.change(within(dialog()).getByRole("searchbox"), { target: { value: other.odai.text } });
+    const row = rowButton(other.odai.text);
+    expect(row.hasAttribute("disabled")).toBe(true);
+    expect(row.textContent).toContain("カードにあります");
+  });
+
+  it("Escape でやめると、カードは変わらない", () => {
+    const seen: OdaiCell[][] = [];
+    render(<OdaiHarness onCard={(c) => seen.push(c)} />);
+    fireEvent.click(cellButtons()[0]);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "このお題を替える" }));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(seen).toHaveLength(0);
+  });
+
+  it("曲名ビンゴの小窓には出さない", () => {
+    render(<SongHarness onCard={() => {}} />);
+    fireEvent.click(cellButtons()[0]);
+    expect(within(dialog()).queryByRole("button", { name: "このお題を替える" })).toBeNull();
   });
 });
 

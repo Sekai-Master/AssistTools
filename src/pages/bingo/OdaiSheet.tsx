@@ -11,6 +11,8 @@ interface Props {
   musics: readonly BingoMusic[];
   jacketBase: string;
   onSetCleared: (cleared: boolean) => void;
+  /** 「このお題を替える」（お題を選ぶ小窓を開く）。無ければボタンを出さない。 */
+  onReplace?: () => void;
   onClose: () => void;
 }
 
@@ -61,8 +63,9 @@ const LIST_BOX = "mt-3 min-h-0 flex-1 overflow-y-auto rounded-lg bg-neu p-1 shad
  * お題の小窓。上で埋める／戻す、下で当てはまる曲を確かめる。
  * 「流れた曲が本当にそのお題に当てはまるか」を見てから埋めるためのもの。
  * コラボのお題は、コラボごとに区切って出す（曲の多いコラボから）。
+ * 「このお題を替える」で、このマスだけを別のお題に替えられる（ほかのマスは動かさない）。
  */
-export function OdaiSheet({ odai, cleared, musics, jacketBase, onSetCleared, onClose }: Props) {
+export function OdaiSheet({ odai, cleared, musics, jacketBase, onSetCleared, onReplace, onClose }: Props) {
   const [query, setQuery] = useState("");
   const total = useMemo(() => listOdaiSongs(odai, musics).length, [odai, musics]);
   const songs = useMemo(() => listOdaiSongs(odai, musics, query), [odai, musics, query]);
@@ -82,6 +85,15 @@ export function OdaiSheet({ odai, cleared, musics, jacketBase, onSetCleared, onC
       className="h-[80vh] max-h-[640px]"
     >
       <FillButton cleared={cleared} onSetCleared={onSetCleared} />
+      {onReplace && (
+        <button
+          type="button"
+          onClick={onReplace}
+          className="mt-2 min-h-11 w-full shrink-0 rounded-lg text-sm font-bold text-slate-600 hover:bg-[color:color-mix(in_srgb,var(--neu-ink)_9%,transparent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]"
+        >
+          このお題を替える
+        </button>
+      )}
       {/* 16px 未満だと iOS が入力時に画面を拡大する */}
       <NeuInput
         type="search"

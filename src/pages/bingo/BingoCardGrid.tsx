@@ -1,14 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SongSearchModal, type AliasEntry } from "../../components/SongSearchModal";
 import { UNIT_COLOR_VAR } from "../../lib/units";
 import { onJacketError } from "../../lib/img";
 import { cn } from "../../lib/utils";
 import { NeuButton } from "../../components/ui/NeuButton";
 import type { BingoMusic, Cell } from "./bingoLogic";
-import type { OdaiCell } from "./odaiLogic";
+import { type OdaiCell, replaceOdaiCell } from "./odaiLogic";
+import { fitsCell } from "./odaiDefs";
+import type { PickableOdai } from "./odaiPins";
 import { BINGO_LINES, type Progress, progressOf, withCleared, withClearedAll } from "./bingoProgress";
 import { matchingCells } from "./bingoPlayed";
 import { OdaiSheet } from "./OdaiSheet";
+import { OdaiPicker } from "./OdaiPicker";
 import { PlayedSongSheet, type PlayedMatch } from "./PlayedSongSheet";
 import { SongCellSheet } from "./SongCellSheet";
 
@@ -20,9 +23,19 @@ interface Common {
 
 type Props = Common &
   (
-    | { kind: "odai"; card: OdaiCell[]; onChange: (card: OdaiCell[]) => void }
+    | {
+        kind: "odai";
+        card: OdaiCell[];
+        onChange: (card: OdaiCell[]) => void;
+        /** マスを替えるときに選べるお題（楽曲データで 1 曲以上当てはまるすべて）。 */
+        pickable: readonly PickableOdai[];
+      }
     | { kind: "song"; card: Cell[]; onChange: (card: Cell[]) => void }
   );
+
+/** 選ぶ小窓の見出しの上の 1 行: どのマスを替えるか（「作者 DECO*27 のマス」）。 */
+const replacingCaption = (cell: OdaiCell | undefined) =>
+  cell && cell !== "FREE" ? `${cell.odai.caption} ${cell.odai.text} のマス` : "マス";
 
 const CELL_BASE =
   "relative flex items-center justify-center overflow-hidden rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]";
@@ -79,18 +92,69 @@ function ProgressLine({ progress }: { progress: Progress }) {
   );
 }
 
+interface CellCenters {
+  width: number;
+  height: number;
+  centers: (readonly [number, number])[];
+}
+
+/**
+ * マスの中心を、線を重ねる枠（grid の親）からの px で測る。
+ * ★ スマホのお題のマスは中身に合わせて縦に伸びる（長い作者名は 4〜5 行）。段の高さが揃っている前提の
+ *   5 等分で引くと、伸びた段のある列で線が段の中心から 30px 以上ずれた（2026-11-09 実測）。
+ * 測れないとき（最初の描画・jsdom・ResizeObserver の無いブラウザ）は null で、呼ぶ側は 5 等分で引く。
+ */
+function useCellCenters(gridRef: RefObject<HTMLDivElement | null>, active: boolean): CellCenters | null {
+  const [measured, setMeasured] = useState<CellCenters | null>(null);
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    const frame = grid?.parentElement;
+    if (!active || !grid || !frame) return;
+    const measure = () => {
+      const base = frame.getBoundingClientRect();
+      const cells = Array.from(grid.children);
+      if (base.width === 0 || base.height === 0 || cells.length !== 25) {
+        setMeasured(null);
+        return;
+      }
+      const centers = cells.map((el) => {
+        const r = el.getBoundingClientRect();
+        return [r.left - base.left + r.width / 2, r.top - base.top + r.height / 2] as const;
+      });
+      setMeasured({ width: base.width, height: base.height, centers });
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    // マスの 1 つが伸び縮みしただけでも測り直す（差し替えで長い名前が入ったとき など）
+    const ro = new ResizeObserver(measure);
+    ro.observe(frame);
+    for (const el of Array.from(grid.children)) ro.observe(el);
+    return () => ro.disconnect();
+  }, [gridRef, active]);
+  return active ? measured : null;
+}
+
 /**
  * そろった列に線を引く（マスの中心どうしを結ぶ）。下の文字が読めるよう半透明にする。
  * 白い縁はジャケットの上でだけ付ける（お題の文字の上では白が字を消してしまう）。
  */
-function BingoLines({ lines, outline }: { lines: number[]; outline: boolean }) {
+function BingoLines({
+  lines,
+  outline,
+  gridRef,
+}: {
+  lines: number[];
+  outline: boolean;
+  gridRef: RefObject<HTMLDivElement | null>;
+}) {
+  const measured = useCellCenters(gridRef, lines.length > 0);
   if (lines.length === 0) return null;
-  const center = (i: number) => [(i % 5) + 0.5, Math.floor(i / 5) + 0.5] as const;
+  const center = (i: number) => measured?.centers[i] ?? ([(i % 5) + 0.5, Math.floor(i / 5) + 0.5] as const);
   return (
     <svg
       aria-hidden
       className="pointer-events-none absolute inset-0 h-full w-full"
-      viewBox="0 0 5 5"
+      viewBox={measured ? `0 0 ${measured.width} ${measured.height}` : "0 0 5 5"}
       preserveAspectRatio="none"
     >
       {lines.map((li) => {
@@ -133,9 +197,12 @@ export function BingoCardGrid(props: Props) {
   const [played, setPlayed] = useState<BingoMusic | "picking" | null>(null);
   // useModalA11y は onClose が変わるたびに掛け直すので、同じ関数を渡す
   const close = useCallback(() => setOpenIndex(null), []);
+  // ★ お題の小窓から「このお題を替える」で開くと、お題の小窓が閉じるときにマスへ戻したフォーカスを、
+  //   選ぶ小窓が「開く前のフォーカス」として覚える。閉じればそのマスに戻る
   const closeReplace = useCallback(() => setReplacing(null), []);
   const closePlayed = useCallback(() => setPlayed(null), []);
   const playedButton = useRef<HTMLButtonElement>(null);
+  const grid = useRef<HTMLDivElement>(null);
   const wasPlayedOpen = useRef(false);
   // 閉じたら「遊んだ曲を入れる」にフォーカスを戻す。検索欄の autoFocus のせいで、小窓が覚える
   // 「開く前のフォーカス」は消えた検索欄になり、そのままだとフォーカスが body に落ちる
@@ -157,6 +224,16 @@ export function BingoCardGrid(props: Props) {
     props.onChange(props.card.map((c, j) => (j === idx ? { ...music, cleared: false } : c)));
     setReplacing(null);
   };
+
+  // お題のマスの差し替え: そのマスだけ替える（埋めた印は外れる）。カードにあるお題は選ぶ小窓で選べない
+  const replaceOdai = (odai: PickableOdai) => {
+    if (props.kind !== "odai" || replacing === null) return;
+    props.onChange(replaceOdaiCell(props.card, replacing, odai));
+    setReplacing(null);
+  };
+  const onCard = new Set(
+    props.kind === "odai" ? props.card.flatMap((c) => (c === "FREE" ? [] : [c.odai.key])) : []
+  );
 
   const playedMatches: PlayedMatch[] =
     played && played !== "picking"
@@ -190,7 +267,7 @@ export function BingoCardGrid(props: Props) {
       </NeuButton>
       <ProgressLine progress={progress} />
       <div className="relative -mx-2 sm:mx-auto sm:max-w-lg">
-        <div className="grid grid-cols-5 gap-1 sm:gap-2">
+        <div ref={grid} className="grid grid-cols-5 gap-1 sm:gap-2">
           {card.map((cell, i) => {
             if (cell === "FREE") {
               return (
@@ -213,6 +290,11 @@ export function BingoCardGrid(props: Props) {
             };
             if ("odai" in cell) {
               const { odai } = cell;
+              // 入れたお題・差し替えで選んだ長い名前（1640mP（164×40mP）・Orangestar など）は、PC でも 12px にし、
+              // 字の間を詰める。スマホは 12px が最小（docs/design-system.md 2 節）なので、長い英字は語の途中で折る。
+              // ★ 区切りを inline-block にすると、中で折り返した区切りの後ろに次の区切りが続けられず 1 行増える
+              //   （PC の正方形のマスで「Ado×Giga、TeddyLoid & DECO*｜27」が 4 行になり切れた）。長い名前は続けて流す
+              const long = !fitsCell(odai);
               return (
                 <button
                   key={i}
@@ -232,12 +314,24 @@ export function BingoCardGrid(props: Props) {
                     />
                   )}
                   <span className="relative text-xs text-slate-500">{odai.caption}</span>
-                  <span className="relative mt-1 w-full text-xs font-bold [line-break:strict] [overflow-wrap:anywhere] sm:text-sm">
-                    {odai.chunks.map((chunk, j) => (
-                      <span key={j} className="inline-block max-w-full">
-                        {chunk}
-                      </span>
-                    ))}
+                  <span
+                    className={cn(
+                      "relative mt-1 w-full text-xs font-bold [line-break:strict] [overflow-wrap:anywhere]",
+                      long ? "tracking-tighter" : "sm:text-sm"
+                    )}
+                  >
+                    {odai.chunks.map((chunk, j) =>
+                      long ? (
+                        <span key={j}>
+                          {chunk}
+                          <wbr />
+                        </span>
+                      ) : (
+                        <span key={j} className="inline-block max-w-full">
+                          {chunk}
+                        </span>
+                      )
+                    )}
                   </span>
                 </button>
               );
@@ -256,7 +350,7 @@ export function BingoCardGrid(props: Props) {
             );
           })}
         </div>
-        <BingoLines lines={progress.lines} outline={props.kind === "song"} />
+        <BingoLines lines={progress.lines} outline={props.kind === "song"} gridRef={grid} />
       </div>
 
       {openIndex !== null && open && open !== "FREE" && "odai" in open && (
@@ -266,7 +360,24 @@ export function BingoCardGrid(props: Props) {
           musics={musics}
           jacketBase={jacketBase}
           onSetCleared={(v) => setCleared(openIndex, v)}
+          onReplace={() => {
+            setOpenIndex(null);
+            setReplacing(openIndex);
+          }}
           onClose={close}
+        />
+      )}
+      {props.kind === "odai" && replacing !== null && (
+        <OdaiPicker
+          mode="single"
+          caption={replacingCaption(props.card[replacing])}
+          title="替えるお題を選ぶ"
+          sub="カードにあるお題は選べません。埋めた印は外れます"
+          items={props.pickable}
+          unavailable={onCard}
+          unavailableNote="カードにあります"
+          onPick={replaceOdai}
+          onClose={closeReplace}
         />
       )}
       {openIndex !== null && open && open !== "FREE" && !("odai" in open) && (
@@ -302,7 +413,7 @@ export function BingoCardGrid(props: Props) {
           onClose={closePlayed}
         />
       )}
-      {replacing !== null && (
+      {props.kind === "song" && replacing !== null && (
         <SongSearchModal
           musics={musics}
           aliases={aliases}

@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import type { BingoMusic, CenterMode } from "./bingoLogic";
 import type { CardKind } from "./bingoShare";
-import { type OdaiTheme, ODAI_THEMES, ODAI_THEME_KEYS } from "./odaiLogic";
+import { type OdaiTheme, MAX_ODAI_PINS, ODAI_THEMES, ODAI_THEME_KEYS } from "./odaiLogic";
+import type { PickableOdai } from "./odaiPins";
 import { CATEGORY_OPTIONS, TYPE_OPTIONS, UNIT_OPTIONS } from "./bingoConstants";
 
 const THEME_OPTIONS = ODAI_THEME_KEYS.map((k) => ({ value: k, label: ODAI_THEMES[k].label }));
@@ -62,24 +63,88 @@ interface Props {
   /** お題ビンゴのテーマ（作るときだけ使う。コードにも保存にも入れない）。 */
   theme: OdaiTheme;
   onThemeChange: (theme: OdaiTheme) => void;
+  /** お題ビンゴの入れたいお題（作るカードに必ず入れる。この端末に残す）。 */
+  pins: readonly PickableOdai[];
+  onRemovePin: (key: string) => void;
+  onPickPins: () => void;
   onPickCenter: () => void;
   onOpenCode: (code: string) => void;
 }
 
+/** 入れたいお題の段: 選んだお題を札＋文言のチップで並べ（それぞれ外せる）、「お題を選ぶ」で選ぶ小窓を開く。 */
+function PinnedOdais({ pins, onRemove, onPick }: { pins: readonly PickableOdai[]; onRemove: (key: string) => void; onPick: () => void }) {
+  // 外した × は消えるので、フォーカスは「お題を選ぶ」へ移す（body に落とさない）
+  const pickRef = useRef<HTMLButtonElement>(null);
+  return (
+    <div>
+      <p className="mb-2 text-xs font-bold text-slate-500">
+        入れたいお題（<span className="font-num">{MAX_ODAI_PINS}</span>つまで）
+      </p>
+      <p className="mb-2 text-sm text-slate-600">
+        {pins.length > 0 ? "新しいカードを作ると、選んだお題が必ず入ります" : "選んだお題を、新しいカードに必ず入れます"}
+      </p>
+      {pins.length > 0 && (
+        <ul className="mb-2 flex flex-wrap gap-2">
+          {pins.map((o) => (
+            <li key={o.key} className="flex min-h-11 max-w-full items-center rounded-lg border border-slate-300 pl-3">
+              <span className="min-w-0 py-1">
+                <span className="block text-xs text-slate-500">{o.caption}</span>
+                <span className="block text-sm font-bold text-slate-700 [overflow-wrap:anywhere]">{o.text}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  onRemove(o.key);
+                  pickRef.current?.focus();
+                }}
+                aria-label={`${o.caption} ${o.text}を外す`}
+                className="flex h-11 w-11 shrink-0 items-center justify-center text-xl leading-none text-slate-500 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]"
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <NeuButton ref={pickRef} className="min-h-11 !px-3" onClick={onPick}>
+        お題を選ぶ
+      </NeuButton>
+    </div>
+  );
+}
+
 /**
- * 細かい設定（初めは閉じておく）。お題ビンゴのテーマ、曲名ビンゴの絞り込み・中央マスと、コードから開く。
+ * 細かい設定（初めは閉じておく）。お題ビンゴのテーマ・入れたいお題、曲名ビンゴの絞り込み・中央マスと、コードから開く。
  * 初めての人には要らないものをここに寄せて、最初の画面を「選ぶ・作る」だけにする。
+ * 入れたいお題は閉じていても効くので、選んでいれば見出しに数を出す。
  */
-export function BingoSettings({ kind, filters, onFiltersChange, theme, onThemeChange, onPickCenter, onOpenCode }: Props) {
+export function BingoSettings({
+  kind,
+  filters,
+  onFiltersChange,
+  theme,
+  onThemeChange,
+  pins,
+  onRemovePin,
+  onPickPins,
+  onPickCenter,
+  onOpenCode,
+}: Props) {
   const [code, setCode] = useState("");
   const set = (patch: Partial<SongFilters>) => onFiltersChange({ ...filters, ...patch });
 
   return (
     <details className="mt-4 rounded-lg border border-slate-300">
-      <summary className="flex min-h-11 cursor-pointer items-center px-4 text-sm font-bold text-slate-600">
+      <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-4 text-sm font-bold text-slate-600">
         細かい設定
+        {kind === "odai" && pins.length > 0 && (
+          <span className="font-normal text-slate-500">
+            （入れたいお題 <span className="font-num">{pins.length}</span>つ）
+          </span>
+        )}
       </summary>
       <div className="space-y-4 border-t border-slate-300 p-4">
+        {kind === "odai" && <PinnedOdais pins={pins} onRemove={onRemovePin} onPick={onPickPins} />}
         {kind === "odai" && (
           <div>
             <p className="mb-2 text-xs font-bold text-slate-500">テーマ</p>

@@ -8,9 +8,11 @@
  */
 import type { BingoMusic } from "./bingoLogic";
 import { BINGO_LINES, hasBingo, withCleared } from "./bingoProgress";
-import { type Odai, type OdaiKind, allOdaiDefs, fitsCell, odaiDefFromKey, toHiragana } from "./odaiDefs";
+import { type Odai, type OdaiDef, type OdaiKind, allOdaiDefs, fitsCell, odaiDefFromKey, toHiragana } from "./odaiDefs";
+import { MAX_ODAI_PINS } from "./odaiPinStorage";
 
 export type { Odai, OdaiKind, RowKey } from "./odaiDefs";
+export { MAX_ODAI_PINS };
 export { readingRow, textEm, titleKind } from "./odaiDefs";
 
 export type OdaiCell = "FREE" | { odai: Odai; cleared: boolean };
@@ -154,7 +156,8 @@ function reachableThemed(
   pool: readonly Odai[],
   caps: Record<OdaiKind, number>,
   kinds: readonly OdaiKind[],
-  target: number
+  target: number,
+  slots = CELLS - 1
 ): number {
   const themed = pool.filter((o) => kinds.includes(o.kind));
   // 並べない組の少ないものから詰める並びを最初に、あとは決まった種の乱数の並び（いつ数えても同じ結果）
@@ -165,7 +168,7 @@ function reachableThemed(
     const count: Partial<Record<OdaiKind, number>> = {};
     const picked: Odai[] = [];
     for (const o of order) {
-      if (picked.length === CELLS - 1) break;
+      if (picked.length === slots) break;
       const n = count[o.kind] ?? 0;
       if (n >= caps[o.kind] || picked.some((p) => clashes(p, o))) continue;
       count[o.kind] = n + 1;
@@ -180,13 +183,28 @@ function reachableThemed(
  * このテーマ・段で守るテーマのマスの下限。ODAI_THEMES の floor を、いまの候補で同時に入れられる数で頭打ちにする。
  * ★ 曲が増えて候補が割合の範囲から外れたり、並べない組が増えたりしても、届かない下限を課さない
  *   （毎日の楽曲データの更新のテストも止めない）。
+ * 入れたお題（pinned）があれば、そのうちテーマの種類のものを数え、残りのマスで入れられる数を足す
+ * （入れたお題と並べない組の候補は除き、入れたお題の種類の数は上限から引く）。
  */
-export function odaiThemeFloor(candidates: readonly Odai[], level: OdaiLevel, theme: OdaiTheme): number {
+export function odaiThemeFloor(
+  candidates: readonly Odai[],
+  level: OdaiLevel,
+  theme: OdaiTheme,
+  pinned: readonly Odai[] = []
+): number {
   const { minRate } = ODAI_LEVELS[level];
   const { kinds, floor } = ODAI_THEMES[theme];
   if (floor[level] === 0) return 0;
-  const pool = candidates.filter((o) => o.rate >= minRate);
-  return Math.min(floor[level], reachableThemed(pool, odaiCapsFor(level, theme), kinds, floor[level]));
+  const pinnedKeys = new Set(pinned.map((p) => p.key));
+  const pool = candidates.filter(
+    (o) => o.rate >= minRate && !pinnedKeys.has(o.key) && !pinned.some((p) => clashes(p, o))
+  );
+  const caps = { ...odaiCapsFor(level, theme) };
+  for (const p of pinned) caps[p.kind] = Math.max(0, caps[p.kind] - 1);
+  const pinnedThemed = pinned.filter((p) => kinds.includes(p.kind)).length;
+  const rest = Math.max(0, floor[level] - pinnedThemed);
+  const reach = rest === 0 ? 0 : reachableThemed(pool, caps, kinds, rest, CELLS - 1 - pinned.length);
+  return Math.min(floor[level], pinnedThemed + reach);
 }
 
 const CELLS = 25;
@@ -279,6 +297,60 @@ export function clashes(a: Odai, b: Odai): boolean {
   return a.clashes?.has(b.key) ?? false;
 }
 
+/** 鍵からお題の定義を引く。楽曲データに無い・読めない鍵は null（入れたいお題の保存が古いときに黙って落とす）。 */
+function defOrNull(key: string, musics: readonly BingoMusic[]): OdaiDef | null {
+  try {
+    return odaiDefFromKey(key, musics);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 入れたいお題の鍵を、カードの生成で使える形にする（重複と、楽曲データで 1 曲も当てはまらない・読めない鍵は黙って落とす）。
+ * 候補にあるお題は候補のまま使う（並べない組は候補どうしで数えてある）。候補に無いお題（割合の範囲外・1 マスに収まらない名前）は、
+ * ここで候補との並べない組を数える。clashes(入れたお題, 候補) で引ける。
+ * ★ 割合の範囲外のお題（DEEP_MIN_RATE 未満・MAX_RATE 超え）は、重なりでは並べない組にせず、同じユニットの色の印だけを見る。
+ *   重なりは小さい方の曲数で割るので、大きさが大きく違う組では、小さい方がほぼ必ず「含まれる」と数えられる
+ *   （2026-11-09 実測: ミク 約 68% は EASY の候補 103 のうち 96 と、1 曲だけの作者は最大 30 と並べない組になり、残りが埋まらない）。
+ *   範囲外の組は見た目も似ず（「作者 syudou × バルーン」と「読みの頭 さ行」）、見積もりのずれもその 1 曲ぶんしかない。
+ *   範囲内で 1 マスに収まらないだけの作者（Orangestar など）は、候補と同じ決まり（重なり・同じユニット）で数える。
+ */
+export function resolvePinnedOdais(
+  keys: readonly string[],
+  musics: readonly BingoMusic[],
+  candidates: readonly Odai[]
+): Odai[] {
+  const byKey = new Map(candidates.map((o) => [o.key, o]));
+  const out: Odai[] = [];
+  let candidateBits: Uint32Array[] | null = null;
+  for (const key of new Set(keys)) {
+    if (out.length === MAX_ODAI_PINS) break;
+    const known = byKey.get(key);
+    if (known) {
+      out.push(known);
+      continue;
+    }
+    const def = defOrNull(key, musics);
+    if (!def) continue;
+    const bits = songBits(def.test, musics);
+    const n = countBits(bits);
+    if (n === 0) continue;
+    const rate = n / musics.length;
+    const inRange = rate >= DEEP_MIN_RATE && rate <= MAX_RATE;
+    candidateBits ??= candidates.map((o) => songBits(o.test, musics));
+    const set = new Set<string>();
+    candidates.forEach((o, i) => {
+      const sameUnit = def.unit !== undefined && def.unit === o.unit;
+      const overlaps =
+        inRange && countShared(bits, candidateBits![i]) / Math.min(n, countBits(candidateBits![i])) >= OVERLAP_LIMIT;
+      if (sameUnit || overlaps) set.add(o.key);
+    });
+    out.push({ ...def, rate, clashes: set });
+  }
+  return out;
+}
+
 // ---- カード ----
 
 /** 中央を除く 24 マスの並び → 25 マスの位置。 */
@@ -298,34 +370,60 @@ export function estimateBingoChance(cells: readonly (Odai | null)[], songs: numb
 }
 
 /**
- * 種類ごとの上限と並べない組を守って、ランダムに 24 個選ぶ。
+ * 種類ごとの上限と並べない組を守って、ランダムに 24 個選ぶ（埋めきれなければ、選べたところまで）。
  * テーマがあれば、テーマの種類から先に floor 個まで入れてから、残りを全部の候補から埋める。
+ * 入れたお題（pinned）は先に置き、種類の数とテーマのマスに数える。自動で選ぶお題は、入れたお題とも並べない組にしない。
  */
 function pickWithCaps(
   candidates: readonly Odai[],
   caps: Record<OdaiKind, number>,
   rng: () => number,
   inTheme: (o: Odai) => boolean = () => false,
-  floor = 0
-): Odai[] | null {
+  floor = 0,
+  pinned: readonly Odai[] = []
+): Odai[] {
   const count: Partial<Record<OdaiKind, number>> = {};
-  const picked: Odai[] = [];
+  for (const p of pinned) count[p.kind] = (count[p.kind] ?? 0) + 1;
+  const picked: Odai[] = [...pinned];
+  let themed = pinned.filter(inTheme).length;
   const tryAdd = (o: Odai) => {
     const n = count[o.kind] ?? 0;
     if (n >= caps[o.kind] || picked.includes(o) || picked.some((p) => clashes(p, o))) return;
     count[o.kind] = n + 1;
     picked.push(o);
+    if (inTheme(o)) themed++;
   };
   const order = shuffleWith(candidates, rng);
   for (const o of order) {
-    if (picked.length >= floor) break;
+    if (themed >= floor) break;
     if (inTheme(o)) tryAdd(o);
   }
   for (const o of order) {
     if (picked.length === CELLS - 1) break;
     tryAdd(o);
   }
-  return picked.length === CELLS - 1 ? picked : null;
+  return picked;
+}
+
+/**
+ * 入れたお題との並べない組と種類の上限のせいで 24 マスを埋めきれなかったときの埋め方（入れたお題があるときだけ）。
+ * まず入れたお題との並べない組を見ずに、それでも足りなければ重複だけを避けて、使っていない候補で埋める。
+ * ★ 例外を投げない（入れたお題がどんな組み合わせでもカードは出る。Nori 2026-11-09）。
+ */
+function fillRest(picked: readonly Odai[], pool: readonly Odai[], pinned: readonly Odai[], caps: Record<OdaiKind, number>, rng: () => number): Odai[] {
+  const out = [...picked];
+  const order = shuffleWith(pool, rng).filter((o) => !out.some((p) => p.key === o.key));
+  const autos = () => out.filter((o) => !pinned.includes(o));
+  for (const o of order) {
+    if (out.length === CELLS - 1) break;
+    const n = out.filter((p) => p.kind === o.kind).length;
+    if (n < caps[o.kind] && !autos().some((p) => clashes(p, o))) out.push(o);
+  }
+  for (const o of order) {
+    if (out.length === CELLS - 1) break;
+    if (!out.includes(o)) out.push(o);
+  }
+  return out;
 }
 
 /** 2 つのマスの位置を入れ替える（並びで、そろいやすい列が変わる）。 */
@@ -338,17 +436,18 @@ function swapTwo(cells: readonly (Odai | null)[], rng: () => number): (Odai | nu
   return next;
 }
 
-/** 1 マスを、まだ使っていない候補に替える（種類ごとの上限と、並べない組を守る）。 */
+/** 1 マスを、まだ使っていない候補に替える（種類ごとの上限と、並べない組を守る）。入れたお題（fixed）のマスは替えない。 */
 function replaceOne(
   cells: readonly (Odai | null)[],
   pool: readonly Odai[],
   caps: Record<OdaiKind, number>,
-  rng: () => number
+  rng: () => number,
+  fixed: ReadonlySet<string>
 ): (Odai | null)[] | null {
   const a = Math.floor(rng() * CELLS);
   const out = cells[a];
   const cand = pool[Math.floor(rng() * pool.length)];
-  if (!out || cells.some((o) => o?.key === cand.key)) return null;
+  if (!out || fixed.has(out.key) || cells.some((o) => o?.key === cand.key)) return null;
   const sameKind = cells.filter((o) => o?.kind === cand.kind).length - (out.kind === cand.kind ? 1 : 0);
   if (sameKind >= caps[cand.kind]) return null;
   if (cells.some((o, i) => i !== a && o !== null && clashes(o, cand))) return null;
@@ -360,21 +459,30 @@ function replaceOne(
  * ランダムな並びから始め、段の曲数での見積もりが目標の幅に近づく入れ替えだけを受け入れる。
  * 1 曲少ないときは線に届かないことも条件にする（カードの枠に出す目安が段の曲数とずれないように）。
  * テーマ（theme）があれば、テーマの種類のマスが下限（ODAI_THEMES の floor）を割らないことも条件にする。
+ *
+ * 入れたお題（pinned。resolvePinnedOdais で作る）は必ず入れる。位置は入れ替えで動くが、ほかのお題には替えない。
+ * 入れたお題どうしは、並べない組・種類の上限・段の割合の下限を見ない（持ち主が選んだもの）。自動で選ぶマスは、
+ * 入れたお題と並べない組にせず、種類の数とテーマの下限には入れたお題も数える。
+ * ★ 入れたお題があるときは例外を投げない。埋めきれなければ決まりを緩めて埋め（fillRest）、合わせ込みが届かなければいちばん近いカード。
  */
 export function buildOdaiCard(
   candidates: readonly Odai[],
   rng: () => number = Math.random,
   level: OdaiLevel = DEFAULT_ODAI_LEVEL,
-  theme: OdaiTheme = DEFAULT_ODAI_THEME
+  theme: OdaiTheme = DEFAULT_ODAI_THEME,
+  pinnedIn: readonly Odai[] = []
 ): OdaiCell[] {
   const { songs, minRate } = ODAI_LEVELS[level];
   const caps = odaiCapsFor(level, theme);
-  const pool = candidates.filter((o) => o.rate >= minRate);
-  if (pool.length < CELLS - 1) {
-    throw new Error(`お題が足りません（必要 ${CELLS - 1} / 候補 ${pool.length}）。`);
+  const allPool = candidates.filter((o) => o.rate >= minRate);
+  if (allPool.length < CELLS - 1) {
+    throw new Error(`お題が足りません（必要 ${CELLS - 1} / 候補 ${allPool.length}）。`);
   }
+  const pinned = pinnedIn.filter((p, i) => pinnedIn.findIndex((q) => q.key === p.key) === i).slice(0, MAX_ODAI_PINS);
+  const fixed = new Set(pinned.map((p) => p.key));
+  const pool = pinned.length > 0 ? allPool.filter((o) => !fixed.has(o.key)) : allPool;
   const { kinds } = ODAI_THEMES[theme];
-  const floor = odaiThemeFloor(candidates, level, theme);
+  const floor = odaiThemeFloor(candidates, level, theme, pinned);
   const inTheme = (o: Odai) => kinds.includes(o.kind);
   // 外れの量: 見積もりが目標から離れた分と、1 曲少なくても線を越えてしまう分（目安が段の曲数より少なく出る）。
   // テーマの下限に足りないマスは重く数える（合わせ込みと引き換えに、テーマのマスを手放さない）
@@ -385,13 +493,20 @@ export function buildOdaiCard(
 
   let best: { cells: (Odai | null)[]; miss: number } | null = null;
   for (let attempt = 0; attempt < MAX_BUILD_TRIES && (best === null || best.miss > 0); attempt++) {
-    let picked: Odai[] | null = null;
-    for (let t = 0; t < MAX_PICK_TRIES && !picked; t++) picked = pickWithCaps(pool, caps, rng, inTheme, floor);
-    if (!picked) throw new Error("お題の組み合わせを作れませんでした。");
-    let cells = toPositions(picked);
+    let picked: Odai[] = [];
+    for (let t = 0; t < MAX_PICK_TRIES && picked.length < CELLS - 1; t++) {
+      const p = pickWithCaps(pool, caps, rng, inTheme, floor, pinned);
+      if (p.length > picked.length) picked = p;
+    }
+    if (picked.length < CELLS - 1) {
+      if (pinned.length === 0) throw new Error("お題の組み合わせを作れませんでした。");
+      picked = fillRest(picked, pool, pinned, caps, rng);
+    }
+    // 入れたお題は先頭に並ぶので、いつも上の段に来ないよう並びを混ぜる（入れないカードは今までと同じ並び）
+    let cells = toPositions(pinned.length > 0 ? shuffleWith(picked, rng) : picked);
     let miss = missOf(cells);
     for (let step = 0; step < MAX_STEPS && miss > 0; step++) {
-      const next = rng() < 0.5 ? swapTwo(cells, rng) : replaceOne(cells, pool, caps, rng);
+      const next = rng() < 0.5 ? swapTwo(cells, rng) : replaceOne(cells, pool, caps, rng, fixed);
       if (!next) continue;
       const m = missOf(next);
       if (m < miss) {
@@ -476,6 +591,19 @@ export function decodeOdaiSeed(seed: string, musics: readonly BingoMusic[]): Oda
 /** 指定したマスを埋める／戻す（新しいカードを返す）。FREE は変えない。 */
 export function setOdaiCleared(card: readonly OdaiCell[], index: number, cleared: boolean): OdaiCell[] {
   return withCleared(card, index, cleared);
+}
+
+/**
+ * 1 マスを別のお題に替える（新しいカードを返す。埋めた印は外す）。ほかのマスは動かさない（合わせ直さない）。
+ * 並べない組・種類の上限は見ない（持ち主が選んだもの）。FREE のマスと、ほかのマスにすでにあるお題は例外。
+ */
+export function replaceOdaiCell(card: readonly OdaiCell[], index: number, odai: Odai): OdaiCell[] {
+  const cell = card[index];
+  if (cell === undefined || cell === "FREE") throw new Error("このマスは替えられません。");
+  if (card.some((c, i) => i !== index && c !== "FREE" && c.odai.key === odai.key)) {
+    throw new Error(`このお題はもうカードにあります（${odai.text}）。`);
+  }
+  return card.map((c, i) => (i === index ? { odai, cleared: false } : c));
 }
 
 /**
