@@ -12,7 +12,9 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import type { BingoMusic } from "./bingoLogic";
 import { buildRandomCard, encodeSeed } from "./bingoLogic";
 import { parseMusics } from "./useBingoMusics";
-import { buildOdaiCandidates, buildOdaiCard, createRng, encodeOdaiSeed } from "./odaiLogic";
+import { buildOdaiCandidates, buildOdaiCard, createRng, encodeOdaiSeed, resolvePinnedOdais } from "./odaiLogic";
+import { fitsCell, textEm } from "./odaiDefs";
+import { listPickableOdais } from "./odaiPins";
 import { decodeCardCode } from "./bingoShare";
 import { matchingCells } from "./bingoPlayed";
 import { BINGO_STORAGE_KEY } from "./bingoStorage";
@@ -158,6 +160,17 @@ describe("カードの設定", () => {
     expect(screen.getByRole("button", { name: "わたしのカード" })).toBeTruthy();
   });
 
+  // ★ 前は 32 字まで打てて、閉じたときに黙って 16 字に切られた（検分 M1 低-6）
+  it("名前の入力の上限（maxLength）は保存の上限と同じ 16 字。絵文字など 2 つに数える字の分だけ広げる", () => {
+    saveSet([entry("a1", encodeOdaiSeed(ODAI_A))]);
+    render(<BingoGenerator />);
+    fireEvent.click(screen.getByRole("button", { name: "カード1の設定" }));
+    const input = within(dialog()).getByRole("textbox") as HTMLInputElement;
+    expect(input.maxLength).toBe(16);
+    fireEvent.change(input, { target: { value: "🎤🎤🎤あ" } });
+    expect(input.maxLength).toBe(19);
+  });
+
   it("埋めたマスのあるカードを外すときは確かめる", () => {
     const filled = [...ODAI_A];
     const first = filled.findIndex((c) => c !== "FREE");
@@ -296,6 +309,92 @@ describe("PC の並べた盤面（区画の幅 1200px・内側の高さ 768px）
     } finally {
       spy.mockRestore();
     }
+  });
+
+  describe("マスの高さの見込み（検分 M1 高-1・中-1。名前の長い作者 1 位と、文言の幅がいちばん大きいふつうのお題）", () => {
+    // jsdom は字を並べないので、行の数は見込み（長い名前 4 行・ふつう 3 行）にして、描いたクラスの行の高さで足す。
+    // 実際に何行に折れて収まるかは、ブラウザでの実測（撮影の台本。G-shots/m1-fix の measure.json）で確かめる。
+    // ★ Tailwind v4 の text-* は自分の行の高さを持ち、親の leading-tight を上書きする。同じ要素に leading-* を付けたときだけ上書きされる
+    const TEXT = { "text-xs": [12, 16], "text-sm": [14, 20], "text-base": [16, 24], "text-xl": [20, 28] } as const;
+    const lineOf = (el: Element) => {
+      const cls = el.className.split(/\s+/);
+      const size = cls.find((c): c is keyof typeof TEXT => c in TEXT);
+      expect(size, el.className).toBeDefined();
+      const [px, own] = TEXT[size!];
+      return cls.includes("leading-tight") ? px * 1.25 : own;
+    };
+    const pickable = listPickableOdais(mockMusics);
+    const longTop5 = pickable.filter((o) => !fitsCell(o)).sort((a, b) => textEm(b.text) - textEm(a.text)).slice(0, 5);
+    const odaiLong = buildOdaiCard(CANDIDATES, createRng(11), "normal", "any", resolvePinnedOdais(longTop5.map((o) => o.key), mockMusics, CANDIDATES));
+    const heavy = [...CANDIDATES].sort((a, b) => textEm(b.text) - textEm(a.text)).slice(0, 24);
+    const odaiHeavy = [...heavy.slice(0, 12), "FREE" as const, ...heavy.slice(12)].map((o) => (o === "FREE" ? o : { odai: o, cleared: false }));
+    const withHeight = (h: number) => {
+      const before = window.innerHeight;
+      Object.defineProperty(window, "innerHeight", { value: h, configurable: true, writable: true });
+      return () => Object.defineProperty(window, "innerHeight", { value: before, configurable: true, writable: true });
+    };
+
+    it("名前の長い作者の上位 5 人（1 位は c286）と、重いお題が入っている", () => {
+      expect(longTop5[0].text).toBe("雄之助 & CircusP feat. Hatsune Miku");
+      expect(heavy.map((o) => o.text)).toEqual(expect.arrayContaining(["ビートまりお×まろん", "柊マグネタイト"]));
+    });
+
+    // 盤面 560px（内側の高さ 768px）と 575px（800px）。長い名前は 4 行、ふつうの文言は 3 行が入るか
+    it.each([
+      [768, 560],
+      [800, 575],
+    ])("内側の高さ %ipx・盤面 %ipx", (height, board) => {
+      saveSet([entry("l1", encodeOdaiSeed(odaiLong)), entry("h2", encodeOdaiSeed(odaiHeavy))]);
+      const spy = withWidth(1200);
+      const restore = withHeight(height);
+      try {
+        render(<BingoGenerator />);
+        let checked = 0;
+        const regions = screen.getAllByRole("region");
+        expect(regions).toHaveLength(2);
+        regions.forEach((region, r) => {
+          const grid = region.querySelector(".grid-cols-5")!;
+          expect((grid.parentElement as HTMLElement).style.maxWidth).toBe(`${board}px`);
+          // マスの間は描いたクラスから（gap-2 は 8px、gap-1 は 4px）
+          const gap = grid.className.split(/\s+/).includes("gap-2") ? 8 : 4;
+          const cell = (board - 4 * gap) / 5;
+          [odaiLong, odaiHeavy][r].forEach((c, i) => {
+            if (c === "FREE") return;
+            const button = grid.children[i];
+            const caption = button.querySelector("span.text-slate-500")!;
+            const text = button.querySelector("span.font-bold")!;
+            const long = !fitsCell(c.odai);
+            // 上下の余白 8（py-1）＋札と文言の間 2（mt-0.5）＋枠線 2
+            const need = 12 + lineOf(caption) + lineOf(text) * (long ? 4 : 3);
+            expect(need, `${c.odai.text}（${long ? "長い名前" : "ふつう"}）`).toBeLessThanOrEqual(cell);
+            checked++;
+          });
+        });
+        expect(checked).toBe(48);
+      } finally {
+        restore();
+        spy.mockRestore();
+      }
+    });
+
+    it("12px より下げられない盤面（列 3・盤面 419px の md）では、長い名前の字の間を詰める", () => {
+      localStorage.setItem(
+        MULTI_STORAGE_KEY,
+        JSON.stringify({ open: true, active: 0, cols: 3, cards: [entry("l1", encodeOdaiSeed(odaiLong)), entry("a2", encodeOdaiSeed(ODAI_A)), entry("b3", encodeOdaiSeed(ODAI_B))] } satisfies SavedMulti)
+      );
+      const spy = withWidth(1305);
+      try {
+        render(<BingoGenerator />);
+        const board = screen.getByRole("region", { name: "カード1" });
+        expect((board.querySelector(".grid-cols-5")!.parentElement as HTMLElement).style.maxWidth).toBe("419px");
+        const c286 = [...board.querySelectorAll("span.font-bold")].find((t) => t.textContent === longTop5[0].text)!;
+        expect(c286.className).toContain("text-xs");
+        expect(c286.className).toContain("tracking-tighter");
+        expect(c286.className).toContain("leading-tight");
+      } finally {
+        spy.mockRestore();
+      }
+    });
   });
 
   it("1 枚で遊ぶのカードは今の見た目のまま（盤面の段の文字にしない）", () => {

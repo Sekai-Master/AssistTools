@@ -15,7 +15,7 @@ import { OdaiPicker } from "./OdaiPicker";
 import { PlayedSongSheet, type PlayedMatch } from "./PlayedSongSheet";
 import { SongCellSheet } from "./SongCellSheet";
 import { BingoSongPicker } from "./BingoSongPicker";
-import type { FontStep } from "./boardLayout";
+import { type FontStep, type TextPx, STEP_PX, cellGapOf, longTextPxOf, longTextTight } from "./boardLayout";
 
 interface Common {
   musics: BingoMusic[];
@@ -28,14 +28,25 @@ interface Common {
   board?: { width: number; step: FontStep };
 }
 
-/** まとめて遊ぶの盤面の、文字の段ごとの札・文言・名前の長い作者の文言の大きさ（字の段の規約 20・16・14・12）。 */
-const STEP_TEXT: Record<FontStep, { caption: string; text: string; long: string }> = {
-  xl: { caption: "text-sm", text: "text-xl", long: "text-base" },
-  lg: { caption: "text-xs", text: "text-base", long: "text-sm" },
-  md: { caption: "text-xs", text: "text-sm", long: "text-xs" },
-  sm: { caption: "text-xs", text: "text-xs", long: "text-xs tracking-tighter" },
-  xs: { caption: "text-xs", text: "text-xs", long: "text-xs tracking-tighter" },
-};
+/** 字の段の規約（20・16・14・12）の大きさから Tailwind のクラス。 */
+const TEXT_CLASS: Record<TextPx, string> = { 20: "text-xl", 16: "text-base", 14: "text-sm", 12: "text-xs" };
+
+/**
+ * まとめて遊ぶの盤面の、札・文言・名前の長い作者の文言のクラス（大きさは boardLayout.ts の STEP_PX・longTextPxOf）。
+ * ★ 行の高さは span ごとに leading-tight（1.25 倍）にそろえる。Tailwind v4 の text-* は自分の行の高さを持ち、
+ *   マスの leading-tight を上書きするので、マスに付けただけでは効かない（検分 M1 高-1。560px の盤面で長い名前が切れた）。
+ *   leading-tight は text-* の後ろに書く。前に書くと cn（tailwind-merge）が text-* と競合するとみなして落とす
+ */
+function boardText(board: { width: number; step: FontStep }) {
+  const px = STEP_PX[board.step];
+  // 12px まで下げても長い名前の 4 行が入らない盤面は、字の間を詰める
+  const tight = longTextTight(board.width, board.step) ? " tracking-tighter" : "";
+  return {
+    caption: `${TEXT_CLASS[px.caption]} leading-tight`,
+    text: `${TEXT_CLASS[px.text]} leading-tight`,
+    long: `${TEXT_CLASS[longTextPxOf(board.width, board.step)]}${tight} leading-tight`,
+  };
+}
 
 type Props = Common &
   (
@@ -284,7 +295,7 @@ export function BingoCardGrid(props: Props) {
           ? "min-h-16"
           : "aspect-square"
         : "min-h-16 sm:aspect-square";
-  const stepText = board ? STEP_TEXT[board.step] : null;
+  const stepText = board ? boardText(board) : null;
   const open = openIndex !== null ? card[openIndex] : null;
 
   return (
@@ -306,7 +317,7 @@ export function BingoCardGrid(props: Props) {
         className={board ? "relative mx-auto w-full" : "relative -mx-2 sm:mx-auto sm:max-w-lg"}
         style={board ? { maxWidth: board.width } : undefined}
       >
-        <div ref={grid} className={cn("grid grid-cols-5", board ? (board.width >= 448 ? "gap-2" : "gap-1") : "gap-1 sm:gap-2")}>
+        <div ref={grid} className={cn("grid grid-cols-5", board ? (cellGapOf(board.width) === 8 ? "gap-2" : "gap-1") : "gap-1 sm:gap-2")}>
           {card.map((cell, i) => {
             if (cell === "FREE") {
               return (
@@ -341,7 +352,7 @@ export function BingoCardGrid(props: Props) {
                   className={cn(
                     CELL_BASE,
                     square,
-                    // 盤面の段の文字の大きさは、上下の余白 4px・札と文言の間 2px で 3 行が正方形に入るように決めてある（boardLayout.ts）
+                    // 盤面の段の文字の大きさは、上下の余白 4px ずつ・札と文言の間 2px・枠線で、3 行（長い名前は 4 行）が正方形に入るように決めてある（boardLayout.ts）
                     stepText ? "py-1" : "py-2",
                     "flex-col border border-slate-300 text-center leading-tight text-slate-700 hover:border-slate-400"
                   )}

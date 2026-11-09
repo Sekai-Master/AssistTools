@@ -18,7 +18,10 @@ const SITE_HEADER = 65;
 const PANEL_CHROME = 24 + 64 + 24;
 /** カードの見出し（名前と進み具合の 1 行 32px＋余白 8px＋プレイ開始の時刻を足すときの予備 8px）。 */
 const BOARD_HEAD = 48;
-/** 自動のときの盤面の下限。1 マス ≒ 余白 8＋札 14×1.25＋間 2＋文言 20×1.25×3 ≒ 103px、5 マスと間 4 つ（8px）で 547px。 */
+/**
+ * 自動のときの盤面の下限。1 マス = 余白 8＋札と文言の間 2＋枠線 2＋札 14×1.25＋文言 20×1.25×3 = 104.5px、
+ * 5 マスと間 4 つ（8px）で 555px なので、切りよく 560px（cellNeed・cellOf）。
+ */
 export const AUTO_MIN_BOARD = 560;
 /** 列の切り替えの上限（カードの上限と同じ）。 */
 export const MAX_BOARD_COLS = 5;
@@ -28,19 +31,80 @@ const GROWN_BOARD_HEIGHT = 64 * 5 + 4 * 4;
 /**
  * 盤面の幅から選ぶ文字の段。字の段の規約（20・16・14・12、docs/design-system.md 2 節）だけを使う。
  * xl: 文言 20／札 14、lg: 16／12、md: 14／12、sm: 12／12（ここまで正方形）、xs: 12／12 で中身に合わせて縦に伸びる。
- * 境目は、その段の文言が 3 行と札が正方形のマスに入る盤面の幅。
+ * 境目は、その段の文言が 3 行と札が正方形のマスに入る盤面の幅（cellOf(境目) ≥ cellNeed(札, 文言, 3)）。
  */
 export type FontStep = "xl" | "lg" | "md" | "sm" | "xs";
 
+/**
+ * 段ごとの文字の大きさ（px）。札・文言・名前の長い作者の文言（ふつうより 1 段下げる。さらに下げるのは longTextPxOf）。
+ * 描く側（BingoCardGrid）はこの値から Tailwind の text-* を選ぶ。
+ */
+export type TextPx = 20 | 16 | 14 | 12;
+
+export const STEP_PX: Record<FontStep, { caption: TextPx; text: TextPx; long: TextPx }> = {
+  xl: { caption: 14, text: 20, long: 16 },
+  lg: { caption: 12, text: 16, long: 14 },
+  md: { caption: 12, text: 14, long: 12 },
+  sm: { caption: 12, text: 12, long: 12 },
+  xs: { caption: 12, text: 12, long: 12 },
+};
+
+/**
+ * 盤面の札と文言の行の高さ（文字の大きさの倍）。
+ * ★ BingoCardGrid が盤面の札と文言の span に leading-tight を付けて、この値にそろえている。Tailwind v4 の
+ *   text-xl などは自分の行の高さ（20px→28px・16px→24px・14px→20px）を持ち、親（マス）の leading-tight を上書きする。
+ *   前は 1.25 倍で数えたまま span に付けておらず、盤面 560px で名前の長い作者のマスが切れた（検分 M1 高-1）
+ */
+const BOARD_LEADING = 1.25;
+/** お題のマスの縦の決まった分: 上下の余白（py-1 で 4px ずつ）・札と文言の間（mt-0.5）・枠線（上下 1px ずつ）。 */
+const CELL_FIXED = 8 + 2 + 2;
+/** 名前の長い作者の文言に見込む行の数（1 位「雄之助 & CircusP feat. Hatsune Miku」が 16px で 4 行になる）。 */
+const LONG_LINES = 4;
+
+/** マスの間（px）。BingoCardGrid はこれで gap-2・gap-1 を選ぶ。 */
+export const cellGapOf = (board: number) => (board >= 448 ? 8 : 4);
+
+/** 盤面の幅から、正方形のマス 1 つの高さ（枠線ごと）。 */
+export const cellOf = (board: number) => (board - 4 * cellGapOf(board)) / 5;
+
+/** 札 1 行と文言 lines 行が入るお題のマスの高さ（枠線ごと）。 */
+export const cellNeed = (captionPx: number, textPx: number, lines: number) =>
+  CELL_FIXED + (captionPx + textPx * lines) * BOARD_LEADING;
+
+// ★ 計画の表の境目（460・410・370）は枠線を数えておらず、境目の盤面で 3 行の文言が 1〜1.4px はみ出す。
+//   枠線ごと数えて引き直した（lg 467・md 414・sm 376 → 切りよく 470・415・380。検分 M1 高-1）
 const STEP_MIN: readonly (readonly [number, FontStep])[] = [
   [AUTO_MIN_BOARD, "xl"],
-  [460, "lg"],
-  [410, "md"],
-  [370, "sm"],
+  [470, "lg"],
+  [415, "md"],
+  [380, "sm"],
 ];
 
 export function fontStepOf(board: number): FontStep {
   return STEP_MIN.find(([min]) => board >= min)?.[1] ?? "xs";
+}
+
+/** 字の段の規約で 1 段下の大きさ（12px より下げない）。 */
+const stepDown = (px: TextPx): TextPx => (px > 16 ? 16 : px > 14 ? 14 : 12);
+
+/**
+ * 名前の長い作者（fitsCell に通らないお題）の文言の大きさ（px）。ふつうの文言より 1 段下げ、
+ * その大きさで 4 行が正方形のマスに入らない盤面では、もう 1 段下げる（盤面 560〜579px の xl は 14px）。
+ * md 以下は 12px のまま（12px が最小。docs/design-system.md 2 節）。
+ */
+export function longTextPxOf(board: number, step: FontStep): TextPx {
+  const { caption, long } = STEP_PX[step];
+  if (long <= 12 || cellOf(board) >= cellNeed(caption, long, LONG_LINES)) return long;
+  return stepDown(long);
+}
+
+/**
+ * 名前の長い作者の文言の字の間を詰めるか。longTextPxOf の大きさでも 4 行が正方形のマスに入らない盤面
+ * （md の下の方・sm・xs）は 12px より下げられないので、字の間を詰めて 3 行に収める。
+ * ★ 列を 3 つ選んだ 1400 幅（盤面 419px の md）で、1 位が 12px で 4 行になり切れた（sm・xs は前から詰めている）
+ */
+export function longTextTight(board: number, step: FontStep): boolean {
+  return cellOf(board) < cellNeed(STEP_PX[step].caption, longTextPxOf(board, step), LONG_LINES);
 }
 
 export type BoardLayout =

@@ -16,6 +16,14 @@ interface Props {
   onClose: () => void;
 }
 
+/**
+ * 名前の入力の上限（maxLength は UTF-16 の数で数える）。保存は [...s] で 16 字（cleanCardName）なので、
+ * 絵文字など 2 つに数える字の分だけ広げる。これで入力が保存の上限を超えず、閉じたときに黙って切られない（検分 M1 低-6）。
+ * 上限は今の字から数えるので、絵文字を貼る・15 字目に絵文字を打つときは 16 字より手前で止まることがある（超えることはない）。
+ * ★ onChange で字を切らない。日本語の変換中に値を書き換えると、変換が崩れる
+ */
+const nameLimit = (s: string) => MAX_CARD_NAME + (s.length - [...s].length);
+
 const SUB_BUTTON =
   "mt-3 min-h-11 w-full shrink-0 rounded-lg text-sm font-bold text-slate-600 hover:bg-[color:color-mix(in_srgb,var(--neu-ink)_9%,transparent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]";
 
@@ -56,13 +64,13 @@ export function MultiCardSheet({ entry, name, link, onRename, onRemove, onClose 
     <CellSheetFrame caption="カードの設定" title={name} onClose={close}>
       <label className="mt-4 block text-xs font-bold text-slate-500">
         名前（<span className="font-num">{MAX_CARD_NAME}</span>字まで）
-        {/* 16px 未満だと iOS が入力時に画面を拡大する。字数は整える側（cleanCardName）でも切る */}
+        {/* 16px 未満だと iOS が入力時に画面を拡大する。字数は入力で止め、整える側（cleanCardName）でも切る */}
         <NeuInput
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
           placeholder={name}
-          maxLength={MAX_CARD_NAME * 2}
+          maxLength={nameLimit(draft)}
           className="mt-2 text-base"
         />
       </label>
