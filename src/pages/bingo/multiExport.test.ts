@@ -29,17 +29,28 @@ const SET: SavedMulti = {
   ],
 };
 const NOW = 1_790_000_500_000;
+const PLAYED = [
+  { id: "549", at: 1_790_000_100_000, cells: [{ card: "a1", filled: [3, 7] }] },
+  { id: "74", at: 1_790_000_200_000 },
+];
 const text = (v: unknown) => JSON.stringify(v);
 
 describe("buildMultiExport（中断用の書き出し）", () => {
-  it("アプリの名前・版・書き出した時刻・セットの全部（名前・休止の区間・時刻）を持ち、遊んだ曲はまだ空", () => {
-    const file = buildMultiExport(SET, NOW);
-    expect(file).toEqual({ app: EXPORT_APP, version: EXPORT_VERSION, exportedAt: NOW, multi: SET, played: [] });
+  it("アプリの名前・版・書き出した時刻・セットの全部（名前・休止の区間・時刻）と、遊んだ曲の一覧を持つ", () => {
+    expect(buildMultiExport(SET, NOW)).toEqual({ app: EXPORT_APP, version: EXPORT_VERSION, exportedAt: NOW, multi: SET, played: [] });
+    expect(buildMultiExport(SET, NOW, PLAYED).played).toEqual(PLAYED);
   });
 
-  it("書き出して読み込むと同じセットに戻る（読むときは「まとめて遊ぶ」で開く）", () => {
-    const r = parseMultiExport(text(buildMultiExport({ ...SET, open: false }, NOW)));
-    expect(r).toEqual({ ok: true, multi: SET, exportedAt: NOW, dropped: 0 });
+  it("書き出して読み込むと同じセットと一覧に戻る（読むときは「まとめて遊ぶ」で開く）", () => {
+    const r = parseMultiExport(text(buildMultiExport({ ...SET, open: false }, NOW, PLAYED)));
+    expect(r).toEqual({ ok: true, multi: SET, exportedAt: NOW, dropped: 0, played: PLAYED, droppedPlayed: 0 });
+  });
+
+  it("遊んだ曲の欄が空・無い書き出し（#231 の版の書き出しを含む）は、一覧を null で返す（今の一覧を変えない）", () => {
+    const r = parseMultiExport(text(buildMultiExport(SET, NOW)));
+    expect(r.ok && r.played).toBeNull();
+    const old = text({ app: EXPORT_APP, version: 1, exportedAt: NOW, multi: SET });
+    expect(parseMultiExport(old).ok && (parseMultiExport(old) as { played: unknown }).played).toBeNull();
   });
 
   it("ファイル名は sekaimaster-bingo-YYYYMMDD-HHmm.json、読み込んだときの時刻は「11/12 09:03」の形（この端末の時刻）", () => {
@@ -84,10 +95,11 @@ describe("parseMultiExport（読み込み。読めないときは理由を返し
     expect(errorOf(ok({ multi: { cards: [{ id: "!!", code: "x" }] } }))).toBe("書き出しにカードが入っていません");
   });
 
-  it("遊んだ曲が入っている書き出しは、この版では読まない（黙って一覧を捨てない）。形が違えば壊れている", () => {
-    expect(errorOf(ok({ played: [{ id: 1, at: NOW }] }))).toBe(
-      "遊んだ曲の一覧が入った、新しい版の書き出しです。ページを読み込み直してから試してください"
-    );
+  it("遊んだ曲は 1 件ずつ読み、形の合わない件だけ落として数を返す。欄が配列でなければ壊れている", () => {
+    // #231 の版はここで「新しい版の書き出し」と断っていた。この版で一覧を保存できるようになったので読む
+    const r = parseMultiExport(ok({ played: [{ id: 1, at: NOW }, PLAYED[1], null] }));
+    expect(r.ok && r.played).toEqual([PLAYED[1]]);
+    expect(r.ok && r.droppedPlayed).toBe(2);
     expect(errorOf(ok({ played: "x" }))).toBe("書き出しが壊れています（遊んだ曲の欄が読めません）");
     // 欄が無いのは空と同じ
     expect(parseMultiExport(ok({ played: undefined })).ok).toBe(true);
@@ -101,8 +113,8 @@ describe("parseMultiExport（読み込み。読めないときは理由を返し
     expect(r.ok && r.multi.cards.map((c) => c.id)).toEqual(["a1", "c3"]);
   });
 
-  it("書き出した時刻が読めなければ null（読み込みは止めない）", () => {
-    const r = parseMultiExport(ok({ exportedAt: "x" }));
-    expect(r.ok && r.exportedAt).toBeNull();
+  it("書き出した時刻が読めなければ null（読み込みは止めない）。Date が表せない巨大な時刻も読めないことにする（検分 M2 安全の低-1）", () => {
+    expect((parseMultiExport(ok({ exportedAt: "x" })) as { exportedAt: unknown }).exportedAt).toBeNull();
+    expect((parseMultiExport(ok({ exportedAt: 1e300 })) as { exportedAt: unknown }).exportedAt).toBeNull();
   });
 });

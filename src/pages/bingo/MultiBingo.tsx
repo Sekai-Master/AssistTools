@@ -195,7 +195,7 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf,
             />
           </div>
         )}
-        <MultiSaveFile set={set} />
+        <MultiSaveFile set={set} played={list} />
       </div>
       <div ref={area}>
         {entries.length === 0 ? (
