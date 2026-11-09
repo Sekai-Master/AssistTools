@@ -6,7 +6,7 @@ import { NeuButton } from "../../components/ui/NeuButton";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { resolveColor } from "../../lib/canvasColor";
 import { useBingoMusics } from "./useBingoMusics";
-import { buildRandomCard, filterForGeneration, pickBorderColor } from "./bingoLogic";
+import { buildSongCard, pickBorderColor } from "./bingoLogic";
 import {
   type OdaiLevel,
   type OdaiTheme,
@@ -30,6 +30,8 @@ import { MINUTES_PER_SONG, playTimeText } from "./playTime";
 import { type CardKind, cardCode, cardLink, decodeCardCode, extractCode, shareText } from "./bingoShare";
 import { canReplaceSilently, errorText } from "./bingoRestore";
 import { useSingleCards } from "./useSingleCards";
+import { useSongPins, useSongPool } from "./useSongPins";
+import { MAX_SONG_PINS } from "./songPinStorage";
 import { drawBingoCard } from "./bingoCanvas";
 import { drawOdaiCard } from "./odaiCanvas";
 import { BingoCardGrid } from "./BingoCardGrid";
@@ -53,6 +55,7 @@ const DEFAULT_FILTERS: SongFilters = {
   units: new Set(ALL_UNIT_VALUES),
   categories: new Set(ALL_CATEGORY_VALUES),
   types: new Set(ALL_TYPE_VALUES),
+  singer: null,
   centerMode: "free",
   centerSong: null,
 };
@@ -97,6 +100,11 @@ function BingoBoard({
   // テーマは作るときだけ使う（コードにも保存にも入れない。開き直すとおまかせに戻る）
   const [theme, setTheme] = useState<OdaiTheme>(DEFAULT_ODAI_THEME);
   const [filters, setFilters] = useState<SongFilters>(DEFAULT_FILTERS);
+  // 曲名ビンゴの入れたい曲（端末に残す）と、絞り込みに当てはまる曲・足りるか
+  const songPins = useSongPins(musics);
+  const songPool = useSongPool(musics, filters, songPins.pins);
+  const [pickingSongPins, setPickingSongPins] = useState(false);
+  const closeSongPinPicker = useCallback(() => setPickingSongPins(false), []);
   const [pickingCenter, setPickingCenter] = useState(false);
   const [borderColor, setBorderColor] = useState(pickBorderColor);
   const [error, setError] = useState<string | null>(initial.error);
@@ -169,8 +177,7 @@ function BingoBoard({
         const pinned = resolvePinnedOdais(pinKeys, musics, odaiCandidates);
         setOdaiCard(buildOdaiCard(odaiCandidates, Math.random, level, theme, pinned));
       } else {
-        const pool = filterForGeneration(musics, filters.units, filters.categories, filters.types);
-        setSongCard(buildRandomCard(pool, filters.centerMode, filters.centerSong));
+        setSongCard(buildSongCard(songPool.pool, songPins.pins, filters.centerMode, filters.centerSong));
       }
       setBorderColor(pickBorderColor());
     } catch (e) {
@@ -196,6 +203,15 @@ function BingoBoard({
   const closeCenterPicker = useCallback(() => setPickingCenter(false), []);
 
   const centerMissing = kind === "song" && filters.centerMode === "specified" && !filters.centerSong;
+  // 条件の曲が足りないときは、作る前に止める（足りない数は細かい設定の曲数の行に出る）
+  const songShort = kind === "song" && songPool.needs.need > songPool.needs.available;
+  const createLabel = loading
+    ? "楽曲データ読込中…"
+    : centerMissing
+      ? "中央マスの曲を選んでください"
+      : songShort
+        ? "条件に合う曲が足りません"
+        : "新しいカードを作る";
   // いまのカードの段（リンクや前の版のカードも、お題から数える）
   const cardLevel = current?.kind === "odai" ? odaiLevelOf(current.card) : null;
   const cardSongs = current?.kind === "odai" ? odaiSongsToHalf(current.card) : null;
@@ -247,10 +263,10 @@ function BingoBoard({
         )}
         <ActionButton
           onClick={newCard}
-          disabled={loading || centerMissing}
+          disabled={loading || centerMissing || songShort}
           className="mt-4 min-h-12 w-full text-base"
         >
-          {loading ? "楽曲データ読込中…" : centerMissing ? "中央マスの曲を選んでください" : "新しいカードを作る"}
+          {createLabel}
         </ActionButton>
         {error && (
           <p className="mt-3 text-sm text-rose-600" role="alert">
@@ -285,6 +301,16 @@ function BingoBoard({
           pins={pins}
           onRemovePin={(key) => setPinKeys((keys) => keys.filter((k) => k !== key))}
           onPickPins={() => setPickingPins(true)}
+          song={{
+            pins: songPins.pins,
+            outside: songPool.outside,
+            matched: songPool.pool.length,
+            need: songPool.needs.need,
+            available: songPool.needs.available,
+            onRemovePin: songPins.remove,
+            onClearPins: songPins.clear,
+            onPickPins: () => setPickingSongPins(true),
+          }}
           onPickCenter={() => setPickingCenter(true)}
           onOpenCode={openCode}
         />
@@ -345,6 +371,20 @@ function BingoBoard({
             setPickingCenter(false);
           }}
           onClose={closeCenterPicker}
+        />
+      )}
+      {pickingSongPins && (
+        <BingoSongPicker
+          mode="multi"
+          caption="入れたい曲"
+          title="曲を選ぶ"
+          musics={musics}
+          aliases={aliases}
+          jacketBase={JACKET_BASE}
+          selected={songPins.ids}
+          max={MAX_SONG_PINS}
+          onPick={songPins.toggle}
+          onClose={closeSongPinPicker}
         />
       )}
       {pickingPins && (
