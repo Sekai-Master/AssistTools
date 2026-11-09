@@ -403,3 +403,214 @@ describe("楽曲データが届く前後の保存（入れたい曲・入れた�
     }
   });
 });
+
+// ---- 作り直す（カードの枠の見出し）: 新しいカードを作ると同じ設定・同じ処理・同じ確認 ----
+// スマホで「作る → 盤面を見る → また作る」を、上の枠へ戻らずに回すためのボタン（Nori 2026-11-10）
+
+/** カードの枠（見出し「カード」のある枠）。 */
+const cardPanel = () => screen.getByRole("heading", { name: "カード" }).closest("section")!;
+const regenButton = () => within(cardPanel()).getByRole("button", { name: "作り直す" });
+const newCardButton = () => screen.getByRole("button", { name: "新しいカードを作る" });
+/** この端末に保存されたカードのコード（作ったカードはすぐ保存される）。 */
+const savedCode = (kind: "odai" | "song") =>
+  (JSON.parse(localStorage.getItem(BINGO_STORAGE_KEY) ?? "{}") as Record<string, string | undefined>)[kind];
+/** 埋めていないマスの n 番目を埋める（マスの小窓の「埋める」）。 */
+const fillCell = (n: number) => {
+  const cells = within(cardPanel())
+    .getAllByRole("button")
+    .filter((b) => b.getAttribute("aria-pressed") === "false");
+  fireEvent.click(cells[n]);
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "埋める" }));
+};
+/** 決まった並びの乱数（mulberry32）。同じ種なら同じカードになる。 */
+const seeded = (seed: number) => () => {
+  seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+/** 同じ乱数で「新しいカードを作る」と「作り直す」を押し、それぞれのカードのコードを返す。 */
+const byNewAndRegen = (kind: "odai" | "song") => {
+  const random = vi.spyOn(Math, "random");
+  try {
+    random.mockImplementation(seeded(117));
+    fireEvent.click(newCardButton());
+    const byNew = savedCode(kind);
+    random.mockImplementation(seeded(117));
+    fireEvent.click(regenButton());
+    return { byNew, byRegen: savedCode(kind) };
+  } finally {
+    random.mockRestore();
+  }
+};
+
+describe("作り直す（カードの枠の見出し）", () => {
+  it("カードの枠の見出しの行にあり、押すとカードが替わる", () => {
+    render(<BingoGenerator />);
+    const heading = screen.getByRole("heading", { name: "カード" });
+    // 見出しの行（見出しを包む要素の親）の中に置く
+    expect(heading.parentElement!.parentElement!.contains(regenButton())).toBe(true);
+    const before = savedCode("odai");
+    fireEvent.click(regenButton());
+    expect(savedCode("odai")).not.toBe(before);
+  });
+
+  it("お題ビンゴ: 難易度・テーマ・入れたいお題が今のままで、新しいカードを作ると同じカードになる", () => {
+    localStorage.setItem(ODAI_PINS_STORAGE_KEY, JSON.stringify(["s21", "c5"]));
+    render(<BingoGenerator />);
+    fireEvent.click(screen.getByRole("radio", { name: "HARD" }));
+    openSettings();
+    fireEvent.click(
+      within(screen.getByRole("radiogroup", { name: "テーマ" })).getByRole("radio", { name: ODAI_THEMES.singer.label })
+    );
+    const initialCode = savedCode("odai");
+    const { byNew, byRegen } = byNewAndRegen("odai");
+    expect(byNew).not.toBe(initialCode);
+    expect(byRegen).toBe(byNew);
+    const keys = decodeOdaiSeed(byRegen ?? "", mockMusics).flatMap((c) => (c === "FREE" ? [] : [c.odai.key]));
+    expect(keys).toEqual(expect.arrayContaining(["s21", "c5"]));
+  });
+
+  it("曲名ビンゴ: 入れたい曲・歌う人の絞り込みが今のままで、新しいカードを作ると同じカードになる", () => {
+    const pins = uniqueSongs.slice(0, 3).map((m) => m.id);
+    localStorage.setItem(SONG_PINS_STORAGE_KEY, JSON.stringify(pins));
+    render(<BingoGenerator />);
+    toSongKind();
+    openSettings();
+    fireEvent.change(screen.getByRole("combobox", { name: "歌う人" }), { target: { value: "20" } });
+    const { byNew, byRegen } = byNewAndRegen("song");
+    expect(byNew).toBeTruthy();
+    expect(byRegen).toBe(byNew);
+    const ids = new Set([...filterForGeneration(mockMusics, ...ALL_FILTERS, 20).map((m) => m.id), ...pins]);
+    expect(savedSongIds()).toEqual(expect.arrayContaining(pins));
+    expect(savedSongIds().every((id) => ids.has(id))).toBe(true);
+  });
+
+  it("埋めたマスがあると、新しいカードを作ると同じ確認を出す。やめればカードはそのまま", () => {
+    render(<BingoGenerator />);
+    fillCell(0);
+    const filled = savedCode("odai");
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    try {
+      fireEvent.click(regenButton());
+      expect(confirm).toHaveBeenLastCalledWith("いまのカードを消して、新しく作りますか？");
+      expect(savedCode("odai")).toBe(filled);
+      fireEvent.click(regenButton());
+      expect(confirm).toHaveBeenCalledTimes(2);
+      expect(savedCode("odai")).not.toBe(filled);
+      expect(cardPanel().textContent).toContain("埋めたマス 0/24");
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+
+  it("埋めたマスが無ければ、確かめずに作り直す", () => {
+    render(<BingoGenerator />);
+    const confirm = vi.spyOn(window, "confirm");
+    try {
+      fireEvent.click(regenButton());
+      expect(confirm).not.toHaveBeenCalled();
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+
+  it("条件に合う曲が足りないときは、新しいカードを作ると同じく押せない", () => {
+    render(<BingoGenerator />);
+    toSongKind();
+    fireEvent.click(newCardButton());
+    openSettings();
+    for (const name of ["VS", "L/n", "MMJ", "VBS", "WxS", "25時", "既存曲"]) fireEvent.click(screen.getByRole("button", { name }));
+    expect((screen.getByRole("button", { name: "条件に合う曲が足りません" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((regenButton() as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("作り直したあとの画面の位置", () => {
+  /**
+   * jsdom は配置を計算しないので、見出しの位置を「上の枠に断り（role=alert）が出ていれば 40px 下」とみなす。
+   * 断りが消えると上の枠が縮み、カードの枠が上へ動く（実際の画面と同じ向き）。
+   */
+  const fakeLayout = () => {
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(() => {
+      const top = document.querySelector('[role="alert"]') ? 140 : 100;
+      return { top, bottom: top + 44, left: 0, right: 0, width: 0, height: 44, x: 0, y: top, toJSON: () => ({}) };
+    });
+    const scrollBy = vi.spyOn(window, "scrollBy").mockImplementation(() => undefined);
+    return {
+      scrollBy,
+      restore: () => {
+        rect.mockRestore();
+        scrollBy.mockRestore();
+      },
+    };
+  };
+  /** 読めないコードを開いて、上の枠に断りを出す。 */
+  const showError = () => {
+    fireEvent.change(screen.getByRole("textbox", { name: "コードかリンク" }), { target: { value: "zzz" } });
+    fireEvent.click(screen.getByRole("button", { name: "開く" }));
+    expect(screen.getByRole("alert").textContent).toContain("コード");
+  };
+
+  it("作り直しで上の枠の断りが消えて枠が動いても、動いた分だけ戻して見出しを同じ所に留める", () => {
+    render(<BingoGenerator />);
+    openSettings();
+    showError();
+    const layout = fakeLayout();
+    try {
+      fireEvent.click(regenButton());
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(layout.scrollBy).toHaveBeenCalledTimes(1);
+      expect(layout.scrollBy).toHaveBeenCalledWith({ top: -40, behavior: "instant" });
+    } finally {
+      layout.restore();
+    }
+  });
+
+  it("枠が動かなければスクロールしない", () => {
+    render(<BingoGenerator />);
+    const layout = fakeLayout();
+    try {
+      fireEvent.click(regenButton());
+      expect(layout.scrollBy).not.toHaveBeenCalled();
+    } finally {
+      layout.restore();
+    }
+  });
+
+  it("上の「新しいカードを作る」の動きは変えない（位置を合わせない）", () => {
+    render(<BingoGenerator />);
+    openSettings();
+    showError();
+    const layout = fakeLayout();
+    try {
+      fireEvent.click(newCardButton());
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(layout.scrollBy).not.toHaveBeenCalled();
+    } finally {
+      layout.restore();
+    }
+  });
+
+  it("確認でやめたあと、カードが替わっても位置を合わせない（やめた作り直しの位置を持ち越さない）", () => {
+    render(<BingoGenerator />);
+    fillCell(0);
+    openSettings();
+    showError();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const layout = fakeLayout();
+    try {
+      fireEvent.click(regenButton());
+      expect(screen.getByRole("alert")).toBeTruthy();
+      // 今のカードのコードを開き直す: カードが替わり（同じ中身の新しい配列）、断りが消えて見出しが 100 へ動く。
+      // 作り直してはいないので、位置を合わせない
+      fireEvent.change(screen.getByRole("textbox", { name: "コードかリンク" }), { target: { value: savedCode("odai") } });
+      fireEvent.click(screen.getByRole("button", { name: "開く" }));
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(layout.scrollBy).not.toHaveBeenCalled();
+    } finally {
+      layout.restore();
+      confirm.mockRestore();
+    }
+  });
+});
