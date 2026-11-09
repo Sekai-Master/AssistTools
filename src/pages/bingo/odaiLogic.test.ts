@@ -130,7 +130,7 @@ describe("buildOdaiCandidates（実データから計算）", () => {
     for (const k of ["u1", "u2", "u3", "u4", "u5", "u9"]) expect(keys).toContain(k);
   });
 
-  it("14 種類（ユニット・歌う人・歌唱・曲の種類・読みの頭・読み・長さ・曲名・曲名の語・MV・追加・譜面・作り手・作者）がそろう", () => {
+  it("14 種類（ユニット・歌うキャラ・歌唱 ver.・曲の種類・読みの頭・読み・長さ・曲名・曲名の語・MV・追加・譜面・作り手・作者）がそろう", () => {
     const kinds = new Set(CANDIDATES.map((o) => o.kind));
     expect([...kinds].sort()).toEqual(Object.keys(ODAI_KIND_CAPS).sort());
     expect(kinds.size).toBe(14);

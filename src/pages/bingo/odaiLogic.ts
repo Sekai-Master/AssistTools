@@ -92,7 +92,7 @@ const MAX_STEPS = 4000;
 const MAX_PICK_TRIES = 20;
 /**
  * MAX_STEPS で目標に届かなかったとき、選び直してやり直す回数（いちばん近いカードを使う）。
- * テーマの下限は、選んだ顔ぶれによっては 1 つずつの入れ替えでは届かない（2026-11-09 実測、歌う人の EXPERT で 1800 枚に 1 枚）。
+ * テーマの下限は、選んだ顔ぶれによっては 1 つずつの入れ替えでは届かない（2026-11-09 実測、ユニットのテーマの EXPERT で 1800 枚に 1 枚）。
  */
 const MAX_BUILD_TRIES = 5;
 /** テーマの下限に足りないマス 1 つの重み。合わせ込みの外れ（最大でも 1 程度）より重くする。 */
@@ -117,20 +117,20 @@ const levelsOf = (n: number): Record<OdaiLevel, number> => ({ easy: n, normal: n
  * 上限を THEME_CAP_BONUS 足し（Nori の決定、案 b）、テーマの種類のマスをこの下限以上にする。並べない組・段の割合の下限・
  * 合わせ込みはそのまま守る。下限（2026-11-09、テーマ × 段ごとに 600 枚 × 3 回で全部のカードが届く）:
  * - 曲名・読み 12
- * - 歌う人 9・譜面・MV 9。並べられる最大（歌う人 11: ユニットの色の 6 つ＋色の印の無い 5 つ、譜面・MV 12: 譜面は並べない組で 4 つまで）
+ * - ユニット 9・譜面・MV 9。並べられる最大（ユニット 11: ユニットの色の 6 つ＋色の印の無い 5 つ、譜面・MV 12: 譜面は並べない組で 4 つまで）
  *   の近くまで下限を上げると、足した上限の分を下限が使い切り、同じテーマのカードが似る（譜面・MV 11 で 2 枚に共通するお題が
  *   EASY 10.0・MASTER 15.5、9 なら 8.1・11.2）。テーマのマスを多めにしつつ、顔ぶれに余裕を残す数にした
  */
 export const ODAI_THEMES: Record<OdaiTheme, OdaiThemeDef> = {
   any: { label: "おまかせ", kinds: [], floor: levelsOf(0) },
-  singer: { label: "歌う人", kinds: ["singer", "vocal", "unit", "origin"], floor: levelsOf(9) },
+  singer: { label: "ユニット", kinds: ["singer", "vocal", "unit", "origin"], floor: levelsOf(9) },
   title: { label: "曲名・読み", kinds: ["title", "word", "row", "reading", "length"], floor: levelsOf(12) },
   chart: { label: "譜面・MV", kinds: ["chart", "mv", "added", "maker"], floor: levelsOf(9) },
 };
 export const ODAI_THEME_KEYS: readonly OdaiTheme[] = ["any", "singer", "title", "chart"];
 export const DEFAULT_ODAI_THEME: OdaiTheme = "any";
 
-/** テーマを選んだとき、テーマの種類の上限に足す数。上限のままだと、譜面・MV は 8、歌う人は 9 しか入らず、毎回同じお題が並んだ。 */
+/** テーマを選んだとき、テーマの種類の上限に足す数。上限のままだと、譜面・MV は 8、ユニットは 9 しか入らず、毎回同じお題が並んだ。 */
 export const THEME_CAP_BONUS = 2;
 
 /** この段・テーマで守る、種類ごとの上限。テーマの種類だけ THEME_CAP_BONUS 足す（作者はどのテーマにも入らないので段の上限のまま）。 */
@@ -248,7 +248,7 @@ function countShared(a: Uint32Array, b: Uint32Array): number {
  * 実データから使うお題の候補を作る（割合が DEEP_MIN_RATE〜MAX_RATE で、1 マスに収まるもの）。段ごとの下限は buildOdaiCard で絞る。
  * 候補の組ごとに、同じカードに並べないか（clashes）もここで 1 回だけ数える:
  * - 当てはまる曲の重なりが overlapLimit 以上（ユニットとそのメンバー・Lv.32 以上と Lv.33 以上 など）
- * - 同じユニットの色の印を持つ（ユニット・そのメンバーの歌う人・その書き下ろしは 1 枚に 1 つまで。Nori 2026-11-09）
+ * - 同じユニットの色の印を持つ（ユニット・そのメンバーのボーカル・その書き下ろしは 1 枚に 1 つまで。Nori 2026-11-09）
  */
 export function buildOdaiCandidates(musics: readonly BingoMusic[], overlapLimit = OVERLAP_LIMIT): Odai[] {
   const scored = allOdaiDefs(musics)
