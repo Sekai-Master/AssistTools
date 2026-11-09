@@ -284,7 +284,7 @@ describe('積む（runIntro）', () => {
     expect(calls).toHaveLength(1)
     expect((await unsentPosts(env.DB, 'x')).map((p) => p.id)).toEqual(['intro:2026-10-31:deck'])
   })
-  it('gacha の候補が無い（28 日以内に出した）ときだけ、翌日に running の紹介を出す', async () => {
+  it('gacha の候補が無い（28 日以内に出した）ときは、翌日に running の紹介を出す', async () => {
     const { env, fetcher } = setup()
     await upsertEvents(env.DB, [EV223])
     await seedIntro(env, 'intro:2026-10-12:deck')
@@ -294,6 +294,18 @@ describe('積む（runIntro）', () => {
     expect(await runIntro(env, RUNNING_223 - 30 * M, fetcher)).toEqual({ status: 'queued', id: 'intro:2026-11-01:analyzer' })
     const [post] = await unsentPosts(env.DB, 'x')
     expect(JSON.parse(post.payload as string).postAt).toBe(RUNNING_223)
+  })
+  it('ガチャの日に出せなかったときは理由を問わず翌日に running（intros.json が1時間ずっと読めない・Worker が止まっていた）', async () => {
+    // 2026-11-10 の検分（低 1）で指揮が受け入れた挙動を固定する。gacha の候補が残っていても、翌日は running の紹介
+    const ok = (async () => new Response(JSON.stringify(CATALOG), { status: 200 })) as unknown as typeof fetch
+    const unreadable = setup(CATALOG, 503)
+    await upsertEvents(unreadable.env.DB, [EV223])
+    expect(await patrol(unreadable.env, unreadable.fetcher, GACHA_223 - H, GACHA_223)).toEqual([])
+    expect(await runIntro(unreadable.env, RUNNING_223 - 30 * M, ok)).toEqual({ status: 'queued', id: 'intro:2026-11-01:analyzer' })
+    // ガチャの日に一度も見回らなかった（Worker が止まっていた）
+    const stopped = setup()
+    await upsertEvents(stopped.env.DB, [EV223])
+    expect(await runIntro(stopped.env, RUNNING_223 - 30 * M, stopped.fetcher)).toEqual({ status: 'queued', id: 'intro:2026-11-01:analyzer' })
   })
   it('gacha の日に出せる gacha の紹介があっても、running の紹介を同じ日に足さない（1日1本）', async () => {
     const { env, fetcher } = setup()
