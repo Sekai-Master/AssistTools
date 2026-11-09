@@ -8,7 +8,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import table from "./creatorMembers.json";
-import { creatorCovers, isCreatorAlias } from "./creatorMembers";
+import type { BingoMusic } from "./bingoLogic";
+import { creatorAliasOf, creatorCovers, sameCreatorKey } from "./creatorMembers";
 import { allOdaiDefs, odaiDefFromKey } from "./odaiDefs";
 import { parseMusics } from "./useBingoMusics";
 
@@ -66,11 +67,18 @@ describe("表の形", () => {
   });
 
   it("表記違いは、メンバーがほかの作者 ID ひとつの行だけ", () => {
-    expect(isCreatorAlias(17)).toBe(true);
-    expect(isCreatorAlias(22)).toBe(true);
-    expect(isCreatorAlias(198)).toBe(false);
-    expect(isCreatorAlias(240)).toBe(false); // メンバーが名前だけの連名
-    expect(isCreatorAlias(29)).toBe(false); // 表に無い作者
+    expect(creatorAliasOf(17)).toBe(47);
+    expect(creatorAliasOf(22)).toBe(193);
+    expect(creatorAliasOf(198)).toBeNull();
+    expect(creatorAliasOf(240)).toBeNull(); // メンバーが名前だけの連名
+    expect(creatorAliasOf(29)).toBeNull(); // 表に無い作者
+  });
+
+  it("表記違いの作者のお題の鍵は、同じ人の鍵に引ける（ほかの鍵は null）", () => {
+    expect(sameCreatorKey("c49")).toBe("c36");
+    expect(sameCreatorKey("c36")).toBeNull();
+    expect(sameCreatorKey("c198")).toBeNull();
+    expect(sameCreatorKey("s1")).toBeNull();
   });
 });
 
@@ -108,9 +116,38 @@ describe("実データ", () => {
 
   it("表記違いの作者 ID はお題の一覧に出ず、コードからは開ける", () => {
     for (const r of table) {
-      if (!isCreatorAlias(r.id) || !MUSICS.some((m) => m.creatorArtistId === r.id)) continue;
+      const same = creatorAliasOf(r.id);
+      if (same === null || !MUSICS.some((m) => m.creatorArtistId === r.id)) continue;
+      if (!MUSICS.some((m) => m.creatorArtistId === same)) continue; // 同じ人の自分の曲が無い日は表記違いの側を出す
       expect(defs.has(`c${r.id}`), r.name).toBe(false);
       expect(odaiDefFromKey(`c${r.id}`, MUSICS).kind).toBe("creator");
     }
+  });
+});
+
+describe("表記違いをお題の一覧から外す（作った曲で）", () => {
+  const song = (id: string, creatorArtistId: number, artistName: string): BingoMusic => ({
+    id,
+    title: id,
+    default: 0,
+    Unit: "0_VS",
+    categories: [],
+    isNewlyWrittenMusic: false,
+    jacketLink: "",
+    creatorArtistId,
+    artistName,
+  });
+  const creatorKeys = (musics: BingoMusic[]) =>
+    allOdaiDefs(musics)
+      .filter((d) => d.kind === "creator")
+      .map((d) => d.key);
+
+  it("同じ人の自分の曲があれば、表記違いは出さず同じ人のお題にまとめる", () => {
+    const musics = [song("1", 36, "和田たけあき"), song("2", 49, "和田たけあき(くらげP)")];
+    expect(creatorKeys(musics)).toEqual(["c36"]);
+  });
+
+  it("同じ人の自分の曲が無ければ（配信停止）、表記違いのお題を出す", () => {
+    expect(creatorKeys([song("2", 49, "和田たけあき(くらげP)")])).toEqual(["c49"]);
   });
 });

@@ -30,10 +30,17 @@ export function creatorCovers(cellId: number, songId: number): boolean {
   return true;
 }
 
-/** ほかの作者 ID と表記が違うだけの同じ人か（お題の一覧には出さない）。 */
-export function isCreatorAlias(id: number): boolean {
+/** ほかの作者 ID と表記が違うだけの同じ人なら、その作者 ID（お題の一覧にはそちらを出す）。違えば null。 */
+export function creatorAliasOf(id: number): number | null {
   const want = MEMBERS.get(id);
-  if (!want || want.size !== 1) return false;
+  if (!want || want.size !== 1) return null;
   const [only] = want;
-  return typeof only === "number" && only !== id;
+  return typeof only === "number" && only !== id ? only : null;
+}
+
+/** 表記違いの作者のお題の鍵（c49）なら、同じ人のお題の鍵（c36）。ほかの鍵は null。 */
+export function sameCreatorKey(key: string): string | null {
+  const m = /^c([1-9]\d*)$/.exec(key);
+  const same = m ? creatorAliasOf(Number(m[1])) : null;
+  return same === null ? null : `c${same}`;
 }

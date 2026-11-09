@@ -10,7 +10,7 @@ import type { UnitKey } from "../../lib/units";
 import { CHARACTERS, UNIT_KEY } from "../deck/lib/characters";
 import type { BingoMusic } from "./bingoLogic";
 import { UNIT_OPTIONS } from "./bingoConstants";
-import { creatorCovers, isCreatorAlias } from "./creatorMembers";
+import { creatorAliasOf, creatorCovers } from "./creatorMembers";
 
 export type OdaiKind =
   | "unit"
@@ -547,11 +547,17 @@ function creatorDef(id: number, musics: readonly BingoMusic[]): OdaiDef | null {
 }
 
 function creatorDefs(musics: readonly BingoMusic[]): OdaiDef[] {
-  // 表記が違うだけの作者 ID は、同じ人のお題と重なるので出さない（コードから開くのは odaiDefFromKey で引ける）
-  const ids = [...new Set(musics.map((m) => m.creatorArtistId).filter((v): v is number => v !== undefined))]
-    .filter((id) => !isCreatorAlias(id))
-    .sort((a, b) => a - b);
-  return ids.map((id) => creatorDef(id, musics)).filter((d): d is OdaiDef => d !== null);
+  const ids = new Set(musics.map((m) => m.creatorArtistId).filter((v): v is number => v !== undefined));
+  // 表記が違うだけの作者 ID は、同じ人のお題と重なるので出さない。ただし同じ人の自分の曲が無ければ（配信停止）出す。
+  // コードから開くのは odaiDefFromKey で引ける
+  return [...ids]
+    .filter((id) => {
+      const same = creatorAliasOf(id);
+      return same === null || !ids.has(same);
+    })
+    .sort((a, b) => a - b)
+    .map((id) => creatorDef(id, musics))
+    .filter((d): d is OdaiDef => d !== null);
 }
 
 /** 楽曲データから作るものも含めた、すべての定義。 */

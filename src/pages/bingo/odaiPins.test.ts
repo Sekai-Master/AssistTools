@@ -30,7 +30,7 @@ import {
   resolvePinnedOdais,
   setOdaiCleared,
 } from "./odaiLogic";
-import { PICK_GROUPS, listPickableOdais, pickSections } from "./odaiPins";
+import { PICK_GROUPS, listPickableOdais, pickSections, resolveSavedPins } from "./odaiPins";
 import { ODAI_PINS_STORAGE_KEY, loadOdaiPins, parseSavedPins, saveOdaiPins, summarizeSavedPins } from "./odaiPinStorage";
 
 const MUSICS: BingoMusic[] = parseMusics(
@@ -417,5 +417,18 @@ describe("入れたいお題の保存（odaiPinStorage）", () => {
     expect(summarizeSavedPins("[]", "B")).toBeNull();
     expect(summarizeSavedPins("{", "B")).toBe("B");
     expect(summarizeSavedPins('"u1"', "B")).toBe("B");
+  });
+});
+
+describe("保存した入れたいお題を今の一覧に合わせる（resolveSavedPins）", () => {
+  const pickable = new Map([["c36", 1], ["s1", 1]]);
+
+  it("表記違いの作者の鍵は同じ人の鍵に置き換え、重なれば 1 つにする", () => {
+    expect(resolveSavedPins(["c49", "s1", "c36"], pickable)).toEqual(["c36", "s1"]);
+  });
+
+  it("選べない鍵は落とす。同じ人の鍵が選べなければ、表記違いの鍵のまま見る", () => {
+    expect(resolveSavedPins(["zz", "c49"], new Map([["c49", 1]]))).toEqual(["c49"]);
+    expect(resolveSavedPins(["zz", "c49"], new Map())).toEqual([]);
   });
 });
