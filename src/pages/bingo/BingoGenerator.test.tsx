@@ -429,16 +429,23 @@ const seeded = (seed: number) => () => {
   t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
-/** 同じ乱数で「新しいカードを作る」と「作り直す」を押し、それぞれのカードのコードを返す。 */
+/**
+ * 同じ乱数で「新しいカードを作る」と「作り直す」を押し、それぞれのカードのコードを返す。
+ * ★ 間に別の種で 1 枚作っておく（byOther）。直前に作ったカードのままだと、作り直すが何もしなくても
+ *   コードが一致してしまう（2026-11-10 の検分で、曲名ビンゴのときだけ何もしない版が緑のまま通った）
+ */
 const byNewAndRegen = (kind: "odai" | "song") => {
   const random = vi.spyOn(Math, "random");
   try {
     random.mockImplementation(seeded(117));
     fireEvent.click(newCardButton());
     const byNew = savedCode(kind);
+    random.mockImplementation(seeded(5));
+    fireEvent.click(newCardButton());
+    const byOther = savedCode(kind);
     random.mockImplementation(seeded(117));
     fireEvent.click(regenButton());
-    return { byNew, byRegen: savedCode(kind) };
+    return { byNew, byOther, byRegen: savedCode(kind) };
   } finally {
     random.mockRestore();
   }
@@ -464,8 +471,10 @@ describe("作り直す（カードの枠の見出し）", () => {
       within(screen.getByRole("radiogroup", { name: "テーマ" })).getByRole("radio", { name: ODAI_THEMES.singer.label })
     );
     const initialCode = savedCode("odai");
-    const { byNew, byRegen } = byNewAndRegen("odai");
+    const { byNew, byOther, byRegen } = byNewAndRegen("odai");
     expect(byNew).not.toBe(initialCode);
+    // 別の種のカードから、作り直しで種 117 のカードに戻る（作り直すが新しいカードを作っている）
+    expect(byOther).not.toBe(byNew);
     expect(byRegen).toBe(byNew);
     const keys = decodeOdaiSeed(byRegen ?? "", mockMusics).flatMap((c) => (c === "FREE" ? [] : [c.odai.key]));
     expect(keys).toEqual(expect.arrayContaining(["s21", "c5"]));
@@ -478,8 +487,9 @@ describe("作り直す（カードの枠の見出し）", () => {
     toSongKind();
     openSettings();
     fireEvent.change(screen.getByRole("combobox", { name: "歌う人" }), { target: { value: "20" } });
-    const { byNew, byRegen } = byNewAndRegen("song");
+    const { byNew, byOther, byRegen } = byNewAndRegen("song");
     expect(byNew).toBeTruthy();
+    expect(byOther).not.toBe(byNew);
     expect(byRegen).toBe(byNew);
     const ids = new Set([...filterForGeneration(mockMusics, ...ALL_FILTERS, 20).map((m) => m.id), ...pins]);
     expect(savedSongIds()).toEqual(expect.arrayContaining(pins));
