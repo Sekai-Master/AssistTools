@@ -67,6 +67,15 @@ describe("parseSavedMulti（まとめて遊ぶの保存を読む）", () => {
     ]);
   });
 
+  it("Date が表せない巨大な時刻（1e300）は時刻として読まない（画面の時刻が NaN にならないように。検分 M2 安全の低-1）", () => {
+    const [c] = parseSavedMulti(
+      JSON.stringify({ cards: [card({ addedAt: 1e300, startedAt: 8.64e15 + 1, paused: [[1e300, null], [1, 2]] })] })
+    ).cards;
+    expect(c.addedAt).toBe(0);
+    expect(c.startedAt).toBeUndefined();
+    expect(c.paused).toEqual([[1, 2]]);
+  });
+
   it("5 枚まで。active・cols は範囲に収め、open は真偽でなければ偽", () => {
     const cards = Array.from({ length: 7 }, (_, i) => card({ id: `c${i}` }));
     const saved = parseSavedMulti(JSON.stringify({ open: "yes", active: 9, cols: 8, cards }));

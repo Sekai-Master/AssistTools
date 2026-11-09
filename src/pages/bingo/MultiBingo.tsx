@@ -152,7 +152,8 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf 
     <Panel>
       {/* 見出しの段を飛ばさない（ページの見出し h1 → この区画 → カードごとの h3） */}
       <h2 className="sr-only">並べたカード</h2>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      {/* relative: 書き出し・読み込みの知らせを、この列の下に重ねて出す（MultiSaveFile） */}
+      <div className="relative mb-4 flex flex-wrap items-center gap-3">
         <NeuButton
           ref={playedButton}
           onClick={() => setPlayed("picking")}

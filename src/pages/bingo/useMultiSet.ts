@@ -131,14 +131,18 @@ export function useMultiSet(musics: BingoMusic[]) {
     setSaved((s) => ({ ...s, cards: s.cards.map((c) => (c.id === id ? { ...c, name: cleanCardName(name) } : c)) }));
   }, []);
 
-  /** カードを替える（埋める・戻す・差し替え・遊んだ曲の反映）。updates は id → 新しいカード。 */
+  /**
+   * カードを替える（マスの小窓で埋める・戻す・差し替え）。updates は id → 新しいカード。
+   * ★ 休止中のカードは変えない。休止はほかのタブでも変わるので、当てる時点の保存で見る（検分 M2 低-2。
+   *   小窓を開いたままほかのタブで休止されると、開いていた小窓の［埋める］で休止中のカードが埋まった）
+   */
   const updateCards = useCallback((updates: ReadonlyMap<string, KindedCard>) => {
     const now = Date.now();
     setSaved((s) => ({
       ...s,
       cards: s.cards.map((c) => {
         const kc = updates.get(c.id);
-        return kc ? withCard(c, kc, now) : c;
+        return kc && !isPaused(c) ? withCard(c, kc, now) : c;
       }),
     }));
   }, []);

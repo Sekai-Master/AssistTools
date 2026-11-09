@@ -58,7 +58,11 @@ const CODE_PATTERN = /^[\x21-\x7e]+$/;
 // eslint-disable-next-line no-control-regex
 const UNSAFE_CHARS = /[\u0000-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩؜]/g;
 
-const isTime = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
+/** 時刻の上限。Date が表せる最大（8.64e15 ミリ秒）。これを超える値（1e300 など）を通すと、画面の時刻が NaN になる（検分 M2 安全の低-1）。 */
+export const MAX_TIME = 8.64e15;
+
+/** 時刻（ミリ秒）として使える数か。正の有限で、Date が表せる範囲。遊んだ曲・1 枚で遊ぶの時刻の読み込みも同じ決まり。 */
+export const isTime = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0 && v <= MAX_TIME;
 
 /**
  * カードの名前を整える（ファイルや画面の入力から来る文字）。制御文字・向きを変える文字を落とし、

@@ -178,6 +178,22 @@ describe("休止", () => {
     expect(savedSet().cards).toEqual(before);
   });
 
+  // 検分 M2 低-2: 手で埋める経路（updateCards）も、当てる時点の休止を見る
+  it("マスの小窓を開いている間にほかのタブでそのカードを休止したら、小窓の［埋める］でも埋まらない", () => {
+    saveSet([entry("a1", encodeOdaiSeed(ODAI_A))]);
+    render(<BingoGenerator />);
+    const board = screen.getByRole("region", { name: "カード1" });
+    fireEvent.click(within(board).getAllByRole("button", { pressed: false })[3]);
+    const next = JSON.stringify({ open: true, active: 0, cols: 0, cards: [entry("a1", encodeOdaiSeed(ODAI_A), { paused: PAUSED })] });
+    localStorage.setItem(MULTI_STORAGE_KEY, next);
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: MULTI_STORAGE_KEY, newValue: next, storageArea: localStorage }));
+    });
+    const fill = screen.queryByRole("button", { name: "埋める" });
+    if (fill) fireEvent.click(fill);
+    expect(filledOf(savedSet().cards[0].code)).toEqual([]);
+  });
+
   it("再開すると、また押せる", () => {
     saveSet([entry("a1", encodeOdaiSeed(ODAI_A), { paused: PAUSED })]);
     render(<BingoGenerator />);

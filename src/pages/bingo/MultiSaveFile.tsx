@@ -108,12 +108,22 @@ export function MultiSaveFile({ set }: { set: MultiSet }) {
         }}
       />
       {message && (
-        <p
-          role={message.kind === "error" ? "alert" : "status"}
-          className={`basis-full text-sm ${message.kind === "error" ? "text-rose-600" : "text-slate-600"}`}
-        >
-          {message.text}
-        </p>
+        <div className="absolute inset-x-0 top-full z-20 mt-1 flex items-start gap-2 rounded-lg bg-neu py-1 pl-3 shadow-neu-sm">
+          <p
+            role={message.kind === "error" ? "alert" : "status"}
+            className={`min-w-0 flex-1 py-2 text-sm ${message.kind === "error" ? "text-rose-600" : "text-slate-600"}`}
+          >
+            {message.text}
+          </p>
+          <button
+            type="button"
+            onClick={() => setMessage(null)}
+            aria-label="知らせを閉じる"
+            className="flex h-11 w-11 shrink-0 items-center justify-center text-xl leading-none text-slate-500 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]"
+          >
+            ×
+          </button>
+        </div>
       )}
     </>
   );
