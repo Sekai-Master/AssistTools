@@ -379,3 +379,27 @@ describe("曲名ビンゴの絞り込みの歌う人と、条件に合う曲数"
     expect(savedSongIds()).toHaveLength(24);
   });
 });
+
+describe("楽曲データが届く前後の保存（入れたい曲・入れたいお題）", () => {
+  it("届く前（楽曲データが空）の画面は保存を消さず、届いたあとに読み直して残す", () => {
+    const pins = uniqueSongs.slice(0, 2).map((m) => m.id);
+    localStorage.setItem(SONG_PINS_STORAGE_KEY, JSON.stringify(pins));
+    localStorage.setItem(ODAI_PINS_STORAGE_KEY, JSON.stringify(["s1"]));
+    const all = mockMusics;
+    mockMusics = [];
+    try {
+      const { rerender } = render(<BingoGenerator />);
+      expect(savedSongPins()).toEqual(pins);
+      expect(localStorage.getItem(ODAI_PINS_STORAGE_KEY)).toBe(JSON.stringify(["s1"]));
+      mockMusics = all;
+      rerender(<BingoGenerator />);
+      expect(savedSongPins()).toEqual(pins);
+      expect(localStorage.getItem(ODAI_PINS_STORAGE_KEY)).toBe(JSON.stringify(["s1"]));
+      toSongKind();
+      openSettings();
+      expect(songChips()).toHaveLength(2);
+    } finally {
+      mockMusics = all;
+    }
+  });
+});
