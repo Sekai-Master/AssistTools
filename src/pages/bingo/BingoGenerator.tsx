@@ -7,9 +7,8 @@ import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { SongSearchModal } from "../../components/SongSearchModal";
 import { resolveColor } from "../../lib/canvasColor";
 import { useBingoMusics } from "./useBingoMusics";
-import { type Cell, buildRandomCard, filterForGeneration, pickBorderColor } from "./bingoLogic";
+import { buildRandomCard, filterForGeneration, pickBorderColor } from "./bingoLogic";
 import {
-  type OdaiCell,
   type OdaiLevel,
   type OdaiTheme,
   DEFAULT_ODAI_LEVEL,
@@ -28,18 +27,9 @@ import { loadOdaiPins, saveOdaiPins } from "./odaiPinStorage";
 import { OdaiPicker } from "./OdaiPicker";
 import { progressOf } from "./bingoProgress";
 import { MINUTES_PER_SONG, playTimeText } from "./playTime";
-import {
-  CARD_PARAM,
-  type CardKind,
-  type KindedCard,
-  cardCode,
-  cardLink,
-  decodeCardCode,
-  extractCode,
-  shareText,
-} from "./bingoShare";
-import { saveBingo } from "./bingoStorage";
-import { canReplaceSilently, errorText, restoreInitial } from "./bingoRestore";
+import { type CardKind, cardCode, cardLink, decodeCardCode, extractCode, shareText } from "./bingoShare";
+import { canReplaceSilently, errorText } from "./bingoRestore";
+import { useSingleCards } from "./useSingleCards";
 import { drawBingoCard } from "./bingoCanvas";
 import { drawOdaiCard } from "./odaiCanvas";
 import { BingoCardGrid } from "./BingoCardGrid";
@@ -83,27 +73,33 @@ function BingoBoard({
   loading,
   error: dataError,
 }: ReturnType<typeof useBingoMusics>) {
-  const [initial] = useState(() =>
-    restoreInitial(musics, new URLSearchParams(window.location.search).get(CARD_PARAM))
-  );
+  const {
+    initial,
+    kind,
+    setKind,
+    odaiCard,
+    setOdaiCard,
+    songCard,
+    setSongCard,
+    pendingLink,
+    setPendingLink,
+    applyCard,
+    current,
+  } = useSingleCards(musics);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // 書き出し画像の描き終わり。共有・保存はこれを待ってから画像にする（埋めた直後でも最新の絵）
   const drawn = useRef<Promise<void>>(Promise.resolve());
 
-  const [kind, setKind] = useState<CardKind>(initial.kind);
   // 開き直したときは今のカードの段から（HARD に戻ると、MASTER のつもりで HARD のカードを作ってしまう）
   const [level, setLevel] = useState<OdaiLevel>(() =>
     initial.odai ? odaiLevelOf(initial.odai) : DEFAULT_ODAI_LEVEL
   );
   // テーマは作るときだけ使う（コードにも保存にも入れない。開き直すとおまかせに戻る）
   const [theme, setTheme] = useState<OdaiTheme>(DEFAULT_ODAI_THEME);
-  const [odaiCard, setOdaiCard] = useState<OdaiCell[] | null>(initial.odai);
-  const [songCard, setSongCard] = useState<Cell[] | null>(initial.song);
   const [filters, setFilters] = useState<SongFilters>(DEFAULT_FILTERS);
   const [pickingCenter, setPickingCenter] = useState(false);
   const [borderColor, setBorderColor] = useState(pickBorderColor);
   const [error, setError] = useState<string | null>(initial.error);
-  const [pendingLink, setPendingLink] = useState<KindedCard | null>(initial.pendingLink);
   const ready = musics.length > 0;
 
   const odaiCandidates = useMemo(() => buildOdaiCandidates(musics), [musics]);
@@ -120,32 +116,6 @@ function BingoBoard({
     [pinKeys, pickableByKey]
   );
 
-  const applyCard = useCallback((kc: KindedCard) => {
-    if (kc.kind === "odai") setOdaiCard(kc.card);
-    else setSongCard(kc.card);
-    setKind(kc.kind);
-  }, []);
-
-  // リンクのカードを読んだ後はリンクを外す（開き直したときに、埋めた途中が人のカードで上書きされないように）。
-  // ★ ルーターの setSearchParams を使うと同じ /bingo でも画面遷移の演出が走るので、履歴を直接書き換える
-  useEffect(() => {
-    if (!ready) return;
-    const url = new URL(window.location.href);
-    if (!url.searchParams.has(CARD_PARAM)) return;
-    url.searchParams.delete(CARD_PARAM);
-    window.history.replaceState(window.history.state, "", url);
-  }, [ready]);
-
-  // 途中経過を残す（楽曲データが届く前の空のカードで上書きしない）
-  useEffect(() => {
-    if (!ready) return;
-    saveBingo({
-      kind,
-      ...(odaiCard ? { odai: cardCode({ kind: "odai", card: odaiCard }) } : {}),
-      ...(songCard ? { song: cardCode({ kind: "song", card: songCard }) } : {}),
-    });
-  }, [ready, kind, odaiCard, songCard]);
-
   // 入れたいお題も残す（届く前の空の一覧で消さない）
   useEffect(() => {
     if (ready) saveOdaiPins(pinKeys);
@@ -160,18 +130,6 @@ function BingoBoard({
           : keys
     );
   const closePinPicker = useCallback(() => setPickingPins(false), []);
-
-  const current = useMemo<KindedCard | null>(
-    () =>
-      kind === "odai"
-        ? odaiCard
-          ? { kind, card: odaiCard }
-          : null
-        : songCard
-          ? { kind, card: songCard }
-          : null,
-    [kind, odaiCard, songCard]
-  );
 
   // 書き出し画像は隠した canvas に描いておく（共有・保存のとき使う）
   useEffect(() => {
