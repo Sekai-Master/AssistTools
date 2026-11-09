@@ -18,6 +18,7 @@ import {
   resolveVocals,
   stringifyCompactNumbers,
 } from './lib/musicBingoFields.mjs';
+import { newCreatorSuspects } from './lib/creatorMembers.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -368,6 +369,22 @@ async function toThumbnail(input) {
       `⚠ カテゴリが無い公開曲 ${noCategory.length}件:`,
       noCategory.map((m) => `${m.id} ${m.title}`).join(', ')
     );
+  }
+
+  // お題ビンゴの作者の表に足す候補（新しい連名・表記違い）。足し忘れても今までどおり動くので、止めずに警告だけ出す
+  try {
+    const creatorTable = JSON.parse(
+      fs.readFileSync(path.join(__dirname, '../src/pages/bingo/creatorMembers.json'), 'utf-8')
+    );
+    const suspects = newCreatorSuspects(transformed, previousSnapshot, creatorTable.map((r) => r.id));
+    if (suspects.length > 0) {
+      console.warn(
+        `::warning::新しい作者が連名・表記違いかもしれない（src/pages/bingo/creatorMembers.json に足すか確かめる）: ` +
+          suspects.map((c) => `${c.id} ${c.name}`).join(' / ')
+      );
+    }
+  } catch (err) {
+    console.warn('作者の表（creatorMembers.json）を読めない（連名の確認を飛ばして続ける）:', err.message);
   }
 
   // 整形して書く。歌うキャラ（数の配列）だけは 1 行に詰める（ほぼ全ツールが読むので膨らませない）

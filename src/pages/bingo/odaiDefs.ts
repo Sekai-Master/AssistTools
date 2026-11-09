@@ -10,6 +10,7 @@ import type { UnitKey } from "../../lib/units";
 import { CHARACTERS, UNIT_KEY } from "../deck/lib/characters";
 import type { BingoMusic } from "./bingoLogic";
 import { UNIT_OPTIONS } from "./bingoConstants";
+import { creatorCovers, isCreatorAlias } from "./creatorMembers";
 
 export type OdaiKind =
   | "unit"
@@ -538,14 +539,18 @@ function creatorDef(id: number, musics: readonly BingoMusic[]): OdaiDef | null {
     caption: "作者",
     text: top[0],
     chunks: splitName(top[0]),
-    test: (m) => m.creatorArtistId === id,
+    // 連名の曲・表記違いの作者の曲も埋まる（creatorMembers.ts）
+    test: (m) => m.creatorArtistId !== undefined && creatorCovers(id, m.creatorArtistId),
+    // 自分の ID 以外の曲には、曲の作者の表記を添える（なぜ当てはまるかが分かるように）
+    hint: (m) => (m.creatorArtistId !== id && m.artistName ? m.artistName : null),
   };
 }
 
 function creatorDefs(musics: readonly BingoMusic[]): OdaiDef[] {
-  const ids = [...new Set(musics.map((m) => m.creatorArtistId).filter((v): v is number => v !== undefined))].sort(
-    (a, b) => a - b
-  );
+  // 表記が違うだけの作者 ID は、同じ人のお題と重なるので出さない（コードから開くのは odaiDefFromKey で引ける）
+  const ids = [...new Set(musics.map((m) => m.creatorArtistId).filter((v): v is number => v !== undefined))]
+    .filter((id) => !isCreatorAlias(id))
+    .sort((a, b) => a - b);
   return ids.map((id) => creatorDef(id, musics)).filter((d): d is OdaiDef => d !== null);
 }
 
