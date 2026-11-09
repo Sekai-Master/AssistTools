@@ -124,7 +124,7 @@ export type PostPayload =
       dailyAt: number | null
     }
   /**
-   * 機能紹介（週1回。intro.ts）。画像はサイトの /intro/<slug>/ に置いた PNG（images の url）。Bot は取ってきて付けるだけで描かない。
+   * 機能紹介（1回のイベントに1本。ガチャの日か翌日の 12:00。intro.ts）。画像はサイトの /intro/<slug>/ に置いた PNG（images の url）。Bot は取ってきて付けるだけで描かない。
    * postAt ちょうどに X にだけ出す。本文（posts.text）は intros.json のまま（末尾の #プロセカ も含む）
    */
   | { kind: 'intro'; postAt: number; slug: string; images: { url: string; alt: string }[] }

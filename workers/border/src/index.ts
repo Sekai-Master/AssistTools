@@ -13,7 +13,7 @@ import { runIntro } from './intro.ts'
 import { runSpurt } from './spurt.ts'
 import { runStart } from './start.ts'
 
-/** 5分ごとの見回り: 終わった直後の回を歴代の表へ足す（finals.ts）と、21時の日報（daily.ts）、終了3時間前の追い込み（spurt.ts）、開始15分前の告知（start.ts）、毎週水曜12時の機能紹介（intro.ts）、GitHub Actions の起動（解析ジョブを22:45・10:45、次の回が未登録のあいだ日程の取り込みを1時間に1回。dispatch.ts）。wrangler.jsonc の crons と同じ文字列 */
+/** 5分ごとの見回り: 終わった直後の回を歴代の表へ足す（finals.ts）と、21時の日報（daily.ts）、終了3時間前の追い込み（spurt.ts）、開始15分前の告知（start.ts）、1回のイベントに1本の機能紹介（ガチャの日か翌日の12時。intro.ts）、GitHub Actions の起動（解析ジョブを22:45・10:45、次の回が未登録のあいだ日程の取り込みを1時間に1回。dispatch.ts）。wrangler.jsonc の crons と同じ文字列 */
 export const FINALS_CRON = '*/5 * * * *'
 
 export default {
