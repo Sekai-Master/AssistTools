@@ -19,6 +19,7 @@ import {
   stringifyCompactNumbers,
 } from './lib/musicBingoFields.mjs';
 import { newCreatorSuspects } from './lib/creatorMembers.mjs';
+import { bannerFields, indexBannerCharacters, previousBannersFrom, resolveBanners } from './lib/musicBanner.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,6 +42,10 @@ const musicCategoriesUrl = `${MASTER_DB_BASE}/musicCategories.json`;
 const musicCollaborationsUrl = `${MASTER_DB_BASE}/musicCollaborations.json`;
 // 歌唱 ver.（歌うキャラ・人数・エイプリルフール ver.）。お題ビンゴのお題に使う（scripts/lib/musicBingoFields.mjs）。
 const musicVocalsUrl = `${MASTER_DB_BASE}/musicVocals.json`;
+// バナー曲（そのキャラがバナーの回のイベント曲、ワールドリンクは外す）を引く 4 つの表。ビンゴの曲を選ぶ小窓に使う
+// （scripts/lib/musicBanner.mjs）。eventStories.json が約 820KB で、ほかは 10〜20KB。
+// 2026-11-10 の手元の計測で、ほかの表と並べて取ると 70〜120ms で終わり、いちばん遅い music_metas.json（0.6〜2.5 秒）の内側に収まる
+const BANNER_TABLES = ['eventMusics', 'eventStories', 'gameCharacterUnits', 'worldBlooms'];
 const jacketRemoteUrl = (id) =>
   `${SEKAI_BEST_BASE}/sekai-jp-assets/music/jacket/jacket_s_${id}/jacket_s_${id}.webp`;
 
@@ -57,6 +62,22 @@ async function fetchJson(url) {
   return res.json();
 }
 
+/**
+ * バナー曲の 4 つの表。取れない表は null にする（scripts/lib/musicBanner.mjs が「取れない」として扱い、
+ * 直前の配信データの値を引き継ぐ）。ビンゴでしか使わないので、取れなくても更新全体は止めない。
+ */
+async function fetchBannerTables() {
+  const tables = await Promise.all(
+    BANNER_TABLES.map((name) =>
+      fetchJson(`${MASTER_DB_BASE}/${name}.json`).catch((err) => {
+        console.warn(`${name}.json が取れない（${err.message}）`);
+        return null;
+      })
+    )
+  );
+  return Object.fromEntries(BANNER_TABLES.map((name, i) => [name, tables[i]]));
+}
+
 async function toThumbnail(input) {
   return sharp(input)
     .resize({ width: JACKET_WIDTH, withoutEnlargement: true })
@@ -65,7 +86,7 @@ async function toThumbnail(input) {
 }
 
 (async () => {
-  const [musics, artists, metas, limitedTimeMusics, musicDifficulties, musicCategories, musicCollaborations, musicVocals] = await Promise.all([
+  const [musics, artists, metas, limitedTimeMusics, musicDifficulties, musicCategories, musicCollaborations, musicVocals, bannerTables] = await Promise.all([
     fetchJson(musicsUrl),
     fetchJson(artistsUrl),
     fetchJson(metasUrl),
@@ -87,6 +108,8 @@ async function toThumbnail(input) {
       console.warn(`::warning::musicVocals.json が取れない（${err.message}）。歌うキャラ・人数は直前の配信データから引き継ぐ`);
       return [];
     }),
+    // ★ バナー曲の表もビンゴでしか使わないので、取れなくても止めない（中で表ごとに null にする）
+    fetchBannerTables(),
   ]);
   const collabLabelOf = new Map(musicCollaborations.map((c) => [c.id, c.label]));
 
@@ -240,6 +263,14 @@ async function toThumbnail(input) {
   const categoryOf = new Map(
     releasedMusics.map((m) => [m.id, resolveCategories(m, categoryIndex, previousCategories)])
   );
+  // バナー曲。公開済みの曲だけに書く（始まっていない回の曲は公開前なので入らない）。
+  // 表が取れない・形が変わった・急に減った日は、直前の配信データの値を引き継ぐ（scripts/lib/musicBanner.mjs）
+  const bannerIndex = indexBannerCharacters(bannerTables);
+  const banners = resolveBanners(
+    releasedMusics.map((m) => m.id),
+    bannerIndex,
+    previousBannersFrom(previousSnapshot)
+  );
 
   const transformed = releasedMusics.map((m) => {
     const id = String(m.id).padStart(3, '0');
@@ -275,6 +306,8 @@ async function toThumbnail(input) {
       ...vocalOf.get(m.id).fields,
       ...musicFields(m),
       ...difficultyFields(diffByMusic.get(m.id)),
+      // ビンゴの曲を選ぶ小窓の「バナー曲だけ」用。バナーの無い曲には項目自体を書かない
+      ...bannerFields(m.id, banners.bannerOf),
     };
   });
 
@@ -362,6 +395,20 @@ async function toThumbnail(input) {
     console.warn(
       `::warning::歌うキャラがある公開曲が ${withSingers}/${published.length} 曲しかない。上流（musicVocals.json）の形が変わった可能性がある`
     );
+  }
+  // バナー曲の取り先。★ 件数と表の名前だけを出す（回の番号・キャラ・曲名は書かない。scripts/lib/musicBanner.mjs の冒頭）
+  console.log(
+    `バナー曲: 表 ${banners.tableCount}曲 / 直前の配信データ ${banners.previousCount}曲 → ` +
+      (banners.source === 'table' ? '表を使う' : '直前の値を引き継ぐ')
+  );
+  if (banners.problem) {
+    console.warn(
+      `::warning::バナー曲を直前の配信データから引き継いだ（${banners.problem}）。上流の形が変わった可能性がある。` +
+        '直すまで毎日引き継ぎ、新しい曲にはバナーが付かない（scripts/lib/musicBanner.mjs）'
+    );
+  }
+  if (bannerIndex.duplicates > 0) {
+    console.warn(`⚠ 2 回以上のイベントに出た曲が ${bannerIndex.duplicates}件ある（先の回のバナーにした）`);
   }
   const noCategory = transformed.filter((m) => m.published && m.categories.length === 0);
   if (noCategory.length > 0) {
