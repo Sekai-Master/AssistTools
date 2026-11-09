@@ -24,6 +24,11 @@ interface ToolPageProps {
   icon?: string;
   /** 2カラム等で広い横幅が要るツール向け。既定は従来どおり max-w-3xl。 */
   wide?: boolean;
+  /**
+   * 画面いっぱい（左右 16px）。BINGO の「まとめて遊ぶ」で盤面を並べるときだけ（持ち主 2026-11-10、
+   * docs/design-system.md 1 節の例外）。★ 100vw で作るとスクロールバーの幅だけ横にはみ出すので、max-w-none にする
+   */
+  full?: boolean;
   children: ReactNode;
 }
 
@@ -40,6 +45,7 @@ export function ToolPage({
   title,
   icon,
   wide = false,
+  full = false,
   morphKey,
   children,
 }: ToolPageProps) {
@@ -54,7 +60,7 @@ export function ToolPage({
       style={style}
       className={cn(
         "mx-auto w-full px-4 py-6 sm:py-8",
-        wide ? "max-w-6xl" : "max-w-3xl",
+        full ? "max-w-none" : wide ? "max-w-6xl" : "max-w-3xl",
       )}
     >
       <h1 className="unit-title text-xl font-bold" data-morph={morphKey}>
