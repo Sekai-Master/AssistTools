@@ -12,6 +12,15 @@
 /** 歌唱 ver. の種類のうち、エイプリルフールの ver.（2022 年の 1 回だけ。年が増えたら足す）。 */
 const APRIL_FOOL_TYPES = new Set(["april_fool_2022"]);
 
+/**
+ * 歌う人に数えない ver. の種類。コネクトライブ ver.（streaming_live、2026-11-10 で 36 件・33 曲）。
+ * 持ち主の判断（Nori 2026-11-10）: 「コネクトライブは有償ライブイベントで見てない人からすると全く知らないということもままある」。
+ * 歌う人（singers）にも 1 つの ver. の人数（maxSingers）にも入れない。エイプリルフールの ver. は今どおり数える。
+ * ★ これを外すと、オーバーライド（521）の瑞希・ミクのように、コネクトライブ ver. だけで歌う人が
+ *   お題の「ボーカル」と曲の検索の「歌う人」に入る（2026-11-10 で 26 曲で歌う人が増えていた）
+ */
+const NOT_SINGER_TYPES = new Set(["streaming_live"]);
+
 const isPositive = (v) => typeof v === "number" && Number.isFinite(v) && v > 0;
 
 /**
@@ -20,12 +29,13 @@ const isPositive = (v) => typeof v === "number" && Number.isFinite(v) && v > 0;
  *   ゲームの外の歌い手（outside_character）は入れない
  * - maxSingers: 1 つの ver. で歌う人数の最大（ゲームの外の歌い手も数える）
  * - hasAprilFool: エイプリルフールの ver. がある
- * 壊れた行（musicId が無い・characters が配列でない）は捨てる。
+ * 壊れた行（musicId が無い・characters が配列でない）と、歌う人に数えない ver.（NOT_SINGER_TYPES）の行は捨てる。
  */
 export function indexVocals(rows) {
   const acc = new Map();
   for (const r of Array.isArray(rows) ? rows : []) {
     if (!r || r.musicId == null || !Array.isArray(r.characters)) continue;
+    if (NOT_SINGER_TYPES.has(r.musicVocalType)) continue;
     const cur = acc.get(r.musicId) ?? { singers: new Set(), maxSingers: 0, hasAprilFool: false };
     for (const c of r.characters) {
       if (c && c.characterType === "game_character" && Number.isInteger(c.characterId)) cur.singers.add(c.characterId);

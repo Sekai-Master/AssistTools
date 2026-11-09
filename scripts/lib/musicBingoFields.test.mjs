@@ -37,6 +37,37 @@ describe("歌唱の表（musicVocals.json）の索引", () => {
     expect(index.get(1).hasAprilFool).toBe(false);
   });
 
+  // マスタの musicVocals.json の 521（オーバーライド）の行そのまま（2026-11-10 取得）。
+  // 瑞希（20）とミク（21）はコネクトライブ ver. だけで歌う
+  const override = indexVocals([
+    vocal(521, "original_song", [singer(24, "outside_character")]),
+    vocal(521, "sekai", [singer(22), singer(5), singer(6), singer(7), singer(8)]),
+    vocal(521, "another_vocal", [singer(7)]),
+    vocal(521, "streaming_live", [singer(21), singer(5), singer(7), singer(20)]),
+  ]);
+
+  it("コネクトライブ ver. だけで歌うキャラは singers に入れない（持ち主の判断 2026-11-10）", () => {
+    expect(override.get(521).singers).toEqual([5, 6, 7, 8, 22]);
+  });
+
+  it("コネクトライブ ver. の人数は maxSingers に数えない", () => {
+    const big = indexVocals([
+      vocal(9, "sekai", [singer(1), singer(2)]),
+      vocal(9, "streaming_live", [1, 2, 3, 4, 5, 6, 7].map((c) => singer(c))),
+    ]);
+    expect(big.get(9).maxSingers).toBe(2);
+    expect(big.get(9).singers).toEqual([1, 2]);
+  });
+
+  it("コネクトライブ ver. しかない曲は索引に入れない（歌う人なし）", () => {
+    const only = indexVocals([vocal(10, "streaming_live", [singer(1)])]);
+    expect(only.has(10)).toBe(false);
+  });
+
+  it("エイプリルフールの ver. で歌うキャラは今どおり数える", () => {
+    expect(index.get(2).singers).toEqual([4, 12, 18, 22, 23, 25]);
+  });
+
   it("壊れた行は捨てる・配列でなければ空", () => {
     const broken = indexVocals([null, { musicId: 1 }, { characters: [] }, vocal(4, "sekai", [null, singer("x")])]);
     expect([...broken.keys()]).toEqual([4]);
