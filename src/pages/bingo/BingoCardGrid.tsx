@@ -357,7 +357,8 @@ export function BingoCardGrid(props: Props) {
                     square,
                     // 盤面の段の文字の大きさは、上下の余白 4px ずつ・札と文言の間 2px・枠線で、3 行（長い名前は 4 行）が正方形に入るように決めてある（boardLayout.ts）
                     stepText ? "py-1" : "py-2",
-                    "flex-col border border-slate-300 text-center leading-tight text-slate-700 hover:border-slate-400"
+                    // 枠を濃くするのは押せるマスだけ（休止中の盤面で、押せないマスが押せそうに見えないように）
+                    "flex-col border border-slate-300 text-center leading-tight text-slate-700 enabled:hover:border-slate-400"
                   )}
                 >
                   {cell.cleared && <FilledMark onJacket={false} />}
