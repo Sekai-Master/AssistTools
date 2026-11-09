@@ -46,6 +46,13 @@ export function exportFileName(now: Date): string {
   return `sekaimaster-bingo-${day}-${p(now.getHours())}${p(now.getMinutes())}.json`;
 }
 
+/** 書き出した時刻の短い形（「11/12 15:03」。この端末の時刻）。 */
+export function shortTime(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 const fail = (error: string): ImportResult => ({ ok: false, error });
 
 /** 版の欄を見る。読める版なら null、読めなければ理由。 */

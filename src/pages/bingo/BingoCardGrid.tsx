@@ -24,8 +24,9 @@ interface Common {
   /**
    * まとめて遊ぶの盤面として描く（幅と文字の段は boardLayout.ts）。このときは「遊んだ曲を入れる」と
    * 進み具合の行を出さない（盤面の外の操作の列と、カードの見出しが受け持つ）。
+   * dimmed は休止中: 盤面の枠だけを薄くする（マスの小窓は薄くしない）。
    */
-  board?: { width: number; step: FontStep };
+  board?: { width: number; step: FontStep; dimmed?: boolean };
 }
 
 /** 字の段の規約（20・16・14・12）の大きさから Tailwind のクラス。 */
@@ -314,7 +315,7 @@ export function BingoCardGrid(props: Props) {
         </>
       )}
       <div
-        className={board ? "relative mx-auto w-full" : "relative -mx-2 sm:mx-auto sm:max-w-lg"}
+        className={board ? cn("relative mx-auto w-full", board.dimmed && "opacity-50") : "relative -mx-2 sm:mx-auto sm:max-w-lg"}
         style={board ? { maxWidth: board.width } : undefined}
       >
         <div ref={grid} className={cn("grid grid-cols-5", board ? (cellGapOf(board.width) === 8 ? "gap-2" : "gap-1") : "gap-1 sm:gap-2")}>

@@ -11,7 +11,11 @@ interface Props {
   name: string;
   /** このカードを開くリンク（埋めた状態ごと。今の ?card= と同じ）。 */
   link: string;
+  /** いま休止しているか。 */
+  paused: boolean;
   onRename: (name: string) => void;
+  /** 休止する（true）／再開する（false）。押したら小窓を閉じる（盤面の帯で結果が見える）。 */
+  onPause: (paused: boolean) => void;
   onRemove: () => void;
   onClose: () => void;
 }
@@ -28,10 +32,10 @@ const SUB_BUTTON =
   "mt-3 min-h-11 w-full shrink-0 rounded-lg text-sm font-bold text-slate-600 hover:bg-[color:color-mix(in_srgb,var(--neu-ink)_9%,transparent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]";
 
 /**
- * カードの設定（名前・リンクをコピー・外す）。見出しの [設定] から開く。
+ * カードの設定（名前・リンクをコピー・休止・外す）。見出しの [設定] から開く。
  * ドロップダウンのメニューは作らず、このページのほかの操作と同じ小窓（CellSheetFrame）にする。
  */
-export function MultiCardSheet({ entry, name, link, onRename, onRemove, onClose }: Props) {
+export function MultiCardSheet({ entry, name, link, paused, onRename, onPause, onRemove, onClose }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   // 打っている間は下書きに持ち、離れたとき・閉じたときに整えて残す（打つたびに整えると、語の間の空白が打てない）
   const [draft, setDraft] = useState(entry.name);
@@ -85,6 +89,17 @@ export function MultiCardSheet({ entry, name, link, onRename, onRemove, onClose 
       <button type="button" onClick={copyLink} className={SUB_BUTTON}>
         {entry.card ? "リンクをコピー" : "コードをコピー"}
       </button>
+      <button
+        type="button"
+        onClick={() => {
+          commit();
+          onPause(!paused);
+        }}
+        className={SUB_BUTTON}
+      >
+        {paused ? "再開する" : "休止する"}
+      </button>
+      <p className="mt-1 text-center text-xs text-slate-500">休止中のカードには、遊んだ曲を入れても反映しません</p>
       <button type="button" onClick={remove} className={SUB_BUTTON}>
         このカードを外す
       </button>

@@ -6,6 +6,7 @@ import {
   buildMultiExport,
   exportFileName,
   parseMultiExport,
+  shortTime,
 } from "./multiExport";
 import type { SavedMulti } from "./multiStorage";
 
@@ -41,8 +42,9 @@ describe("buildMultiExport（中断用の書き出し）", () => {
     expect(r).toEqual({ ok: true, multi: SET, exportedAt: NOW, dropped: 0 });
   });
 
-  it("ファイル名は sekaimaster-bingo-YYYYMMDD-HHmm.json（この端末の時刻）", () => {
+  it("ファイル名は sekaimaster-bingo-YYYYMMDD-HHmm.json、読み込んだときの時刻は「11/12 09:03」の形（この端末の時刻）", () => {
     expect(exportFileName(new Date(2026, 10, 12, 9, 3))).toBe("sekaimaster-bingo-20261112-0903.json");
+    expect(shortTime(new Date(2026, 10, 12, 9, 3).getTime())).toBe("11/12 09:03");
   });
 });
 

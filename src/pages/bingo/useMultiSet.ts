@@ -17,10 +17,12 @@ import {
   type SavedMulti,
   type SavedMultiCard,
   cleanCardName,
+  isPaused,
   loadMulti,
   newCardId,
   parseSavedMulti,
   saveMulti,
+  withPaused,
 } from "./multiStorage";
 
 export interface MultiEntry extends SavedMultiCard {
@@ -144,7 +146,7 @@ export function useMultiSet(musics: BingoMusic[]) {
   /**
    * いまの保存のカードに対して、変え方（fn）を当てる（遊んだ曲の反映）。画面に描いた時点のカードではなく、
    * 当てる時点のカードを読み直して変えるので、小窓を開いている間にほかのタブが埋めたマスを古い内容で上書きしない。
-   * fn が null を返したカード・読めないカードは変えない。
+   * fn が null を返したカード・読めないカード・休止中のカードは変えない（休止もほかのタブで変わりうるので、当てる時点で見る）。
    */
   const applyToCards = useCallback(
     (fn: (kc: KindedCard) => KindedCard | null) => {
@@ -152,6 +154,7 @@ export function useMultiSet(musics: BingoMusic[]) {
       setSaved((s) => ({
         ...s,
         cards: s.cards.map((c) => {
+          if (isPaused(c)) return c;
           const kc = decodeOrNull(c.code, musics);
           const next = kc ? fn(kc) : null;
           return next ? withCard(c, next, now) : c;
@@ -161,11 +164,31 @@ export function useMultiSet(musics: BingoMusic[]) {
     [musics]
   );
 
+  /** 休止する／再開する（区間を保存に足す・閉じる）。 */
+  const setPaused = useCallback((id: string, paused: boolean) => {
+    const now = Date.now();
+    setSaved((s) => ({ ...s, cards: s.cards.map((c) => (c.id === id ? withPaused(c, paused, now) : c)) }));
+  }, []);
+
+  /**
+   * セットをまるごと置き換える（中断用の書き出しの読み込み）。まとめて遊ぶで開いたままにする。
+   * 戻り値は楽曲データで読めないカードの数（落とさずに持ってきたことを画面で知らせる）。
+   */
+  const replaceAll = useCallback(
+    (next: SavedMulti) => {
+      setSaved({ ...next, open: true });
+      return next.cards.filter((c) => decodeOrNull(c.code, musics) === null).length;
+    },
+    [musics]
+  );
+
   return {
     open: saved.open,
     active: saved.active,
     cols: saved.cols,
     entries,
+    /** 中断用の書き出しに入れる、保存の形そのまま。 */
+    saved,
     full: saved.cards.length >= MAX_MULTI_CARDS,
     setOpen,
     setActive,
@@ -175,6 +198,8 @@ export function useMultiSet(musics: BingoMusic[]) {
     renameCard,
     updateCards,
     applyToCards,
+    setPaused,
+    replaceAll,
   };
 }
 

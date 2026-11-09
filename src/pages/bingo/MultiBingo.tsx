@@ -14,6 +14,8 @@ import { BingoSongPicker } from "./BingoSongPicker";
 import { MultiBoard } from "./MultiBoard";
 import { MultiCardSheet } from "./MultiCardSheet";
 import { MultiPlayedSheet, type PlayedGroup } from "./MultiPlayedSheet";
+import { MultiSaveFile } from "./MultiSaveFile";
+import { isPaused } from "./multiStorage";
 import { type MultiEntry, type MultiSet, entryName } from "./useMultiSet";
 
 interface Props {
@@ -57,7 +59,7 @@ function playedGroups(entries: readonly MultiEntry[], music: BingoMusic): Played
         ? { index, caption: cell.odai.caption, text: cell.odai.text, cleared: cell.cleared }
         : { index, cleared: cell.cleared };
     });
-    return [{ id: e.id, name: entryName(e, i), kind: e.card.kind, matches }];
+    return [{ id: e.id, name: entryName(e, i), kind: e.card.kind, matches, paused: isPaused(e) }];
   });
 }
 
@@ -70,22 +72,27 @@ function filledByPlayed(kc: KindedCard, music: BingoMusic): KindedCard | null {
     : { kind: "song", card: withClearedAll(kc.card, indices) };
 }
 
-/** スマホの切り替え: 番号と BINGO の印だけ（名前は下の見出しに全部出す。320px でも 5 つが 44px 以上で入る）。 */
+/**
+ * スマホの切り替え: 番号と BINGO の印だけ（名前は下の見出しに全部出す。320px でも 5 つが 44px 以上で入る）。
+ * 休止中のカードは番号を薄くする（盤面と同じ見せ方）。
+ */
 function MultiTabs({ entries, active, onSelect }: { entries: readonly MultiEntry[]; active: number; onSelect: (i: number) => void }) {
   return (
     <div role="group" aria-label="カードを選ぶ" className="mb-3 flex gap-2">
       {entries.map((e, i) => {
         const bingo = e.card ? progressOf(e.card.card).bingo : false;
+        const paused = isPaused(e);
         return (
           <button
             key={e.id}
             type="button"
             aria-pressed={i === active}
-            aria-label={`${entryName(e, i)}${bingo ? "（BINGO）" : ""}`}
+            aria-label={`${entryName(e, i)}${bingo ? "（BINGO）" : ""}${paused ? "（休止中）" : ""}`}
             onClick={() => onSelect(i)}
             className={cn(
               "relative flex min-h-11 min-w-11 flex-1 items-center justify-center rounded-lg font-num text-base font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]",
-              i === active ? "bg-[color:var(--unit-color)] text-[color:var(--unit-ink)]" : "bg-neu text-slate-600 shadow-neu-sm"
+              i === active ? "bg-[color:var(--unit-color)] text-[color:var(--unit-ink)]" : "bg-neu text-slate-600 shadow-neu-sm",
+              paused && "opacity-50"
             )}
           >
             {i + 1}
@@ -119,7 +126,9 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf 
     wasPlayedOpen.current = played !== null;
   }, [played]);
 
+  // 遊んだ曲を入れられるカード（読めて、休止していない）。無ければ「遊んだ曲を入れる」を押せない
   const readable = entries.some((e) => e.card);
+  const playable = entries.some((e) => e.card && !isPaused(e));
   const settingsEntry = entries.find((e) => e.id === settingsId) ?? null;
   const active = Math.min(set.active, Math.max(0, entries.length - 1));
   const renderBoard = (e: MultiEntry, i: number, board: { width: number; step: ReturnType<typeof fontStepOf> }) => (
@@ -132,8 +141,10 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf 
       jacketBase={jacketBase}
       pickable={pickable}
       board={board}
+      paused={isPaused(e)}
       onChange={(kc) => set.updateCards(new Map([[e.id, kc]]))}
       onSettings={() => setSettingsId(e.id)}
+      onResume={() => set.setPaused(e.id, false)}
     />
   );
 
@@ -145,12 +156,13 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf 
         <NeuButton
           ref={playedButton}
           onClick={() => setPlayed("picking")}
-          disabled={!readable}
+          disabled={!playable}
           className="flex min-h-12 items-center justify-center gap-2 !px-4 text-base"
         >
           <span className="material-icons text-xl text-slate-500" aria-hidden data-icon="search" />
           遊んだ曲を入れる
         </NeuButton>
+        {readable && !playable && <span className="text-sm text-slate-600">全部のカードが休止中です</span>}
         {layout.mode === "grid" && entries.length > 1 && (
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-slate-600">列</span>
@@ -164,6 +176,7 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf 
             />
           </div>
         )}
+        <MultiSaveFile set={set} />
       </div>
       <div ref={area}>
         {entries.length === 0 ? (
@@ -191,7 +204,12 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf 
           entry={settingsEntry}
           name={entryName(settingsEntry, entries.indexOf(settingsEntry))}
           link={settingsEntry.card ? linkOf(settingsEntry.card) : ""}
+          paused={isPaused(settingsEntry)}
           onRename={(name) => set.renameCard(settingsEntry.id, name)}
+          onPause={(paused) => {
+            set.setPaused(settingsEntry.id, paused);
+            setSettingsId(null);
+          }}
           onRemove={() => {
             set.removeCard(settingsEntry.id);
             setSettingsId(null);
