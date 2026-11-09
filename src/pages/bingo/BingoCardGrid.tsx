@@ -15,12 +15,27 @@ import { OdaiPicker } from "./OdaiPicker";
 import { PlayedSongSheet, type PlayedMatch } from "./PlayedSongSheet";
 import { SongCellSheet } from "./SongCellSheet";
 import { BingoSongPicker } from "./BingoSongPicker";
+import type { FontStep } from "./boardLayout";
 
 interface Common {
   musics: BingoMusic[];
   aliases: AliasEntry[];
   jacketBase: string;
+  /**
+   * まとめて遊ぶの盤面として描く（幅と文字の段は boardLayout.ts）。このときは「遊んだ曲を入れる」と
+   * 進み具合の行を出さない（盤面の外の操作の列と、カードの見出しが受け持つ）。
+   */
+  board?: { width: number; step: FontStep };
 }
+
+/** まとめて遊ぶの盤面の、文字の段ごとの札・文言・名前の長い作者の文言の大きさ（字の段の規約 20・16・14・12）。 */
+const STEP_TEXT: Record<FontStep, { caption: string; text: string; long: string }> = {
+  xl: { caption: "text-sm", text: "text-xl", long: "text-base" },
+  lg: { caption: "text-xs", text: "text-base", long: "text-sm" },
+  md: { caption: "text-xs", text: "text-sm", long: "text-xs" },
+  sm: { caption: "text-xs", text: "text-xs", long: "text-xs tracking-tighter" },
+  xs: { caption: "text-xs", text: "text-xs", long: "text-xs tracking-tighter" },
+};
 
 type Props = Common &
   (
@@ -259,22 +274,39 @@ export function BingoCardGrid(props: Props) {
     setPlayed(null);
   };
 
-  const square = props.kind === "song" ? "aspect-square" : "min-h-16 sm:aspect-square";
+  const { board } = props;
+  // まとめて遊ぶの盤面: 正方形にするかと文字の大きさは、画面の幅でなく盤面の幅の段で決める（boardLayout.ts）
+  const square =
+    props.kind === "song"
+      ? "aspect-square"
+      : board
+        ? board.step === "xs"
+          ? "min-h-16"
+          : "aspect-square"
+        : "min-h-16 sm:aspect-square";
+  const stepText = board ? STEP_TEXT[board.step] : null;
   const open = openIndex !== null ? card[openIndex] : null;
 
   return (
     <>
-      <NeuButton
-        ref={playedButton}
-        onClick={() => setPlayed("picking")}
-        className="mb-4 flex min-h-12 w-full items-center justify-center gap-2 text-base"
+      {!board && (
+        <>
+          <NeuButton
+            ref={playedButton}
+            onClick={() => setPlayed("picking")}
+            className="mb-4 flex min-h-12 w-full items-center justify-center gap-2 text-base"
+          >
+            <span className="material-icons text-xl text-slate-500" aria-hidden data-icon="search" />
+            遊んだ曲を入れる
+          </NeuButton>
+          <ProgressLine progress={progress} />
+        </>
+      )}
+      <div
+        className={board ? "relative mx-auto w-full" : "relative -mx-2 sm:mx-auto sm:max-w-lg"}
+        style={board ? { maxWidth: board.width } : undefined}
       >
-        <span className="material-icons text-xl text-slate-500" aria-hidden data-icon="search" />
-        遊んだ曲を入れる
-      </NeuButton>
-      <ProgressLine progress={progress} />
-      <div className="relative -mx-2 sm:mx-auto sm:max-w-lg">
-        <div ref={grid} className="grid grid-cols-5 gap-1 sm:gap-2">
+        <div ref={grid} className={cn("grid grid-cols-5", board ? (board.width >= 448 ? "gap-2" : "gap-1") : "gap-1 sm:gap-2")}>
           {card.map((cell, i) => {
             if (cell === "FREE") {
               return (
@@ -309,7 +341,9 @@ export function BingoCardGrid(props: Props) {
                   className={cn(
                     CELL_BASE,
                     square,
-                    "flex-col border border-slate-300 py-2 text-center leading-tight text-slate-700 hover:border-slate-400"
+                    // 盤面の段の文字の大きさは、上下の余白 4px・札と文言の間 2px で 3 行が正方形に入るように決めてある（boardLayout.ts）
+                    stepText ? "py-1" : "py-2",
+                    "flex-col border border-slate-300 text-center leading-tight text-slate-700 hover:border-slate-400"
                   )}
                 >
                   {cell.cleared && <FilledMark onJacket={false} />}
@@ -320,11 +354,13 @@ export function BingoCardGrid(props: Props) {
                       style={{ background: UNIT_COLOR_VAR[odai.unit] }}
                     />
                   )}
-                  <span className="relative text-xs text-slate-500">{odai.caption}</span>
+                  <span className={cn("relative text-slate-500", stepText?.caption ?? "text-xs")}>{odai.caption}</span>
                   <span
                     className={cn(
-                      "relative mt-1 w-full text-xs font-bold [line-break:strict] [overflow-wrap:anywhere]",
-                      long ? "tracking-tighter" : "sm:text-sm"
+                      "relative w-full font-bold [line-break:strict] [overflow-wrap:anywhere]",
+                      stepText
+                        ? cn("mt-0.5", long ? stepText.long : stepText.text)
+                        : cn("mt-1 text-xs", long ? "tracking-tighter" : "sm:text-sm")
                     )}
                   >
                     {odai.chunks.map((chunk, j) =>
