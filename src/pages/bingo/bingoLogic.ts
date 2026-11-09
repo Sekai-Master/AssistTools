@@ -58,6 +58,15 @@ export function shuffle<T>(arr: readonly T[]): T[] {
   return a;
 }
 
+/**
+ * 歌う人で絞るときの判定。singer が null なら絞らない。
+ * 歌う人の決まりはお題ビンゴの「ボーカル」と同じ楽曲データの singers（scripts/lib/musicBingoFields.mjs の indexVocals）。
+ * singers の無い曲（インスト・ゲームの外の歌い手だけ）は、誰で絞っても当てはまらない。
+ */
+export function sungBy(m: BingoMusic, singer: number | null): boolean {
+  return singer === null || (m.singers?.includes(singer) ?? false);
+}
+
 /** 生成用フィルタ: published相当はロード時に済ませる前提。ユニット/カテゴリ/曲種で絞る。 */
 export function filterForGeneration(
   musics: readonly BingoMusic[],

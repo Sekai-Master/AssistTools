@@ -4,7 +4,6 @@ import { Panel } from "../../components/ui/Panel";
 import { ActionButton } from "../../components/ui/ActionButton";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
-import { SongSearchModal } from "../../components/SongSearchModal";
 import { resolveColor } from "../../lib/canvasColor";
 import { useBingoMusics } from "./useBingoMusics";
 import { buildRandomCard, filterForGeneration, pickBorderColor } from "./bingoLogic";
@@ -25,6 +24,7 @@ import {
 import { type PickableOdai, listPickableOdais, resolveSavedPins } from "./odaiPins";
 import { loadOdaiPins, saveOdaiPins } from "./odaiPinStorage";
 import { OdaiPicker } from "./OdaiPicker";
+import { BingoSongPicker } from "./BingoSongPicker";
 import { progressOf } from "./bingoProgress";
 import { MINUTES_PER_SONG, playTimeText } from "./playTime";
 import { type CardKind, cardCode, cardLink, decodeCardCode, extractCode, shareText } from "./bingoShare";
@@ -333,12 +333,14 @@ function BingoBoard({
       <canvas ref={canvasRef} className="hidden" />
 
       {pickingCenter && (
-        <SongSearchModal
+        <BingoSongPicker
+          mode="single"
+          caption="中央マス"
+          title="中央マスの曲を選ぶ"
           musics={musics}
           aliases={aliases}
           jacketBase={JACKET_BASE}
-          title="中央マスの曲を選ぶ"
-          onSelect={(m) => {
+          onPick={(m) => {
             setFilters((f) => ({ ...f, centerSong: m }));
             setPickingCenter(false);
           }}

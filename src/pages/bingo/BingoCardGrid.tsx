@@ -1,5 +1,5 @@
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { SongSearchModal, type AliasEntry } from "../../components/SongSearchModal";
+import type { AliasEntry } from "../../lib/songSearch";
 import { UNIT_COLOR_VAR } from "../../lib/units";
 import { onJacketError } from "../../lib/img";
 import { cn } from "../../lib/utils";
@@ -14,6 +14,7 @@ import { OdaiSheet } from "./OdaiSheet";
 import { OdaiPicker } from "./OdaiPicker";
 import { PlayedSongSheet, type PlayedMatch } from "./PlayedSongSheet";
 import { SongCellSheet } from "./SongCellSheet";
+import { BingoSongPicker } from "./BingoSongPicker";
 
 interface Common {
   musics: BingoMusic[];
@@ -36,6 +37,9 @@ type Props = Common &
 /** 選ぶ小窓の見出しの上の 1 行: どのマスを替えるか（「作者 DECO*27 のマス」）。 */
 const replacingCaption = (cell: OdaiCell | undefined) =>
   cell && cell !== "FREE" ? `${cell.odai.caption} ${cell.odai.text} のマス` : "マス";
+
+/** 曲名ビンゴの差し替えの見出しの上の 1 行（「ロウワー のマス」）。 */
+const replacingSongCaption = (cell: Cell | undefined) => (cell && cell !== "FREE" ? `${cell.title} のマス` : "マス");
 
 const CELL_BASE =
   "relative flex items-center justify-center overflow-hidden rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]";
@@ -231,8 +235,11 @@ export function BingoCardGrid(props: Props) {
     props.onChange(replaceOdaiCell(props.card, replacing, odai));
     setReplacing(null);
   };
+  // カードにあるお題の鍵・曲の id。差し替えの選ぶ小窓で選べなくする（同じお題・曲が 2 マスに入らないように）
   const onCard = new Set(
-    props.kind === "odai" ? props.card.flatMap((c) => (c === "FREE" ? [] : [c.odai.key])) : []
+    props.kind === "odai"
+      ? props.card.flatMap((c) => (c === "FREE" ? [] : [c.odai.key]))
+      : props.card.flatMap((c) => (c === "FREE" ? [] : [c.id]))
   );
 
   const playedMatches: PlayedMatch[] =
@@ -394,12 +401,14 @@ export function BingoCardGrid(props: Props) {
         />
       )}
       {played === "picking" && (
-        <SongSearchModal
+        <BingoSongPicker
+          mode="single"
+          caption="遊んだ曲を入れる"
+          title="遊んだ曲を選ぶ"
           musics={musics}
           aliases={aliases}
           jacketBase={jacketBase}
-          title="遊んだ曲を選ぶ"
-          onSelect={setPlayed}
+          onPick={setPlayed}
           onClose={closePlayed}
         />
       )}
@@ -414,12 +423,17 @@ export function BingoCardGrid(props: Props) {
         />
       )}
       {props.kind === "song" && replacing !== null && (
-        <SongSearchModal
+        <BingoSongPicker
+          mode="single"
+          caption={replacingSongCaption(props.card[replacing])}
+          title="差し替える曲を選ぶ"
+          sub="カードにある曲は選べません"
           musics={musics}
           aliases={aliases}
           jacketBase={jacketBase}
-          title="差し替える曲を選ぶ"
-          onSelect={replaceSong}
+          unavailable={onCard}
+          unavailableNote="カードにあります"
+          onPick={replaceSong}
           onClose={closeReplace}
         />
       )}
