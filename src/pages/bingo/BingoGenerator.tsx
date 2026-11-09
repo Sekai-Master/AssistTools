@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { Panel } from "../../components/ui/Panel";
 import { ActionButton } from "../../components/ui/ActionButton";
@@ -197,10 +197,11 @@ function BingoBoard({
     return { kind, card: buildSongCard(songPool.pool, songPins.pins, filters.centerMode, filters.centerSong) };
   };
 
-  const newCard = () => {
+  /** 今の設定でカードを作る。作れたら true（確かめてやめた・作れなかったときは false）。 */
+  const newCard = (): boolean => {
     // まとめて遊ぶでは、作ったカードをセットに足す（今のカードは消さないので確かめない）
     if (!multi.open && current && progressOf(current.card).filled > 0 && !window.confirm("いまのカードを消して、新しく作りますか？")) {
-      return;
+      return false;
     }
     setError(null);
     try {
@@ -208,10 +209,33 @@ function BingoBoard({
       if (multi.open) multi.addCard(kc);
       else applyCard(kc);
       setBorderColor(pickBorderColor());
+      return true;
     } catch (e) {
       setError(errorText(e, "カードを作れませんでした"));
+      return false;
     }
   };
+
+  // カードの枠の「作り直す」: 上の「新しいカードを作る」と同じ処理（設定・確認とも同じ）。
+  // スマホで「作る → 盤面を見る → また作る」を、上の枠へ戻らずに回すためのもの（Nori 2026-11-10）。
+  // ★ 作り直しで枠より上の高さが変わると（上の枠の断りが消える など）、押したボタンが画面の中で動く。
+  //   iOS 26 までの Safari はスクロールの位置合わせ（overflow-anchor）が無い（caniuse、2026-11-10 に確認。27 から対応）ので、
+  //   見出しの行が動いた分だけ自分で戻す。上の「新しいカードを作る」は押したあとの位置を今のまま変えない
+  const regenRow = useRef<HTMLDivElement>(null);
+  const regenTop = useRef<number | null>(null);
+  const regenerate = () => {
+    const top = regenRow.current?.getBoundingClientRect().top;
+    // やめた・作れなかったときは覚えない（次にカードが替わったとき、古い位置へ戻してしまう）
+    if (newCard() && top !== undefined) regenTop.current = top;
+  };
+  useLayoutEffect(() => {
+    const top = regenTop.current;
+    regenTop.current = null;
+    const row = regenRow.current;
+    if (top === null || !row) return;
+    const moved = row.getBoundingClientRect().top - top;
+    if (Math.abs(moved) >= 1) window.scrollBy({ top: moved, behavior: "instant" });
+  }, [current]);
 
   const openCode = (input: string) => {
     try {
@@ -240,6 +264,9 @@ function BingoBoard({
   // 条件の曲が足りないときは、作る前に止める（足りない数は細かい設定の曲数の行に出る）
   const songShort = kind === "song" && songPool.needs.need > songPool.needs.available;
   const multiFull = multi.open && multi.full;
+  // 上の「新しいカードを作る」とカードの枠の「作り直す」で同じ。まとめて遊ぶの「カードを足す」は、5 枚で押せなくするのも足す
+  // （「作り直す」はカードの枠の見出しの行にあり、1 枚で遊ぶのときだけ出るので multiFull は要らない）
+  const createDisabled = loading || centerMissing || songShort;
   const createLabel = loading
     ? "楽曲データ読込中…"
     : centerMissing
@@ -313,7 +340,7 @@ function BingoBoard({
         )}
         <ActionButton
           onClick={newCard}
-          disabled={loading || centerMissing || songShort || multiFull}
+          disabled={createDisabled || multiFull}
           className="mt-4 min-h-12 w-full text-base"
         >
           {createLabel}
@@ -368,13 +395,25 @@ function BingoBoard({
 
       {current && !multi.open && (
         <Panel>
-          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <h2 className="text-base font-bold text-slate-700">カード</h2>
-            {cardLevel && cardSongs !== null && (
-              <p className="text-sm text-slate-600">
-                <span className="font-bold">{ODAI_LEVELS[cardLevel].label}</span> ・ {playTimeText(cardSongs)}
-              </p>
-            )}
+          {/* 見出しの行の右に「作り直す」。主役は盤面なので、枠のほかの副のボタン（遊んだ曲を入れる・画像を保存）と同じ浮き出しの灰色。
+              ★ スマホの幅（390px 以下で実測）では段と時間が見出しの下へ折り返す。ボタンは縮めない（タップの領域 44px） */}
+          <div ref={regenRow} className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
+              <h2 className="text-base font-bold text-slate-700">カード</h2>
+              {cardLevel && cardSongs !== null && (
+                <p className="text-sm text-slate-600">
+                  <span className="font-bold">{ODAI_LEVELS[cardLevel].label}</span> ・ {playTimeText(cardSongs)}
+                </p>
+              )}
+            </div>
+            <NeuButton
+              onClick={regenerate}
+              disabled={createDisabled}
+              className="flex min-h-11 shrink-0 items-center gap-1 !px-3 whitespace-nowrap disabled:pointer-events-none disabled:opacity-50"
+            >
+              <span className="material-icons text-xl text-slate-500" aria-hidden data-icon="refresh" />
+              作り直す
+            </NeuButton>
           </div>
           {current.kind === "odai" ? (
             <BingoCardGrid

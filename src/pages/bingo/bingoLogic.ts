@@ -39,6 +39,8 @@ export interface BingoMusic {
   appendLevel?: number;
   /** MASTER のノーツ数。 */
   masterNotes?: number;
+  /** バナー曲なら、その回のバナーのキャラの id（scripts/lib/musicBanner.mjs。ワールドリンクの曲は無い）。曲を選ぶ小窓の「バナー曲だけ」に使う。 */
+  bannerCharacterId?: number;
 }
 
 export type Cell = "FREE" | (BingoMusic & { cleared: boolean });

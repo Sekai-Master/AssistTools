@@ -75,6 +75,16 @@ describe("parseMusics（お題ビンゴ用の項目）", () => {
     expect(parseMusics([{ ...base, singers: "1,2" }])[0].singers).toBeUndefined();
   });
 
+  // scripts/lib/musicBanner.mjs が書く。ゲームのキャラ（1〜26）の整数だけ通す
+  it("バナーのキャラ（bannerCharacterId）は 1〜26 の整数だけ読む", () => {
+    expect(parseMusics([{ ...base, bannerCharacterId: 20 }])[0].bannerCharacterId).toBe(20);
+    expect(parseMusics([{ ...base, bannerCharacterId: 26 }])[0].bannerCharacterId).toBe(26);
+    for (const bad of ["20", 0, 27, 3.5, -1, null, true]) {
+      expect(parseMusics([{ ...base, bannerCharacterId: bad }])[0].bannerCharacterId).toBeUndefined();
+    }
+    expect(parseMusics([base])[0].bannerCharacterId).toBeUndefined();
+  });
+
   it("配信している楽曲データの項目を読める", () => {
     const musics = parseMusics(
       JSON.parse(fs.readFileSync(path.join(__dirname, "../../../public/MusicDatas/transformedMusics.json"), "utf8"))
