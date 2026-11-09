@@ -64,8 +64,9 @@ describe("pickBoardLayout（列を選んだとき）", () => {
 });
 
 describe("fontStepOf（盤面の幅から文字の段）", () => {
+  // ★ sm の下限は 390。380〜385px では 1 位 c286 が 12px・字の間を詰めても 4 行になり切れた（検分 M1b 新-中-1）
   it("段の境目", () => {
-    expect([560, 559, 470, 469, 415, 414, 380, 379].map(fontStepOf)).toEqual([
+    expect([560, 559, 470, 469, 415, 414, 390, 389].map(fontStepOf)).toEqual([
       "xl",
       "lg",
       "lg",
@@ -80,7 +81,7 @@ describe("fontStepOf（盤面の幅から文字の段）", () => {
   // ★ 前は行の高さを 1.25 倍で数え、マスの枠線（上下 1px）を数えていなかった。盤面 560px で
   //   「雄之助 & CircusP feat. Hatsune Miku」が切れた（検分 M1 高-1）。境目は枠線ごと数える
   it("どの段も、境目の盤面で札 1 行と文言 3 行が正方形のマスに入る（枠線・余白ごと）", () => {
-    for (const board of [AUTO_MIN_BOARD, 470, 415, 380]) {
+    for (const board of [AUTO_MIN_BOARD, 470, 415, 390]) {
       const step = fontStepOf(board);
       const { caption, text } = STEP_PX[step];
       expect(cellOf(board), `${board}px（${step}）`).toBeGreaterThanOrEqual(cellNeed(caption, text, 3));
@@ -103,7 +104,7 @@ describe("longTextPxOf（名前の長い作者の文言）", () => {
     expect([470, 516, 517, 559].map((b) => longTextPxOf(b, "lg"))).toEqual([12, 12, 14, 14]);
     // 12px より下げない
     expect(longTextPxOf(415, "md")).toBe(12);
-    expect(longTextPxOf(380, "sm")).toBe(12);
+    expect(longTextPxOf(390, "sm")).toBe(12);
     expect(longTextPxOf(300, "xs")).toBe(12);
   });
 

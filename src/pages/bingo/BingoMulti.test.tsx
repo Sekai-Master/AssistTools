@@ -160,6 +160,40 @@ describe("カードの設定", () => {
     expect(screen.getByRole("button", { name: "わたしのカード" })).toBeTruthy();
   });
 
+  // ★ 前は 1 字打つたびに小窓の作法（useModalA11y）が掛け直され、フォーカスが欄から小窓の先頭へ移った。
+  //   キーでは 2 字目から入らず、変換も途中で確定された（検分 M1b 新-高-1）。fireEvent.change だけでなくフォーカスを見る
+  it("名前の欄に続けて打てる（1 字ごとにフォーカスが欄から移らない）。× でも Esc でも、最後に打った名前で残る", () => {
+    saveSet([entry("a1", encodeOdaiSeed(ODAI_A)), entry("b2", encodeSeed(SONG))]);
+    render(<BingoGenerator />);
+    // ブラウザと同じく、押したボタンにフォーカスがある状態で開く（小窓は閉じるときここへフォーカスを戻す）
+    const openSettings = (name: string) => {
+      const button = screen.getByRole("button", { name });
+      button.focus();
+      fireEvent.click(button);
+    };
+    openSettings("カード1の設定");
+    let input = within(dialog()).getByRole("textbox") as HTMLInputElement;
+    input.focus();
+    for (const value of ["a", "ab", "abc", "abcd"]) {
+      fireEvent.change(input, { target: { value } });
+      expect(document.activeElement, `「${value}」のあと`).toBe(input);
+    }
+    expect(input.value).toBe("abcd");
+    fireEvent.click(within(dialog()).getByRole("button", { name: "閉じる" }));
+    expect(savedSet().cards[0].name).toBe("abcd");
+
+    // jsdom は切り替え式で描くので、2 枚目を選んでから設定を開く
+    fireEvent.click(screen.getByRole("button", { name: "カード2" }));
+    openSettings("カード2の設定");
+    input = within(dialog()).getByRole("textbox") as HTMLInputElement;
+    input.focus();
+    for (const value of ["x", "xy", "xyz"]) fireEvent.change(input, { target: { value } });
+    expect(document.activeElement).toBe(input);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(savedSet().cards[1].name).toBe("xyz");
+  });
+
   // ★ 前は 32 字まで打てて、閉じたときに黙って 16 字に切られた（検分 M1 低-6）
   it("名前の入力の上限（maxLength）は保存の上限と同じ 16 字。絵文字など 2 つに数える字の分だけ広げる", () => {
     saveSet([entry("a1", encodeOdaiSeed(ODAI_A))]);

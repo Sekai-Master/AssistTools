@@ -32,6 +32,7 @@ const GROWN_BOARD_HEIGHT = 64 * 5 + 4 * 4;
  * 盤面の幅から選ぶ文字の段。字の段の規約（20・16・14・12、docs/design-system.md 2 節）だけを使う。
  * xl: 文言 20／札 14、lg: 16／12、md: 14／12、sm: 12／12（ここまで正方形）、xs: 12／12 で中身に合わせて縦に伸びる。
  * 境目は、その段の文言が 3 行と札が正方形のマスに入る盤面の幅（cellOf(境目) ≥ cellNeed(札, 文言, 3)）。
+ * sm だけは名前の長い作者が収まる幅で決める（STEP_MIN の注）。
  */
 export type FontStep = "xl" | "lg" | "md" | "sm" | "xs";
 
@@ -72,12 +73,16 @@ export const cellNeed = (captionPx: number, textPx: number, lines: number) =>
   CELL_FIXED + (captionPx + textPx * lines) * BOARD_LEADING;
 
 // ★ 計画の表の境目（460・410・370）は枠線を数えておらず、境目の盤面で 3 行の文言が 1〜1.4px はみ出す。
-//   枠線ごと数えて引き直した（lg 467・md 414・sm 376 → 切りよく 470・415・380。検分 M1 高-1）
+//   枠線ごと数えて引き直した（lg 467・md 414 → 切りよく 470・415。検分 M1 高-1）
+// ★ sm の下限は、ふつうの文言の 3 行（376px）でなく、名前の長い作者 1 位「雄之助 & CircusP feat. Hatsune Miku」
+//   （c286、18.95em）が 12px・字の間を詰めて 3 行に入る幅で決める。380〜385px では詰めても 4 行になり切れ、
+//   386px から 3 行に入る（実測。検分 M1b 新-中-1）。少し余裕を見て 390px。これより狭い盤面はマスが中身で縦に伸びる（xs）。
+//   選べる列を絞る直し方もあるが、列の切り替えは「外れたら本人が直せる」ための逃げ道なので減らさない
 const STEP_MIN: readonly (readonly [number, FontStep])[] = [
   [AUTO_MIN_BOARD, "xl"],
   [470, "lg"],
   [415, "md"],
-  [380, "sm"],
+  [390, "sm"],
 ];
 
 export function fontStepOf(board: number): FontStep {

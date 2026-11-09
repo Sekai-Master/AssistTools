@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { progressOf } from "./bingoProgress";
 import { CellSheetFrame } from "./CellSheetFrame";
@@ -38,10 +38,18 @@ export function MultiCardSheet({ entry, name, link, onRename, onRemove, onClose 
   const commit = () => {
     if (draft !== entry.name) onRename(draft);
   };
-  const close = () => {
-    commit();
-    onClose();
-  };
+  // ★ 小窓の作法（useModalA11y）は onClose が変わるたびに掛け直し、そのたびにフォーカスを開く前の要素へ戻してから
+  //   小窓の先頭（閉じる）へ移す。下書きを同じ部品に持つので、描くたびに作る close を渡すと、1 字打つごとに欄から
+  //   フォーカスが外れ、キーでは 2 字目から入らず、変換も途中で確定された（検分 M1b 新-高-1）。
+  //   BingoCardGrid と同じく変わらない関数を渡し、閉じるときの下書きは ref から読む
+  const latest = useRef({ commit, onClose });
+  useLayoutEffect(() => {
+    latest.current = { commit, onClose };
+  });
+  const close = useCallback(() => {
+    latest.current.commit();
+    latest.current.onClose();
+  }, []);
   const filled = entry.card ? progressOf(entry.card.card).filled : 0;
 
   // 読めないカードはリンクにしても開けないので、元のコードを写せるようにする（楽曲データが戻れば開ける）
