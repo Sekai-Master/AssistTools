@@ -19,6 +19,7 @@ import { BINGO_STORAGE_KEY, summarizeSavedBingo } from "../../bingo/bingoStorage
 import { ODAI_PINS_STORAGE_KEY, summarizeSavedPins } from "../../bingo/odaiPinStorage";
 import { SONG_PINS_STORAGE_KEY, summarizeSavedSongPins } from "../../bingo/songPinStorage";
 import { MULTI_STORAGE_KEY, summarizeSavedMulti } from "../../bingo/multiStorage";
+import { PLAYED_STORAGE_KEY, summarizeSavedPlayed } from "../../bingo/playedStorage";
 
 export interface StoredItem {
   key: string;
@@ -233,6 +234,12 @@ export const STORED_ITEMS: StoredItem[] = [
     label: "BINGOのまとめて遊ぶカード",
     note: "「BINGOカードジェネレーター」のまとめて遊ぶで並べたカード（5 枚まで）と、名前・埋めたマス・列の数",
     summarize: (raw) => summarizeSavedMulti(raw, BROKEN),
+  },
+  {
+    key: PLAYED_STORAGE_KEY,
+    label: "BINGOの遊んだ曲",
+    note: "「BINGOカードジェネレーター」で埋めると決めた曲と、その時刻・その曲で埋めたマス（1000 曲まで）",
+    summarize: (raw) => summarizeSavedPlayed(raw, BROKEN),
   },
   {
     key: "sekaimaster:motion:v1",
