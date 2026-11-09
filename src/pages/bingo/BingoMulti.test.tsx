@@ -205,9 +205,104 @@ describe("読めないカード・壊れた保存・ほかのタブ", () => {
     expect(screen.getAllByRole("button", { name: /^カード\d$/ })).toHaveLength(1);
     const next = JSON.stringify({ open: false, active: 0, cols: 0, cards: [entry("a1", encodeOdaiSeed(ODAI_A)), entry("b2", encodeSeed(SONG))] });
     act(() => {
-      window.dispatchEvent(new StorageEvent("storage", { key: MULTI_STORAGE_KEY, newValue: next }));
+      window.dispatchEvent(new StorageEvent("storage", { key: MULTI_STORAGE_KEY, newValue: next, storageArea: localStorage }));
     });
     expect(screen.getAllByRole("button", { name: /^カード\d$/ })).toHaveLength(2);
     expect(screen.getByRole("button", { name: "1 枚で遊ぶに戻る" })).toBeTruthy();
+  });
+});
+
+describe("ほかのタブとの行き来（レビューの指摘）", () => {
+  it("ほかのタブの保存を読み直した後は書き返さない（見ている画面がタブごとに違っても、出来事が往復しない）", () => {
+    saveSet([entry("a1", encodeOdaiSeed(ODAI_A))]);
+    render(<BingoGenerator />);
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    const next = JSON.stringify({ open: false, active: 1, cols: 2, cards: [entry("a1", encodeOdaiSeed(ODAI_A)), entry("b2", encodeSeed(SONG))] });
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: MULTI_STORAGE_KEY, newValue: next, storageArea: localStorage }));
+    });
+    expect(setItem.mock.calls.filter(([k]) => k === MULTI_STORAGE_KEY)).toHaveLength(0);
+    setItem.mockRestore();
+  });
+
+  it("設定画面で消した（newValue が null）ら空にし、書き直して復活させない", () => {
+    saveSet([entry("a1", encodeOdaiSeed(ODAI_A))]);
+    render(<BingoGenerator />);
+    localStorage.removeItem(MULTI_STORAGE_KEY);
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: MULTI_STORAGE_KEY, newValue: null, storageArea: localStorage }));
+    });
+    expect(screen.getByText(/まだカードがありません/)).toBeTruthy();
+    expect(localStorage.getItem(MULTI_STORAGE_KEY)).toBeNull();
+  });
+
+  it("遊んだ曲の小窓を開いている間にほかのタブが埋めたマスは、「まとめて埋める」で消えない", () => {
+    const unique = (m: BingoMusic) => mockMusics.filter((o) => o.title.startsWith(m.title)).length === 1;
+    const target = SONG.filter((c): c is Exclude<(typeof SONG)[number], "FREE"> => c !== "FREE").find(unique)!;
+    saveSet([entry("c3", encodeSeed(SONG))]);
+    render(<BingoGenerator />);
+    fireEvent.click(screen.getByRole("button", { name: "遊んだ曲を入れる" }));
+    fireEvent.change(within(dialog()).getByRole("textbox"), { target: { value: target.title } });
+    fireEvent.click(within(dialog()).getAllByRole("button").find((b) => b.textContent?.startsWith(target.title))!);
+    // ほかのタブで、別のマス（target でない最初のマス）を埋めた
+    const other = SONG.findIndex((c) => c !== "FREE" && c.id !== target.id);
+    const byOther = SONG.map((c, i) => (i === other && c !== "FREE" ? { ...c, cleared: true } : c));
+    const next = JSON.stringify({ open: true, active: 0, cols: 0, cards: [entry("c3", encodeSeed(byOther))] });
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: MULTI_STORAGE_KEY, newValue: next, storageArea: localStorage }));
+    });
+    fireEvent.click(within(dialog()).getByRole("button", { name: /まとめて埋める/ }));
+    const targetIndex = SONG.findIndex((c) => c !== "FREE" && c.id === target.id);
+    expect(filledOf(savedSet().cards[0].code)).toEqual([other, targetIndex].sort((a, b) => a - b));
+  });
+});
+
+describe("PC の並べた盤面（区画の幅 1200px・内側の高さ 768px）", () => {
+  const withWidth = (w: number) => vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(w);
+
+  it("自動では 2 列・盤面 560px・文言 20px（xl）で並べ、列の切り替えで 1 列にできる（端末に残る）", () => {
+    saveSet([entry("a1", encodeOdaiSeed(ODAI_A)), entry("b2", encodeOdaiSeed(ODAI_B)), entry("c3", encodeSeed(SONG))]);
+    const spy = withWidth(1200);
+    try {
+      render(<BingoGenerator />);
+      const grid = screen.getAllByRole("region")[0].parentElement!.parentElement!;
+      expect(grid.style.gridTemplateColumns).toBe("repeat(2, minmax(0, 1fr))");
+      expect(screen.getAllByRole("region")).toHaveLength(3);
+      const firstBoard = screen.getByRole("region", { name: "カード1" });
+      const texts = [...firstBoard.querySelectorAll(".grid-cols-5 button span.font-bold")];
+      expect(texts.length).toBeGreaterThan(0);
+      expect(texts.every((t) => t.className.includes("text-xl") || t.className.includes("text-base"))).toBe(true);
+      expect((firstBoard.querySelector(".grid-cols-5")!.parentElement as HTMLElement).style.maxWidth).toBe("560px");
+      fireEvent.click(within(screen.getByRole("radiogroup", { name: "列の数" })).getByRole("radio", { name: "1" }));
+      expect(grid.style.gridTemplateColumns).toBe("repeat(1, minmax(0, 1fr))");
+      expect(savedSet().cols).toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("前のカードを外しても、見ていたカード（active）は同じカードを指す", () => {
+    localStorage.setItem(
+      MULTI_STORAGE_KEY,
+      JSON.stringify({ open: true, active: 2, cols: 0, cards: [entry("a1", encodeOdaiSeed(ODAI_A)), entry("b2", encodeOdaiSeed(ODAI_B)), entry("c3", encodeSeed(SONG)), entry("d4", encodeOdaiSeed(ODAI_A))] })
+    );
+    const spy = withWidth(1200);
+    try {
+      render(<BingoGenerator />);
+      fireEvent.click(screen.getByRole("button", { name: "カード1の設定" }));
+      fireEvent.click(within(dialog()).getByRole("button", { name: "このカードを外す" }));
+      const s = savedSet();
+      expect(s.cards[s.active].id).toBe("c3");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("1 枚で遊ぶのカードは今の見た目のまま（盤面の段の文字にしない）", () => {
+    render(<BingoGenerator />);
+    const texts = [...document.querySelectorAll(".grid-cols-5 button span.font-bold")];
+    expect(texts.length).toBeGreaterThan(0);
+    expect(texts.every((t) => t.className.includes("mt-1 text-xs"))).toBe(true);
+    expect(texts.some((t) => t.className.includes("text-xl"))).toBe(false);
   });
 });

@@ -7,7 +7,7 @@
  * ★ 同じブラウザでタブを 2 つ開いていると、後から書いた方が勝つ。ほかのタブが保存を変えたら（storage の出来事）、
  *   読み直して画面に出す（G-08）。どちらの画面を見ているか（open・active）はタブごとのまま残す。
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BingoMusic } from "./bingoLogic";
 import { progressOf } from "./bingoProgress";
 import { CARD_PARAM, type KindedCard, cardCode, decodeCardCode } from "./bingoShare";
@@ -49,6 +49,14 @@ function withCard(c: SavedMultiCard, kc: KindedCard, now: number): SavedMultiCar
   return { ...c, code: cardCode(kc), ...(started !== undefined ? { startedAt: started } : {}) };
 }
 
+/** 外した・減ったあとも、見ていたカードを id で追って選び直す（番号で持つと、前のカードを外したときに別のカードが出る）。 */
+function followActive(prev: SavedMulti, cards: readonly SavedMultiCard[]): number {
+  const id = prev.cards[prev.active]?.id;
+  const kept = id === undefined ? -1 : cards.findIndex((c) => c.id === id);
+  if (kept >= 0) return kept;
+  return Math.max(0, Math.min(prev.active, cards.length - 1));
+}
+
 export function useMultiSet(musics: BingoMusic[]) {
   const ready = musics.length > 0;
   const [saved, setSaved] = useState<SavedMulti>(() => {
@@ -57,16 +65,28 @@ export function useMultiSet(musics: BingoMusic[]) {
     const linked = typeof window !== "undefined" && new URLSearchParams(window.location.search).has(CARD_PARAM);
     return linked ? { ...s, open: false } : s;
   });
+  // ほかのタブの保存を読み直した直後は、書き返さない。
+  // ★ 書き返すと、タブごとに違う open・active が入った文字列が往復し、storage の出来事が止まらなくなる。
+  //   設定画面で消した保存（newValue が null）を、開いているタブが書き直して復活させることも防ぐ
+  const fromOtherTab = useRef(false);
 
   useEffect(() => {
-    if (ready) saveMulti(saved);
+    if (!ready) return;
+    if (fromOtherTab.current) {
+      fromOtherTab.current = false;
+      return;
+    }
+    saveMulti(saved);
   }, [ready, saved]);
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key !== MULTI_STORAGE_KEY) return;
-      const next = parseSavedMulti(e.newValue);
-      setSaved((cur) => ({ ...next, open: cur.open, active: Math.min(cur.active, Math.max(0, next.cards.length - 1)) }));
+      if (e.storageArea !== window.localStorage) return;
+      // key が null は localStorage.clear()（全部消した）
+      if (e.key !== null && e.key !== MULTI_STORAGE_KEY) return;
+      const next = parseSavedMulti(e.key === null ? null : e.newValue);
+      fromOtherTab.current = true;
+      setSaved((cur) => ({ ...next, open: cur.open, active: followActive(cur, next.cards) }));
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
@@ -101,7 +121,7 @@ export function useMultiSet(musics: BingoMusic[]) {
   const removeCard = useCallback((id: string) => {
     setSaved((s) => {
       const cards = s.cards.filter((c) => c.id !== id);
-      return { ...s, cards, active: Math.max(0, Math.min(s.active, cards.length - 1)) };
+      return { ...s, cards, active: followActive(s, cards) };
     });
   }, []);
 
@@ -121,6 +141,26 @@ export function useMultiSet(musics: BingoMusic[]) {
     }));
   }, []);
 
+  /**
+   * いまの保存のカードに対して、変え方（fn）を当てる（遊んだ曲の反映）。画面に描いた時点のカードではなく、
+   * 当てる時点のカードを読み直して変えるので、小窓を開いている間にほかのタブが埋めたマスを古い内容で上書きしない。
+   * fn が null を返したカード・読めないカードは変えない。
+   */
+  const applyToCards = useCallback(
+    (fn: (kc: KindedCard) => KindedCard | null) => {
+      const now = Date.now();
+      setSaved((s) => ({
+        ...s,
+        cards: s.cards.map((c) => {
+          const kc = decodeOrNull(c.code, musics);
+          const next = kc ? fn(kc) : null;
+          return next ? withCard(c, next, now) : c;
+        }),
+      }));
+    },
+    [musics]
+  );
+
   return {
     open: saved.open,
     active: saved.active,
@@ -134,6 +174,7 @@ export function useMultiSet(musics: BingoMusic[]) {
     removeCard,
     renameCard,
     updateCards,
+    applyToCards,
   };
 }
 
