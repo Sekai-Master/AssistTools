@@ -199,7 +199,8 @@ export const TOOLS: ToolDef[] = [
     path: "/analyzer",
     name: "ポイント調整アナライザー",
     shortName: "アナライザー",
-    description: "ポイント調整の方法を検索できます。",
+    // 2026-11-09 に機能紹介の文（public/intro/intros.json）に合わせた。「検索」は中身と食い違っていた（/border の入口でもこの文を出す）
+    description: "いまのPtと目標のPtを入れると、目標ちょうどで止まる走り方を出します。",
     icon: "analytics",
     category: "event",
     status: "ready",
