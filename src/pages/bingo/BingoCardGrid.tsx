@@ -5,10 +5,13 @@ import { onJacketError } from "../../lib/img";
 import { cn } from "../../lib/utils";
 import { NeuButton } from "../../components/ui/NeuButton";
 import type { BingoMusic, Cell } from "./bingoLogic";
-import type { OdaiCell } from "./odaiLogic";
+import { type OdaiCell, replaceOdaiCell } from "./odaiLogic";
+import { fitsCell } from "./odaiDefs";
+import type { PickableOdai } from "./odaiPins";
 import { BINGO_LINES, type Progress, progressOf, withCleared, withClearedAll } from "./bingoProgress";
 import { matchingCells } from "./bingoPlayed";
 import { OdaiSheet } from "./OdaiSheet";
+import { OdaiPicker } from "./OdaiPicker";
 import { PlayedSongSheet, type PlayedMatch } from "./PlayedSongSheet";
 import { SongCellSheet } from "./SongCellSheet";
 
@@ -20,9 +23,19 @@ interface Common {
 
 type Props = Common &
   (
-    | { kind: "odai"; card: OdaiCell[]; onChange: (card: OdaiCell[]) => void }
+    | {
+        kind: "odai";
+        card: OdaiCell[];
+        onChange: (card: OdaiCell[]) => void;
+        /** マスを替えるときに選べるお題（楽曲データで 1 曲以上当てはまるすべて）。 */
+        pickable: readonly PickableOdai[];
+      }
     | { kind: "song"; card: Cell[]; onChange: (card: Cell[]) => void }
   );
+
+/** 選ぶ小窓の見出しの上の 1 行: どのマスを替えるか（「作者 DECO*27 のマス」）。 */
+const replacingCaption = (cell: OdaiCell | undefined) =>
+  cell && cell !== "FREE" ? `${cell.odai.caption} ${cell.odai.text} のマス` : "マス";
 
 const CELL_BASE =
   "relative flex items-center justify-center overflow-hidden rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]";
@@ -133,6 +146,8 @@ export function BingoCardGrid(props: Props) {
   const [played, setPlayed] = useState<BingoMusic | "picking" | null>(null);
   // useModalA11y は onClose が変わるたびに掛け直すので、同じ関数を渡す
   const close = useCallback(() => setOpenIndex(null), []);
+  // ★ お題の小窓から「このお題を替える」で開くと、お題の小窓が閉じるときにマスへ戻したフォーカスを、
+  //   選ぶ小窓が「開く前のフォーカス」として覚える。閉じればそのマスに戻る
   const closeReplace = useCallback(() => setReplacing(null), []);
   const closePlayed = useCallback(() => setPlayed(null), []);
   const playedButton = useRef<HTMLButtonElement>(null);
@@ -157,6 +172,16 @@ export function BingoCardGrid(props: Props) {
     props.onChange(props.card.map((c, j) => (j === idx ? { ...music, cleared: false } : c)));
     setReplacing(null);
   };
+
+  // お題のマスの差し替え: そのマスだけ替える（埋めた印は外れる）。カードにあるお題は選ぶ小窓で選べない
+  const replaceOdai = (odai: PickableOdai) => {
+    if (props.kind !== "odai" || replacing === null) return;
+    props.onChange(replaceOdaiCell(props.card, replacing, odai));
+    setReplacing(null);
+  };
+  const onCard = new Set(
+    props.kind === "odai" ? props.card.flatMap((c) => (c === "FREE" ? [] : [c.odai.key])) : []
+  );
 
   const playedMatches: PlayedMatch[] =
     played && played !== "picking"
@@ -213,6 +238,9 @@ export function BingoCardGrid(props: Props) {
             };
             if ("odai" in cell) {
               const { odai } = cell;
+              // 入れたお題・差し替えで選んだ長い名前（1640mP（164×40mP）・Orangestar など）は、PC でも 12px にし、
+              // 字の間を詰める。スマホは 12px が最小（docs/design-system.md 2 節）なので、長い英字は語の途中で折る
+              const long = !fitsCell(odai);
               return (
                 <button
                   key={i}
@@ -232,7 +260,12 @@ export function BingoCardGrid(props: Props) {
                     />
                   )}
                   <span className="relative text-xs text-slate-500">{odai.caption}</span>
-                  <span className="relative mt-1 w-full text-xs font-bold [line-break:strict] [overflow-wrap:anywhere] sm:text-sm">
+                  <span
+                    className={cn(
+                      "relative mt-1 w-full text-xs font-bold [line-break:strict] [overflow-wrap:anywhere]",
+                      long ? "tracking-tighter" : "sm:text-sm"
+                    )}
+                  >
                     {odai.chunks.map((chunk, j) => (
                       <span key={j} className="inline-block max-w-full">
                         {chunk}
@@ -266,7 +299,24 @@ export function BingoCardGrid(props: Props) {
           musics={musics}
           jacketBase={jacketBase}
           onSetCleared={(v) => setCleared(openIndex, v)}
+          onReplace={() => {
+            setOpenIndex(null);
+            setReplacing(openIndex);
+          }}
           onClose={close}
+        />
+      )}
+      {props.kind === "odai" && replacing !== null && (
+        <OdaiPicker
+          mode="single"
+          caption={replacingCaption(props.card[replacing])}
+          title="替えるお題を選ぶ"
+          sub="カードにあるお題は選べません。替えたマスは埋めていない状態に戻ります"
+          items={props.pickable}
+          unavailable={onCard}
+          unavailableNote="カードにあります"
+          onPick={replaceOdai}
+          onClose={closeReplace}
         />
       )}
       {openIndex !== null && open && open !== "FREE" && !("odai" in open) && (
@@ -302,7 +352,7 @@ export function BingoCardGrid(props: Props) {
           onClose={closePlayed}
         />
       )}
-      {replacing !== null && (
+      {props.kind === "song" && replacing !== null && (
         <SongSearchModal
           musics={musics}
           aliases={aliases}

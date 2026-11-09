@@ -14,13 +14,18 @@ import {
   type OdaiTheme,
   DEFAULT_ODAI_LEVEL,
   DEFAULT_ODAI_THEME,
+  MAX_ODAI_PINS,
   ODAI_LEVELS,
   ODAI_LEVEL_KEYS,
   buildOdaiCandidates,
   buildOdaiCard,
   odaiLevelOf,
   odaiSongsToHalf,
+  resolvePinnedOdais,
 } from "./odaiLogic";
+import { type PickableOdai, listPickableOdais } from "./odaiPins";
+import { loadOdaiPins, saveOdaiPins } from "./odaiPinStorage";
+import { OdaiPicker } from "./OdaiPicker";
 import { progressOf } from "./bingoProgress";
 import { MINUTES_PER_SONG, playTimeText } from "./playTime";
 import {
@@ -102,6 +107,16 @@ function BingoBoard({
   const ready = musics.length > 0;
 
   const odaiCandidates = useMemo(() => buildOdaiCandidates(musics), [musics]);
+  // 選ぶ小窓に出すお題（入れたいお題・マスの差し替え）。楽曲データで 1 曲以上当てはまるすべて
+  const pickable = useMemo(() => listPickableOdais(musics), [musics]);
+  const pickableByKey = useMemo(() => new Map(pickable.map((o) => [o.key, o])), [pickable]);
+  // 入れたいお題の鍵。楽曲データに無い鍵は黙って落とす（楽曲データが届いてから作り直すので、届く前は空）
+  const [pinKeys, setPinKeys] = useState<string[]>(() => loadOdaiPins().filter((k) => pickableByKey.has(k)));
+  const [pickingPins, setPickingPins] = useState(false);
+  const pins = useMemo(
+    () => pinKeys.flatMap((k) => pickableByKey.get(k) ?? []),
+    [pinKeys, pickableByKey]
+  );
 
   const applyCard = useCallback((kc: KindedCard) => {
     if (kc.kind === "odai") setOdaiCard(kc.card);
@@ -128,6 +143,21 @@ function BingoBoard({
       ...(songCard ? { song: cardCode({ kind: "song", card: songCard }) } : {}),
     });
   }, [ready, kind, odaiCard, songCard]);
+
+  // 入れたいお題も残す（届く前の空の一覧で消さない）
+  useEffect(() => {
+    if (ready) saveOdaiPins(pinKeys);
+  }, [ready, pinKeys]);
+
+  const togglePin = (odai: PickableOdai) =>
+    setPinKeys((keys) =>
+      keys.includes(odai.key)
+        ? keys.filter((k) => k !== odai.key)
+        : keys.length < MAX_ODAI_PINS
+          ? [...keys, odai.key]
+          : keys
+    );
+  const closePinPicker = useCallback(() => setPickingPins(false), []);
 
   const current = useMemo<KindedCard | null>(
     () =>
@@ -176,7 +206,8 @@ function BingoBoard({
     setError(null);
     try {
       if (kind === "odai") {
-        setOdaiCard(buildOdaiCard(odaiCandidates, Math.random, level, theme));
+        const pinned = resolvePinnedOdais(pinKeys, musics, odaiCandidates);
+        setOdaiCard(buildOdaiCard(odaiCandidates, Math.random, level, theme, pinned));
       } else {
         const pool = filterForGeneration(musics, filters.units, filters.categories, filters.types);
         setSongCard(buildRandomCard(pool, filters.centerMode, filters.centerSong));
@@ -291,6 +322,9 @@ function BingoBoard({
           onFiltersChange={setFilters}
           theme={theme}
           onThemeChange={setTheme}
+          pins={pins}
+          onRemovePin={(key) => setPinKeys((keys) => keys.filter((k) => k !== key))}
+          onPickPins={() => setPickingPins(true)}
           onPickCenter={() => setPickingCenter(true)}
           onOpenCode={openCode}
         />
@@ -314,6 +348,7 @@ function BingoBoard({
               aliases={aliases}
               jacketBase={JACKET_BASE}
               onChange={setOdaiCard}
+              pickable={pickable}
             />
           ) : (
             <BingoCardGrid
@@ -348,6 +383,18 @@ function BingoBoard({
             setPickingCenter(false);
           }}
           onClose={closeCenterPicker}
+        />
+      )}
+      {pickingPins && (
+        <OdaiPicker
+          mode="multi"
+          caption="入れたいお題"
+          title="お題を選ぶ"
+          items={pickable}
+          selected={pinKeys}
+          max={MAX_ODAI_PINS}
+          onPick={togglePin}
+          onClose={closePinPicker}
         />
       )}
     </>
