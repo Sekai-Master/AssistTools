@@ -356,6 +356,31 @@ describe('積む（runIntro）', () => {
     // 223 は gacha の日に出せなかったので、翌日に running で出す
     expect(await runIntro(env, RUNNING_223 - 30 * M, fetcher)).toEqual({ status: 'queued', id: 'intro:2026-11-01:tweet' })
   })
+  it('開始の早い回がもう出していれば、同じ日に段のある次の回で出す', async () => {
+    const { env, fetcher } = setup()
+    const a: EventMeta = { ...EV223, id: 300, name: 'A', startAt: jst(2026, 10, 30, 15), aggregateAt: jst(2026, 11, 2, 20, 59) + 59_000, asset: 'event_a_2026' }
+    await upsertEvents(env.DB, [a, EV223])
+    // 10/30 は A の gacha で deck を出す → 10/31 は A の running だが A は出し済みなので、223 の gacha（deck は前日に出したので compare）
+    expect(await runIntro(env, jst(2026, 10, 30, 11, 30), fetcher)).toEqual({ status: 'queued', id: 'intro:2026-10-30:deck' })
+    expect(await runIntro(env, GACHA_223 - 30 * M, fetcher)).toEqual({ status: 'queued', id: 'intro:2026-10-31:compare' })
+    const posts = await env.DB.prepare('SELECT id, event_id FROM posts ORDER BY id').all<{ id: string; event_id: number }>()
+    expect(posts.results).toEqual([
+      { id: 'intro:2026-10-30:deck', event_id: 300 },
+      { id: 'intro:2026-10-31:compare', event_id: 223 },
+    ])
+  })
+  it('28 日の境目は id の日付どうしで数える（28 日前に出した紹介は出せる、27 日前なら出さない）', async () => {
+    const ok = setup()
+    await upsertEvents(ok.env.DB, [EV223])
+    await seedIntro(ok.env, 'intro:2026-10-03:deck')
+    await seedIntro(ok.env, 'intro:2026-10-21:compare')
+    expect(await runIntro(ok.env, GACHA_223 - 55 * M, ok.fetcher)).toEqual({ status: 'queued', id: 'intro:2026-10-31:deck' })
+    const ng = setup()
+    await upsertEvents(ng.env.DB, [EV223])
+    await seedIntro(ng.env, 'intro:2026-10-04:deck')
+    await seedIntro(ng.env, 'intro:2026-10-21:compare')
+    expect((await runIntro(ng.env, GACHA_223 - 55 * M, ng.fetcher)).status).toBe('skip')
+  })
   it('intros.json が読めなければ積まない（次の見回りでまた読む）', async () => {
     const { env, fetcher } = setup(CATALOG, 404)
     await upsertEvents(env.DB, [EV223])
