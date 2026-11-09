@@ -155,9 +155,10 @@ export function OdaiPicker({
 
   return (
     <CellSheetFrame caption={caption} title={title} sub={sub} onClose={onClose} className="h-[85dvh] max-h-[720px]">
-      {full && (
-        <p className="mt-2 shrink-0 text-sm font-bold text-slate-700" role="status">
-          {max}つまで選べます。選んだお題を押して外すと、ほかを選べます
+      {/* 読み上げに届くよう、知らせる枠は先に置いておき、中の文だけを入れ替える（multi のときだけ） */}
+      {mode === "multi" && (
+        <p className={full ? "mt-2 shrink-0 text-sm font-bold text-slate-700" : "sr-only"} role="status">
+          {full ? `${max}つまで選べます。選んだお題を押して外すと、ほかを選べます` : ""}
         </p>
       )}
       {/* 16px 未満だと iOS が入力時に画面を拡大する */}

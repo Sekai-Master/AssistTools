@@ -159,7 +159,7 @@ describe("入れたいお題（細かい設定）", () => {
     expect(savedPins()).not.toContain("rk");
     pick("ミク", "ミク");
     expect(savedPins()).not.toContain("s21");
-    expect(within(d).queryByRole("status")).toBeNull();
+    expect(within(d).getByRole("status").textContent).toBe("");
   });
 
   it("入れたお題（範囲外のミク・1 マスに収まらない名前の作者を含む）が、作ったカードに必ず入る", () => {
@@ -174,9 +174,10 @@ describe("入れたいお題（細かい設定）", () => {
       const keys = savedOdaiCard().flatMap((c) => (c === "FREE" ? [] : [c.odai.key]));
       expect(keys).toEqual(expect.arrayContaining(["s21", "c5", "u5"]));
     }
-    // チップの × で外せる
+    // チップの × で外せる。外したあとのフォーカスは「お題を選ぶ」へ（押した × は消える）
     fireEvent.click(screen.getByRole("button", { name: "ボーカル ミクを外す" }));
     expect(savedPins()).toEqual(["c5", "u5"]);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "お題を選ぶ" }));
   });
 
   it("壊れた保存・楽曲データに無い鍵は黙って落とす", () => {

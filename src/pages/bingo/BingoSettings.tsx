@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
@@ -73,6 +73,8 @@ interface Props {
 
 /** 入れたいお題の段: 選んだお題を札＋文言のチップで並べ（それぞれ外せる）、「お題を選ぶ」で選ぶ小窓を開く。 */
 function PinnedOdais({ pins, onRemove, onPick }: { pins: readonly PickableOdai[]; onRemove: (key: string) => void; onPick: () => void }) {
+  // 外した × は消えるので、フォーカスは「お題を選ぶ」へ移す（body に落とさない）
+  const pickRef = useRef<HTMLButtonElement>(null);
   return (
     <div>
       <p className="mb-2 text-xs font-bold text-slate-500">
@@ -91,7 +93,10 @@ function PinnedOdais({ pins, onRemove, onPick }: { pins: readonly PickableOdai[]
               </span>
               <button
                 type="button"
-                onClick={() => onRemove(o.key)}
+                onClick={() => {
+                  onRemove(o.key);
+                  pickRef.current?.focus();
+                }}
                 aria-label={`${o.caption} ${o.text}を外す`}
                 className="flex h-11 w-11 shrink-0 items-center justify-center text-xl leading-none text-slate-500 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]"
               >
@@ -101,7 +106,7 @@ function PinnedOdais({ pins, onRemove, onPick }: { pins: readonly PickableOdai[]
           ))}
         </ul>
       )}
-      <NeuButton className="min-h-11 !px-3" onClick={onPick}>
+      <NeuButton ref={pickRef} className="min-h-11 !px-3" onClick={onPick}>
         お題を選ぶ
       </NeuButton>
     </div>

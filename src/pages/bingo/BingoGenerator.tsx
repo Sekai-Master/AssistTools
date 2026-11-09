@@ -110,7 +110,9 @@ function BingoBoard({
   // 選ぶ小窓に出すお題（入れたいお題・マスの差し替え）。楽曲データで 1 曲以上当てはまるすべて
   const pickable = useMemo(() => listPickableOdais(musics), [musics]);
   const pickableByKey = useMemo(() => new Map(pickable.map((o) => [o.key, o])), [pickable]);
-  // 入れたいお題の鍵。楽曲データに無い鍵は黙って落とす（楽曲データが届いてから作り直すので、届く前は空）
+  // 入れたいお題の鍵。楽曲データに無い鍵は黙って落とす。
+  // ★ 届く前は空になるが、BingoGenerator が楽曲データが届いたら key を変えてこの部品を作り直すので、そこで読み直す
+  //   （key を外すと、届く前の空の一覧で保存を消してしまう。保存の useEffect も ready を待つ）
   const [pinKeys, setPinKeys] = useState<string[]>(() => loadOdaiPins().filter((k) => pickableByKey.has(k)));
   const [pickingPins, setPickingPins] = useState(false);
   const pins = useMemo(

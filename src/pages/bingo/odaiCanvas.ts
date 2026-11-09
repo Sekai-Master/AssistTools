@@ -35,8 +35,9 @@ const CAPTION_GAP = 6;
 /** 札・文言を置ける高さ（上端の帯と上下の余白を除く）。 */
 const BODY_HEIGHT = CELL - STRIPE - PAD * 2;
 /**
- * 12px でも 3 行に収まらない長い名前（入れたいお題・差し替えで選べる作者。「雄之助 & CircusP feat. Hatsune Miku」など）だけに使う
- * 小さい字。画像は 520px の絵で、画面の字の決まり（12px より小さくしない）とは別。行の数はマスの高さに収まるだけ。
+ * 12px でも 3 行に収まらない長い名前（入れたいお題・差し替えで選べる作者）だけに使う小さい字。行の数はマスの高さに収まるだけ。
+ * 画像は 520px の絵で、画面の字の決まり（12px より小さくしない）とは別。今の楽曲データでは使わない
+ * （いちばん長い「雄之助 & CircusP feat. Hatsune Miku」も 13px・3 行に収まる。2026-11-09 に Chrome で実測）。
  */
 const LONG_SIZES = [11, 10, 9, 8];
 const LONG_MIN_SIZE = LONG_SIZES[LONG_SIZES.length - 1];

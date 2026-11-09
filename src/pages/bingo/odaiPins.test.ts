@@ -209,9 +209,29 @@ describe("buildOdaiCard に入れたお題を渡す", () => {
       expect(keys).toContain("c4");
       expect(new Set(keys).size).toBe(24);
       expect(card[12]).toBe("FREE");
+      // 緩めるのは入れたお題との並べない組だけ（候補は十分にあるので、種類の上限と自動どうしの決まりは守ったまま埋まる）
+      const autos = cellsOf(card).filter((o) => o.key !== "c4");
+      for (let i = 0; i < autos.length; i++) for (let j = i + 1; j < autos.length; j++) expect(clashes(autos[i], autos[j])).toBe(false);
+      const caps = odaiCapsFor(level, "any");
+      for (const kind of new Set(autos.map((o) => o.kind))) {
+        const total = cellsOf(card).filter((o) => o.kind === kind).length;
+        expect(total, `${level} ${kind}`).toBeLessThanOrEqual(caps[kind]);
+      }
     }
   });
 
+  it("6 つ以上・同じお題を重ねて渡しても、重複を除いた最初の 5 つだけを入れる", () => {
+    const pins = resolvePinnedOdais(["u1"], MUSICS, CANDIDATES);
+    const more = resolvePinnedOdais(["ra", "rk", "rs", "rt", "rn"], MUSICS, CANDIDATES);
+    const card = buildOdaiCard(CANDIDATES, createRng(6), "normal", "any", [pins[0], pins[0], ...more]);
+    const keys = cellsOf(card).map((o) => o.key);
+    expect(new Set(keys).size).toBe(24);
+    expect(keys).toEqual(expect.arrayContaining(["u1", "ra", "rk", "rs", "rt"]));
+    expect(checkCard(card, [pins[0], ...more.slice(0, 4)], "normal", "any")).toEqual([]);
+  });
+
+  // ★ 乱数の使い方まで今までと同じことは、作った時点で origin/main の odaiLogic.ts と 5 段 × 4 テーマ × 25 種（500 枚）の
+  //   コードを突き合わせて確かめた（2026-11-09）。楽曲データが毎日変わるので、コードの値はテストに書かない
   it("入れたお題が無ければ、今までと同じカード（同じ乱数の種で同じコード）", () => {
     for (const level of ODAI_LEVEL_KEYS) {
       const a = buildOdaiCard(CANDIDATES, createRng(8), level, "any");
