@@ -3,6 +3,7 @@ import { NeuButton } from "../../components/ui/NeuButton";
 import { progressOf } from "./bingoProgress";
 import { MAX_EXPORT_BYTES, buildMultiExport, exportFileName, parseMultiExport, shortTime } from "./multiExport";
 import type { MultiEntry, MultiSet } from "./useMultiSet";
+import type { PlayedList } from "./usePlayedList";
 
 /** 置き換える前に確かめるか: 埋めたマス・名前・読めないカード（中身が分からない）のどれかがあるとき。 */
 const worthKeeping = (entries: readonly MultiEntry[]) =>
@@ -15,18 +16,39 @@ const OK_MESSAGE_MS = 6000;
 
 const BUTTON = "min-h-11 !px-3 text-sm";
 
+/** 置き換える前に確かめる文。遊んだ曲の一覧も置き換えるときは、その数も書く。 */
+function confirmText(entries: readonly MultiEntry[], n: number, played: { now: number; next: number } | null): string {
+  const cards = `いまのカード（${entries.length}枚）を、書き出しのカード（${n}枚）に置き換えますか？埋めたマスも置き換わります`;
+  if (!played) return cards;
+  return `${cards}。遊んだ曲の一覧（${played.now}曲）も、書き出しの一覧（${played.next}曲）に置き換わります`;
+}
+
 /**
  * 中断・再開用の完全な書き出し（ファイル）の入口。まとめて遊ぶの操作の列に置く。
- * ★ 読み込みは、読めない・やめたときは今のセットに触らない。読めないカードは落とさずに持ってきて、その数を知らせる。
+ * 書き出しには遊んだ曲の一覧（この端末の一覧の全部）も入れる。読み込むと、書き出しに曲が入っていれば一覧も置き換える。
+ * ★ 読み込みは、読めない・やめたときは今のセットにも一覧にも触らない。読めないカードは落とさずに持ってきて、その数を知らせる。
+ * ★ 知らせは操作の列の下に重ねて出す（間に差し込むと、出たときと消えたときに盤面が 2 回上下する。画面共有の相手から見て盤面が跳ねる。検分 M2 低-3）。
+ *   呼ぶ側（操作の列）は relative にしておく。
  */
-export function MultiSaveFile({ set }: { set: MultiSet }) {
+export function MultiSaveFile({
+  set,
+  played,
+  isKnown,
+}: {
+  set: MultiSet;
+  played: PlayedList;
+  /** 楽曲データにある曲か。曲数は一覧の画面と同じく、楽曲データにある曲だけを数える（検分 P 低-2）。 */
+  isKnown: (id: string) => boolean;
+}) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<Message | null>(null);
   // ファイルを読み終えた時点のセットで確かめる（読んでいる間にほかのタブが変えても、古いセットで決めない）
   const entriesRef = useRef(set.entries);
+  const playedRef = useRef(played.list);
   useEffect(() => {
     entriesRef.current = set.entries;
-  }, [set.entries]);
+    playedRef.current = played.list;
+  }, [set.entries, played.list]);
   useEffect(() => {
     if (message?.kind !== "ok") return;
     const t = setTimeout(() => setMessage(null), OK_MESSAGE_MS);
@@ -35,7 +57,7 @@ export function MultiSaveFile({ set }: { set: MultiSet }) {
 
   const download = () => {
     const now = new Date();
-    const blob = new Blob([JSON.stringify(buildMultiExport(set.saved, now.getTime()), null, 1)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(buildMultiExport(set.saved, now.getTime(), played.list), null, 1)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -68,20 +90,28 @@ export function MultiSaveFile({ set }: { set: MultiSet }) {
     }
     const n = r.multi.cards.length;
     const entries = entriesRef.current;
-    if (
-      worthKeeping(entries) &&
-      !window.confirm(`いまのカード（${entries.length}枚）を、書き出しのカード（${n}枚）に置き換えますか？埋めたマスも置き換わります`)
-    ) {
+    // 曲数は一覧のボタン・一覧の画面と同じ数え方（楽曲データにある曲だけ）。前は保存の件数で、「3 曲」と知らせて一覧は「1 曲」になった
+    const nowPlayed = playedRef.current.filter((e) => isKnown(e.id)).length;
+    const nextPlayed = r.played === null ? 0 : r.played.filter((e) => isKnown(e.id)).length;
+    const hidden = r.played === null ? 0 : r.played.length - nextPlayed;
+    // 一覧を置き換えるのは、書き出しに曲が入っているときだけ。今の一覧に曲があれば、それも確かめる文に入れる
+    const replacingPlayed = r.played !== null && nowPlayed > 0 ? { now: nowPlayed, next: nextPlayed } : null;
+    if ((worthKeeping(entries) || replacingPlayed) && !window.confirm(confirmText(entries, n, replacingPlayed))) {
       setMessage(null);
       return;
     }
     const unreadable = set.replaceAll(r.multi);
+    if (r.played !== null) played.replace(r.played);
     const when = r.exportedAt === null ? "書き出しの" : `${shortTime(r.exportedAt)} に書き出した`;
     const notes = [
       unreadable > 0 && `読めないカードが ${unreadable} 枚あります（配信が止まった曲などが入っています）`,
       r.dropped > 0 && `形が合わない・6 枚目より後のカード ${r.dropped} 枚は読みませんでした`,
+      r.droppedPlayed > 0 && `形が合わない・1000 曲より古い遊んだ曲 ${r.droppedPlayed} 件は読みませんでした`,
     ].filter(Boolean);
-    setMessage({ kind: "ok", text: [`${when}カード ${n} 枚を読み込みました`, ...notes].join("。") });
+    const what = r.played !== null ? `カード ${n} 枚と遊んだ曲 ${nextPlayed} 曲` : `カード ${n} 枚`;
+    // 楽曲データに無い曲（配信が止まった など）は保存には残し、一覧には出さない（計画 4 節）。その数を添える
+    const hiddenNote = hidden > 0 ? `（楽曲データに無い曲 ${hidden} 曲は一覧に出ません）` : "";
+    setMessage({ kind: "ok", text: [`${when}${what}を読み込みました${hiddenNote}`, ...notes].join("。") });
   };
 
   return (
@@ -108,12 +138,22 @@ export function MultiSaveFile({ set }: { set: MultiSet }) {
         }}
       />
       {message && (
-        <p
-          role={message.kind === "error" ? "alert" : "status"}
-          className={`basis-full text-sm ${message.kind === "error" ? "text-rose-600" : "text-slate-600"}`}
-        >
-          {message.text}
-        </p>
+        <div className="absolute inset-x-0 top-full z-20 mt-1 flex items-start gap-2 rounded-lg bg-neu py-1 pl-3 shadow-neu-sm sm:left-auto sm:w-full sm:max-w-md">
+          <p
+            role={message.kind === "error" ? "alert" : "status"}
+            className={`min-w-0 flex-1 py-2 text-sm ${message.kind === "error" ? "text-rose-600" : "text-slate-600"}`}
+          >
+            {message.text}
+          </p>
+          <button
+            type="button"
+            onClick={() => setMessage(null)}
+            aria-label="知らせを閉じる"
+            className="flex h-11 w-11 shrink-0 items-center justify-center text-xl leading-none text-slate-500 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]"
+          >
+            ×
+          </button>
+        </div>
       )}
     </>
   );

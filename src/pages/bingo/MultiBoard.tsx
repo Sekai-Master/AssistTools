@@ -7,6 +7,7 @@ import type { PickableOdai } from "./odaiPins";
 import type { FontStep } from "./boardLayout";
 import { BingoCardGrid } from "./BingoCardGrid";
 import type { MultiEntry } from "./useMultiSet";
+import { playStartText } from "./playedExport";
 
 interface Props {
   entry: MultiEntry;
@@ -18,6 +19,10 @@ interface Props {
   board: { width: number; step: FontStep };
   /** 休止中（盤面を薄くし「休止中」の帯を重ねる）。 */
   paused: boolean;
+  /** この画面を開いた時刻（これより後に付いたプレイ開始は「プレイ開始！」と太字）。 */
+  freshSince: number;
+  /** 切り替え式（スマホ）で 1 枚だけ出しているか。プレイ開始を 3 行目に分け、印が出る前から行を置いておく。 */
+  single?: boolean;
   onChange: (card: KindedCard) => void;
   onSettings: () => void;
   onResume: () => void;
@@ -29,9 +34,33 @@ const kindLabel = (kc: KindedCard) => (kc.kind === "odai" ? `お題 ${ODAI_LEVEL
 const SETTINGS_BUTTON =
   "flex min-h-11 shrink-0 items-center rounded-lg px-3 text-sm font-bold text-slate-600 hover:bg-[color:color-mix(in_srgb,var(--neu-ink)_9%,transparent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]";
 
-/** カードの見出し: 名前（16px 太字）・種類と段・埋めたマス・リーチ・BINGO の札、右端に [設定]。 */
-function BoardHeader({ name, kc, onSettings }: { name: string; kc: KindedCard | null; onSettings: () => void }) {
+/**
+ * カードの見出し: 名前（16px 太字）・種類と段・埋めたマス・リーチ・プレイ開始・BINGO の札、右端に [設定]。
+ * ★ 並べたときは、プレイ開始を 2 行目の最後に足して 1 行に収める（行を増やすと、カードごとに見出しの高さが変わり、並べた盤面の段がずれる）。
+ * ★ 切り替え式（スマホ）では、2 行目は 1 行に収め、プレイ開始は 3 行目に分けて、印が出る前から行を置いておく。
+ *   前は 2 行目の折り返しを許していて、最初に埋めた瞬間に見出しが 2 行になり、盤面が 12px 下がった（検分 P 低-1）
+ */
+function BoardHeader({
+  name,
+  kc,
+  startedAt,
+  fresh,
+  ownLine,
+  onSettings,
+}: {
+  name: string;
+  kc: KindedCard | null;
+  startedAt: number | undefined;
+  fresh: boolean;
+  /** プレイ開始を別の行に分けて、いつも置いておく（切り替え式で 1 枚だけ出しているとき）。 */
+  ownLine: boolean;
+  onSettings: () => void;
+}) {
   const p = kc ? progressOf(kc.card) : null;
+  const start =
+    startedAt === undefined ? null : (
+      <span className={fresh ? "font-bold text-slate-700" : undefined}>{playStartText(startedAt, fresh)}</span>
+    );
   return (
     <div className="mb-2 flex min-h-11 items-center gap-2">
       <div className="min-w-0 flex-1">
@@ -47,6 +76,14 @@ function BoardHeader({ name, kc, onSettings }: { name: string; kc: KindedCard | 
                 {" "}・ リーチ <span className="font-num font-bold text-slate-600">{p.reach}</span>
               </>
             )}
+            {start && !ownLine && <>{" "}・ {start}</>}
+          </p>
+        )}
+        {kc && ownLine && (
+          // 行の高さ（12px の 1 行ぶん）はいつも取っておく。読み上げは付いた瞬間に 1 回（role="status" にすると、
+          // 操作の列の知らせ（書き出し・読み込み）の status と並んでしまうので、aria-live だけにする）
+          <p data-play-start="" aria-live="polite" className="min-h-4 truncate text-xs text-slate-500">
+            {start}
           </p>
         )}
       </div>
@@ -82,11 +119,32 @@ function PausedBand({ onResume }: { onResume: () => void }) {
  * 読めないカード（楽曲データの側が変わった など）は盤面の代わりに 1 行で出し、消すのは設定から（黙って落とさない）。
  * 休止中は盤面を薄くして「休止中」の帯を重ねる（並びからは外さない。持ち主 2026-11-10）。
  */
-export function MultiBoard({ entry, name, musics, aliases, jacketBase, pickable, board, paused, onChange, onSettings, onResume }: Props) {
+export function MultiBoard({
+  entry,
+  name,
+  musics,
+  aliases,
+  jacketBase,
+  pickable,
+  board,
+  paused,
+  freshSince,
+  single = false,
+  onChange,
+  onSettings,
+  onResume,
+}: Props) {
   const kc = entry.card;
   return (
     <section aria-label={name} className="min-w-0">
-      <BoardHeader name={name} kc={kc} onSettings={onSettings} />
+      <BoardHeader
+        name={name}
+        kc={kc}
+        startedAt={entry.startedAt}
+        fresh={(entry.startedAt ?? 0) >= freshSince}
+        ownLine={single}
+        onSettings={onSettings}
+      />
       {!kc ? (
         <p className="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-600" role="note">
           このカードは読めません（配信が止まった曲などが入っています）。「設定」からコードをコピーするか、外せます

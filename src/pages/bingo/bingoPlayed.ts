@@ -6,11 +6,13 @@
 import type { BingoMusic, Cell } from "./bingoLogic";
 import type { OdaiCell } from "./odaiLogic";
 
+/** そのマスに曲が当てはまるか。FREE は当てはまらない。 */
+export function cellMatches(c: OdaiCell | Cell, music: BingoMusic): boolean {
+  if (c === "FREE") return false;
+  return "odai" in c ? c.odai.test(music) : c.id === music.id;
+}
+
 /** 当てはまるマスの番号（カードの番号順）。FREE は数えない。 */
 export function matchingCells(card: readonly (OdaiCell | Cell)[], music: BingoMusic): number[] {
-  return card.flatMap((c, i) => {
-    if (c === "FREE") return [];
-    const hit = "odai" in c ? c.odai.test(music) : c.id === music.id;
-    return hit ? [i] : [];
-  });
+  return card.flatMap((c, i) => (cellMatches(c, music) ? [i] : []));
 }

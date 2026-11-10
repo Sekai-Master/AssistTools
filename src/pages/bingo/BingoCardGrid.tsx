@@ -1,4 +1,4 @@
-import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { AliasEntry } from "../../lib/songSearch";
 import { UNIT_COLOR_VAR } from "../../lib/units";
 import { onJacketError } from "../../lib/img";
@@ -27,6 +27,13 @@ interface Common {
    * dimmed は休止中: 盤面の枠だけを薄くし（マスの小窓は薄くしない）、マスを押せなくする。
    */
   board?: { width: number; step: FontStep; dimmed?: boolean };
+  /**
+   * 遊んだ曲を一覧に入れる（1 枚で遊ぶ）。「埋める」「遊んだ曲に入れる」と決めたときだけ呼ぶ。filled はその曲で埋めたマス。
+   * 渡さないとき（見るだけの間など）は記録せず、「遊んだ曲に入れる」も出さない。
+   */
+  onPlayed?: (music: BingoMusic, filled: number[]) => void;
+  /** 「遊んだ曲を入れる」の横に置くもの（遊んだ曲の一覧のボタン）。 */
+  listButton?: ReactNode;
 }
 
 /** 字の段の規約（20・16・14・12）の大きさから Tailwind のクラス。 */
@@ -281,10 +288,24 @@ export function BingoCardGrid(props: Props) {
 
   const fillPlayed = () => {
     const indices = playedMatches.map((m) => m.index);
+    if (played && played !== "picking") {
+      props.onPlayed?.(
+        played,
+        playedMatches.filter((m) => !m.cleared).map((m) => m.index)
+      );
+    }
     if (props.kind === "odai") props.onChange(withClearedAll(props.card, indices));
     else props.onChange(withClearedAll(props.card, indices));
     setPlayed(null);
   };
+  const { onPlayed } = props;
+  const recordPlayed =
+    onPlayed && played && played !== "picking"
+      ? () => {
+          onPlayed(played, []);
+          setPlayed(null);
+        }
+      : undefined;
 
   const { board } = props;
   // まとめて遊ぶの盤面: 正方形にするかと文字の大きさは、画面の幅でなく盤面の幅の段で決める（boardLayout.ts）
@@ -303,14 +324,18 @@ export function BingoCardGrid(props: Props) {
     <>
       {!board && (
         <>
-          <NeuButton
-            ref={playedButton}
-            onClick={() => setPlayed("picking")}
-            className="mb-4 flex min-h-12 w-full items-center justify-center gap-2 text-base"
-          >
-            <span className="material-icons text-xl text-slate-500" aria-hidden data-icon="search" />
-            遊んだ曲を入れる
-          </NeuButton>
+          {/* ★ 一覧のボタンを横に並べる。320px では入らないので折り返し、どちらも幅いっぱいにする */}
+          <div className="mb-4 flex flex-wrap gap-2">
+            <NeuButton
+              ref={playedButton}
+              onClick={() => setPlayed("picking")}
+              className="flex min-h-12 grow-[4] basis-48 items-center justify-center gap-2 text-base"
+            >
+              <span className="material-icons text-xl text-slate-500" aria-hidden data-icon="search" />
+              遊んだ曲を入れる
+            </NeuButton>
+            {props.listButton}
+          </div>
           <ProgressLine progress={progress} />
         </>
       )}
@@ -469,6 +494,7 @@ export function BingoCardGrid(props: Props) {
           music={played}
           matches={playedMatches}
           onFill={fillPlayed}
+          onRecord={recordPlayed}
           onPickAgain={() => setPlayed("picking")}
           onClose={closePlayed}
         />

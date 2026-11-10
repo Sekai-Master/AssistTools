@@ -9,7 +9,8 @@
  *   今のセットを壊さない。カードは multiStorage の決まりで 1 件ずつ読み、楽曲データで読めるかはここでは見ない
  *   （読めないカードも落とさずに持ってくる。計画のレビュー G-06）。
  */
-import { type SavedMulti, parseMultiObject } from "./multiStorage";
+import { type SavedMulti, isImportTime, parseMultiObject } from "./multiStorage";
+import { type PlayedEntry, parsePlayedArray } from "./playedStorage";
 
 export const EXPORT_APP = "sekaimaster-bingo";
 export const EXPORT_VERSION = 1;
@@ -21,8 +22,11 @@ export interface MultiExport {
   version: typeof EXPORT_VERSION;
   exportedAt: number;
   multi: SavedMulti;
-  /** 遊んだ曲の一覧（{ id, at, cells? }）。一覧の PR まで空。 */
-  played: unknown[];
+  /**
+   * 遊んだ曲の一覧（{ id, at, cells? }。形は playedStorage.ts）。1 枚で遊ぶ・まとめて遊ぶで共通の、この端末の一覧の全部。
+   * ★ 版は 1 のまま。#231（M2）の版は、ここに曲が入った書き出しを「新しい版」と断って読まない作りにしてある
+   */
+  played: PlayedEntry[];
 }
 
 export type ImportResult =
@@ -33,11 +37,18 @@ export type ImportResult =
       exportedAt: number | null;
       /** 形の合わない・6 枚目より後のカードを落とした数（黙って捨てずに画面で知らせる）。 */
       dropped: number;
+      /**
+       * 遊んだ曲の一覧。書き出しに曲が入っていなければ null（今の一覧を変えない。曲の欄が空の書き出しは、
+       * 一覧が空だったのか、一覧を持たない前の版の書き出しかを見分けられないため）。
+       */
+      played: PlayedEntry[] | null;
+      /** 形の合わない遊んだ曲を落とした数。 */
+      droppedPlayed: number;
     }
   | { ok: false; error: string };
 
-export function buildMultiExport(multi: SavedMulti, now: number): MultiExport {
-  return { app: EXPORT_APP, version: EXPORT_VERSION, exportedAt: now, multi, played: [] };
+export function buildMultiExport(multi: SavedMulti, now: number, played: readonly PlayedEntry[] = []): MultiExport {
+  return { app: EXPORT_APP, version: EXPORT_VERSION, exportedAt: now, multi, played: [...played] };
 }
 
 export function exportFileName(now: Date): string {
@@ -64,11 +75,9 @@ function versionError(v: unknown): string | null {
   return "書き出しが壊れています（版が読めません）";
 }
 
-/** 遊んだ曲の欄を見る。無い・空なら null。 */
+/** 遊んだ曲の欄を見る。無い・配列なら null。 */
 function playedError(v: unknown): string | null {
-  if (v === undefined || (Array.isArray(v) && v.length === 0)) return null;
-  // ★ この版には遊んだ曲の一覧の保存が無い。読むと一覧を黙って捨てることになるので、新しいページで読んでもらう
-  if (Array.isArray(v)) return "遊んだ曲の一覧が入った、新しい版の書き出しです。ページを読み込み直してから試してください";
+  if (v === undefined || Array.isArray(v)) return null;
   return "書き出しが壊れています（遊んだ曲の欄が読めません）";
 }
 
@@ -87,15 +96,22 @@ export function parseMultiExport(text: string): ImportResult {
   const bad = versionError(r.version) ?? playedError(r.played);
   if (bad) return fail(bad);
 
-  const multi = parseMultiObject(r.multi);
+  // ファイルは人が作れるので、時刻は厳しい範囲（2020-09-30 以後・今から 1 日先まで）で読む。この端末の保存の読み込みは緩いまま（検分 P2 中-1）
+  const multi = parseMultiObject(r.multi, isImportTime);
   if (!multi) return fail("書き出しが壊れています（カードの欄が読めません）");
   if (multi.cards.length === 0) return fail("書き出しにカードが入っていません");
   const rawCards = (r.multi as Record<string, unknown>).cards;
   const given = Array.isArray(rawCards) ? rawCards.length : 0;
+  const played = parsePlayedArray(r.played, isImportTime);
+  const hasPlayed = Array.isArray(r.played) && r.played.length > 0;
+  // 空でない配列が 1 件も読めなければ、カードの欄と同じく読まない（今の一覧を 0 曲で置き換えない。検分 P 安全の低-2）
+  if (hasPlayed && played.entries.length === 0) return fail("書き出しが壊れています（遊んだ曲の欄が読めません）");
   return {
     ok: true,
     multi: { ...multi, open: true },
-    exportedAt: typeof r.exportedAt === "number" && Number.isFinite(r.exportedAt) && r.exportedAt > 0 ? r.exportedAt : null,
+    exportedAt: isImportTime(r.exportedAt) ? r.exportedAt : null,
     dropped: Math.max(0, given - multi.cards.length),
+    played: hasPlayed ? played.entries : null,
+    droppedPlayed: played.dropped,
   };
 }

@@ -15,9 +15,18 @@ interface Props {
   music: BingoMusic;
   matches: PlayedMatch[];
   onFill: () => void;
+  /**
+   * 埋めるマスが無い曲を、遊んだ曲の一覧にだけ入れる。渡さないとき（見るだけの間など、記録しないとき）は出さない。
+   * 一覧に入れるのは「埋める」「遊んだ曲に入れる」を押したときだけ（× や背景のタップで閉じたら入れない。持ち主の決定 2）
+   */
+  onRecord?: () => void;
   onPickAgain: () => void;
   onClose: () => void;
 }
+
+/** 小窓の主ボタン（48px）。 */
+export const PRIMARY =
+  "neu-cta mt-4 min-h-12 w-full shrink-0 rounded-xl text-base font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]";
 
 function summary(kind: Props["kind"], count: number): ReactNode {
   if (kind === "song") return count > 0 ? "カードにあります" : "カードにはありません";
@@ -33,7 +42,7 @@ function summary(kind: Props["kind"], count: number): ReactNode {
  * 遊んだ曲の小窓。入れた曲で埋まるマスを見せ、まとめて埋める。
  * 長さや読みの行は覚えていなくても、曲を選べば当てはまるかが分かる。
  */
-export function PlayedSongSheet({ kind, music, matches, onFill, onPickAgain, onClose }: Props) {
+export function PlayedSongSheet({ kind, music, matches, onFill, onRecord, onPickAgain, onClose }: Props) {
   const open = matches.filter((m) => !m.cleared).length;
 
   return (
@@ -59,15 +68,21 @@ export function PlayedSongSheet({ kind, music, matches, onFill, onPickAgain, onC
         </ul>
       )}
       {open > 0 ? (
-        <button
-          type="button"
-          onClick={onFill}
-          className="neu-cta mt-4 min-h-12 w-full shrink-0 rounded-xl text-base font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]"
-        >
-          {open > 1 ? "まとめて埋める" : "埋める"}
-        </button>
+        <>
+          <button type="button" onClick={onFill} className={PRIMARY}>
+            {open > 1 ? "まとめて埋める" : "埋める"}
+          </button>
+          {onRecord && <p className="mt-2 shrink-0 text-center text-xs text-slate-500">埋めると、遊んだ曲の一覧にも入ります</p>}
+        </>
       ) : (
-        matches.length > 0 && <p className="mt-4 text-center text-sm text-slate-600">もう埋まっています</p>
+        <>
+          {matches.length > 0 && <p className="mt-4 text-center text-sm text-slate-600">もう埋まっています</p>}
+          {onRecord && (
+            <button type="button" onClick={onRecord} className={PRIMARY}>
+              遊んだ曲に入れる
+            </button>
+          )}
+        </>
       )}
       <button
         type="button"

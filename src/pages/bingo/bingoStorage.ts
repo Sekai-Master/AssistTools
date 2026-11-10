@@ -6,6 +6,7 @@
  *   （設定画面の一覧・削除・書き出しと、プライバシーポリシーの表に出る）。
  */
 import type { CardKind } from "./bingoShare";
+import { isTime } from "./multiStorage";
 
 export const BINGO_STORAGE_KEY = "sekaimaster:bingo:v1";
 
@@ -14,7 +15,17 @@ export interface SavedBingo {
   kind: CardKind;
   odai?: string;
   song?: string;
+  /**
+   * そのカードを足した（作った・開いた）時刻と、プレイ開始の時刻（最初に埋めたとき）。ミリ秒。
+   * 遊んだ曲の一覧の PR で足した省略できる項目。前の版は知っている項目だけを取り出すので、足しても前の版で開ける。
+   */
+  odaiAddedAt?: number;
+  odaiStartedAt?: number;
+  songAddedAt?: number;
+  songStartedAt?: number;
 }
+
+const TIME_KEYS = ["odaiAddedAt", "odaiStartedAt", "songAddedAt", "songStartedAt"] as const;
 
 /** コードは 25 マス × 数文字。これより長いものは壊れているとみなす。 */
 const MAX_CODE_LENGTH = 400;
@@ -23,7 +34,7 @@ type StorageLike = Pick<Storage, "getItem" | "setItem">;
 
 const isCode = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= MAX_CODE_LENGTH;
 
-/** 保存された文字列を読む。形が違えば null（壊れた値は無視する）。 */
+/** 保存された文字列を読む。形が違えば null（壊れた値は無視する）。時刻だけが壊れていれば、カードは捨てずに時刻を無いことにする。 */
 export function parseSavedBingo(raw: string | null): SavedBingo | null {
   if (raw === null) return null;
   try {
@@ -37,6 +48,7 @@ export function parseSavedBingo(raw: string | null): SavedBingo | null {
       kind: r.kind,
       ...(r.odai !== undefined ? { odai: r.odai as string } : {}),
       ...(r.song !== undefined ? { song: r.song as string } : {}),
+      ...Object.fromEntries(TIME_KEYS.flatMap((k) => (isTime(r[k]) ? [[k, r[k]]] : []))),
     };
   } catch {
     return null;

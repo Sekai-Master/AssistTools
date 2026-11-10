@@ -9,8 +9,9 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BingoMusic } from "./bingoLogic";
-import { progressOf } from "./bingoProgress";
+import { isFirstFill } from "./bingoProgress";
 import { CARD_PARAM, type KindedCard, cardCode, decodeCardCode } from "./bingoShare";
+import type { CardTimes } from "./bingoRestore";
 import {
   MAX_MULTI_CARDS,
   MULTI_STORAGE_KEY,
@@ -41,13 +42,26 @@ function decodeOrNull(code: string, musics: readonly BingoMusic[]): KindedCard |
   }
 }
 
-function newEntry(kc: KindedCard, now: number): SavedMultiCard {
-  return { id: newCardId(), name: "", code: cardCode(kc), addedAt: now, paused: [] };
+/** 新しく足す 1 件。times は 1 枚で遊ぶから写すカードの時刻（同じカードなので、足した時刻・プレイ開始を持ち越す）。 */
+function newEntry(kc: KindedCard, now: number, times?: CardTimes | null): SavedMultiCard {
+  const addedAt = times && times.addedAt > 0 ? times.addedAt : now;
+  return {
+    id: newCardId(),
+    name: "",
+    code: cardCode(kc),
+    addedAt,
+    ...(times?.startedAt !== undefined ? { startedAt: times.startedAt } : {}),
+    paused: [],
+  };
 }
 
-/** カードを替えた後の保存の 1 件。最初に埋めたとき（埋めたマスが 0 から増えた）にプレイ開始の時刻を付ける。 */
-function withCard(c: SavedMultiCard, kc: KindedCard, now: number): SavedMultiCard {
-  const started = c.startedAt ?? (progressOf(kc.card).filled > 0 ? now : undefined);
+/**
+ * カードを替えた後の保存の 1 件。最初に埋めたとき（替える前が 0 マスで、替えた後が 1 マス以上）にプレイ開始の時刻を付ける。
+ * prev は替える前のカード（読めなければ null で、時刻は付けない）。
+ * ★ 前は替える前を見ず、時刻の無い途中のカード（埋めた状態で足した・リンクから足した）に、次に替えた時刻が付いた（検分 P 中-1）
+ */
+function withCard(c: SavedMultiCard, prev: KindedCard | null, kc: KindedCard, now: number): SavedMultiCard {
+  const started = c.startedAt ?? (prev && isFirstFill(prev.card, kc.card) ? now : undefined);
   return { ...c, code: cardCode(kc), ...(started !== undefined ? { startedAt: started } : {}) };
 }
 
@@ -99,12 +113,15 @@ export function useMultiSet(musics: BingoMusic[]) {
     [saved.cards, musics, ready]
   );
 
-  /** まとめて遊ぶを開く／閉じる。初めて開いたとき（セットが空）は、1 枚で遊ぶで見ていたカードを 1 枚目に写す。 */
-  const setOpen = useCallback((open: boolean, seed: KindedCard | null = null) => {
+  /**
+   * まとめて遊ぶを開く／閉じる。初めて開いたとき（セットが空）は、1 枚で遊ぶで見ていたカードを 1 枚目に写す。
+   * seedTimes はそのカードの時刻（プレイ開始の印が、まとめて遊ぶに移っても消えないように）。
+   */
+  const setOpen = useCallback((open: boolean, seed: KindedCard | null = null, seedTimes: CardTimes | null = null) => {
     setSaved((s) => ({
       ...s,
       open,
-      cards: open && s.cards.length === 0 && seed ? [newEntry(seed, Date.now())] : s.cards,
+      cards: open && s.cards.length === 0 && seed ? [newEntry(seed, Date.now(), seedTimes)] : s.cards,
     }));
   }, []);
 
@@ -131,17 +148,25 @@ export function useMultiSet(musics: BingoMusic[]) {
     setSaved((s) => ({ ...s, cards: s.cards.map((c) => (c.id === id ? { ...c, name: cleanCardName(name) } : c)) }));
   }, []);
 
-  /** カードを替える（埋める・戻す・差し替え・遊んだ曲の反映）。updates は id → 新しいカード。 */
-  const updateCards = useCallback((updates: ReadonlyMap<string, KindedCard>) => {
-    const now = Date.now();
-    setSaved((s) => ({
-      ...s,
-      cards: s.cards.map((c) => {
-        const kc = updates.get(c.id);
-        return kc ? withCard(c, kc, now) : c;
-      }),
-    }));
-  }, []);
+  /**
+   * カードを替える（マスの小窓で埋める・戻す・差し替え）。updates は id → 新しいカード。
+   * ★ 休止中のカードは変えない。休止はほかのタブでも変わるので、当てる時点の保存で見る（検分 M2 低-2。
+   *   小窓を開いたままほかのタブで休止されると、開いていた小窓の［埋める］で休止中のカードが埋まった）
+   */
+  const updateCards = useCallback(
+    (updates: ReadonlyMap<string, KindedCard>) => {
+      const now = Date.now();
+      setSaved((s) => ({
+        ...s,
+        cards: s.cards.map((c) => {
+          const kc = updates.get(c.id);
+          // 替える前のカードは保存のコードから読む（最初に埋めたときかを見るため）
+          return kc && !isPaused(c) ? withCard(c, decodeOrNull(c.code, musics), kc, now) : c;
+        }),
+      }));
+    },
+    [musics]
+  );
 
   /**
    * いまの保存のカードに対して、変え方（fn）を当てる（遊んだ曲の反映）。画面に描いた時点のカードではなく、
@@ -157,11 +182,44 @@ export function useMultiSet(musics: BingoMusic[]) {
           if (isPaused(c)) return c;
           const kc = decodeOrNull(c.code, musics);
           const next = kc ? fn(kc) : null;
-          return next ? withCard(c, next, now) : c;
+          return next ? withCard(c, kc, next, now) : c;
         }),
       }));
     },
     [musics]
+  );
+
+  /**
+   * 1 枚だけに変え方（fn）を当てる（遊んだ曲の一覧から埋める・戻す）。applyToCards と同じく当てる時点の保存を読み直す。
+   * skipPaused が偽なら休止中でも当てる（一覧から 1 曲消してマスを戻すのは、休止中のカードにも当てる）。
+   * 一覧から埋めるときは真にする（休止中のカードには遊んだ曲を反映しない。持ち主の決定 2）。
+   */
+  const applyToCard = useCallback(
+    (id: string, fn: (kc: KindedCard) => KindedCard | null, skipPaused = false) => {
+      const now = Date.now();
+      setSaved((s) => ({
+        ...s,
+        cards: s.cards.map((c) => {
+          if (c.id !== id || (skipPaused && isPaused(c))) return c;
+          const kc = decodeOrNull(c.code, musics);
+          const next = kc ? fn(kc) : null;
+          return next ? withCard(c, kc, next, now) : c;
+        }),
+      }));
+    },
+    [musics]
+  );
+
+  /**
+   * そのカードがいま休止しているか。ほかのタブの休止が storage の出来事で届く前でも分かるよう、保存を読み直して見る
+   * （保存が読めない・そのカードが無いときは、この画面の状態で見る）。
+   */
+  const pausedNow = useCallback(
+    (id: string) => {
+      const latest = loadMulti().cards.find((c) => c.id === id) ?? saved.cards.find((c) => c.id === id);
+      return latest !== undefined && isPaused(latest);
+    },
+    [saved.cards]
   );
 
   /** 休止する／再開する（区間を保存に足す・閉じる）。 */
@@ -198,6 +256,8 @@ export function useMultiSet(musics: BingoMusic[]) {
     renameCard,
     updateCards,
     applyToCards,
+    applyToCard,
+    pausedNow,
     setPaused,
     replaceAll,
   };

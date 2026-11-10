@@ -1,4 +1,4 @@
-import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { Panel } from "../../components/ui/Panel";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
@@ -17,6 +17,8 @@ import { MultiPlayedSheet, type PlayedGroup } from "./MultiPlayedSheet";
 import { MultiSaveFile } from "./MultiSaveFile";
 import { isPaused } from "./multiStorage";
 import { type MultiEntry, type MultiSet, entryName } from "./useMultiSet";
+import type { PlayedCells } from "./playedStorage";
+import type { PlayedList } from "./usePlayedList";
 
 interface Props {
   set: MultiSet;
@@ -26,6 +28,12 @@ interface Props {
   pickable: readonly PickableOdai[];
   /** カードを開くリンク（埋めた状態ごと）。 */
   linkOf: (kc: KindedCard) => string;
+  /** 遊んだ曲の一覧（1 枚で遊ぶと同じ一覧）。「まとめて埋める」「遊んだ曲に入れる」と決めたときだけ入れる。 */
+  played: PlayedList;
+  /** この画面を開いた時刻（これより後に付いたプレイ開始は「プレイ開始！」）。 */
+  freshSince: number;
+  /** 「遊んだ曲を入れる」の横に置く、遊んだ曲の一覧のボタン。 */
+  listButton: ReactNode;
 }
 
 /** 盤面の区画の内側の幅と、ブラウザの内側の高さ。測れない（jsdom・ResizeObserver の無いブラウザ）ときは幅 0（切り替え式）。 */
@@ -60,6 +68,14 @@ function playedGroups(entries: readonly MultiEntry[], music: BingoMusic): Played
         : { index, cleared: cell.cleared };
     });
     return [{ id: e.id, name: entryName(e, i), kind: e.card.kind, matches, paused: isPaused(e) }];
+  });
+}
+
+/** 遊んだ曲で埋めるマス（休止していないカードの、まだ埋めていない当てはまるマス）。一覧の記録に残す。 */
+function cellsToRecord(groups: readonly PlayedGroup[]): PlayedCells[] {
+  return groups.flatMap((g) => {
+    const filled = g.paused ? [] : g.matches.filter((m) => !m.cleared).map((m) => m.index);
+    return filled.length > 0 ? [{ card: g.id, filled }] : [];
   });
 }
 
@@ -108,8 +124,10 @@ function MultiTabs({ entries, active, onSelect }: { entries: readonly MultiEntry
  * まとめて遊ぶの盤面の区画（PC は画面いっぱいの幅に並べ、スマホは切り替え）。
  * 上に操作の列（遊んだ曲を入れる・列の切り替え）、下にカードごとの見出しと盤面。並べ方は boardLayout.ts。
  */
-export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf }: Props) {
+export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf, played: list, freshSince, listButton }: Props) {
   const area = useRef<HTMLDivElement>(null);
+  const knownIds = useMemo(() => new Set(musics.map((m) => m.id)), [musics]);
+  const isKnown = useCallback((id: string) => knownIds.has(id), [knownIds]);
   const { width, height } = useAreaSize(area);
   const { entries } = set;
   const layout = pickBoardLayout({ count: entries.length, width, height, cols: set.cols });
@@ -131,7 +149,7 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf 
   const playable = entries.some((e) => e.card && !isPaused(e));
   const settingsEntry = entries.find((e) => e.id === settingsId) ?? null;
   const active = Math.min(set.active, Math.max(0, entries.length - 1));
-  const renderBoard = (e: MultiEntry, i: number, board: { width: number; step: ReturnType<typeof fontStepOf> }) => (
+  const renderBoard = (e: MultiEntry, i: number, board: { width: number; step: ReturnType<typeof fontStepOf> }, single = false) => (
     <MultiBoard
       key={e.id}
       entry={e}
@@ -142,6 +160,8 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf 
       pickable={pickable}
       board={board}
       paused={isPaused(e)}
+      freshSince={freshSince}
+      single={single}
       onChange={(kc) => set.updateCards(new Map([[e.id, kc]]))}
       onSettings={() => setSettingsId(e.id)}
       onResume={() => set.setPaused(e.id, false)}
@@ -152,7 +172,8 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf 
     <Panel>
       {/* 見出しの段を飛ばさない（ページの見出し h1 → この区画 → カードごとの h3） */}
       <h2 className="sr-only">並べたカード</h2>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      {/* relative: 書き出し・読み込みの知らせを、この列の下に重ねて出す（MultiSaveFile） */}
+      <div className="relative mb-4 flex flex-wrap items-center gap-3">
         <NeuButton
           ref={playedButton}
           onClick={() => setPlayed("picking")}
@@ -162,6 +183,7 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf 
           <span className="material-icons text-xl text-slate-500" aria-hidden data-icon="search" />
           遊んだ曲を入れる
         </NeuButton>
+        {listButton}
         {readable && !playable && <span className="text-sm text-slate-600">全部のカードが休止中です</span>}
         {layout.mode === "grid" && entries.length > 1 && (
           <div className="flex items-center gap-2">
@@ -176,7 +198,7 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf 
             />
           </div>
         )}
-        <MultiSaveFile set={set} />
+        <MultiSaveFile set={set} played={list} isKnown={isKnown} />
       </div>
       <div ref={area}>
         {entries.length === 0 ? (
@@ -184,7 +206,7 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf 
         ) : layout.mode === "tabs" ? (
           <>
             <MultiTabs entries={entries} active={active} onSelect={set.setActive} />
-            {renderBoard(entries[active], active, { width: Math.max(width, 1), step: fontStepOf(width) })}
+            {renderBoard(entries[active], active, { width: Math.max(width, 1), step: fontStepOf(width) }, true)}
           </>
         ) : (
           <div className="grid" style={{ gridTemplateColumns: `repeat(${layout.cols}, minmax(0, 1fr))`, gap: BOARD_GAP }}>
@@ -234,7 +256,13 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf 
           music={played}
           groups={playedGroups(entries, played)}
           onFill={() => {
+            const cells = cellsToRecord(playedGroups(entries, played));
+            list.add({ id: played.id, at: Date.now(), ...(cells.length > 0 ? { cells } : {}) });
             set.applyToCards((kc) => filledByPlayed(kc, played));
+            setPlayed(null);
+          }}
+          onRecord={() => {
+            list.add({ id: played.id, at: Date.now() });
             setPlayed(null);
           }}
           onPickAgain={() => setPlayed("picking")}

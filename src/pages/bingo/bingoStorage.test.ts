@@ -51,3 +51,51 @@ describe("ビンゴの途中経過の保存", () => {
     expect(item!.summarize("{")).toBe(BROKEN);
   });
 });
+
+describe("1 枚で遊ぶの時刻（足した時刻・プレイ開始。遊んだ曲の一覧の PR で足した省略できる項目）", () => {
+  const T = 1_790_000_000_000;
+
+  it("時刻つきで保存して読み直すと同じものが戻る", () => {
+    const s = memoryStorage();
+    const saved = { kind: "odai" as const, odai: "OD1:abc", odaiAddedAt: T, odaiStartedAt: T + 60_000, song: "A".repeat(50), songAddedAt: T + 1 };
+    saveBingo(saved, s);
+    expect(loadBingo(s)).toEqual(saved);
+  });
+
+  it("時刻が壊れていても、カードは捨てずに時刻だけ無いことにする", () => {
+    const raw = JSON.stringify({ kind: "odai", odai: "OD1:abc", odaiAddedAt: "x", odaiStartedAt: -5, songStartedAt: Number.NaN, songAddedAt: 1e300 });
+    // 端末の時計が戻って今より先になった時刻は残す（この端末の保存は、正の数で Date が表せる範囲なら読む。検分 P2 中-1）
+    const later = Date.now() + 3 * 86_400_000;
+    expect(parseSavedBingo(JSON.stringify({ kind: "odai", odai: "OD1:abc", odaiAddedAt: later, odaiStartedAt: later + 1 }))).toEqual({
+      kind: "odai",
+      odai: "OD1:abc",
+      odaiAddedAt: later,
+      odaiStartedAt: later + 1,
+    });
+    expect(parseSavedBingo(raw)).toEqual({ kind: "odai", odai: "OD1:abc" });
+  });
+
+  it("時刻を足した保存を、前の版の読み方（知っている項目だけ取り出す）で読んでもカードが戻る", () => {
+    // 前の版（#231 まで）の parseSavedBingo の写し
+    const parseOld = (r: string | null) => {
+      if (r === null) return null;
+      try {
+        const v: unknown = JSON.parse(r);
+        if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+        const o = v as Record<string, unknown>;
+        if (o.kind !== "odai" && o.kind !== "song") return null;
+        const ok = (x: unknown) => typeof x === "string" && x.length > 0 && x.length <= 400;
+        if (o.odai !== undefined && !ok(o.odai)) return null;
+        if (o.song !== undefined && !ok(o.song)) return null;
+        return { kind: o.kind, ...(o.odai !== undefined ? { odai: o.odai } : {}), ...(o.song !== undefined ? { song: o.song } : {}) };
+      } catch {
+        return null;
+      }
+    };
+    const s = memoryStorage();
+    saveBingo({ kind: "song", odai: "OD1:abc", odaiAddedAt: T, odaiStartedAt: T + 1, song: "A".repeat(50), songAddedAt: T }, s);
+    expect(parseOld(s.data[BINGO_STORAGE_KEY])).toEqual({ kind: "song", odai: "OD1:abc", song: "A".repeat(50) });
+    // 前の版が書いた（時刻の無い）保存も、今の版で読める
+    expect(parseSavedBingo(JSON.stringify({ kind: "odai", odai: "OD1:abc" }))).toEqual({ kind: "odai", odai: "OD1:abc" });
+  });
+});
