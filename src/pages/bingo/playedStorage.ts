@@ -13,7 +13,7 @@
  *   書く側（usePlayedList）は、足す・消す直前に保存を読み直し、そこへ当ててから書く。
  */
 
-import { isTime } from "./multiStorage";
+import { type TimeCheck, isTime } from "./multiStorage";
 
 export const PLAYED_STORAGE_KEY = "sekaimaster:bingo:played:v1";
 
@@ -58,10 +58,10 @@ function parseCells(v: unknown): PlayedCells[] {
 }
 
 /** 1 件を読む。形が合わなければ null。埋めたマスの記録だけが壊れていれば、記録を外して残す。 */
-function parseEntry(v: unknown): PlayedEntry | null {
+function parseEntry(v: unknown, time: TimeCheck): PlayedEntry | null {
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
   const r = v as Record<string, unknown>;
-  if (typeof r.id !== "string" || !MUSIC_ID.test(r.id) || !isTime(r.at)) return null;
+  if (typeof r.id !== "string" || !MUSIC_ID.test(r.id) || !time(r.at)) return null;
   const cells = parseCells(r.cells);
   return { id: r.id, at: r.at, ...(cells.length > 0 ? { cells } : {}) };
 }
@@ -69,10 +69,11 @@ function parseEntry(v: unknown): PlayedEntry | null {
 /**
  * 解釈済みの値から一覧を作る（保存の読み込みと、中断用の書き出しの読み込みで共通）。
  * 配列でなければ空。1 件ずつ見て形の合わない件を落とし、新しい MAX_PLAYED 件だけ残す。dropped は落とした件数（上限で切った件も含む）。
+ * time は時刻の決まり: この端末の保存は isTime（既定。時計が戻っても消さない）、ファイルの読み込みは isImportTime。
  */
-export function parsePlayedArray(v: unknown): { entries: PlayedEntry[]; dropped: number } {
+export function parsePlayedArray(v: unknown, time: TimeCheck = isTime): { entries: PlayedEntry[]; dropped: number } {
   if (!Array.isArray(v)) return { entries: [], dropped: 0 };
-  const entries = v.flatMap((item) => parseEntry(item) ?? []);
+  const entries = v.flatMap((item) => parseEntry(item, time) ?? []);
   const kept = entries.slice(-MAX_PLAYED);
   // 上限より古くて切った件も数える（書き出しの読み込みで黙って落とさない）
   return { entries: kept, dropped: v.length - kept.length };

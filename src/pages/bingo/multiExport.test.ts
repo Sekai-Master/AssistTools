@@ -120,4 +120,15 @@ describe("parseMultiExport（読み込み。読めないときは理由を返し
     expect((parseMultiExport(ok({ exportedAt: 1e300 })) as { exportedAt: unknown }).exportedAt).toBeNull();
     expect((parseMultiExport(ok({ exportedAt: 8.64e15 })) as { exportedAt: unknown }).exportedAt).toBeNull();
   });
+
+  it("ファイルの時刻は 2020-09-30 以後・今から 1 日先までだけ読む（カードの時刻・休止の区間・遊んだ曲。検分 P 安全の低-1）", () => {
+    const card = { ...SET.cards[0], addedAt: 1, startedAt: 8.64e15, paused: [[1e300, null]] };
+    const r = parseMultiExport(ok({ multi: { ...SET, cards: [card] }, played: [PLAYED[1], { id: "1", at: 1 }, { id: "2", at: 8.64e15 }] }));
+    if (!r.ok) throw new Error(r.error);
+    expect(r.multi.cards[0].addedAt).toBe(0);
+    expect(r.multi.cards[0].startedAt).toBeUndefined();
+    expect(r.multi.cards[0].paused).toEqual([]);
+    expect(r.played).toEqual([PLAYED[1]]);
+    expect(r.droppedPlayed).toBe(2);
+  });
 });

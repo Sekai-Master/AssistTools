@@ -9,7 +9,7 @@
  *   今のセットを壊さない。カードは multiStorage の決まりで 1 件ずつ読み、楽曲データで読めるかはここでは見ない
  *   （読めないカードも落とさずに持ってくる。計画のレビュー G-06）。
  */
-import { type SavedMulti, isTime, parseMultiObject } from "./multiStorage";
+import { type SavedMulti, isImportTime, parseMultiObject } from "./multiStorage";
 import { type PlayedEntry, parsePlayedArray } from "./playedStorage";
 
 export const EXPORT_APP = "sekaimaster-bingo";
@@ -96,19 +96,20 @@ export function parseMultiExport(text: string): ImportResult {
   const bad = versionError(r.version) ?? playedError(r.played);
   if (bad) return fail(bad);
 
-  const multi = parseMultiObject(r.multi);
+  // ファイルは人が作れるので、時刻は厳しい範囲（2020-09-30 以後・今から 1 日先まで）で読む。この端末の保存の読み込みは緩いまま（検分 P2 中-1）
+  const multi = parseMultiObject(r.multi, isImportTime);
   if (!multi) return fail("書き出しが壊れています（カードの欄が読めません）");
   if (multi.cards.length === 0) return fail("書き出しにカードが入っていません");
   const rawCards = (r.multi as Record<string, unknown>).cards;
   const given = Array.isArray(rawCards) ? rawCards.length : 0;
-  const played = parsePlayedArray(r.played);
+  const played = parsePlayedArray(r.played, isImportTime);
   const hasPlayed = Array.isArray(r.played) && r.played.length > 0;
   // 空でない配列が 1 件も読めなければ、カードの欄と同じく読まない（今の一覧を 0 曲で置き換えない。検分 P 安全の低-2）
   if (hasPlayed && played.entries.length === 0) return fail("書き出しが壊れています（遊んだ曲の欄が読めません）");
   return {
     ok: true,
     multi: { ...multi, open: true },
-    exportedAt: isTime(r.exportedAt) ? r.exportedAt : null,
+    exportedAt: isImportTime(r.exportedAt) ? r.exportedAt : null,
     dropped: Math.max(0, given - multi.cards.length),
     played: hasPlayed ? played.entries : null,
     droppedPlayed: played.dropped,

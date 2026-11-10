@@ -13,6 +13,7 @@ import {
   withoutEntry,
 } from "./playedStorage";
 import { BROKEN, STORED_ITEM_BY_KEY } from "../settings/lib/storedItems";
+import { isImportTime } from "./multiStorage";
 
 function memoryStorage(init: Record<string, string> = {}) {
   const data: Record<string, string> = { ...init };
@@ -64,9 +65,6 @@ describe("遊んだ曲の一覧の保存", () => {
       { id: "74", at: -1 },
       { id: "74", at: Number.MAX_VALUE * 2 },
       { id: "74", at: 1e300 },
-      // 2020-09-30 より前（1970 年）・今から 1 日より先（西暦 275760 年）は読まない（検分 P 安全の低-1）
-      { id: "74", at: 1 },
-      { id: "74", at: 8.64e15 },
       [],
       e("74", T0 + 1),
     ]);
@@ -111,6 +109,19 @@ describe("遊んだ曲の一覧の保存", () => {
   it("書き出しのファイルの一覧は、読めなかった件の数も返す", () => {
     expect(parsePlayedArray([e("549", T0), { id: "x" }, null])).toEqual({ entries: [e("549", T0)], dropped: 2 });
     expect(parsePlayedArray("x")).toEqual({ entries: [], dropped: 0 });
+  });
+});
+
+describe("端末の時計が戻ったとき（検分 P2 中-1）", () => {
+  it("この端末の保存は、今より 3 日先の時刻でも読む（落とすと、次に足すときの書き込みで保存からも消える）", () => {
+    const later = Date.now() + 3 * 86_400_000;
+    expect(parseSavedPlayed(JSON.stringify([e("549", later), e("74", later + 1)]))).toEqual([e("549", later), e("74", later + 1)]);
+  });
+
+  it("ファイルの読み込み（isImportTime を渡す）では、2020-09-30 より前・今から 1 日より先・1e300 を落とす", () => {
+    const later = Date.now() + 3 * 86_400_000;
+    const r = parsePlayedArray([e("549", T0), { id: "1", at: 1 }, { id: "2", at: 8.64e15 }, { id: "3", at: 1e300 }, { id: "4", at: later }], isImportTime);
+    expect(r).toEqual({ entries: [e("549", T0)], dropped: 4 });
   });
 });
 

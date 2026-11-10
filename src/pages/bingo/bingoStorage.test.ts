@@ -64,7 +64,14 @@ describe("1 枚で遊ぶの時刻（足した時刻・プレイ開始。遊ん�
 
   it("時刻が壊れていても、カードは捨てずに時刻だけ無いことにする", () => {
     const raw = JSON.stringify({ kind: "odai", odai: "OD1:abc", odaiAddedAt: "x", odaiStartedAt: -5, songStartedAt: Number.NaN, songAddedAt: 1e300 });
-    expect(parseSavedBingo(JSON.stringify({ kind: "odai", odai: "OD1:abc", odaiAddedAt: 1, odaiStartedAt: 8.64e15 }))).toEqual({ kind: "odai", odai: "OD1:abc" });
+    // 端末の時計が戻って今より先になった時刻は残す（この端末の保存は、正の数で Date が表せる範囲なら読む。検分 P2 中-1）
+    const later = Date.now() + 3 * 86_400_000;
+    expect(parseSavedBingo(JSON.stringify({ kind: "odai", odai: "OD1:abc", odaiAddedAt: later, odaiStartedAt: later + 1 }))).toEqual({
+      kind: "odai",
+      odai: "OD1:abc",
+      odaiAddedAt: later,
+      odaiStartedAt: later + 1,
+    });
     expect(parseSavedBingo(raw)).toEqual({ kind: "odai", odai: "OD1:abc" });
   });
 

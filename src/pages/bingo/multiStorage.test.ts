@@ -5,6 +5,7 @@ import {
   type SavedMultiCard,
   cleanCardName,
   MIN_TIME,
+  isImportTime,
   isPaused,
   loadMulti,
   parseMultiObject,
@@ -14,7 +15,7 @@ import {
   withPaused,
 } from "./multiStorage";
 
-/** 時刻の基準（2026-09-21）。時刻は 2020-09-30 以後・今から 1 日先までしか読まないので、区間はこれからの差で書く。 */
+/** 時刻の基準（2026-09-21）。ファイルの読み込みは 2020-09-30 以後・今から 1 日先までしか読まないので、区間はこれからの差で書く。 */
 const B = 1_790_000_000_000;
 const card = (over: Record<string, unknown> = {}) => ({
   id: "a1",
@@ -79,18 +80,32 @@ describe("parseSavedMulti（まとめて遊ぶの保存を読む）", () => {
     expect(c.paused).toEqual([[B + 1, B + 2]]);
   });
 
-  it("時刻は 2020-09-30 以後・今から 1 日先までだけ読む（西暦 275760 年・1970 年は読まない。検分 P 安全の低-1）", () => {
+  it("ファイルの読み込み（isImportTime）では、時刻は 2020-09-30 以後・今から 1 日先までだけ読む（西暦 275760 年・1970 年は読まない。検分 P 安全の低-1）", () => {
     const day = 86_400_000;
-    const [c] = parseSavedMulti(
-      JSON.stringify({ cards: [card({ addedAt: 1, startedAt: Date.now() + 2 * day, paused: [[8.64e15, null], [B + 1, B + 2]] })] })
-    ).cards;
+    const read = (over: Record<string, unknown>) => parseMultiObject({ cards: [card(over)] }, isImportTime)!.cards[0];
+    const c = read({ addedAt: 1, startedAt: Date.now() + 2 * day, paused: [[8.64e15, null], [B + 1, B + 2]] });
     expect(c.addedAt).toBe(0);
     expect(c.startedAt).toBeUndefined();
     expect(c.paused).toEqual([[B + 1, B + 2]]);
     // 境目: 2020-09-30 00:00（日本時間）と、今から 1 日先の少し手前は読む
-    const ok = parseSavedMulti(JSON.stringify({ cards: [card({ addedAt: MIN_TIME, startedAt: Date.now() + day - 60_000 })] })).cards[0];
+    const ok = read({ addedAt: MIN_TIME, startedAt: Date.now() + day - 60_000 });
     expect(ok.addedAt).toBe(MIN_TIME);
     expect(ok.startedAt).toBeGreaterThan(0);
+  });
+
+  // 検分 P2 中-1: この端末の保存は、端末の時計が 1 日より大きく戻っても消さない（開いた時点で書き返すので、落とすと保存からも消える）
+  it("この端末の保存は、今より 3 日先の時刻（端末の時計が戻った）でも、休止の区間・足した時刻・プレイ開始を残す", () => {
+    const later = Date.now() + 3 * 86_400_000;
+    const [c] = parseSavedMulti(
+      JSON.stringify({ cards: [card({ addedAt: later, startedAt: later + 1, paused: [[later + 2, later + 3], [later + 4, null]] })] })
+    ).cards;
+    expect(c.addedAt).toBe(later);
+    expect(c.startedAt).toBe(later + 1);
+    expect(c.paused).toEqual([
+      [later + 2, later + 3],
+      [later + 4, null],
+    ]);
+    expect(isPaused(c)).toBe(true);
   });
 
   it("5 枚まで。active・cols は範囲に収め、open は真偽でなければ偽", () => {

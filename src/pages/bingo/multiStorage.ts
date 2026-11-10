@@ -63,14 +63,27 @@ export const MIN_TIME = Date.UTC(2020, 8, 29, 15, 0, 0);
 /** 時刻の上限は「今から 1 日先」。端末の時計のずれは許し、遠い先（西暦 275760 年など）は通さない。 */
 const FUTURE_SLACK = 86_400_000;
 
+/** Date が表せる最大（8.64e15 ミリ秒）。これを超える値（1e300 など）を通すと、画面の時刻が NaN になる（検分 M2 安全の低-1）。 */
+const MAX_TIME = 8.64e15;
+
+/** 時刻を読むときの決まり（保存とファイルで使い分ける）。 */
+export type TimeCheck = (v: unknown) => v is number;
+
 /**
- * 時刻（ミリ秒）として使える数か。2020-09-30 以後・今から 1 日先まで（計画 2-6 の st と同じ決まり）。
- * 休止の区間・足した時刻・プレイ開始・書き出した時刻・遊んだ曲・1 枚で遊ぶの時刻の読み込みで共通に使う。
- * ★ 前は「正の有限」だけで、1e300 が通って画面の時刻が NaN になった（検分 M2 安全の低-1）。Date の最大（8.64e15）を上限にしても、
- *   西暦 275760 年や 1970 年が通り、一覧に「9/13（土）」と出て、遠い先の曲がどのカードの「足した時刻より後」にも当たった（検分 P 安全の低-1）
+ * この端末の保存（localStorage）から読む時刻: 正の有限で、Date が表せる範囲。休止の区間・足した時刻・プレイ開始・遊んだ曲・1 枚で遊ぶの時刻。
+ * ★ ファイルと同じ厳しい範囲（今から 1 日先まで）を当てると、端末の時計が 1 日より大きく戻ったときに、開いただけで休止と時刻が消え、
+ *   まとめて遊ぶは開いた時点で、遊んだ曲は次に足す直前の読み直しで、保存からも消えた（検分 P2 中-1）。保存に変な時刻を入れられるのは、
+ *   自分で保存を書き換えた本人だけなので、ここは緩い決まりのままにする
  */
-export const isTime = (v: unknown, now: number = Date.now()): v is number =>
-  typeof v === "number" && Number.isFinite(v) && v >= MIN_TIME && v <= now + FUTURE_SLACK;
+export const isTime: TimeCheck = (v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0 && v <= MAX_TIME;
+
+/**
+ * ファイル（中断用の書き出し）から読む時刻: 2020-09-30 以後・今から 1 日先まで（計画 2-6 の st と同じ決まり）。
+ * ★ ファイルは人が作れる。Date の最大までにしても、西暦 275760 年や 1970 年が通り、一覧に「9/13（土）」と出て、
+ *   遠い先の曲がどのカードの「足した時刻より後」にも当たった（検分 P 安全の低-1）
+ */
+export const isImportTime: TimeCheck = (v): v is number =>
+  isTime(v) && v >= MIN_TIME && v <= Date.now() + FUTURE_SLACK;
 
 /**
  * カードの名前を整える（ファイルや画面の入力から来る文字）。制御文字・向きを変える文字を落とし、
@@ -85,13 +98,13 @@ export function cleanCardName(v: unknown): string {
  * 休止の区間を読む。新しい MAX_PAUSES 件だけ（古い方を落とす。今の休止は最後にあるので残る）。
  * 終わりが null の区間は最後の 1 件だけ。途中にあると、遊んだ曲の一覧から埋めるときにそこから先がずっと休止になる。
  */
-function parsePauses(v: unknown): PauseRange[] {
+function parsePauses(v: unknown, time: TimeCheck): PauseRange[] {
   if (!Array.isArray(v)) return [];
   const out: PauseRange[] = [];
   for (const r of v.slice(-MAX_PAUSES)) {
-    if (!Array.isArray(r) || !isTime(r[0])) continue;
+    if (!Array.isArray(r) || !time(r[0])) continue;
     if (r[1] === null) out.push([r[0], null]);
-    else if (isTime(r[1]) && r[1] >= r[0]) out.push([r[0], r[1]]);
+    else if (time(r[1]) && r[1] >= r[0]) out.push([r[0], r[1]]);
   }
   return out.filter((r, i) => r[1] !== null || i === out.length - 1);
 }
@@ -113,7 +126,7 @@ export function withPaused(c: SavedMultiCard, paused: boolean, now: number): Sav
   return { ...c, paused: [...c.paused.slice(0, -1), [start, Math.max(now, start)] as const] };
 }
 
-function parseCard(v: unknown): SavedMultiCard | null {
+function parseCard(v: unknown, time: TimeCheck): SavedMultiCard | null {
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
   const r = v as Record<string, unknown>;
   if (typeof r.id !== "string" || !ID_PATTERN.test(r.id)) return null;
@@ -122,23 +135,24 @@ function parseCard(v: unknown): SavedMultiCard | null {
     id: r.id,
     name: cleanCardName(r.name),
     code: r.code,
-    addedAt: isTime(r.addedAt) ? r.addedAt : 0,
-    ...(isTime(r.startedAt) ? { startedAt: r.startedAt } : {}),
-    paused: parsePauses(r.paused),
+    addedAt: time(r.addedAt) ? r.addedAt : 0,
+    ...(time(r.startedAt) ? { startedAt: r.startedAt } : {}),
+    paused: parsePauses(r.paused, time),
   };
 }
 
 /**
  * 解釈済みの値からセットを作る（保存の読み込みと、中断用の書き出しの読み込みで共通）。
  * オブジェクトでなければ null。カードは 1 件ずつ見て、id・コードの形が合わない件と同じ id の 2 件目だけ落とす。
+ * time は時刻の決まり: この端末の保存は isTime（既定）、ファイルの読み込みは isImportTime。
  */
-export function parseMultiObject(v: unknown): SavedMulti | null {
+export function parseMultiObject(v: unknown, time: TimeCheck = isTime): SavedMulti | null {
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
   const r = v as Record<string, unknown>;
   const seen = new Set<string>();
   const cards: SavedMultiCard[] = [];
   for (const item of Array.isArray(r.cards) ? r.cards : []) {
-    const c = parseCard(item);
+    const c = parseCard(item, time);
     if (!c || seen.has(c.id) || cards.length === MAX_MULTI_CARDS) continue;
     seen.add(c.id);
     cards.push(c);

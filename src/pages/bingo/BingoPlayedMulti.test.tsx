@@ -147,6 +147,29 @@ describe("プレイ開始は 0 マスから埋めたときだけ（検分 P 中-
   });
 });
 
+// 検分 P2 中-1: 前は端末の保存にもファイルと同じ時刻の範囲を当てていて、開いただけで休止と時刻が消えて書き返され、
+// 次に 1 曲入れると、休止していたカードまで埋まった
+describe("端末の時計が 1 日より大きく戻ったとき", () => {
+  it("今より 3 日先の時刻を持つ保存を開いても、休止・プレイ開始・足した時刻・遊んだ曲が残り、休止中のカードは埋まらない", () => {
+    const later = T + 3 * 24 * 60 * MIN;
+    saveSet([
+      entry("a1", encodeOdaiSeed(ODAI_A), { name: "休み", addedAt: later, startedAt: later + 1, paused: [[later + 2, null]] }),
+      entry("c3", encodeSeed(SONG), { name: "曲名" }),
+    ]);
+    savePlayed([{ id: NONE.id, at: later + 3 }]);
+    render(<BingoGenerator />);
+    const [a] = savedSet().cards;
+    expect(a.paused).toEqual([[later + 2, null]]);
+    expect(a.startedAt).toBe(later + 1);
+    expect(a.addedAt).toBe(later);
+    expect(screen.getByRole("button", { name: /^一覧/ }).textContent).toContain("1曲");
+    pickPlayed(TARGET);
+    fireEvent.click(within(dialog()).getByRole("button", { name: /まとめて埋める|遊んだ曲に入れる/ }));
+    expect(filledOf(savedSet().cards[0].code)).toEqual([]);
+    expect(played().map((p) => p.id)).toEqual([NONE.id, TARGET.id]);
+  });
+});
+
 describe("この一覧でカードを埋める（カードを 1 枚選ぶ）", () => {
   it("選んだカードだけを、足した時刻より後で休止の区間の外の曲で埋める。休止中のカードは選べない", () => {
     const songIdx = SONG.findIndex((c) => c !== "FREE" && c.id === TARGET.id);

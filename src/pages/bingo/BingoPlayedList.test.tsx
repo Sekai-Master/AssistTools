@@ -173,6 +173,23 @@ describe("プレイ開始の時刻の分からない途中のカード", () => {
     expect(screen.getByRole("status", { name: "プレイ開始" }).textContent).toBe("");
   });
 
+  // 検分 P2 低-1: 「替えた後が 1 マス以上」の側を守る（isFirstFill を「替える前が 0 マス」だけにすると赤）
+  it("0 マスのカードでマスを差し替えただけ（埋めていない）では、プレイ開始は付かない", () => {
+    saveSingle();
+    render(<BingoGenerator />);
+    fireEvent.click(screen.getAllByRole("button").find((b) => b.getAttribute("aria-pressed") === "false")!);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "このお題を替える" }));
+    const option = within(dialog())
+      .getAllByRole("button")
+      .find((b) => b.querySelector(".font-bold") && !(b as HTMLButtonElement).disabled)!;
+    fireEvent.click(option);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(single().odai).not.toBe(CODE);
+    expect(filledOf(single().odai!)).toEqual([]);
+    expect(single().odaiStartedAt).toBeUndefined();
+    expect(screen.getByText("マスを埋めるとプレイ開始")).toBeTruthy();
+  });
+
   it("全部戻して 0 マスにしてから埋めると、そのとき付く（0 マスから 1 マス以上になったとき）", () => {
     localStorage.setItem(BINGO_STORAGE_KEY, JSON.stringify({ kind: "odai", odai: encodeOdaiSeed(withFilled([hits(ONE)[0]])) }));
     render(<BingoGenerator />);
