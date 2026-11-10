@@ -122,6 +122,31 @@ describe("まとめて遊ぶで記録する", () => {
   });
 });
 
+describe("プレイ開始は 0 マスから埋めたときだけ（検分 P 中-1）・スマホの見出しの高さ（低-1）", () => {
+  it("時刻の無い途中のカード（埋めたマスがある）は、まとめて埋めてもプレイ開始が付かない。0 マスのカードには付く", () => {
+    const filledA = ODAI_A.map((c, i) => (c !== "FREE" && i === ODAI_A.findIndex((x) => x !== "FREE" && !matchingCells(ODAI_A, TARGET).includes(ODAI_A.indexOf(x))) ? { ...c, cleared: true } : c));
+    saveSet([entry("a1", encodeOdaiSeed(filledA)), entry("c3", encodeSeed(SONG))]);
+    render(<BingoGenerator />);
+    pickPlayed(TARGET);
+    fireEvent.click(within(dialog()).getByRole("button", { name: /まとめて埋める/ }));
+    const [a, c] = savedSet().cards;
+    expect(filledOf(a.code).length).toBeGreaterThan(1);
+    expect(a.startedAt).toBeUndefined();
+    expect(c.startedAt).toBe(T);
+  });
+
+  it("切り替え式（スマホ）では、プレイ開始の行を印が出る前から置いておく（最初に埋めた瞬間に盤面が下がらないように）", () => {
+    saveSet([entry("c3", encodeSeed(SONG), { name: "曲名" })]);
+    render(<BingoGenerator />);
+    const startLine = () => screen.getByRole("region", { name: "曲名" }).querySelector("[data-play-start]");
+    expect(startLine()).not.toBeNull();
+    expect(startLine()!.textContent).toBe("");
+    pickPlayed(TARGET);
+    fireEvent.click(within(dialog()).getByRole("button", { name: /まとめて埋める/ }));
+    expect(startLine()!.textContent).toBe("プレイ開始！ 11/12 15:03");
+  });
+});
+
 describe("この一覧でカードを埋める（カードを 1 枚選ぶ）", () => {
   it("選んだカードだけを、足した時刻より後で休止の区間の外の曲で埋める。休止中のカードは選べない", () => {
     const songIdx = SONG.findIndex((c) => c !== "FREE" && c.id === TARGET.id);
@@ -209,6 +234,19 @@ describe("中断用の書き出しに遊んだ曲の一覧を入れる", () => {
     choose(fileOf(text));
     await waitFor(() => expect(played()).toEqual(incoming));
     expect(screen.getByRole("status").textContent).toContain("カード 1 枚と遊んだ曲 1 曲を読み込みました");
+  });
+
+  it("楽曲データに無い曲が入っていても、確かめる文と知らせの曲数は一覧に出る曲数にそろえ、出ない曲の数を添える（検分 P 低-2）", async () => {
+    saveSet([entry("a1", encodeOdaiSeed(ODAI_A))]);
+    savePlayed([{ id: NONE.id, at: T - MIN }, { id: "9999", at: T - 2 * MIN }]);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<BingoGenerator />);
+    const incoming: PlayedEntry[] = [{ id: "9999", at: T - 5 * MIN }, { id: "0000", at: T - 4 * MIN }, { id: TARGET.id, at: T - 3 * MIN }];
+    choose(fileOf(JSON.stringify(buildMultiExport({ open: true, active: 0, cols: 0, cards: [entry("x1", encodeSeed(SONG))] }, T, incoming))));
+    await waitFor(() => expect(played()).toEqual(incoming));
+    expect(confirm.mock.calls[0][0]).toContain("遊んだ曲の一覧（1曲）も、書き出しの一覧（1曲）に置き換わります");
+    expect(screen.getByRole("status").textContent).toContain("カード 1 枚と遊んだ曲 1 曲を読み込みました（楽曲データに無い曲 2 曲は一覧に出ません）");
+    expect(screen.getByRole("button", { name: /^一覧/ }).textContent).toContain("1曲");
   });
 
   it("一覧の入っていない書き出し（#231 の版）を読んでも、今の一覧は変えない", async () => {

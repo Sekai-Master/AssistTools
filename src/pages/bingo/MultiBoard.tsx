@@ -1,5 +1,4 @@
 import type { AliasEntry } from "../../lib/songSearch";
-import { cn } from "../../lib/utils";
 import type { BingoMusic } from "./bingoLogic";
 import { progressOf } from "./bingoProgress";
 import type { KindedCard } from "./bingoShare";
@@ -22,7 +21,7 @@ interface Props {
   paused: boolean;
   /** この画面を開いた時刻（これより後に付いたプレイ開始は「プレイ開始！」と太字）。 */
   freshSince: number;
-  /** 切り替え式（スマホ）で 1 枚だけ出しているか。見出しの 2 行目を折り返してよい（並べた盤面の段がずれる心配が無い）。 */
+  /** 切り替え式（スマホ）で 1 枚だけ出しているか。プレイ開始を 3 行目に分け、印が出る前から行を置いておく。 */
   single?: boolean;
   onChange: (card: KindedCard) => void;
   onSettings: () => void;
@@ -37,31 +36,37 @@ const SETTINGS_BUTTON =
 
 /**
  * カードの見出し: 名前（16px 太字）・種類と段・埋めたマス・リーチ・プレイ開始・BINGO の札、右端に [設定]。
- * ★ プレイ開始は 2 行目の最後に足す（行を増やさない）。カードごとに見出しの高さが変わると、並べた盤面の段がずれるため
+ * ★ 並べたときは、プレイ開始を 2 行目の最後に足して 1 行に収める（行を増やすと、カードごとに見出しの高さが変わり、並べた盤面の段がずれる）。
+ * ★ 切り替え式（スマホ）では、2 行目は 1 行に収め、プレイ開始は 3 行目に分けて、印が出る前から行を置いておく。
+ *   前は 2 行目の折り返しを許していて、最初に埋めた瞬間に見出しが 2 行になり、盤面が 12px 下がった（検分 P 低-1）
  */
 function BoardHeader({
   name,
   kc,
   startedAt,
   fresh,
-  wrap,
+  ownLine,
   onSettings,
 }: {
   name: string;
   kc: KindedCard | null;
   startedAt: number | undefined;
   fresh: boolean;
-  /** 2 行目を折り返す（切り替え式で 1 枚だけ出しているとき。並べたときは 1 行に収めて段をそろえる）。 */
-  wrap: boolean;
+  /** プレイ開始を別の行に分けて、いつも置いておく（切り替え式で 1 枚だけ出しているとき）。 */
+  ownLine: boolean;
   onSettings: () => void;
 }) {
   const p = kc ? progressOf(kc.card) : null;
+  const start =
+    startedAt === undefined ? null : (
+      <span className={fresh ? "font-bold text-slate-700" : undefined}>{playStartText(startedAt, fresh)}</span>
+    );
   return (
     <div className="mb-2 flex min-h-11 items-center gap-2">
       <div className="min-w-0 flex-1">
         <h3 className="truncate text-base font-bold text-slate-700">{name}</h3>
         {kc && p && (
-          <p className={cn("text-xs text-slate-500", !wrap && "truncate")}>
+          <p className="truncate text-xs text-slate-500">
             {kindLabel(kc)} ・ 埋めた{" "}
             <span className="font-num font-bold text-slate-600">
               {p.filled}/{p.total}
@@ -71,11 +76,14 @@ function BoardHeader({
                 {" "}・ リーチ <span className="font-num font-bold text-slate-600">{p.reach}</span>
               </>
             )}
-            {startedAt !== undefined && (
-              <>
-                {" "}・ <span className={fresh ? "font-bold text-slate-700" : undefined}>{playStartText(startedAt, fresh)}</span>
-              </>
-            )}
+            {start && !ownLine && <>{" "}・ {start}</>}
+          </p>
+        )}
+        {kc && ownLine && (
+          // 行の高さ（12px の 1 行ぶん）はいつも取っておく。読み上げは付いた瞬間に 1 回（role="status" にすると、
+          // 操作の列の知らせ（書き出し・読み込み）の status と並んでしまうので、aria-live だけにする）
+          <p data-play-start="" aria-live="polite" className="min-h-4 truncate text-xs text-slate-500">
+            {start}
           </p>
         )}
       </div>
@@ -134,7 +142,7 @@ export function MultiBoard({
         kc={kc}
         startedAt={entry.startedAt}
         fresh={(entry.startedAt ?? 0) >= freshSince}
-        wrap={single}
+        ownLine={single}
         onSettings={onSettings}
       />
       {!kc ? (

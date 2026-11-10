@@ -30,7 +30,16 @@ function confirmText(entries: readonly MultiEntry[], n: number, played: { now: n
  * ★ 知らせは操作の列の下に重ねて出す（間に差し込むと、出たときと消えたときに盤面が 2 回上下する。画面共有の相手から見て盤面が跳ねる。検分 M2 低-3）。
  *   呼ぶ側（操作の列）は relative にしておく。
  */
-export function MultiSaveFile({ set, played }: { set: MultiSet; played: PlayedList }) {
+export function MultiSaveFile({
+  set,
+  played,
+  isKnown,
+}: {
+  set: MultiSet;
+  played: PlayedList;
+  /** 楽曲データにある曲か。曲数は一覧の画面と同じく、楽曲データにある曲だけを数える（検分 P 低-2）。 */
+  isKnown: (id: string) => boolean;
+}) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<Message | null>(null);
   // ファイルを読み終えた時点のセットで確かめる（読んでいる間にほかのタブが変えても、古いセットで決めない）
@@ -81,9 +90,12 @@ export function MultiSaveFile({ set, played }: { set: MultiSet; played: PlayedLi
     }
     const n = r.multi.cards.length;
     const entries = entriesRef.current;
-    const nowPlayed = playedRef.current.length;
+    // 曲数は一覧のボタン・一覧の画面と同じ数え方（楽曲データにある曲だけ）。前は保存の件数で、「3 曲」と知らせて一覧は「1 曲」になった
+    const nowPlayed = playedRef.current.filter((e) => isKnown(e.id)).length;
+    const nextPlayed = r.played === null ? 0 : r.played.filter((e) => isKnown(e.id)).length;
+    const hidden = r.played === null ? 0 : r.played.length - nextPlayed;
     // 一覧を置き換えるのは、書き出しに曲が入っているときだけ。今の一覧に曲があれば、それも確かめる文に入れる
-    const replacingPlayed = r.played !== null && nowPlayed > 0 ? { now: nowPlayed, next: r.played.length } : null;
+    const replacingPlayed = r.played !== null && nowPlayed > 0 ? { now: nowPlayed, next: nextPlayed } : null;
     if ((worthKeeping(entries) || replacingPlayed) && !window.confirm(confirmText(entries, n, replacingPlayed))) {
       setMessage(null);
       return;
@@ -96,8 +108,10 @@ export function MultiSaveFile({ set, played }: { set: MultiSet; played: PlayedLi
       r.dropped > 0 && `形が合わない・6 枚目より後のカード ${r.dropped} 枚は読みませんでした`,
       r.droppedPlayed > 0 && `形が合わない・1000 曲より古い遊んだ曲 ${r.droppedPlayed} 件は読みませんでした`,
     ].filter(Boolean);
-    const what = r.played !== null ? `カード ${n} 枚と遊んだ曲 ${r.played.length} 曲` : `カード ${n} 枚`;
-    setMessage({ kind: "ok", text: [`${when}${what}を読み込みました`, ...notes].join("。") });
+    const what = r.played !== null ? `カード ${n} 枚と遊んだ曲 ${nextPlayed} 曲` : `カード ${n} 枚`;
+    // 楽曲データに無い曲（配信が止まった など）は保存には残し、一覧には出さない（計画 4 節）。その数を添える
+    const hiddenNote = hidden > 0 ? `（楽曲データに無い曲 ${hidden} 曲は一覧に出ません）` : "";
+    setMessage({ kind: "ok", text: [`${when}${what}を読み込みました${hiddenNote}`, ...notes].join("。") });
   };
 
   return (

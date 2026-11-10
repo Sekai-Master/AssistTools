@@ -3,14 +3,14 @@
  * BingoGenerator の画面から状態を切り出したもの。以後のカードまわりの追加はここに積む。
  *
  * カードごとに時刻を持つ（CardTimes）: 足した時刻（遊んだ曲の一覧から埋めるとき、これより前の曲は使わない）と、
- * プレイ開始（最初に埋めたとき。まとめて遊ぶの useMultiSet の withCard と同じ決まり）。
+ * プレイ開始（最初に埋めたとき＝0 マスから 1 マス以上になったとき。まとめて遊ぶの useMultiSet の withCard と同じ決まり）。
  *
  * ★ 楽曲データが届く前（musics が空）に呼ばれた部品は、BingoGenerator が届いたら key を変えて作り直す。
  *   届く前の空のカードで保存を上書きしないよう、保存とリンクの外しは ready を待つ。
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { BingoMusic } from "./bingoLogic";
-import { progressOf } from "./bingoProgress";
+import { isFirstFill } from "./bingoProgress";
 import { CARD_PARAM, type CardKind, type KindedCard, cardCode } from "./bingoShare";
 import { saveBingo } from "./bingoStorage";
 import { type CardTimes, restoreInitial } from "./bingoRestore";
@@ -30,10 +30,13 @@ const cardOf = (o: Owned, kind: CardKind): KindedCard | null =>
 const withCardSet = (o: Owned, kc: KindedCard, times: CardTimes): Owned =>
   kc.kind === "odai" ? { ...o, odai: kc.card, meta: { ...o.meta, odai: times } } : { ...o, song: kc.card, meta: { ...o.meta, song: times } };
 
-/** 埋めたマスのあるカードになったとき、まだプレイ開始が無ければ now を付ける（useMultiSet の withCard と同じ）。 */
-function startedTimes(times: CardTimes | null, kc: KindedCard, now: number): CardTimes {
+/**
+ * 0 マスから埋めたとき（最初に埋めたとき）だけ、まだプレイ開始が無ければ now を付ける（useMultiSet の withCard と同じ。isFirstFill）。
+ * 時刻の分からない途中のカードは、替えても付けない（印は空のまま）。
+ */
+function startedTimes(times: CardTimes | null, prev: KindedCard, next: KindedCard, now: number): CardTimes {
   const base = times ?? { addedAt: 0 };
-  if (base.startedAt !== undefined || progressOf(kc.card).filled === 0) return base;
+  if (base.startedAt !== undefined || !isFirstFill(prev.card, next.card)) return base;
   return { ...base, startedAt: now };
 }
 
@@ -78,14 +81,13 @@ export function useSingleCards(musics: BingoMusic[]) {
    * 自分のカードを変える（埋める・戻す・差し替え・遊んだ曲の一覧から埋める／戻す）。見るだけの間でも自分のカードを変える。
    * fn は今の自分のカードを受け取り、変えないなら null。最初に埋めたときにプレイ開始の時刻が付く。
    * ★ fn は setState の中で呼ぶので、純粋にする（StrictMode では 2 回呼ばれる。保存や記録は呼ぶ側で 1 回だけ）
-
    */
   const updateOwn = useCallback((k: CardKind, fn: (kc: KindedCard) => KindedCard | null) => {
     const now = Date.now();
     setOwned((o) => {
       const prev = cardOf(o, k);
       const next = prev ? fn(prev) : null;
-      return next && next.kind === k ? withCardSet(o, next, startedTimes(o.meta[k], next, now)) : o;
+      return prev && next && next.kind === k ? withCardSet(o, next, startedTimes(o.meta[k], prev, next, now)) : o;
     });
   }, []);
 

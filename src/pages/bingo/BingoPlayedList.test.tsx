@@ -151,6 +151,41 @@ describe("プレイ開始の印（最初に埋めたとき）", () => {
   });
 });
 
+// 検分 P 中-1: プレイ開始は「最初に埋めたとき」だけ。時刻の分からない途中のカードで次に替えた時刻を、開始として出さない
+describe("プレイ開始の時刻の分からない途中のカード", () => {
+  it("前の版で埋めた途中のカード（時刻なし）で 1 マス埋めても、プレイ開始は付かず、印も案内も出さない", () => {
+    localStorage.setItem(BINGO_STORAGE_KEY, JSON.stringify({ kind: "odai", odai: encodeOdaiSeed(withFilled(hits(TWO))) }));
+    render(<BingoGenerator />);
+    expect(screen.getByRole("status", { name: "プレイ開始" }).textContent).toBe("");
+    pickPlayed(ONE.title);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "埋める" }));
+    expect(filledOf(single().odai!)).toHaveLength(hits(TWO).length + 1);
+    expect(single().odaiStartedAt).toBeUndefined();
+    expect(screen.getByRole("status", { name: "プレイ開始" }).textContent).toBe("");
+  });
+
+  it("埋めた状態のリンクのカードを開いて（自分のカードが無い）埋めても、プレイ開始は付かない", () => {
+    window.history.replaceState(null, "", `/bingo?card=${encodeURIComponent(encodeOdaiSeed(withFilled(hits(TWO))))}`);
+    render(<BingoGenerator />);
+    pickPlayed(ONE.title);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "埋める" }));
+    expect(single().odaiStartedAt).toBeUndefined();
+    expect(screen.getByRole("status", { name: "プレイ開始" }).textContent).toBe("");
+  });
+
+  it("全部戻して 0 マスにしてから埋めると、そのとき付く（0 マスから 1 マス以上になったとき）", () => {
+    localStorage.setItem(BINGO_STORAGE_KEY, JSON.stringify({ kind: "odai", odai: encodeOdaiSeed(withFilled([hits(ONE)[0]])) }));
+    render(<BingoGenerator />);
+    const filledCell = screen.getAllByRole("button").find((b) => b.getAttribute("aria-pressed") === "true")!;
+    fireEvent.click(filledCell);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "戻す" }));
+    expect(single().odaiStartedAt).toBeUndefined();
+    pickPlayed(ONE.title);
+    fireEvent.click(within(dialog()).getByRole("button", { name: "埋める" }));
+    expect(single().odaiStartedAt).toBe(T);
+  });
+});
+
 describe("一覧を見る", () => {
   it("新しい順に、日付の見出し・番号・曲名・時刻。プレイ開始の行も入る。見出しの下に曲数と始まり", () => {
     saveSingle({ odai: encodeOdaiSeed(withFilled([hits(ONE)[0]])), odaiStartedAt: T - 24 * 60 * MIN + MIN });

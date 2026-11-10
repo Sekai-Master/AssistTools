@@ -60,3 +60,12 @@ export function withClearedAll<T extends { cleared: boolean }>(
   const targets = new Set(indices);
   return card.map((c, i) => (targets.has(i) && c !== "FREE" ? { ...c, cleared: true } : c));
 }
+
+/**
+ * プレイ開始の時刻を付けるか: 替える前が 0 マスで、替えた後が 1 マス以上のとき（最初に埋めたとき。持ち主の決定 2）。
+ * ★ 「替えた後に埋めたマスがあって、時刻が無ければ付ける」だと、時刻の分からない途中のカード（前の版で埋めた・埋めた状態で
+ *   リンクから開いた）に、次に替えた時刻が開始として付いた（検分 P 中-1）。分からないものは分からないまま（印を出さない）にする
+ */
+export function isFirstFill(prev: readonly AnyCell[], next: readonly AnyCell[]): boolean {
+  return progressOf(prev).filled === 0 && progressOf(next).filled > 0;
+}

@@ -101,6 +101,8 @@ describe("parseMultiExport（読み込み。読めないときは理由を返し
     expect(r.ok && r.played).toEqual([PLAYED[1]]);
     expect(r.ok && r.droppedPlayed).toBe(2);
     expect(errorOf(ok({ played: "x" }))).toBe("書き出しが壊れています（遊んだ曲の欄が読めません）");
+    // 空でない配列で全部読めなければ、カードの欄と同じく読まない（今の一覧を 0 曲で置き換えない。検分 P 安全の低-2）
+    expect(errorOf(ok({ played: [null, { id: "x" }] }))).toBe("書き出しが壊れています（遊んだ曲の欄が読めません）");
     // 欄が無いのは空と同じ
     expect(parseMultiExport(ok({ played: undefined })).ok).toBe(true);
   });
@@ -116,5 +118,6 @@ describe("parseMultiExport（読み込み。読めないときは理由を返し
   it("書き出した時刻が読めなければ null（読み込みは止めない）。Date が表せない巨大な時刻も読めないことにする（検分 M2 安全の低-1）", () => {
     expect((parseMultiExport(ok({ exportedAt: "x" })) as { exportedAt: unknown }).exportedAt).toBeNull();
     expect((parseMultiExport(ok({ exportedAt: 1e300 })) as { exportedAt: unknown }).exportedAt).toBeNull();
+    expect((parseMultiExport(ok({ exportedAt: 8.64e15 })) as { exportedAt: unknown }).exportedAt).toBeNull();
   });
 });

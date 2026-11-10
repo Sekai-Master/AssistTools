@@ -274,7 +274,8 @@ describe("中断用の書き出し", () => {
   const fileOf = (content: string) => new File([content], "bingo.json", { type: "application/json" });
   const choose = (file: File) => fireEvent.change(screen.getByLabelText("書き出しのファイル"), { target: { files: [file] } });
   const exported = (cards: SavedMultiCard[]) =>
-    JSON.stringify(buildMultiExport({ open: true, active: 0, cols: 0, cards }, new Date(2026, 10, 12, 15, 3).getTime()));
+    // 書き出した時刻は過去の日にする（時刻は「今から 1 日先」までしか読まない決まりになった。検分 P 安全の低-1。前は 11/12 の先の日だった）
+    JSON.stringify(buildMultiExport({ open: true, active: 0, cols: 0, cards }, new Date(2026, 9, 12, 15, 3).getTime()));
 
   it("読み込むと続きから遊べる（名前・埋めた状態・休止）。埋めたマスが無ければ確かめない", async () => {
     saveSet([entry("z9", encodeOdaiSeed(ODAI_B))]);
@@ -282,7 +283,7 @@ describe("中断用の書き出し", () => {
     render(<BingoGenerator />);
     const incoming = [entry("a1", encodeOdaiSeed(filledOdai()), { name: "わたし" }), entry("b2", encodeSeed(SONG), { paused: PAUSED })];
     choose(fileOf(exported(incoming)));
-    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("11/12 15:03 に書き出したカード 2 枚を読み込みました"));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("10/12 15:03 に書き出したカード 2 枚を読み込みました"));
     expect(confirm).not.toHaveBeenCalled();
     expect(savedSet().cards).toEqual(incoming);
     expect(screen.getByRole("heading", { name: "わたし" })).toBeTruthy();

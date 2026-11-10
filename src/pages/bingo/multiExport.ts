@@ -103,6 +103,8 @@ export function parseMultiExport(text: string): ImportResult {
   const given = Array.isArray(rawCards) ? rawCards.length : 0;
   const played = parsePlayedArray(r.played);
   const hasPlayed = Array.isArray(r.played) && r.played.length > 0;
+  // 空でない配列が 1 件も読めなければ、カードの欄と同じく読まない（今の一覧を 0 曲で置き換えない。検分 P 安全の低-2）
+  if (hasPlayed && played.entries.length === 0) return fail("書き出しが壊れています（遊んだ曲の欄が読めません）");
   return {
     ok: true,
     multi: { ...multi, open: true },

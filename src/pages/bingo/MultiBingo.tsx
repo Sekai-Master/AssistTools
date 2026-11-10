@@ -1,4 +1,4 @@
-import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { Panel } from "../../components/ui/Panel";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
@@ -126,6 +126,8 @@ function MultiTabs({ entries, active, onSelect }: { entries: readonly MultiEntry
  */
 export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf, played: list, freshSince, listButton }: Props) {
   const area = useRef<HTMLDivElement>(null);
+  const knownIds = useMemo(() => new Set(musics.map((m) => m.id)), [musics]);
+  const isKnown = useCallback((id: string) => knownIds.has(id), [knownIds]);
   const { width, height } = useAreaSize(area);
   const { entries } = set;
   const layout = pickBoardLayout({ count: entries.length, width, height, cols: set.cols });
@@ -196,7 +198,7 @@ export function MultiBingo({ set, musics, aliases, jacketBase, pickable, linkOf,
             />
           </div>
         )}
-        <MultiSaveFile set={set} played={list} />
+        <MultiSaveFile set={set} played={list} isKnown={isKnown} />
       </div>
       <div ref={area}>
         {entries.length === 0 ? (

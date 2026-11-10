@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BingoMusic } from "./bingoLogic";
-import { progressOf } from "./bingoProgress";
+import { isFirstFill } from "./bingoProgress";
 import { CARD_PARAM, type KindedCard, cardCode, decodeCardCode } from "./bingoShare";
 import type { CardTimes } from "./bingoRestore";
 import {
@@ -55,9 +55,13 @@ function newEntry(kc: KindedCard, now: number, times?: CardTimes | null): SavedM
   };
 }
 
-/** カードを替えた後の保存の 1 件。最初に埋めたとき（埋めたマスが 0 から増えた）にプレイ開始の時刻を付ける。 */
-function withCard(c: SavedMultiCard, kc: KindedCard, now: number): SavedMultiCard {
-  const started = c.startedAt ?? (progressOf(kc.card).filled > 0 ? now : undefined);
+/**
+ * カードを替えた後の保存の 1 件。最初に埋めたとき（替える前が 0 マスで、替えた後が 1 マス以上）にプレイ開始の時刻を付ける。
+ * prev は替える前のカード（読めなければ null で、時刻は付けない）。
+ * ★ 前は替える前を見ず、時刻の無い途中のカード（埋めた状態で足した・リンクから足した）に、次に替えた時刻が付いた（検分 P 中-1）
+ */
+function withCard(c: SavedMultiCard, prev: KindedCard | null, kc: KindedCard, now: number): SavedMultiCard {
+  const started = c.startedAt ?? (prev && isFirstFill(prev.card, kc.card) ? now : undefined);
   return { ...c, code: cardCode(kc), ...(started !== undefined ? { startedAt: started } : {}) };
 }
 
@@ -149,16 +153,20 @@ export function useMultiSet(musics: BingoMusic[]) {
    * ★ 休止中のカードは変えない。休止はほかのタブでも変わるので、当てる時点の保存で見る（検分 M2 低-2。
    *   小窓を開いたままほかのタブで休止されると、開いていた小窓の［埋める］で休止中のカードが埋まった）
    */
-  const updateCards = useCallback((updates: ReadonlyMap<string, KindedCard>) => {
-    const now = Date.now();
-    setSaved((s) => ({
-      ...s,
-      cards: s.cards.map((c) => {
-        const kc = updates.get(c.id);
-        return kc && !isPaused(c) ? withCard(c, kc, now) : c;
-      }),
-    }));
-  }, []);
+  const updateCards = useCallback(
+    (updates: ReadonlyMap<string, KindedCard>) => {
+      const now = Date.now();
+      setSaved((s) => ({
+        ...s,
+        cards: s.cards.map((c) => {
+          const kc = updates.get(c.id);
+          // 替える前のカードは保存のコードから読む（最初に埋めたときかを見るため）
+          return kc && !isPaused(c) ? withCard(c, decodeOrNull(c.code, musics), kc, now) : c;
+        }),
+      }));
+    },
+    [musics]
+  );
 
   /**
    * いまの保存のカードに対して、変え方（fn）を当てる（遊んだ曲の反映）。画面に描いた時点のカードではなく、
@@ -174,7 +182,7 @@ export function useMultiSet(musics: BingoMusic[]) {
           if (isPaused(c)) return c;
           const kc = decodeOrNull(c.code, musics);
           const next = kc ? fn(kc) : null;
-          return next ? withCard(c, next, now) : c;
+          return next ? withCard(c, kc, next, now) : c;
         }),
       }));
     },
@@ -195,7 +203,7 @@ export function useMultiSet(musics: BingoMusic[]) {
           if (c.id !== id || (skipPaused && isPaused(c))) return c;
           const kc = decodeOrNull(c.code, musics);
           const next = kc ? fn(kc) : null;
-          return next ? withCard(c, next, now) : c;
+          return next ? withCard(c, kc, next, now) : c;
         }),
       }));
     },

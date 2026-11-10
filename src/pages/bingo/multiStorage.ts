@@ -58,11 +58,19 @@ const CODE_PATTERN = /^[\x21-\x7e]+$/;
 // eslint-disable-next-line no-control-regex
 const UNSAFE_CHARS = /[\u0000-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩؜]/g;
 
-/** 時刻の上限。Date が表せる最大（8.64e15 ミリ秒）。これを超える値（1e300 など）を通すと、画面の時刻が NaN になる（検分 M2 安全の低-1）。 */
-export const MAX_TIME = 8.64e15;
+/** 時刻の下限: プロセカの配信開始 2020-09-30 00:00（日本時間）。これより前の時刻は壊れた・作られた値（1970 年など）。 */
+export const MIN_TIME = Date.UTC(2020, 8, 29, 15, 0, 0);
+/** 時刻の上限は「今から 1 日先」。端末の時計のずれは許し、遠い先（西暦 275760 年など）は通さない。 */
+const FUTURE_SLACK = 86_400_000;
 
-/** 時刻（ミリ秒）として使える数か。正の有限で、Date が表せる範囲。遊んだ曲・1 枚で遊ぶの時刻の読み込みも同じ決まり。 */
-export const isTime = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0 && v <= MAX_TIME;
+/**
+ * 時刻（ミリ秒）として使える数か。2020-09-30 以後・今から 1 日先まで（計画 2-6 の st と同じ決まり）。
+ * 休止の区間・足した時刻・プレイ開始・書き出した時刻・遊んだ曲・1 枚で遊ぶの時刻の読み込みで共通に使う。
+ * ★ 前は「正の有限」だけで、1e300 が通って画面の時刻が NaN になった（検分 M2 安全の低-1）。Date の最大（8.64e15）を上限にしても、
+ *   西暦 275760 年や 1970 年が通り、一覧に「9/13（土）」と出て、遠い先の曲がどのカードの「足した時刻より後」にも当たった（検分 P 安全の低-1）
+ */
+export const isTime = (v: unknown, now: number = Date.now()): v is number =>
+  typeof v === "number" && Number.isFinite(v) && v >= MIN_TIME && v <= now + FUTURE_SLACK;
 
 /**
  * カードの名前を整える（ファイルや画面の入力から来る文字）。制御文字・向きを変える文字を落とし、
