@@ -77,11 +77,12 @@ export default function PrivacyPage() {
             の画面からいつでも一覧・削除できます。同じ画面からファイルへ書き出して、別の端末へ移すこともできます。
             ブラウザのデータ消去でも同時に消えます。
           </p>
-          {/* ★ 本物の鍵ではまだ測っていない。何で確かめたかを書き、詳しくは Cloudflare の説明に任せる（第6項も同じ） */}
+          {/* ★ 本物の鍵ではまだ測っていない。何で確かめたかだけを書く（第6項も同じ）。
+              Turnstile Privacy Addendum は端末に置くもの（ローカルストレージ等）を書いていないので、
+              「Cloudflare の説明のとおり」とは書かない（2026-11-12 の検分 2 回目 中-A） */}
           <p>
-            問い合わせのページで確認の部品（Cloudflare Turnstile、第5項）を読み込んだときに何が保存されるかは、Cloudflare
-            の説明（<DocLink href={TURNSTILE_PRIVACY_URL}>Turnstile Privacy Addendum</DocLink>）のとおりです。2026年11月に運営者が試験用の設定で確かめたときは、Cloudflare
-            の領域（challenges.cloudflare.com）のローカルストレージに値が1つ置かれました。これは上の一覧と設定の画面には出ず、ブラウザのデータ消去で消えます。
+            問い合わせのページで確認の部品（Cloudflare Turnstile、第5項）を読み込むと、Cloudflare
+            が自分の領域（challenges.cloudflare.com）のローカルストレージに値を置くことがあります。2026年11月に運営者が試験用の設定で確かめたときは、値が1つ置かれました。これは上の一覧と設定の画面には出ず、ブラウザのデータ消去で消えます。
           </p>
         </DocSection>
 
@@ -144,9 +145,9 @@ export default function PrivacyPage() {
         <DocSection title="6. Cookie">
           <p>本サイト自身は Cookie を使用していません。広告も掲載していないため、広告目的の追跡もありません。</p>
           <p>
-            問い合わせのページで読み込む確認の部品（Cloudflare Turnstile、第5項）が端末に何を保存するかは、Cloudflare
-            の説明（<DocLink href={TURNSTILE_PRIVACY_URL}>Turnstile Privacy Addendum</DocLink>）のとおりです。2026年11月に運営者が試験用の設定で確かめたときは、Cookie
-            は使われず、Cloudflare の領域（challenges.cloudflare.com）のローカルストレージに値が1つ置かれました。
+            問い合わせのページで読み込む確認の部品（Cloudflare Turnstile、第5項）は、2026年11月に運営者が試験用の設定で確かめたときは、Cookie
+            を使いませんでした（ローカルストレージに置く値は第2項）。Turnstile が扱う情報は、Cloudflare の{" "}
+            <DocLink href={TURNSTILE_PRIVACY_URL}>Turnstile Privacy Addendum</DocLink> に書かれています。
           </p>
         </DocSection>
 
