@@ -85,6 +85,17 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+/**
+ * ログに出た文字を全部つなげる。
+ * ★ JSON.stringify では Error の message・stack が落ちる（列挙できないため {} になる）ので、自分で文字にする。
+ *   これを使わないと「err をそのまま出す」実装をテストが見逃す（実際に見逃した）。
+ */
+const loggedText = () =>
+  errorLog.mock.calls
+    .flat()
+    .map((a: unknown) => (a instanceof Error ? `${a.name} ${a.message} ${a.stack}` : typeof a === 'string' ? a : JSON.stringify(a)))
+    .join('\n')
+
 describe('GET（受け付けているか）', () => {
   const accepting = async (env: ContactEnv) => ((await handleGet(env).json()) as { accepting: unknown }).accepting
 
@@ -330,7 +341,7 @@ describe('POST の Google フォームへの中継', () => {
     stubFetch({ google: () => Promise.reject(new Error('fetch failed https://docs.google.com/forms/d/e/TESTFORMID/formResponse')) })
     const { res } = await send(post(VALID))
     expect(res.status).toBe(502)
-    expect(JSON.stringify(errorLog.mock.calls)).not.toContain('TESTFORMID')
+    expect(loggedText()).not.toContain('TESTFORMID')
   })
 })
 
@@ -385,7 +396,7 @@ describe('ログ・応答に中身を出さない', () => {
     await send(post(VALID))
     stubFetch({ verify: () => Promise.reject(new Error('TESTSECRET')) })
     await send(post(VALID))
-    const logged = JSON.stringify(errorLog.mock.calls)
+    const logged = loggedText()
     expect(errorLog).toHaveBeenCalled()
     for (const s of [BODY_TEXT, REPLY_TEXT, 'TESTSECRET', 'TESTFORMID', 'TESTWEBHOOK']) expect(logged).not.toContain(s)
   })
