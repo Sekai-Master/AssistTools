@@ -59,7 +59,26 @@ describe("利用規約", () => {
     expect(hrefs).toContain("/privacy");
     expect(hrefs).toContain("/changelog");
   });
+
+  it("問い合わせのページへ行ける（第2条・第7条）", () => {
+    at(<TermsPage />);
+    const links = screen.getAllByRole("link", { name: "問い合わせのページ" });
+    expect(links.length).toBeGreaterThanOrEqual(2);
+    for (const a of links) expect(a.getAttribute("href")).toBe("/contact?from=%2Fterms");
+  });
+
+  it("第5条は、問い合わせで送った内容だけは運営者に届くと書く", () => {
+    at(<TermsPage />);
+    expect(sectionText("5. 保存されるデータについて")).toContain("問い合わせのページから送った内容だけは運営者に届きます");
+  });
 });
+
+/** 見出しの名前でその項を探し、本文を返す。 */
+function sectionText(title: string): string {
+  const section = screen.getByRole("heading", { name: title, level: 2 }).closest("section");
+  if (!section) throw new Error(`「${title}」の項が無い`);
+  return section.textContent ?? "";
+}
 
 describe("プライバシーポリシー", () => {
   it("保存している項目を台帳どおり全部載せる（増やしたら自動で載る）", () => {
@@ -69,11 +88,76 @@ describe("プライバシーポリシー", () => {
     }
   });
 
-  it("解析と Cookie の扱いを明記している", () => {
+  /*
+   * ★ 第6項の文そのものは固定しない。問い合わせの Turnstile の Cookie は、本物の鍵で測ってから
+   *   指揮が書き直す（2026-11-12 の時点では試験用の鍵で 0 件）。サイト自身が使わないことと、
+   *   Turnstile に触れていることだけを縛る。
+   */
+  it("解析と Cookie の扱いを明記している（Cookie の項は Turnstile にも触れる）", () => {
     at(<PrivacyPage />);
     const text = document.body.textContent ?? "";
     expect(text).toContain("Cloudflare Web Analytics");
-    expect(text).toContain("Cookie を使用していません");
+    expect(sectionText("6. Cookie")).toContain("Cookie を使用していません");
+    expect(sectionText("6. Cookie")).toContain("Turnstile");
+  });
+
+  it("問い合わせで使う事業者を全部名指しする（第7項）", () => {
+    at(<PrivacyPage />);
+    const third = sectionText("7. 第三者への提供");
+    for (const name of ["Google", "Cloudflare", "Discord", "Anthropic"]) expect(third, name).toContain(name);
+    expect(third).toContain("これ以外には渡しません");
+  });
+
+  it("問い合わせで送った内容の扱い（保存先・AI が読むこと・知らせ・期限と消し方）を書く（第10項）", () => {
+    at(<PrivacyPage />);
+    const contact = sectionText("10. 問い合わせ");
+    expect(contact).toContain("Google のアカウント");
+    expect(contact).toContain("Claude");
+    expect(contact).toContain("種類だけ");
+    expect(contact).toContain("1 年以内");
+    expect(contact).toContain("送った内容に含まれるものは、すべて運営者に届きます");
+  });
+
+  it("Turnstile の読み込みは第5項（外部への通信）に書く。開いただけでは接続しない", () => {
+    at(<PrivacyPage />);
+    const external = sectionText("5. 外部サイトへの通信");
+    expect(external).toContain("ページを開いただけで外部のサーバーに接続することはありません");
+    expect(external).toContain("challenges.cloudflare.com");
+    expect(external).toContain("Turnstile Privacy Addendum");
+    // 実装（ContactForm の読み込みのきっかけ）と同じ言い方にする（検分 高-1）
+    expect(external).toContain("種類・内容・返信先の欄に初めて触れたとき");
+  });
+
+  // ★ 案の印をページに残したまま本番に出さない（検分 高-3。CI は main への push でそのまま本番に出す）
+  it("「（実測の後に確定）」のような案の印を本文に残さない", () => {
+    at(<PrivacyPage />);
+    expect(document.body.textContent).not.toContain("実測の後に確定");
+  });
+
+  it("Turnstile の保存（第2項）と Cookie（第6項）は、何で確かめたかと Cloudflare の説明を添える", () => {
+    at(<PrivacyPage />);
+    const stored = sectionText("2. ブラウザに保存される情報");
+    expect(stored).toContain("試験用の設定");
+    expect(stored).toContain("設定の画面には出ず");
+    const cookie = sectionText("6. Cookie");
+    expect(cookie).toContain("試験用の設定");
+    expect(cookie).toContain("Turnstile Privacy Addendum");
+  });
+
+  it("問い合わせのページへ行ける（第10項）", () => {
+    at(<PrivacyPage />);
+    expect(screen.getByRole("link", { name: "問い合わせのページ" }).getAttribute("href")).toBe("/contact?from=%2Fprivacy");
+  });
+
+  // 問い合わせ口を付けた時点で事実でなくなった文（レビュー 高-1）。戻すと規約・ポリシーが嘘になる
+  it("問い合わせ口と食い違う古い文を残さない", () => {
+    at(<PrivacyPage />);
+    const privacy = document.body.textContent ?? "";
+    expect(privacy).not.toContain("個人情報の入力を求める箇所はありませんが");
+    expect(privacy).not.toContain("そもそも運営者が利用者の情報を取得していないため");
+    cleanup();
+    at(<TermsPage />);
+    expect(sectionText("5. 保存されるデータについて")).not.toMatch(/にだけ保存されます。運営者のサーバーには送られません。\s*詳しくは/);
   });
 
   it("設定画面（消し方）への導線がある", () => {
@@ -138,6 +222,15 @@ describe("フッター", () => {
     expect(hrefs).toContain("/privacy");
     expect(hrefs).toContain("/changelog");
     expect(hrefs).toContain(X_URL);
+  });
+
+  it("お問い合わせへのリンクは、今のページを from に入れる", () => {
+    render(
+      <MemoryRouter initialEntries={["/deck"]}>
+        <SiteFooter />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: "お問い合わせ" }).getAttribute("href")).toBe("/contact?from=%2Fdeck");
   });
 
   it("バージョンを表示する", () => {

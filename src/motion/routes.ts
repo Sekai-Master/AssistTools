@@ -29,7 +29,7 @@ export const ROUTE_LOADERS: Record<string, Loader> = {
 };
 
 /**
- * ツールではない読み物のページ（規約・ポリシー・更新履歴）。
+ * ツールではないページ（規約・ポリシー・更新履歴・問い合わせ）。
  *
  * ROUTE_LOADERS と分けているのは、あちらが「TOOLS に載っているもの」だけを
  * 持つ約束になっていて、routes.test.ts がそれを固定しているため。
@@ -40,6 +40,8 @@ export const PAGE_LOADERS: Record<string, Loader> = {
   "/terms": () => import("../pages/legal/TermsPage"),
   "/privacy": () => import("../pages/legal/PrivacyPage"),
   "/changelog": () => import("../pages/legal/ChangelogPage"),
+  // 問い合わせ。Turnstile はこのチャンクにも入れず、種類・内容・返信先の欄に触れたときに読み込む。
+  "/contact": () => import("../pages/contact/ContactPage"),
   // 知見ノート。一覧と記事で同じチャンクを使う（/knowledge/:slug も同じ入口）。
   "/knowledge": () => import("../pages/knowledge/KnowledgePage"),
 };
@@ -113,6 +115,7 @@ export const RoutePages = {
   terms: lazyOf("/terms"),
   privacy: lazyOf("/privacy"),
   changelog: lazyOf("/changelog"),
+  contact: lazyOf("/contact"),
   knowledge: lazyOf("/knowledge"),
   border: lazyOf("/border"),
   borderHistory: lazyOf("/border/history"),
@@ -126,6 +129,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/terms": "利用規約",
   "/privacy": "プライバシーポリシー",
   "/changelog": "更新履歴",
+  "/contact": "お問い合わせ",
   "/knowledge": "知見ノート",
 };
 

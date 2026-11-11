@@ -115,6 +115,10 @@ export const PAGES: Record<string, PageMeta> = {
     title: "プライバシーポリシー",
     description: `${SITE_NAME} のプライバシーポリシー。`,
   },
+  "/contact": {
+    title: "お問い合わせ",
+    description: `${SITE_NAME} への不具合の報告・データの誤り・要望などを送るページ。`,
+  },
   "/settings": {
     title: "設定",
     description: `${SITE_NAME} の表示と演出の設定。`,

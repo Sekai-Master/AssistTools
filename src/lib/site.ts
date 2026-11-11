@@ -31,12 +31,23 @@ export const OWNER_NAME = "Noritake";
 /**
  * 運営者個人の X。**問い合わせ窓口ではない**。
  * 規約・ポリシーに載せるのは「誰が運営しているか」を辿れるようにするためだけ。
- * 連絡先は下の公式アカウントと GitHub Issues。
+ * 連絡先は問い合わせのページ（CONTACT_PATH、第一の窓口）と、下の公式アカウント・GitHub Issues。
  */
 export const OWNER_X_HANDLE = "@YesNoritake";
 export const OWNER_X_URL = "https://x.com/YesNoritake";
 
-/** 公式 X。問い合わせ窓口であり、更新の告知先でもある（docs/x-operations.md）。 */
+/**
+ * 問い合わせのページ。第一の窓口（送った内容は運営者に届く。プライバシーポリシー第10項）。
+ * 中継は functions/api/contact.ts。
+ */
+export const CONTACT_PATH = "/contact";
+
+/** 問い合わせのページへのリンク。来たページを `?from=` に入れて、どのページの話かを添える。 */
+export function contactHref(from?: string): string {
+  return from && from !== CONTACT_PATH ? `${CONTACT_PATH}?from=${encodeURIComponent(from)}` : CONTACT_PATH;
+}
+
+/** 公式 X。問い合わせの窓口の1つで（第一は問い合わせのページ）、更新の告知先でもある（docs/x-operations.md）。 */
 export const X_HANDLE = "@pj_Sekai_master";
 export const X_URL = "https://x.com/pj_Sekai_master";
 
@@ -48,4 +59,4 @@ export const COPYRIGHT_SINCE = 2024;
 
 /** 利用規約・プライバシーポリシーの施行日と最終改訂日。改訂したらここを更新する。 */
 export const LEGAL_EFFECTIVE_DATE = "2026-08-04";
-export const LEGAL_REVISED_DATE = "2026-08-04";
+export const LEGAL_REVISED_DATE = "2026-11-12";

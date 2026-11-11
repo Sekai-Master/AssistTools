@@ -1,6 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { formatDataDate } from "./SiteFooter";
 import { PAGE_LOADERS, PAGE_TITLES, routeTitle } from "../motion/routes";
+import { CONTACT_PATH, contactHref } from "../lib/site";
+
+describe("お問い合わせへのリンク", () => {
+  it("来たページを from に入れる（関数の側で形を確かめる）", () => {
+    expect(contactHref("/border/history")).toBe("/contact?from=%2Fborder%2Fhistory");
+    expect(contactHref("/")).toBe("/contact?from=%2F");
+  });
+
+  it("問い合わせのページ自身・来たページが無いときは from を付けない", () => {
+    expect(contactHref(CONTACT_PATH)).toBe("/contact");
+    expect(contactHref()).toBe("/contact");
+  });
+
+  it("問い合わせのページは読み物のページとして遅延ロードし、読み上げの名前を持つ", () => {
+    expect(PAGE_LOADERS).toHaveProperty(CONTACT_PATH);
+    expect(routeTitle(CONTACT_PATH)).toBe("お問い合わせ");
+  });
+});
 
 describe("formatDataDate", () => {
   it("ISO 文字列を日本時間の日付にする", () => {

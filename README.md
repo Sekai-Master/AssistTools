@@ -94,6 +94,23 @@ BINGO生成は匿名M氏の「チアフルビンゴ自動生成シート」を�
 
 サイト名・問い合わせ窓口・施行日は `src/lib/site.ts` に集約している。窓口を変えるときはそこだけ直す。
 
+## 問い合わせ
+
+第一の窓口は [問い合わせのページ](https://sekaimaster.pages.dev/contact)（`src/pages/contact/`）。公式 X の DM・リプライと GitHub Issues も窓口として残している。
+送った内容は `functions/api/contact.ts`（Pages Functions）が Cloudflare Turnstile で確かめてから、運営者の Google フォームへ中継し、届いたことを Discord に知らせる。
+使う環境変数（どれも Pages の秘密。本番とプレビューで別に入れる）:
+
+| 名前 | 中身 |
+|---|---|
+| `TURNSTILE_SECRET` | Turnstile の秘密の鍵 |
+| `CONTACT_FORM_ID` | Google フォームの回答用の URL（`/forms/d/e/<ここ>/viewform`）の ID |
+| `CONTACT_FORM_ENTRIES` | JSON `{"kind":"<数字>","body":"<数字>","reply":"<数字>","page":"<数字>","ver":"<数字>"}`（番号は文字列） |
+| `CONTACT_DISCORD_WEBHOOK` | 届いたことの知らせ先（任意） |
+| `CONTACT_DISABLED` | `1` で受付を止める（任意。画面は代わりの窓口を出す） |
+
+**リポジトリは公開なので、フォームの ID・entry の番号をコード・テスト・Issue に書かない**（書くと Turnstile を飛ばして直接送られる）。
+手元で関数ごと試すときは `.dev.vars`（`.gitignore` 済み）に Turnstile の試験用の秘密と架空の ID を入れて `npx wrangler pages dev dist` で動かす。
+
 ## ライセンス
 
-MIT License（コード）。ゲーム内の名称・データ・画像等は各権利者に帰属します。
+MIT License（コード）。ゲーム内の名称・データ・画像等は各権利者に帰属します（`NOTICE`）。

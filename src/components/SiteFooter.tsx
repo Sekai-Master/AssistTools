@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
-import { COPYRIGHT_SINCE, OWNER_NAME, REPO_URL, X_HANDLE, X_URL } from "../lib/site";
+import { Link, useLocation } from "react-router-dom";
+import { COPYRIGHT_SINCE, OWNER_NAME, REPO_URL, X_HANDLE, X_URL, contactHref } from "../lib/site";
 
 /**
  * サイト全体のフッター。
@@ -29,6 +29,8 @@ export function formatDataDate(iso: string): string | null {
 const LINK = "hover:text-slate-700 transition-colors";
 
 export function SiteFooter() {
+  // 問い合わせに「どのページから来たか」を添える（関数の側で形を確かめ、合わなければ空にする）
+  const { pathname } = useLocation();
   const dataDate = formatDataDate(__CARD_DATA_GENERATED_AT__);
   const thisYear = new Date().getFullYear();
   const years = thisYear > COPYRIGHT_SINCE ? `${COPYRIGHT_SINCE}-${thisYear}` : `${COPYRIGHT_SINCE}`;
@@ -42,6 +44,9 @@ export function SiteFooter() {
           </Link>
           <Link to="/privacy" className={LINK}>
             プライバシーポリシー
+          </Link>
+          <Link to={contactHref(pathname)} className={LINK}>
+            お問い合わせ
           </Link>
           <Link to="/knowledge" className={LINK}>
             知見ノート
