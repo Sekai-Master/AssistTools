@@ -30,6 +30,15 @@ const FAILURE_TEXT: Record<Failure, string> = {
 
 const KIND_OPTIONS = CONTACT_KINDS.map((k) => ({ value: k, label: k }));
 
+/**
+ * 送る前の説明。★ 事実だけ書く（「運営者だけが読みます」とは書かない。Claude も読む。レビュー 高-2）。
+ * JSX の中で改行すると「。」のあとに空白が入るので、文字列で持つ。
+ */
+const BEFORE_SEND =
+  "送った内容は、運営者の Google のアカウントに保存され、運営者と、運営者が使う AI のアシスタント（Claude）が読みます。" +
+  "返信が要るときは返信先を書いてください。書いてもらったときは、こちらから連絡することがあります" +
+  "（X の DM は、相手の設定によって送れないことがあります）。詳しくは";
+
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
 
 function failureOf(status: number, data: unknown): Failure {
@@ -179,9 +188,7 @@ export function ContactForm({ from }: { from: string }) {
       <div ref={containerRef} className={status === "idle" ? "" : "min-h-[65px]"} />
 
       <p className="text-sm leading-7 text-slate-600">
-        送った内容は、運営者の Google のアカウントに保存され、運営者と、運営者が使う AI のアシスタント（Claude）が読みます。
-        返信が要るときは返信先を書いてください。書いてもらったときは、こちらから連絡することがあります（X の DM
-        は、相手の設定によって送れないことがあります）。詳しくは
+        {BEFORE_SEND}
         <Link to="/privacy" className="text-[color:var(--unit-color)] underline underline-offset-2">
           プライバシーポリシー
         </Link>
