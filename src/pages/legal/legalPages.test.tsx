@@ -140,6 +140,15 @@ describe("フッター", () => {
     expect(hrefs).toContain(X_URL);
   });
 
+  it("お問い合わせへのリンクは、今のページを from に入れる", () => {
+    render(
+      <MemoryRouter initialEntries={["/deck"]}>
+        <SiteFooter />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: "お問い合わせ" }).getAttribute("href")).toBe("/contact?from=%2Fdeck");
+  });
+
   it("バージョンを表示する", () => {
     at(<SiteFooter />);
     expect(screen.getByText(`v${__APP_VERSION__}`)).toBeTruthy();

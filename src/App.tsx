@@ -38,6 +38,8 @@ export function App() {
               <Route path="/terms" element={<RoutePages.terms />} />
               <Route path="/privacy" element={<RoutePages.privacy />} />
               <Route path="/changelog" element={<RoutePages.changelog />} />
+              {/* 問い合わせ（第一の窓口）。入口はフッター・規約・ポリシー。 */}
+              <Route path="/contact" element={<RoutePages.contact />} />
               <Route path="/knowledge" element={<RoutePages.knowledge />} />
               {/* 記事も同じ入口。slug は useParams で受ける。 */}
               <Route path="/knowledge/:slug" element={<RoutePages.knowledge />} />
