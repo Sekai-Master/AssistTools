@@ -114,6 +114,20 @@ describe('GET（受け付けているか）', () => {
     expect(await accepting({ ...ENV, CONTACT_DISABLED: '0' })).toBe(true)
   })
 
+  /*
+   * ★ 止めた（disabled）のか、設定が壊れている（misconfigured）のかを分ける（検分 中-2）。
+   *   どの変数が欠けたか・値そのものは出さない。壊れているときはログに符号を出す
+   */
+  it('受け付けない理由の符号を返す。止めたときと設定の壊れを分け、変数の名前や値は出さない', async () => {
+    expect(await handleGet({ ...ENV, CONTACT_DISABLED: '1' }).json()).toEqual({ accepting: false, reason: 'disabled' })
+    expect(errorLog).not.toHaveBeenCalled()
+    const res = handleGet({ ...ENV, CONTACT_FORM_ENTRIES: '{' })
+    const raw = await res.text()
+    expect(JSON.parse(raw)).toEqual({ accepting: false, reason: 'misconfigured' })
+    for (const s of ['CONTACT_FORM_ENTRIES', 'TESTSECRET', 'TESTFORMID']) expect(raw).not.toContain(s)
+    expect(loggedText()).toContain('misconfigured')
+  })
+
   it.each([
     ['秘密が無い', { TURNSTILE_SECRET: undefined }],
     ['秘密が空', { TURNSTILE_SECRET: '  ' }],
@@ -256,13 +270,18 @@ describe('POST の Turnstile の確認', () => {
     expect(c.init.signal).toBeInstanceOf(AbortSignal)
   })
 
-  it('success が false なら 403。Google には送らない', async () => {
-    const f = stubFetch({ verify: () => Response.json({ success: false, 'error-codes': ['invalid-input-response'] }) })
-    const { res, data } = await send(post(VALID))
-    expect(res.status).toBe(403)
-    expect(data.error).toBe('verify')
-    expect(f.googleCalls()).toHaveLength(0)
-  })
+  it.each([['invalid-input-response'], ['timeout-or-duplicate'], ['missing-input-response']])(
+    '利用者の token の問題（%s）は 403。Google にも Discord にも送らず、ログに符号だけ出す',
+    async (code) => {
+      const f = stubFetch({ verify: () => Response.json({ success: false, 'error-codes': [code] }) })
+      const { res, data } = await send(post(VALID))
+      expect(res.status).toBe(403)
+      expect(data.error).toBe('verify')
+      expect(f.googleCalls()).toHaveLength(0)
+      expect(f.discordCalls()).toHaveLength(0)
+      expect(loggedText()).toContain(code)
+    },
+  )
 
   it('hostname がリクエストのホストと違えば 403', async () => {
     const f = stubFetch({ verify: () => Response.json({ success: true, hostname: 'evil.example' }) })
@@ -271,12 +290,56 @@ describe('POST の Turnstile の確認', () => {
     expect(f.googleCalls()).toHaveLength(0)
   })
 
-  it('試験用の鍵の結果（hostname が example.com）のときだけ hostname を比べない', async () => {
-    stubFetch({
-      verify: () => Response.json({ success: true, hostname: 'example.com', metadata: { result_with_testing_key: true } }),
-    })
+  /*
+   * ★ 運営者の側の失敗（秘密の誤り・失効）を、利用者の「確認に失敗」（403）に化けさせない（検分 高-2）。
+   *   利用者には「いまは送れません」（503・代わりの窓口）、運営者には Discord で知らせる
+   */
+  it.each([['invalid-input-secret'], ['missing-input-secret']])(
+    '秘密の設定の誤り（%s）は 503。Google には送らず、Discord に符号を知らせる',
+    async (code) => {
+      const f = stubFetch({ verify: () => Response.json({ success: false, 'error-codes': [code] }) })
+      const { res, data } = await send(post(VALID))
+      expect(res.status).toBe(503)
+      expect(data.error).toBe('unavailable')
+      expect(f.googleCalls()).toHaveLength(0)
+      const msg = discordJson(f.discordCalls()[0])
+      expect(msg.content).toContain('Turnstile の秘密')
+      expect(msg.content).toContain(code)
+      expect(String(f.discordCalls()[0].init.body)).not.toContain(BODY_TEXT)
+      expect(loggedText()).toContain(code)
+    },
+  )
+
+  const TESTING = { success: true, hostname: 'example.com', metadata: { result_with_testing_key: true } }
+
+  it.each([['http://localhost:8788/api/contact'], ['http://127.0.0.1:3012/api/contact']])(
+    '試験用の鍵の結果（hostname が example.com）は、手元（%s）でだけ hostname を比べずに通す',
+    async (url) => {
+      stubFetch({ verify: () => Response.json(TESTING) })
+      const { res } = await send(post(VALID, {}, url))
+      expect(res.status).toBe(200)
+    },
+  )
+
+  /*
+   * ★ 試験用の秘密は、どんな token も通す（2026-11-12 に検分が実測）。本番やプレビューに貼られたら、
+   *   確認がすり抜けないよう止めて知らせる（検分 中-1）
+   */
+  it('試験用の鍵の結果が本番・プレビューのホストで返ったら、通さずに 503。Discord に「試験用の秘密」を知らせる', async () => {
+    const f = stubFetch({ verify: () => Response.json(TESTING) })
+    const { res, data } = await send(post(VALID))
+    expect(res.status).toBe(503)
+    expect(data.error).toBe('unavailable')
+    expect(f.googleCalls()).toHaveLength(0)
+    expect(discordJson(f.discordCalls()[0]).content).toContain('試験用の秘密')
+    expect(loggedText()).toContain('verify_testing_key')
+  })
+
+  it('試験用の鍵で success が false でも、本番のホストなら設定の誤りとして知らせる', async () => {
+    const f = stubFetch({ verify: () => Response.json({ ...TESTING, success: false, 'error-codes': ['invalid-input-response'] }) })
     const { res } = await send(post(VALID))
-    expect(res.status).toBe(200)
+    expect(res.status).toBe(503)
+    expect(discordJson(f.discordCalls()[0]).content).toContain('試験用の秘密')
   })
 
   it.each([
@@ -330,6 +393,8 @@ describe('POST の Google フォームへの中継', () => {
     ['400', () => new Response('bad', { status: 400 })],
     ['302', () => new Response(null, { status: 302, headers: { Location: 'https://accounts.google.com/' } })],
     ['500', () => new Response('bad', { status: 500 })],
+    // 2xx でも 200 以外は成功にしない（res.ok で判定すると通ってしまう。検分のテストの穴）
+    ['204', () => new Response(null, { status: 204 })],
   ])('Google が %s なら 502', async (_, google) => {
     stubFetch({ google })
     const { res, data } = await send(post(VALID))

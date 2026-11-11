@@ -66,14 +66,24 @@ const json = (data: unknown, status = 200) =>
   Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } })
 const fail = (status: number, error: string) => json({ ok: false, error }, status)
 
-/** 環境変数を読む。欠け・壊れは null（＝受け付けていない）。 */
-export function readConfig(env: ContactEnv): RelayConfig | null {
-  if (env.CONTACT_DISABLED === '1') return null
+/**
+ * 受け付けない理由。disabled は運営者が止めた（CONTACT_DISABLED=1）、misconfigured は設定の欠け・壊れ。
+ * ★ どの変数が欠けたか・値そのものは応答にもログにも出さない（符号だけ）。
+ */
+type ClosedReason = 'disabled' | 'misconfigured'
+type ConfigResult = { ok: true; config: RelayConfig } | { ok: false; reason: ClosedReason }
+
+/** 環境変数を読む。 */
+export function readConfig(env: ContactEnv): ConfigResult {
+  if (env.CONTACT_DISABLED === '1') return { ok: false, reason: 'disabled' }
   const secret = env.TURNSTILE_SECRET?.trim()
   const formId = env.CONTACT_FORM_ID?.trim()
-  if (!secret || !formId || !/^[A-Za-z0-9_-]{10,200}$/.test(formId)) return null
   const entries = parseEntries(env.CONTACT_FORM_ENTRIES)
-  return entries ? { secret, formId, entries } : null
+  if (!secret || !formId || !/^[A-Za-z0-9_-]{10,200}$/.test(formId) || !entries) {
+    console.error('contact', 'misconfigured')
+    return { ok: false, reason: 'misconfigured' }
+  }
+  return { ok: true, config: { secret, formId, entries } }
 }
 
 function parseEntries(raw: string | undefined): Record<EntryKey, string> | null {
@@ -96,7 +106,8 @@ function parseEntries(raw: string | undefined): Record<EntryKey, string> | null 
 }
 
 export function handleGet(env: ContactEnv): Response {
-  return json({ accepting: readConfig(env) !== null })
+  const c = readConfig(env)
+  return json(c.ok ? { accepting: true } : { accepting: false, reason: c.reason })
 }
 
 /**
@@ -177,12 +188,26 @@ const errorCode = (err: unknown) =>
   err instanceof Error && err.name === 'TimeoutError' ? 'timeout' : 'error'
 
 /**
- * Turnstile の siteverify。secret と response だけを送る（remoteip は送らない）。
- * - ok: 通った ／ rejected: 人の操作と確かめられなかった（403）／ unavailable: 確認そのものができない（502）
- * ★ 試験用の鍵の結果は hostname が example.com で返る（2026-11-12 に手元で実測）。その結果だけは
- *   hostname を比べない。本物の秘密の結果には result_with_testing_key が付かないので、本番の判定は緩まない。
+ * siteverify の判定。
+ * - ok: 通った
+ * - rejected: 利用者の token の問題（期限切れ・使用済み・偽物）か hostname の不一致 → 403「確認に失敗」
+ * - unavailable: 確認そのものができない（例外・5xx・internal-error）→ 502「いまは送れない」
+ * - misconfigured: 運営者の設定の誤り（秘密の誤り・試験用の秘密）→ 503「いまは送れない」＋ Discord に知らせる
  */
-async function verifyTurnstile(secret: string, token: string, hostname: string): Promise<'ok' | 'rejected' | 'unavailable'> {
+type Verdict =
+  | { result: 'ok' | 'rejected' | 'unavailable' }
+  | { result: 'misconfigured'; notice: string }
+
+/** 利用者のせいではない、運営者の側の誤りを表す符号（公式 server-side-validation の error codes）。 */
+const OPERATOR_CODES = ['missing-input-secret', 'invalid-input-secret', 'bad-request']
+/** 試験用の秘密で通してよいホスト（手元だけ）。 */
+const LOCAL_HOSTS = ['localhost', '127.0.0.1']
+
+/** 外から来た符号をログに出してよい形にする（英小文字・数字・- だけ）。 */
+const safeCode = (c: unknown) => (typeof c === 'string' && /^[a-z0-9-]{1,40}$/.test(c) ? c : 'unknown')
+
+/** Turnstile の siteverify。secret と response だけを送る（remoteip は送らない）。 */
+async function verifyTurnstile(secret: string, token: string, hostname: string): Promise<Verdict> {
   let res: Response
   try {
     res = await fetch(SITEVERIFY_URL, {
@@ -192,39 +217,58 @@ async function verifyTurnstile(secret: string, token: string, hostname: string):
     })
   } catch (err) {
     console.error('contact', 'verify', errorCode(err))
-    return 'unavailable'
+    return { result: 'unavailable' }
   }
   if (!res.ok) {
     console.error('contact', 'verify_status', res.status)
-    return 'unavailable'
+    return { result: 'unavailable' }
   }
   let data: unknown
   try {
     data = await res.json()
   } catch {
     console.error('contact', 'verify_json')
-    return 'unavailable'
+    return { result: 'unavailable' }
   }
   return judgeVerify(data, hostname)
 }
 
-function judgeVerify(data: unknown, hostname: string): 'ok' | 'rejected' | 'unavailable' {
-  if (typeof data !== 'object' || data === null) return 'unavailable'
+/**
+ * ★ 運営者の側の誤り（秘密の作り直し・打ち間違い）を、利用者の「確認に失敗」に化けさせない（検分 高-2）。
+ * ★ 試験用の鍵の結果は hostname が example.com で返る（2026-11-12 に手元で実測）。しかも試験用の秘密は
+ *   どんな token も通す（検分が実測）。手元のホストでだけ hostname を比べずに通し、本番・プレビューで
+ *   返ったら設定の誤りとして止める（検分 中-1）。
+ */
+function judgeVerify(data: unknown, hostname: string): Verdict {
+  if (typeof data !== 'object' || data === null) return { result: 'unavailable' }
   const d = data as { success?: unknown; hostname?: unknown; 'error-codes'?: unknown; metadata?: unknown }
-  const codes = Array.isArray(d['error-codes']) ? d['error-codes'] : []
+  const codes: unknown[] = Array.isArray(d['error-codes']) ? d['error-codes'] : []
   if (codes.includes('internal-error')) {
     console.error('contact', 'verify_internal')
-    return 'unavailable'
+    return { result: 'unavailable' }
   }
-  if (d.success !== true) return 'rejected'
+  const operator = codes.find((c) => typeof c === 'string' && OPERATOR_CODES.includes(c))
+  if (operator !== undefined) {
+    const code = safeCode(operator)
+    console.error('contact', 'verify_config', code)
+    return { result: 'misconfigured', notice: `Turnstile の秘密の設定が正しくないようです（${code}）。利用者には代わりの窓口を出しています` }
+  }
   const testing =
     typeof d.metadata === 'object' && d.metadata !== null &&
     (d.metadata as { result_with_testing_key?: unknown }).result_with_testing_key === true
+  if (testing && !LOCAL_HOSTS.includes(hostname)) {
+    console.error('contact', 'verify_testing_key')
+    return { result: 'misconfigured', notice: 'Turnstile に試験用の秘密が入っています（verify_testing_key）。利用者には代わりの窓口を出しています' }
+  }
+  if (d.success !== true) {
+    console.error('contact', 'verify_rejected', safeCode(codes[0]))
+    return { result: 'rejected' }
+  }
   if (!testing && d.hostname !== hostname) {
     console.error('contact', 'verify_hostname')
-    return 'rejected'
+    return { result: 'rejected' }
   }
-  return 'ok'
+  return { result: 'ok' }
 }
 
 /** Google フォームへ中継する。200 だけが成功。失敗は理由の符号を返す（ログと Discord に使う）。 */
@@ -279,16 +323,21 @@ export async function handlePost(
   const url = new URL(request.url)
   // 本番・プレビュー・手元で同じ式。正規表現でホストを並べない（レビュー 中-1）
   if (request.headers.get('Origin') !== url.origin) return fail(403, 'origin')
-  const config = readConfig(env)
-  if (!config) return fail(503, 'closed')
+  const c = readConfig(env)
+  if (!c.ok) return json({ ok: false, error: 'closed', reason: c.reason }, 503)
+  const { config } = c
 
   const parsed = await readSubmission(request)
   if (!parsed.ok) return fail(parsed.status, parsed.error)
   const { sub } = parsed
 
   const verdict = await verifyTurnstile(config.secret, sub.token, url.hostname)
-  if (verdict === 'rejected') return fail(403, 'verify')
-  if (verdict === 'unavailable') return fail(502, 'unavailable')
+  if (verdict.result === 'rejected') return fail(403, 'verify')
+  if (verdict.result === 'unavailable') return fail(502, 'unavailable')
+  if (verdict.result === 'misconfigured') {
+    waitUntil(notifyDiscord(env.CONTACT_DISCORD_WEBHOOK, verdict.notice))
+    return fail(503, 'unavailable')
+  }
 
   const relayError = await relayToForm(config, sub)
   if (relayError) {
