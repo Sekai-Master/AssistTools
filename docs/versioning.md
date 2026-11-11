@@ -130,7 +130,7 @@ gh release create v1.9.0 --title "v1.9.0" --notes "..."
 
 現在、ページを開いたときの外部通信は **Cloudflare Web Analytics のビーコン1本だけ**。フォント・アイコン・画像・データはすべて自前配信になっている。
 
-ページを開いたあと、利用者の操作で増える通信は1つある（2026-11 から）。問い合わせのページ（`/contact`）で入力欄に初めて触れたときに、迷惑な送信を防ぐ **Cloudflare Turnstile** を `challenges.cloudflare.com` から読み込む。送った内容は同一オリジンの `/api/contact`（`functions/api/contact.ts`）に届き、そこから運営者の Google フォームへ中継される（プライバシーポリシー第5項・第10項）。
+ページを開いたあと、利用者の操作で増える通信は1つある（2026-11 から）。問い合わせのページ（`/contact`）で種類・内容・返信先の欄に初めて触れたとき（キーボードで移ったときを含む）に、迷惑な送信を防ぐ **Cloudflare Turnstile** を `challenges.cloudflare.com` から読み込む。送った内容は同一オリジンの `/api/contact`（`functions/api/contact.ts`）に届き、そこから運営者の Google フォームへ中継される（プライバシーポリシー第5項・第10項）。
 
 ここに何かを足す（CDN・埋め込み・外部 API）ときは、**プライバシーポリシー第5項を同時に直す**。直さないとポリシーが嘘になる。
 

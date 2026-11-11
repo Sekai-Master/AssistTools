@@ -76,7 +76,7 @@ export function useTurnstile(theme: Theme) {
     };
   }, [active, theme]);
 
-  /** フォームに最初に触れたときに呼ぶ。2 回目以降は何もしない。 */
+  /** 種類・内容・返信先の欄に初めて触れたときに呼ぶ。2 回目以降は何もしない。 */
   const activate = useCallback(() => {
     setActive(true);
     setStatus((s) => (s === "idle" ? "loading" : s));

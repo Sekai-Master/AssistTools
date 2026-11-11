@@ -40,7 +40,7 @@ export const PAGE_LOADERS: Record<string, Loader> = {
   "/terms": () => import("../pages/legal/TermsPage"),
   "/privacy": () => import("../pages/legal/PrivacyPage"),
   "/changelog": () => import("../pages/legal/ChangelogPage"),
-  // 問い合わせ。Turnstile はこのチャンクにも入れず、フォームに触れたときに読み込む。
+  // 問い合わせ。Turnstile はこのチャンクにも入れず、種類・内容・返信先の欄に触れたときに読み込む。
   "/contact": () => import("../pages/contact/ContactPage"),
   // 知見ノート。一覧と記事で同じチャンクを使う（/knowledge/:slug も同じ入口）。
   "/knowledge": () => import("../pages/knowledge/KnowledgePage"),

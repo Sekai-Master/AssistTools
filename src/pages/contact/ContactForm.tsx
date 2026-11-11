@@ -128,64 +128,67 @@ export function ContactForm({ from }: { from: string }) {
   const copyText = [`種類: ${kind || "（未選択）"}`, `返信先: ${reply.trim() || "（なし）"}`, "", body.trim()].join("\n");
 
   return (
-    <form noValidate onSubmit={onSubmit} onFocus={activate} onInput={activate} className="space-y-4">
-      <div className="space-y-2">
-        <p id={`${id}-kind`} className="border-l-4 pl-2 text-sm font-bold text-slate-600" style={{ borderColor: "var(--unit-color)" }}>
-          種類
-        </p>
-        <div role="group" aria-labelledby={`${id}-kind`}>
-          <Segmented
-            options={KIND_OPTIONS}
-            value={kind}
-            onChange={(v) => {
-              setKind(v as ContactKind);
+    <form noValidate onSubmit={onSubmit} className="space-y-4">
+      {/* ★ Turnstile を読み込むきっかけは、種類・内容・返信先に初めて触れたとき（キーボードで移ったときを含む）だけ。
+          フォーム全体に付けると、説明の中のリンクや送るボタンでも読み込み、枠が広がって押した所がずれる（検分 高-1）。
+          種類のボタンはクリックしてもフォーカスが移らないブラウザ（Safari）があるので、選んだときにも呼ぶ。 */}
+      <div onFocus={activate} onInput={activate} className="space-y-4">
+        <div className="space-y-2">
+          <p id={`${id}-kind`} className="border-l-4 pl-2 text-sm font-bold text-slate-600" style={{ borderColor: "var(--unit-color)" }}>
+            種類
+          </p>
+          <div role="group" aria-labelledby={`${id}-kind`}>
+            <Segmented
+              options={KIND_OPTIONS}
+              value={kind}
+              onChange={(v) => {
+                activate();
+                setKind(v as ContactKind);
+                edited();
+              }}
+            />
+          </div>
+          {tried && !kind && <p className="text-xs font-bold text-rose-600">種類を選んでください</p>}
+        </div>
+
+        <Field label="内容" htmlFor={`${id}-body`}>
+          <NeuTextarea
+            id={`${id}-body`}
+            rows={8}
+            value={body}
+            onChange={(e) => {
+              setBody(e.target.value);
               edited();
             }}
+            aria-describedby={`${id}-count`}
+            className="text-base"
           />
-        </div>
-        {tried && !kind && <p className="text-xs font-bold text-rose-600">種類を選んでください</p>}
+          <div className="flex justify-between gap-3 text-xs text-slate-500">
+            <span className="font-bold text-rose-600">{tried && bodyProblem(body) === "empty" ? "内容を書いてください" : ""}</span>
+            <span id={`${id}-count`} className={tooLong ? "font-bold text-rose-600" : "font-num"}>
+              {`${count} / ${CONTACT_BODY_MAX}`}
+            </span>
+          </div>
+        </Field>
+
+        <Field label="返信先（任意）" htmlFor={`${id}-reply`} hint="X の ID（@ から）かメールアドレス。100 字まで">
+          <NeuInput
+            id={`${id}-reply`}
+            value={reply}
+            onChange={(e) => {
+              setReply(e.target.value);
+              edited();
+            }}
+            autoComplete="off"
+            className="text-base"
+          />
+          {replyOdd && <p className="text-xs text-amber-700">X の ID かメールアドレスの形ではないようです。このままでも送れます。</p>}
+          {replyTooLong && <p className="text-xs font-bold text-rose-600">100 字までです</p>}
+        </Field>
       </div>
-
-      <Field label="内容" htmlFor={`${id}-body`}>
-        <NeuTextarea
-          id={`${id}-body`}
-          rows={8}
-          value={body}
-          onChange={(e) => {
-            setBody(e.target.value);
-            edited();
-          }}
-          aria-describedby={`${id}-count`}
-          className="text-base"
-        />
-        <div className="flex justify-between gap-3 text-xs text-slate-500">
-          <span className="font-bold text-rose-600">{tried && bodyProblem(body) === "empty" ? "内容を書いてください" : ""}</span>
-          <span id={`${id}-count`} className={tooLong ? "font-bold text-rose-600" : "font-num"}>
-            {`${count} / ${CONTACT_BODY_MAX}`}
-          </span>
-        </div>
-      </Field>
-
-      <Field label="返信先（任意）" htmlFor={`${id}-reply`} hint="X の ID（@ から）かメールアドレス。100 字まで">
-        <NeuInput
-          id={`${id}-reply`}
-          value={reply}
-          onChange={(e) => {
-            setReply(e.target.value);
-            edited();
-          }}
-          autoComplete="off"
-          className="text-base"
-        />
-        {replyOdd && <p className="text-xs text-amber-700">X の ID かメールアドレスの形ではないようです。このままでも送れます。</p>}
-        {replyTooLong && <p className="text-xs font-bold text-rose-600">100 字までです</p>}
-      </Field>
       <p className="text-xs leading-6 text-slate-500">
         権利者の方は、所属の分かる連絡先（会社のドメインのメールなど）を返信先に書いてください。その連絡先に確かめてから、規約 第 3 条のとおり対応します。
       </p>
-
-      {/* 最初に触れたときに Turnstile がここへ描かれる（flexible は高さ 65px） */}
-      <div ref={containerRef} className={status === "idle" ? "" : "min-h-[65px]"} />
 
       <p className="text-sm leading-7 text-slate-600">
         {BEFORE_SEND}
@@ -194,6 +197,17 @@ export function ContactForm({ from }: { from: string }) {
         </Link>
         。
       </p>
+
+      {/* ★ Turnstile の枠は送るボタンのすぐ上。広がっても、上にある押せるもの（説明のリンク）は動かない。
+          触れる前と失敗したときは枠を取らない。読み込み中は表示を出す（flexible の部品は高さ 65px）。 */}
+      <div
+        role="group"
+        aria-label="迷惑な送信を防ぐ確認"
+        className={status === "idle" || status === "failed" ? "hidden" : "min-h-[65px]"}
+      >
+        <div ref={containerRef} />
+        {status === "loading" && <p className="text-xs leading-6 text-slate-500">確認の部品を読み込んでいます…</p>}
+      </div>
 
       <ActionButton type="submit" disabled={inFlight || turnstileFailed || tooLong || replyTooLong}>
         {waiting ? "確認中…" : phase === "sending" ? "送っています…" : "送る"}

@@ -169,7 +169,89 @@ describe("Turnstile", () => {
   });
 });
 
+/*
+ * ★ 読み込みのきっかけは「種類・内容・返信先に初めて触れたとき」だけ（検分 高-1）。
+ *   フォームの中のリンクや送るボタンで読み込むと、扱いを確かめようとプライバシーポリシーを押した人の
+ *   情報が、入力欄に触れる前に Cloudflare へ出る（ポリシー第5項と食い違う）。しかも枠が広がって
+ *   押した所がずれ、1 回目のクリックが消えていた。
+ */
+describe("Turnstile を読み込むきっかけと枠", () => {
+  beforeEach(() => stubApi());
+
+  const box = () => screen.getByRole("group", { name: "迷惑な送信を防ぐ確認", hidden: true });
+
+  it("説明の中のプライバシーポリシーにフォーカス・クリックしても読み込まない", async () => {
+    open();
+    await screen.findByLabelText("内容");
+    const link = screen.getByRole("link", { name: "プライバシーポリシー" });
+    fireEvent.focus(link);
+    fireEvent.mouseDown(link);
+    fireEvent.click(link);
+    await act(async () => {});
+    expect(loadTurnstile).not.toHaveBeenCalled();
+  });
+
+  it("何も入れずに送るを押しても読み込まない（種類を選ぶよう促すだけ）", async () => {
+    open();
+    await screen.findByLabelText("内容");
+    fireEvent.focus(sendButton());
+    fireEvent.click(sendButton());
+    expect(await screen.findByText("種類を選んでください")).toBeTruthy();
+    expect(loadTurnstile).not.toHaveBeenCalled();
+  });
+
+  it("種類のボタンを押しただけで読み込む（クリックでフォーカスが移らないブラウザでも）", async () => {
+    open();
+    await screen.findByLabelText("内容");
+    fireEvent.click(screen.getByRole("button", { name: "要望・感想" }));
+    await waitFor(() => expect(loadTurnstile).toHaveBeenCalledTimes(1));
+  });
+
+  it("返信先に触れても読み込む", async () => {
+    open();
+    await screen.findByLabelText("内容");
+    fireEvent.focus(replyBox());
+    await waitFor(() => expect(loadTurnstile).toHaveBeenCalledTimes(1));
+  });
+
+  it("触れる前は枠を取らず、読み込み中は表示を出し、失敗したら枠を外す", async () => {
+    let fail: (e: Error) => void = () => {};
+    vi.mocked(loadTurnstile).mockReturnValue(new Promise((_, reject) => (fail = reject)));
+    open();
+    await screen.findByLabelText("内容");
+    expect(box().className).toContain("hidden");
+    fireEvent.focus(bodyBox());
+    expect(await screen.findByText("確認の部品を読み込んでいます…")).toBeTruthy();
+    expect(box().className).not.toContain("hidden");
+    await act(async () => fail(new Error("timeout")));
+    expect(screen.queryByText("確認の部品を読み込んでいます…")).toBeNull();
+    expect(box().className).toContain("hidden");
+  });
+
+  it("枠は説明のリンクより下、送るボタンのすぐ上にある（広がっても上の押せる所は動かない）", async () => {
+    open();
+    await screen.findByLabelText("内容");
+    const link = screen.getByRole("link", { name: "プライバシーポリシー" });
+    expect(link.compareDocumentPosition(box()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(box().nextElementSibling).toBe(sendButton());
+  });
+});
+
 describe("送る", () => {
+  it("再描画の前に 2 回送っても（Enter の連打など）1 回しか送らない", async () => {
+    stubApi({ post: () => new Promise<Response>(() => {}) });
+    await openAndFill();
+    act(() => widget.opts().callback("TOKEN"));
+    const form = bodyBox().closest("form")!;
+    act(() => {
+      fireEvent.submit(form);
+      fireEvent.submit(form);
+    });
+    await waitFor(() => expect(posted).toHaveLength(1));
+    await act(async () => {});
+    expect(posted).toHaveLength(1);
+  });
+
   it("種類・内容・返信先・ページ・版・token を送り、成功したら入力を空にする", async () => {
     stubApi();
     await openAndFill("  計算がおかしいです  ");
