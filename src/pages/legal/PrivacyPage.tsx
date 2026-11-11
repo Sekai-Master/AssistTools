@@ -14,13 +14,6 @@ import {
   contactHref,
 } from "../../lib/site";
 
-/**
- * ★ 第2項・第6項の Turnstile の保存と Cookie の文は、試験用の鍵で測った結果（Cookie 0 件、
- *   challenges.cloudflare.com のフレームの localStorage に値が 1 つ）をもとにした**案**。
- *   本物の鍵で測り直してから指揮が文を確定し、この印を消す（問い合わせ口の PR の「指揮が確定する点」）。
- */
-const PENDING_MEASUREMENT = "（実測の後に確定）";
-
 const TURNSTILE_PRIVACY_URL = "https://www.cloudflare.com/turnstile-privacy-policy/";
 const ANTHROPIC_PRIVACY_URL = "https://www.anthropic.com/legal/privacy";
 
@@ -84,10 +77,11 @@ export default function PrivacyPage() {
             の画面からいつでも一覧・削除できます。同じ画面からファイルへ書き出して、別の端末へ移すこともできます。
             ブラウザのデータ消去でも同時に消えます。
           </p>
+          {/* ★ 本物の鍵ではまだ測っていない。何で確かめたかを書き、詳しくは Cloudflare の説明に任せる（第6項も同じ） */}
           <p>
-            問い合わせのページで確認の部品（Cloudflare Turnstile、第5項）を読み込むと、Cloudflare
-            が自分の領域（challenges.cloudflare.com）のローカルストレージに値を1つ置きます。これは上の一覧と設定の画面には出ず、ブラウザのデータ消去で消えます。
-            {PENDING_MEASUREMENT}
+            問い合わせのページで確認の部品（Cloudflare Turnstile、第5項）を読み込んだときに何が保存されるかは、Cloudflare
+            の説明（<DocLink href={TURNSTILE_PRIVACY_URL}>Turnstile Privacy Addendum</DocLink>）のとおりです。2026年11月に運営者が試験用の設定で確かめたときは、Cloudflare
+            の領域（challenges.cloudflare.com）のローカルストレージに値が1つ置かれました。これは上の一覧と設定の画面には出ず、ブラウザのデータ消去で消えます。
           </p>
         </DocSection>
 
@@ -139,7 +133,7 @@ export default function PrivacyPage() {
             <li>本サイト内のリンク（GitHub・公式 X・出典元など）を押したとき。</li>
           </DocList>
           <p>
-            問い合わせのページでは、入力欄に初めて触れたときに、迷惑な送信を防ぐ確認の部品（
+            問い合わせのページでは、種類・内容・返信先の欄に初めて触れたとき（キーボードで移ったときを含みます）に、迷惑な送信を防ぐ確認の部品（
             <strong>Cloudflare Turnstile</strong>）を Cloudflare（challenges.cloudflare.com）から読み込みます。
             ページを開いただけでは読み込みません。Turnstile は、人の操作かを確かめるため、IP
             アドレス・ブラウザの情報などを Cloudflare に送ります。Cloudflare はこの情報を Turnstile
@@ -150,8 +144,9 @@ export default function PrivacyPage() {
         <DocSection title="6. Cookie">
           <p>本サイト自身は Cookie を使用していません。広告も掲載していないため、広告目的の追跡もありません。</p>
           <p>
-            問い合わせのページで読み込む確認の部品（Cloudflare Turnstile、第5項）も Cookie を使いません。
-            {PENDING_MEASUREMENT}
+            問い合わせのページで読み込む確認の部品（Cloudflare Turnstile、第5項）が端末に何を保存するかは、Cloudflare
+            の説明（<DocLink href={TURNSTILE_PRIVACY_URL}>Turnstile Privacy Addendum</DocLink>）のとおりです。2026年11月に運営者が試験用の設定で確かめたときは、Cookie
+            は使われず、Cloudflare の領域（challenges.cloudflare.com）のローカルストレージに値が1つ置かれました。
           </p>
         </DocSection>
 

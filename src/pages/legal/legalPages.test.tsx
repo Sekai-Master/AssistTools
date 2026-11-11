@@ -124,6 +124,24 @@ describe("プライバシーポリシー", () => {
     expect(external).toContain("ページを開いただけで外部のサーバーに接続することはありません");
     expect(external).toContain("challenges.cloudflare.com");
     expect(external).toContain("Turnstile Privacy Addendum");
+    // 実装（ContactForm の読み込みのきっかけ）と同じ言い方にする（検分 高-1）
+    expect(external).toContain("種類・内容・返信先の欄に初めて触れたとき");
+  });
+
+  // ★ 案の印をページに残したまま本番に出さない（検分 高-3。CI は main への push でそのまま本番に出す）
+  it("「（実測の後に確定）」のような案の印を本文に残さない", () => {
+    at(<PrivacyPage />);
+    expect(document.body.textContent).not.toContain("実測の後に確定");
+  });
+
+  it("Turnstile の保存（第2項）と Cookie（第6項）は、何で確かめたかと Cloudflare の説明を添える", () => {
+    at(<PrivacyPage />);
+    const stored = sectionText("2. ブラウザに保存される情報");
+    expect(stored).toContain("試験用の設定");
+    expect(stored).toContain("設定の画面には出ず");
+    const cookie = sectionText("6. Cookie");
+    expect(cookie).toContain("試験用の設定");
+    expect(cookie).toContain("Turnstile Privacy Addendum");
   });
 
   it("問い合わせのページへ行ける（第10項）", () => {
