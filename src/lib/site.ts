@@ -59,4 +59,4 @@ export const COPYRIGHT_SINCE = 2024;
 
 /** 利用規約・プライバシーポリシーの施行日と最終改訂日。改訂したらここを更新する。 */
 export const LEGAL_EFFECTIVE_DATE = "2026-08-04";
-export const LEGAL_REVISED_DATE = "2026-08-04";
+export const LEGAL_REVISED_DATE = "2026-11-12";

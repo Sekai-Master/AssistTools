@@ -19,16 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-The license above covers only the source code in this repository. Game names,
-data and images, such as those in public/CardDatas, public/MusicDatas and
-public/MysekaiDatas, belong to their respective rights holders and are not
-covered by this license. Rights holders can reach us through the contact page:
-https://sekaimaster.pages.dev/contact
-
-上の許諾は、このリポジトリのソースコードだけに及びます。public/CardDatas・
-public/MusicDatas・public/MysekaiDatas などにあるゲーム内の名称・データ・画像は
-各権利者に帰属し、この許諾の対象ではありません。権利者の方からの連絡は、
-問い合わせのページ（https://sekaimaster.pages.dev/contact）へお願いします。
