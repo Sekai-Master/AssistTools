@@ -11,7 +11,18 @@ import {
   SITE_NAME,
   X_HANDLE,
   X_URL,
+  contactHref,
 } from "../../lib/site";
+
+/**
+ * ★ 第2項・第6項の Turnstile の保存と Cookie の文は、試験用の鍵で測った結果（Cookie 0 件、
+ *   challenges.cloudflare.com のフレームの localStorage に値が 1 つ）をもとにした**案**。
+ *   本物の鍵で測り直してから指揮が文を確定し、この印を消す（問い合わせ口の PR の「指揮が確定する点」）。
+ */
+const PENDING_MEASUREMENT = "（実測の後に確定）";
+
+const TURNSTILE_PRIVACY_URL = "https://www.cloudflare.com/turnstile-privacy-policy/";
+const ANTHROPIC_PRIVACY_URL = "https://www.anthropic.com/legal/privacy";
 
 /**
  * プライバシーポリシー。
@@ -21,6 +32,10 @@ import {
  *   食い違いが起きると、ポリシーが嘘になる。台帳を正本にすれば構造的に起きない。
  *
  * ★ 事実だけ書く。「大切に扱います」のような態度表明は、検証できないので入れない。
+ *
+ * ★ 問い合わせのページ（2026-11 追加）で送った内容だけは運営者に届く。その扱いは第10項に集め、
+ *   ほかの項は「問い合わせを除き」の形にしてある。項を足して番号をずらさない
+ *  （規約・運用文書・コードのコメントが「第5項」などと番号で指している）。
  */
 export default function PrivacyPage() {
   return (
@@ -40,9 +55,10 @@ export default function PrivacyPage() {
             すべての計算はお使いのブラウザの中だけで完結します。ツールに入力した数値・編成・募集文などが運営者に送られることはありません。
           </p>
           <p>
-            したがって、氏名・メールアドレス・ゲーム内 ID
+            したがって、問い合わせのページから送った内容を除き、氏名・メールアドレス・ゲーム内 ID
             といった個人を特定できる情報を、運営者が取得することはありません。
             ログイン機能も、そのための情報の入力欄もありません。
+            問い合わせのページから送った内容は、運営者の Google のアカウントに保存します（第10項）。
           </p>
         </DocSection>
 
@@ -66,6 +82,11 @@ export default function PrivacyPage() {
             これらは <DocLink href="/settings">設定</DocLink>{" "}
             の画面からいつでも一覧・削除できます。同じ画面からファイルへ書き出して、別の端末へ移すこともできます。
             ブラウザのデータ消去でも同時に消えます。
+          </p>
+          <p>
+            問い合わせのページで確認の部品（Cloudflare Turnstile、第5項）を読み込むと、Cloudflare
+            が自分の領域（challenges.cloudflare.com）のローカルストレージに値を1つ置きます。これは上の一覧と設定の画面には出ず、ブラウザのデータ消去で消えます。
+            {PENDING_MEASUREMENT}
           </p>
         </DocSection>
 
@@ -116,22 +137,41 @@ export default function PrivacyPage() {
             </li>
             <li>本サイト内のリンク（GitHub・公式 X・出典元など）を押したとき。</li>
           </DocList>
+          <p>
+            問い合わせのページでは、入力欄に初めて触れたときに、迷惑な送信を防ぐ確認の部品（
+            <strong>Cloudflare Turnstile</strong>）を Cloudflare（challenges.cloudflare.com）から読み込みます。
+            ページを開いただけでは読み込みません。Turnstile は、人の操作かを確かめるため、IP
+            アドレス・ブラウザの情報などを Cloudflare に送ります。Cloudflare はこの情報を Turnstile
+            の改良にも使います（<DocLink href={TURNSTILE_PRIVACY_URL}>Turnstile Privacy Addendum</DocLink>）。
+          </p>
         </DocSection>
 
         <DocSection title="6. Cookie">
-          <p>本サイトは Cookie を使用していません。広告も掲載していないため、広告目的の追跡もありません。</p>
+          <p>本サイト自身は Cookie を使用していません。広告も掲載していないため、広告目的の追跡もありません。</p>
+          <p>
+            問い合わせのページで読み込む確認の部品（Cloudflare Turnstile、第5項）も Cookie を使いません。
+            {PENDING_MEASUREMENT}
+          </p>
         </DocSection>
 
         <DocSection title="7. 第三者への提供">
           <p>
-            そもそも運営者が利用者の情報を取得していないため、第三者へ提供することはありません。
-            法令にもとづく開示請求があった場合も、提供できる情報を保有していません。
+            問い合わせのページから送った内容を除き、運営者は利用者の情報を取得していないため、第三者へ提供することはありません。
+            法令にもとづく開示請求があった場合も、問い合わせの内容のほかに提供できる情報を保有していません。
           </p>
+          <p>問い合わせのページから送った内容は、保存・確認・知らせ・要約のために、次の事業者のサービスを使います（何に使うかは第10項）。</p>
+          <DocList>
+            <li>Google（保存。運営者の Google のアカウントのフォームとスプレッドシート）</li>
+            <li>Cloudflare（確認。Turnstile による迷惑な送信の確認。送った内容は、本サイトを配信する Cloudflare を通って Google に届きます）</li>
+            <li>Discord（知らせ。届いたことと種類だけ）</li>
+            <li>Anthropic（要約。運営者が使う AI のアシスタント Claude）</li>
+          </DocList>
+          <p>これ以外には渡しません。法令にもとづく場合を除きます。</p>
         </DocSection>
 
         <DocSection title="8. 年齢について">
           <p>
-            本サイトは年齢を問わず利用できます。個人情報の入力を求める箇所はありませんが、
+            本サイトは年齢を問わず利用できます。個人情報の入力を求める箇所は、問い合わせのページの返信先（任意）だけです。書かなくても送れます。
             保護者の方が内容を確認したうえで利用させることを妨げるものではありません。
           </p>
         </DocSection>
@@ -145,9 +185,30 @@ export default function PrivacyPage() {
 
         <DocSection title="10. 問い合わせ">
           <p>
-            この方針についての質問は、GitHub の <DocLink href={ISSUES_URL}>Issues</DocLink>{" "}
-            または公式 X <DocLink href={X_URL}>{X_HANDLE}</DocLink> までお願いします。
+            この方針についての質問を含め、本サイトへの連絡は{" "}
+            <DocLink href={contactHref("/privacy")}>問い合わせのページ</DocLink> から送れます。GitHub の{" "}
+            <DocLink href={ISSUES_URL}>Issues</DocLink> と公式 X <DocLink href={X_URL}>{X_HANDLE}</DocLink>{" "}
+            でも受け付けています。
           </p>
+          <p>問い合わせのページから送ったときの扱いは次のとおりです。</p>
+          <DocList>
+            <li>
+              送った内容（種類・内容・返信先・どのページから来たか・本サイトの版）は、運営者の Google
+              のアカウントのフォームとスプレッドシートに保存されます。送った内容に含まれるものは、すべて運営者に届きます（氏名やメールアドレスを内容の欄に書いた場合も同じです）。
+            </li>
+            <li>送るときに、迷惑な送信を防ぐため Cloudflare Turnstile が人の操作かを確かめます（第5項）。</li>
+            <li>届いたことを運営者に知らせるため、種類だけを運営者の Discord に送ります。内容・返信先は送りません。</li>
+            <li>
+              届いた内容は、運営者と、運営者が使う AI のアシスタント（Anthropic 社の Claude）が読み、要約と振り分けに使います。AI
+              のサービスに渡った分は <DocLink href={ANTHROPIC_PRIVACY_URL}>Anthropic のプライバシーポリシー</DocLink>{" "}
+              に従います。
+            </li>
+            <li>返信先を書いてもらったときは、こちらから連絡することがあります。</li>
+            <li>
+              対応が済んだものは、受け付けから 1 年以内に、Google
+              のフォーム・スプレッドシートと運営者のメールの下書きから消します。消してほしいときは、問い合わせのページから連絡してください。
+            </li>
+          </DocList>
         </DocSection>
       </div>
     </ToolPage>
