@@ -654,6 +654,11 @@ https://sekaimaster.pages.dev/privacy
 - 宣伝以外の雑談はこのアカウントでやらない（運営者個人のアカウント **@YesNoritake** と役割を分ける）。ここが雑談で埋まると、告知が流れて見つからなくなる
 - 逆に **@YesNoritake は窓口にしない**。利用規約にもそう書いてある（第1条で運営者の同定のために載せ、第7条で「窓口ではない」と明記）。個人宛に不具合報告が来たら、公式アカウントか Issues へ誘導する
 - **問い合わせのページの受付を止めるときは、Google フォームの「回答を受け付ける」を切らない。** Pages の環境変数に `CONTACT_DISABLED=1` を入れて出し直す（画面は代わりの窓口を出す）。Google の受付を止めたときに `formResponse` が何を返すかは実測していない。200 が返れば、届いていないのに利用者には「受け付けました」、Discord には「届きました」が出る（2026-11-12 の検分 中-3）
+  - 止める手順（運営者が PowerShell で。秘密の置き場への書き込みと本番のデプロイは、Claude の自動モードの判定で止まるので運営者の手番）:
+    1. `cd C:\Users\masan\Documents\GitHub\AssistTools`
+    2. `npx wrangler pages secret put CONTACT_DISABLED --project-name=sekaimaster` → 値に `1` を入れて Enter
+    3. Pages の環境変数は**次のデプロイから**効く。GitHub の Actions で main の最新の「CI」の実行を開き「Re-run all jobs」を押す（最後の Deploy が出し直す）。`/api/contact` を開いて `{"accepting":false,"reason":"disabled"}` が返れば止まっている
+  - 再開: `npx wrangler pages secret delete CONTACT_DISABLED --project-name=sekaimaster` のあと、同じく「Re-run all jobs」
 
 ## 9. リリース手順との接続
 
