@@ -35,3 +35,7 @@ __pycache__/
 
 # wrangler の手元の状態（wrangler pages dev などが作る）
 .wrangler
+
+# wrangler pages dev が読む手元の秘密（問い合わせの Turnstile の秘密・Google フォームの ID）。
+# ★ リポジトリは公開。フォームの ID が出ると Turnstile を飛ばして直接送られる（functions/api/contact.ts）
+.dev.vars*
