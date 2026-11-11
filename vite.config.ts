@@ -46,7 +46,9 @@ function borderApiProxy() {
  *   Cloudflare Pages 側の設定で有効にしてあり、**配信時に自動で挿入される**
  *  （2026-08-04 の本番デプロイで挿入を実測確認）。
  *   ビルドでも挿し込むと二重に計上されるので、こちらでは触らないこと。
- *   これがサイト唯一の外部通信。増やすときはプライバシーポリシー第5項も直す。
+ *   ページを開いたときの外部通信はこれだけ。ほかには、問い合わせのページで入力欄に触れたときに
+ *   Turnstile（challenges.cloudflare.com）を読み込む（src/pages/contact/turnstile.ts）。
+ *   増やすときはプライバシーポリシー第5項も直す。
  */
 
 // https://vite.dev/config/
