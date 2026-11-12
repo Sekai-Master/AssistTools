@@ -173,6 +173,23 @@ export default function TweetGenerator() {
               onChange={(v) => set("remainingSlots", v)}
             />
           </Field>
+          {/* ★ 主スキル値・募集スキル値はよく打つので、畳まずに見せる（指揮の決定 2026-11-12、PR-6 の検分） */}
+          <SkillRow
+            label="主スキル値"
+            show={s.showHostSkill}
+            onShow={(b) => set("showHostSkill", b)}
+            value={s.hostSkill}
+            onValue={(v) => set("hostSkill", digitsOnly(v))}
+            maxLength={3}
+          />
+          <SkillRow
+            label="募集スキル値"
+            show={s.showRequiredSkill}
+            onShow={(b) => set("showRequiredSkill", b)}
+            value={s.requiredSkill}
+            onValue={(v) => set("requiredSkill", digitsOnly(v))}
+            maxLength={3}
+          />
           <Field label="ルームID" htmlFor="tg-roomid">
             <NeuInput
               id="tg-roomid"
@@ -240,14 +257,6 @@ export default function TweetGenerator() {
               label="スキル値に % を付ける"
             />
             <SkillRow
-              label="主スキル値"
-              show={s.showHostSkill}
-              onShow={(b) => set("showHostSkill", b)}
-              value={s.hostSkill}
-              onValue={(v) => set("hostSkill", digitsOnly(v))}
-              maxLength={3}
-            />
-            <SkillRow
               label="主内部値"
               show={s.showHostInnerValue}
               onShow={(b) => set("showHostInnerValue", b)}
@@ -291,14 +300,6 @@ export default function TweetGenerator() {
 
         <Panel title="募（募集）">
           <div className="space-y-4">
-            <SkillRow
-              label="募集スキル値"
-              show={s.showRequiredSkill}
-              onShow={(b) => set("showRequiredSkill", b)}
-              value={s.requiredSkill}
-              onValue={(v) => set("requiredSkill", digitsOnly(v))}
-              maxLength={3}
-            />
             <SkillRow
               label="募集内部値"
               show={s.showRequiredInnerValue}

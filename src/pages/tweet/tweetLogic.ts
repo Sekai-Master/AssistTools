@@ -81,19 +81,17 @@ export const DEFAULT_TWEET_STATE: TweetState = {
 
 /**
  * 「条件を書く」（畳んだ段）に入れる項目。チェックと値は 1 項目として数える（UX 監査 2026-11-12、PR-6）。
- * 主な入力（楽曲・回数・残り枠・ルームID）はここに入れない。
+ * 主な入力（楽曲・回数・残り枠・ルームID・主スキル値・募集スキル値）はここに入れない。
  */
 const DETAIL_GROUPS: ReadonlyArray<ReadonlyArray<keyof TweetState>> = [
   ["tlFlow"],
   ["room"],
   ["roomIdSymbol"],
   ["appendPercent"],
-  ["showHostSkill", "hostSkill"],
   ["showHostInnerValue", "hostInnerValue"],
   ["showConditionOutside", "conditionOutside"],
   ["showSupporter", "supporterCount"],
   ["showFreeDescription", "freeDescription"],
-  ["showRequiredSkill", "requiredSkill"],
   ["showRequiredInnerValue", "requiredInnerValue"],
   ["showStar4"],
   ["showLongSession"],
