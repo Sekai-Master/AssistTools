@@ -106,14 +106,15 @@ export function GuideCards({ cards, env }: { cards: GuideCard[]; env?: ShareEnv 
           const src = cardSrc(base, c.file);
           return (
             <li key={c.n} className="rounded-2xl border border-[color:var(--neu-edge)] p-3">
-              {/* 一覧は縮小版の WebP、押すと同じタブの中で原寸の PNG を全面に出す（サイト共通のライトボックス） */}
+              {/**
+               * 一覧も全面表示も縮小版の WebP（幅 1200）。押すと同じタブの中で全面に出す（サイト共通のライトボックス）。
+               * ★ fullSrc に PNG（2400×2000）を渡さない。ライトボックスを「原寸」にしたとき幅 390 で 6.4 倍・1 字約 60px に
+               *   なって大きすぎる（#259 の検分）。WebP なら約 3.2 倍で、更新履歴の告知画像と同じくらい。PNG は保存・共有だけ
+               */}
               <ZoomableImage
                 src={cardSrc(base, c.preview)}
                 width={c.previewWidth}
                 height={c.previewHeight}
-                fullSrc={src}
-                fullWidth={c.width}
-                fullHeight={c.height}
                 alt={c.alt}
                 title={`${c.n}. ${c.title}`}
               />

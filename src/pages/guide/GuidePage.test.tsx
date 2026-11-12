@@ -220,13 +220,13 @@ describe("画像はサイト共通のライトボックスで開く", () => {
     expect(screen.getByRole("dialog").querySelector("img")!.getAttribute("src")).toBe("/guide/annotated/02-room-select.webp");
   });
 
-  it("まとめ画像は一覧が縮小版、全面表示は原寸の PNG。保存のリンクはそのまま", () => {
+  it("まとめ画像は一覧も全面表示も縮小版の WebP（PNG は原寸にすると大きすぎる）。保存のリンクは PNG のまま", () => {
     const { container } = at("/guide/cards");
     const first = container.querySelector("li button") as HTMLButtonElement;
     expect(first.querySelector("img")!.getAttribute("src")).toBe("/guide/cards/preview/card-1.webp");
     fireEvent.click(first);
     const dialog = screen.getByRole("dialog");
-    expect(dialog.querySelector("img")!.getAttribute("src")).toBe("/guide/cards/card-1.png");
+    expect(dialog.querySelector("img")!.getAttribute("src")).toBe("/guide/cards/preview/card-1.webp");
     expect(dialog.textContent).toContain("1. はじめての周回の流れ");
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
