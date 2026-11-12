@@ -509,6 +509,34 @@ describe("遷移にならない押下では何も隠さない", () => {
     }
   });
 
+  // 指名から遷移の開始までの間に木が差し替わる（速い連続の押下で、前の遷移の commit が先に来る）。
+  // 外れた要素を持ち上げると、画面に無い行の複製が宙に出る。
+  it("指名した行が木から外れていたら持ち上げない", () => {
+    const { stage, c1 } = hub();
+    aimMorph(c1, stage, PLAIN);
+    stage.innerHTML = `
+      <a href="/deck" id="b1"><span ${MORPH_ATTR}="tool:deck" id="d1"></span></a>
+      <a href="/plan" id="b2"><span ${MORPH_ATTR}="tool:plan" id="d2"></span></a>`;
+    sized(stage.querySelector("#d1")!, 240, 156, 160, 44);
+    sized(stage.querySelector("#d2")!, 290, 156, 160, 44);
+    expect(c1.isConnected).toBe(false);
+    captureMorph(stage, "*");
+    expect(boxes().length).toBe(0);
+  });
+
+  it("ステージの外の要素への指名は持ち上げない", () => {
+    const { stage } = hub();
+    const outside = document.createElement("div");
+    outside.innerHTML = `<a href="/x" id="o1"><span ${MORPH_ATTR}="tool:x" id="oc1"></span></a>`;
+    document.body.appendChild(outside);
+    const oc1 = sized(outside.querySelector("#oc1")!, 10, 10, 200, 40);
+    aimMorph(oc1, undefined, PLAIN);
+    captureMorph(stage, "*");
+    expect(boxes().length).toBe(0);
+    expect(oc1.style.visibility).toBe("");
+  });
+
+  // ★ 旧実装（押下で持ち上げる）でも通る守りのテスト。新しい指名（aimed）の賞味期限を押さえる（#255 の検分 低3）。
   it("古い指名（賞味期限切れ）は使わない", () => {
     const { stage, c1 } = hub();
     const spy = vi.spyOn(performance, "now").mockReturnValue(1000);

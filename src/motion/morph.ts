@@ -322,10 +322,9 @@ export interface ClickLike {
  * これで足りる（＝戻る/進むでも同じ動きになる）。
  */
 export function captureMorph(stage: Element | null, destKey?: string | null): void {
-  const pick =
-    aimed && now() - aimed.at < AIM_TTL_MS && aimed.el.isConnected && (!stage || stage.contains(aimed.el))
-      ? aimed.el
-      : null;
+  // 指名した要素がいまのステージの中に居るときだけ使う。木から外れた要素（指名の後に前の遷移の
+  // commit が来た）も contains で落ちるので、isConnected は別に見ない（#255 の検分 中1）。
+  const pick = aimed && now() - aimed.at < AIM_TTL_MS && stage?.contains(aimed.el) ? aimed.el : null;
   cancelMorph();
   if (!stage) return;
   // 押下で指名済みなら、その1枚を持ち上げる（行き先の照合は飛ぶときにやる）。
