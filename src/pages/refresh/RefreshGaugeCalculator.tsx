@@ -10,6 +10,7 @@ import { Stat } from "./Stat";
 import { useGaugeInputs } from "./useGaugeInputs";
 import { GaugeInputsPanel } from "./GaugeInputsPanel";
 import { PlanTimeline } from "./PlanTimeline";
+import { ResultBar } from "../../components/ui/ResultBar";
 
 /**
  * リフレッシュゲージ。現在ゲージから「100%まで何分・持続ペース」を確認しつつ、
@@ -116,6 +117,19 @@ export default function RefreshGaugeCalculator() {
               。下で休憩込みの推移も計画できます。
             </p>
           </Panel>
+
+          {/* ★ 主な数字は画面下に固定して 1 画面目に出す（UX 監査 2026-11-12、PR-7）。値は上の「この曲で走ると」と同じ */}
+          <ResultBar
+            items={[
+              { label: "100%まで", value: `${plan.runwayPlays}回`, sub: `約 ${fmtDuration(plan.runwayMinutes)}` },
+              { label: "この曲のペース", value: `${songRate.toFixed(0)}回/時` },
+              {
+                label: "持続ペース",
+                value: `${plan.sustainablePerHour.toFixed(0)}回/時`,
+                sub: `休憩 約${plan.restSharePercent.toFixed(0)}%`,
+              },
+            ]}
+          />
 
           <PlanTimeline
             toolId="refresh"
