@@ -139,6 +139,15 @@ describe("ZoomableImage", () => {
     expect(document.activeElement).toBe(button);
   });
 
+  it("閉じるボタンは押せる大きさの基準（44px）以上にする", () => {
+    renderImage();
+    press(trigger());
+    const classes = screen.getByRole("button", { name: "閉じる" }).className.split(" ");
+    // jsdom にはレイアウトが無いので、Tailwind の min-h-11・min-w-11（2.75rem＝44px）が付いていることで縛る
+    expect(classes).toContain("min-h-11");
+    expect(classes).toContain("min-w-11");
+  });
+
   it("背景を押すと閉じる", () => {
     renderImage();
     press(trigger());

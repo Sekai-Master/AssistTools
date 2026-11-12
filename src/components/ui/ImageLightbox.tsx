@@ -72,10 +72,11 @@ export function ImageLightbox({
       }}
     >
       {/* ★ fixed にしない。useModalA11y は offsetParent の無い要素をフォーカスの巡回から外す */}
+      {/* min-h-11・min-w-11: 押せる大きさの基準 44px を満たす（py-2 だけだと高さ 36px） */}
       <button
         type="button"
         onClick={onClose}
-        className={`absolute top-2 right-2 inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-2 text-sm font-bold text-white hover:bg-white/25 sm:top-3 sm:right-3 ${FOCUS_RING}`}
+        className={`absolute top-2 right-2 inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-full bg-white/15 px-3 py-2 text-sm font-bold text-white hover:bg-white/25 sm:top-3 sm:right-3 ${FOCUS_RING}`}
       >
         <X size={18} aria-hidden="true" />
         閉じる
