@@ -9,10 +9,34 @@
  *   内部値 0 を編成に保存できてしまっていた。
  *   明示の「0」は利用者が入れた値なので計算してよい（未入力とは区別する）。
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import type { RankingMusic } from "../ranking/useRankingMusics";
+
+// アンコールの段が開いたときに読む楽曲データ（本物は 428KB の fetch）を差し替える
+const envyExpert: RankingMusic = {
+  musicId: "074",
+  title: "独りんぼエンヴィー",
+  difficulty: "expert",
+  playLevel: 22,
+  noteCount: 544,
+  baseScore: 1.1,
+  skillScoreSolo: [0.07, 0.07, 0.07, 0.07, 0.07, 0.07],
+  baseScoreAuto: 0.7,
+  skillScoreAuto: [0.05, 0.05, 0.05, 0.05, 0.05, 0.05],
+  skillScoreMulti: [0.07, 0.07, 0.07, 0.07, 0.07, 0.15],
+  feverScore: 0.1,
+  musicTime: 74.8,
+  eventRate: 100,
+  jacketLink: "jacket_s_074.webp",
+};
+vi.mock("../ranking/useRankingMusics", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../ranking/useRankingMusics")>()),
+  useRankingMusics: (enabled = true) => ({ entries: enabled ? [envyExpert] : [], loading: false, error: null }),
+}));
+
 import EffectiveValueCalculator from "./EffectiveValueCalculator";
 import { createProfile, resetProfilesForTest, setActiveProfile } from "../../lib/profiles";
 
@@ -118,5 +142,67 @@ describe("2〜5 枠の欄が空のとき", () => {
     expect(screen.queryByRole("button", { name: "取り込む" })).toBeNull();
     // 先頭の段の「発動スキル値候補」も、空の枠から作った値は出さない
     expect(screen.queryByText(/発動スキル値候補/)).toBeNull();
+  });
+});
+
+/**
+ * ★ 結果の下の「アンコールは誰が取るとよいか」（指示書 PR-G2）。既定は閉じ、上の結果の実効値で判定する。
+ *   総合力は「入力に反映」で読んだ編成の値を使う（新しい入力は「ほかの 4 人でいちばん高い実効値」の 1 つだけ）。
+ */
+describe("アンコールの段", () => {
+  const summary = () => screen.getByText("アンコールは誰が取るとよいか").closest("summary")!;
+  const details = () => summary().closest("details")!;
+  const best = () => screen.getByLabelText("ほかの 4 人でいちばん高い実効値");
+
+  it("結果の下にあり、既定は閉じている", () => {
+    draw();
+    expect(details().open).toBe(false);
+  });
+
+  it("実効値がまだ出ていなければ判定しない", async () => {
+    draw();
+    await userEvent.click(summary());
+    await userEvent.type(best(), "280");
+    expect(details().textContent).toContain("自分の実効値が出ると判定します");
+  });
+
+  it("上の結果の実効値（150/710 → 262）で判定する", async () => {
+    draw();
+    await userEvent.type(screen.getByLabelText("内部値"), "710");
+    await userEvent.click(summary());
+    await userEvent.type(best(), "280");
+    expect(details().textContent).toContain("自分の実効値 262");
+    expect(details().textContent).toContain("譲るほうが");
+  });
+
+  it("「入力に反映」で読んだ編成の総合力があれば点でも出す", async () => {
+    setActiveProfile(createProfile("テスト", { power: 300_000, skillLeader: 150, skillTotal: 710 }).id);
+    draw();
+    await userEvent.click(screen.getByRole("button", { name: "入力に反映" }));
+    await userEvent.click(summary());
+    await userEvent.type(best(), "280");
+    // (280 − 262) × 0.15 ÷ 100 × 30 万 × 4 = 32,400
+    expect(details().textContent).toMatch(/32,(39[89]|40[0-2]) ?点/);
+  });
+
+  it("候補が複数ある編成（特訓前のユニットキャラ）は、画面の平均で判定したと書く", async () => {
+    draw();
+    await userEvent.click(screen.getByRole("button", { name: "ブルフェス" }));
+    await userEvent.click(screen.getByRole("button", { name: "特訓前" }));
+    await userEvent.click(screen.getByRole("button", { name: "ユニットキャラ" }));
+    for (const [n, v] of [[2, "100"], [3, "100"], [4, "100"], [5, "0"]] as const) {
+      await userEvent.type(screen.getByLabelText(`${n}枠目のスキル値`), v);
+    }
+    const avg = screen.getByText(/（平均 \d+）/).textContent!.match(/\d+/)![0];
+    await userEvent.click(summary());
+    await userEvent.type(best(), "999");
+    expect(details().textContent).toContain(`平均 ${avg}）`);
+    expect(details().textContent).toMatch(/候補 \d+〜\d+/);
+  });
+
+  it("逆算のときは出さない", async () => {
+    draw();
+    await userEvent.click(screen.getByText("逆算（→内部値）"));
+    expect(screen.queryByText("アンコールは誰が取るとよいか")).toBeNull();
   });
 });
