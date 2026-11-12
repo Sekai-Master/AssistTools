@@ -102,15 +102,18 @@ describe("ZoomableImage", () => {
     expect(document.getElementById(describedBy!)?.getAttribute("alt")).toBe(ALT);
   });
 
-  it("ピンチ拡大を止めない（touch-action を絞らない）・画像の高さは枠に従う", () => {
+  it("ピンチ拡大を止めない（ピンチを殺す touch-action を書かない）・画像の高さは枠に従う", () => {
     renderImage();
     press(trigger());
     const dialog = screen.getByRole("dialog");
     for (const el of [dialog, ...dialog.querySelectorAll("*")]) {
-      expect(el.className.toString()).not.toMatch(/touch-(none|pan|pinch|manipulation)/);
+      // touch-none・pan だけ・pinch-zoom だけ はピンチかスクロールを殺す。manipulation（ダブルタップだけ止める）は許す
+      expect(el.className.toString()).not.toMatch(/touch-(none|pan-|pinch-zoom)/);
       expect((el as HTMLElement).style.touchAction).toBe("");
     }
     const big = dialog.querySelector("img")!;
+    // 画像のタップで原寸を切り替えるので、ダブルタップの拡大だけ止める
+    expect(big.className.split(" ")).toContain("touch-manipulation");
     expect(big.className.split(" ")).toContain("max-h-full");
     expect(big.className.split(" ")).toContain("max-w-full");
   });
