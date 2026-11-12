@@ -20,7 +20,8 @@ import { FOCUS_RING, useModalA11y } from "../../lib/a11y";
  * - 作法はほかのモーダルと同じ: ポータルを使わない `fixed inset-0 z-50`、`data-overlay` の印、
  *   `useModalA11y`（Esc・背面スクロールの停止・フォーカスの巡回と戻し）
  * - 画像は縦横どちらも画面に収める（はみ出さない）。原寸より大きくはしない
- * - **ブラウザの拡大（ピンチ）は止めない。** touch-action や touch の preventDefault を書かない。
+ * - **ブラウザの拡大（ピンチ）は止めない。** touch の preventDefault を書かず、touch-action も絞らない
+ *  （全面表示の画像だけ touch-manipulation＝ダブルタップの拡大だけを止め、ピンチは残す）。
  *   スマホでは全面に出しても字が小さいので、指で広げるか、画像を押して原寸にして読む（下の LightboxDialog）
  * - 幕と文字は黒と白の固定値。このサイトの slate はダークで階調が反転するので使わない
  * - 読み上げ: ダイアログの名前は題、説明（aria-describedby）は画像の alt。開いた直後にフォーカスが
@@ -103,6 +104,8 @@ function LightboxDialog({
   const imgId = useId();
   const imgRef = useRef<HTMLImageElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
   // 押し始めが画像・ボタン・スクロールバーの上だったか。そこで押して背景で離したときに閉じないため
   const downInside = useRef(false);
   const [zoom, setZoom] = useState<Zoom>("fit");
@@ -117,24 +120,43 @@ function LightboxDialog({
   const measure = useCallback(() => {
     const img = imgRef.current;
     if (!img || !img.naturalWidth || img.dataset.zoom !== "fit") return;
-    setCanZoom(img.naturalWidth > img.clientWidth + 1 || img.naturalHeight > img.clientHeight + 1);
+    const next = img.naturalWidth > img.clientWidth + 1 || img.naturalHeight > img.clientHeight + 1;
+    // 切り替えのボタンが消えるときにフォーカスが載っていたら、閉じるへ移す（body に落ちると Tab で背面へ抜ける）
+    if (!next && document.activeElement === toggleRef.current) closeRef.current?.focus({ preventScroll: true });
+    setCanZoom(next);
   }, []);
 
-  // 画面の大きさが変わると、画面に合わせた表示の大きさも変わる（横向きにした・窓を広げた）
+  // 画面に合わせた表示の大きさが変わったら測り直す。横向きにした・窓を広げたとき（resize）のほか、
+  // 開いた直後に背面のスクロールバーが消えて枠が広がるとき・題の行数が変わるときは resize が出ないので、
+  // 枠の大きさも見る（ResizeObserver）
   useEffect(() => {
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    const box = scrollRef.current;
+    const observer = typeof ResizeObserver === "function" && box ? new ResizeObserver(measure) : undefined;
+    if (box) observer?.observe(box);
+    return () => {
+      window.removeEventListener("resize", measure);
+      observer?.disconnect();
+    };
   }, [measure]);
 
-  // 原寸にした直後に、中央に持ってくる所へスクロールを合わせる。描く前に合わせるので、左上が一瞬見えることはない
+  // 切り替えた直後に、描く前に整える。
+  // - 画面に合わせるへ戻したとき: 原寸の間に画面の大きさが変わっていても判定を古いまま残さないよう測り直す。
+  //   原寸の枠（Tab で止まる）にフォーカスがあったら切り替えのボタンへ移す（枠は Tab で止まらなくなる）
+  // - 原寸にしたとき: 中央に持ってくる所へスクロールを合わせる（左上が一瞬見えることはない）
   useLayoutEffect(() => {
     const box = scrollRef.current;
     const img = imgRef.current;
-    if (zoom !== "actual" || !box || !img) return;
+    if (!box || !img) return;
+    if (zoom === "fit") {
+      if (document.activeElement === box) (toggleRef.current ?? closeRef.current)?.focus({ preventScroll: true });
+      measure();
+      return;
+    }
     const { x, y } = focusPoint.current;
     box.scrollLeft = Math.max(0, img.offsetLeft + x * img.naturalWidth - box.clientWidth / 2);
     box.scrollTop = Math.max(0, img.offsetTop + y * img.naturalHeight - box.clientHeight / 2);
-  }, [zoom]);
+  }, [zoom, measure]);
 
   const toggle = (point?: Point) => {
     if (zoom === "fit" && !canZoom) return;
@@ -178,12 +200,12 @@ function LightboxDialog({
         閉じるを右端に置き、その左に切り替えのボタンを並べる
       */}
       <div className="absolute top-2 right-2 flex flex-row-reverse items-center gap-2 sm:top-3 sm:right-3">
-        <button type="button" onClick={onClose} className={OVERLAY_BUTTON}>
+        <button ref={closeRef} type="button" onClick={onClose} className={OVERLAY_BUTTON}>
           <X size={18} aria-hidden="true" />
           閉じる
         </button>
         {(canZoom || actual) && (
-          <button type="button" onClick={() => toggle()} className={OVERLAY_BUTTON}>
+          <button ref={toggleRef} type="button" onClick={() => toggle()} className={OVERLAY_BUTTON}>
             {actual ? <ZoomOut size={18} aria-hidden="true" /> : <ZoomIn size={18} aria-hidden="true" />}
             {actual ? "画面に合わせる" : "原寸で見る"}
           </button>
@@ -192,8 +214,9 @@ function LightboxDialog({
       <div
         ref={scrollRef}
         data-lightbox-scroll=""
-        // 原寸のときだけ、矢印キーで動かせるよう Tab で止まる枠にする
-        tabIndex={actual ? 0 : undefined}
+        // 原寸のときだけ、矢印キーで動かせるよう Tab で止まる枠にする（画面に合わせるときは -1: 押して
+        // フォーカスが載っても Tab の巡回には入らない）
+        tabIndex={actual ? 0 : -1}
         role={actual ? "group" : undefined}
         aria-label={actual ? "原寸の画像（矢印キーで動かせます）" : undefined}
         className={`relative flex min-h-0 w-full flex-1 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${
@@ -228,7 +251,9 @@ function LightboxDialog({
           //   高さの上限は枠（flex-1・min-h-0）に従わせる。題が 2 行に折り返しても画像がはみ出さない
           // 原寸のとき: 画素数のまま出し、枠がスクロールする。m-auto は小さい向きでは真ん中に寄せ、
           //   はみ出す向きでは 0 になる（justify-center と違い、左・上が切れて届かなくなることがない）
-          className={`m-auto block rounded-md ${
+          // touch-manipulation: ダブルタップの拡大だけを止め、ピンチの拡大とスクロールは残す。画像のタップで
+          //   原寸を切り替えるので、続けて 2 回押したときにブラウザの拡大と重ならないように
+          className={`m-auto block touch-manipulation rounded-md ${
             actual
               ? "max-h-none max-w-none shrink-0 cursor-zoom-out"
               : `h-auto max-h-full w-auto max-w-full object-contain ${canZoom ? "cursor-zoom-in" : ""}`

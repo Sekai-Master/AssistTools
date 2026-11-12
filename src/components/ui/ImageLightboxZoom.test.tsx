@@ -7,7 +7,7 @@
  * 位置（getBoundingClientRect）・枠の大きさを差し替えて縛る。実際の見え方は実ブラウザの撮影で確かめる。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ZoomableImage } from "./ImageLightbox";
 
 /** 差し替える寸法。画像は画素数と表示の大きさ、枠（スクロールする箱）は見えている大きさ。 */
@@ -154,6 +154,50 @@ describe("ライトボックスの原寸の切り替え", () => {
     fireEvent.mouseDown(scrollBox(dialog));
     fireEvent.click(scrollBox(dialog));
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("枠のスクロールバーの上で押し始めたときは閉じない（offsetX が中身の幅を超える）", () => {
+    const { dialog } = openLightbox();
+    fireEvent.click(zoomButton("原寸で見る")!);
+    const box = scrollBox(dialog);
+    const down = new MouseEvent("mousedown", { bubbles: true });
+    Object.defineProperty(down, "offsetX", { value: viewport.w + 5 });
+    Object.defineProperty(down, "offsetY", { value: 10 });
+    fireEvent(box, down);
+    fireEvent.click(box);
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("画面の大きさが変わって原寸でも大きくならなくなったら、ボタンを消し、載っていたフォーカスを閉じるへ移す", () => {
+    openLightbox();
+    const button = zoomButton("原寸で見る")!;
+    button.focus();
+    shown = { w: 1200, h: 1000, left: 0, top: 0 };
+    act(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    expect(zoomButton("原寸で見る")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "閉じる" }));
+  });
+
+  it("原寸の間に画面の大きさが変わっても、画面に合わせるへ戻したときに測り直す", () => {
+    const { img } = openLightbox();
+    fireEvent.click(zoomButton("原寸で見る")!);
+    // 原寸の間に、画面に合わせても画素数のまま出せる大きさになった
+    shown = { w: 1200, h: 1000, left: 0, top: 0 };
+    fireEvent.click(zoomButton("画面に合わせる")!);
+    expect(img.dataset.zoom).toBe("fit");
+    expect(zoomButton("原寸で見る")).toBeNull();
+  });
+
+  it("原寸の枠にフォーカスがある状態で画像を押して戻すと、フォーカスを切り替えのボタンへ移す（Tab で背面へ抜けない）", () => {
+    const { dialog, img } = openLightbox();
+    fireEvent.click(zoomButton("原寸で見る")!);
+    scrollBox(dialog).focus();
+    fireEvent.mouseDown(img);
+    fireEvent.click(img);
+    expect(img.dataset.zoom).toBe("fit");
+    expect(document.activeElement).toBe(zoomButton("原寸で見る"));
   });
 
   it("Esc は原寸のときも閉じる。開き直すと画面に合わせるに戻っている", () => {
