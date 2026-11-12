@@ -9,6 +9,7 @@ import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { DurationInput } from "../../components/ui/DurationInput";
 import { TakiInput } from "../../components/ui/TakiInput";
 import { ProfileBar, SaveToProfile } from "../../components/ui/ProfileBar";
+import { ResultBar } from "../../components/ui/ResultBar";
 import { RateCalibrator } from "../refresh/RateCalibrator";
 import { useAnalyzerMusics } from "../analyzer/useAnalyzerMusics";
 import { useGaugeInputs } from "../refresh/useGaugeInputs";
@@ -417,6 +418,29 @@ export default function WorkTimeCalculator() {
           )}
         </Panel>
       )}
+
+      {/* ★ 主な数字は画面下に固定して 1 画面目に出す（UX 監査 2026-11-12、PR-7）。値は上の「結果」「目標から逆算」と同じ */}
+      <ResultBar
+        items={
+          mode === "forward"
+            ? [
+                { label: "到達ポイント", value: result.totalPoints.toLocaleString() },
+                { label: "総稼働", value: fmtDuration(result.totalMinutes) },
+                {
+                  label: "必要な石",
+                  value: result.requiredCrystals.toLocaleString(),
+                  sub: result.requiredCrystals > 0 ? "クリスタル" : "所持で足りる",
+                },
+              ]
+            : targetPt
+              ? [
+                  { label: "必要稼働時間", value: fmtDuration(revMinutes), sub: `焚き${revTaki}で` },
+                  { label: "必要ライボ", value: `${revLB}` },
+                ]
+              : []
+        }
+        empty="目標ポイントを入れると出ます"
+      />
     </ToolPage>
   );
 }
