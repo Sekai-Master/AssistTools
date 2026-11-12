@@ -16,6 +16,11 @@ describe("toHalfWidthNumber", () => {
     expect(toHalfWidthNumber("１５０")).toBe(150);
     expect(toHalfWidthNumber("１２．５")).toBe(12.5);
   });
+  it("桁区切りのカンマは落として読む", () => {
+    expect(toHalfWidthNumber("1,200")).toBe(1200);
+    expect(toHalfWidthNumber("１，２００")).toBe(1200);
+    expect(toHalfWidthNumber(",")).toBeNull();
+  });
   it("空・非数値は null", () => {
     expect(toHalfWidthNumber("")).toBeNull();
     expect(toHalfWidthNumber("abc")).toBeNull();

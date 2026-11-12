@@ -80,11 +80,24 @@ export default function EffectiveValueCalculator() {
     return ocSkillCandidates(level, slotVals);
   }, [leaderKind, presetLeader, train, rank, level, charType, units, slotVals]);
 
-  const ocCandidateLabel = isOc ? formatCandidates(ocSkillCandidates(level, slotVals)) : "";
+  /**
+   * ★ 内部値が欠けていたら結果を出さない（UX 監査 2026-11-12・検分 #239 中-1）。
+   *   前は空を 0 として計算し、単一入力なら先頭 150 で 120、個別入力の全部空なら 150、
+   *   OC の全部空なら 80(4) を大きな字で出していた。入れる前から意味のない数字が出るうえ、
+   *   「取り込む」でその内部値を編成に保存できてしまう。
+   *   2〜5 枠は 1 つでも空なら欠け扱い（残りを 0 として計算した値も意味がない）。
+   *   明示の「0」は入れた値なので計算する（toHalfWidthNumber が null を返すのは空と非数値だけ）。
+   */
+  const usesSlots = detailMode || isOc;
+  const slotsMissing = slots.some((s) => toHalfWidthNumber(s) === null);
+  const innerMissing = usesSlots ? slotsMissing : toHalfWidthNumber(inner) === null;
+
+  const ocCandidateLabel =
+    isOc && !slotsMissing ? formatCandidates(ocSkillCandidates(level, slotVals)) : "";
 
   // 実効値（候補ごと、個数付き）
   const forwardResults = useMemo(() => {
-    if (leaderCandidates.length === 0) return [];
+    if (leaderCandidates.length === 0 || innerMissing) return [];
     return leaderCandidates.map((cand) => {
       const leader = cand.value;
       // 内部値 = 先頭 + 他4枠合計（詳細/OC）or 単一入力
@@ -94,7 +107,7 @@ export default function EffectiveValueCalculator() {
           : (toHalfWidthNumber(inner) ?? 0);
       return { leader, count: cand.count, innerTotal, effective: effectiveValue(leader, innerTotal) };
     });
-  }, [leaderCandidates, detailMode, isOc, slotVals, inner]);
+  }, [leaderCandidates, innerMissing, detailMode, isOc, slotVals, inner]);
 
   // 表示用に実効値を個数集計（同一実効値が複数候補から出るケースを「値(個数)」でまとめる）。
   const forwardEffectiveCandidates = useMemo<SkillCandidate[]>(() => {
@@ -301,16 +314,27 @@ export default function EffectiveValueCalculator() {
           </Panel>
 
           <Panel>
-            <p className="text-sm text-slate-500">この編成の実効値は</p>
-            <p className="mt-1 text-4xl font-extrabold" style={{ color: "var(--unit-color)" }}>
-              {forwardEffectiveCandidates.length === 0
-                ? "—"
-                : formatCandidates(forwardEffectiveCandidates)}
-            </p>
-            {forwardAvg !== null && (
-              <p className="text-sm text-slate-500">（平均 {forwardAvg}）</p>
+            {innerMissing ? (
+              // 「この編成の実効値は／—／です。」の3行のままだと文が繋がらないので、1行に差し替える
+              <p className="text-sm text-slate-500">
+                {usesSlots
+                  ? "この編成の実効値は、2〜5枠目のスキル値をすべて入れると出ます。"
+                  : "この編成の実効値は、内部値を入れると出ます。"}
+              </p>
+            ) : (
+              <>
+                <p className="text-sm text-slate-500">この編成の実効値は</p>
+                <p className="mt-1 text-4xl font-extrabold" style={{ color: "var(--unit-color)" }}>
+                  {forwardEffectiveCandidates.length === 0
+                    ? "—"
+                    : formatCandidates(forwardEffectiveCandidates)}
+                </p>
+                {forwardAvg !== null && (
+                  <p className="text-sm text-slate-500">（平均 {forwardAvg}）</p>
+                )}
+                <p className="text-sm text-slate-500">です。</p>
+              </>
             )}
-            <p className="text-sm text-slate-500">です。</p>
 
             {/* ★ 候補が1つに定まるときだけ保存できる。OC（特訓前ユニットキャラ）は
                 発動スキル値が複数あり得るので、どれを保存したのか分からなくなる。

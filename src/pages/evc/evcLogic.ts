@@ -6,12 +6,15 @@
 
 export type SkillLevel = 1 | 2 | 3 | 4;
 
-/** 全角数字を半角化してから数値化する。空/非数値は null。 */
+/**
+ * 全角数字を半角化してから数値化する。空/非数値は null。
+ * 桁区切りのカンマ（半角・全角）は落として読む（「1,200」を数字でないと弾かない）。
+ */
 export function toHalfWidthNumber(raw: string): number | null {
   const half = (raw ?? "").replace(/[０-９．]/g, (c) =>
     String.fromCharCode(c.charCodeAt(0) - 0xfee0)
   );
-  const cleaned = half.trim();
+  const cleaned = half.replace(/[,，]/g, "").trim();
   if (cleaned === "") return null;
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : null;
