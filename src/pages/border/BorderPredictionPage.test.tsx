@@ -114,6 +114,29 @@ function expectNoLead(ids: string[]) {
   expect(within(shelf()).queryByText(tool("analyzer").description)).toBeNull();
 }
 
+/**
+ * ★ 通常の回でも、予測の数字の近く（確度の説明の頭）に「非公式の予測で、外れることがあります」を出す
+ *   （指揮 2026-11-12。前はページ下の「しくみ」にしか無かった）。
+ * ★ 外挿の回は「この回の予測は参考値です。…大きく外れることがあります」の枠がすでに言っているので、重ねて出さない。
+ */
+describe("予測の数字の近くの「非公式で外れる」の 1 文", () => {
+  const currentPanel = () => screen.getByRole("heading", { name: "開催中のイベント" }).closest("section")!;
+  const note = () => within(currentPanel()).getByText(/確度は8割の幅の広さです/);
+
+  it("通常の回は、確度の説明の頭に出す", async () => {
+    serve(snapshot(-72, 72));
+    await show();
+    expect(note().textContent).toMatch(/^非公式の予測で、外れることがあります。/);
+  });
+
+  it("外挿の回（参考値の枠がある）は、確度の説明に重ねて出さない", async () => {
+    serve({ ...snapshot(-72, 72), extrapolatedFrom: 150 });
+    await show();
+    expect(within(currentPanel()).getByText("この回の予測は参考値です。")).toBeTruthy();
+    expect(note().textContent).not.toContain("非公式の予測で、外れることがあります");
+  });
+});
+
 describe("いま使えるツール", () => {
   it("序盤（開始の直後）: 編成ビルダー・編成かんたん比較・周回プラン", async () => {
     serve(snapshot(-1, 100));
