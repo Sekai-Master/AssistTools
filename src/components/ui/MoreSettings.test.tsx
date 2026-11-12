@@ -56,7 +56,12 @@ describe("MoreSettings", () => {
 
   it("開閉の印（矢印）を見出しに出す（flex の summary では既定の三角が消えるため）", () => {
     render(<MoreSettings changed={0}>中の入力</MoreSettings>);
-    expect(summary().querySelector("[data-more-settings-marker]")).not.toBeNull();
+    const marker = summary().querySelector("[data-more-settings-marker]");
+    expect(marker).not.toBeNull();
+    // ★ design-system.md 4 節: 文字は CSS で出す（data-icon）。合字の元の文字を要素に入れない（検索エンジンが見出しの文字として読む。検分 #247 低-3）
+    expect(marker!.getAttribute("data-icon")).toBe("chevron_right");
+    expect(marker!.textContent).toBe("");
+    expect(summary().textContent).not.toContain("chevron_right");
   });
 
   it("見出しの語は変えられる（中身が分かる言い方にするため）", () => {

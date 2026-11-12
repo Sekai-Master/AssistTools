@@ -37,14 +37,15 @@ export function MoreSettings({
 }) {
   const head = (
     <>
-      {/* ★ summary を flex にすると既定の三角が消えるので、開閉の印を自分で出す */}
+      {/* ★ summary を flex にすると既定の三角が消えるので、開閉の印を自分で出す。
+          文字は CSS で出す（data-icon。design-system.md 4 節）。合字の元の文字を要素に入れると、
+          見出しの文字として「chevron_right詳しく計算する」と読まれる（検分 #247 低-3） */}
       <span
         aria-hidden
         data-more-settings-marker
+        data-icon="chevron_right"
         className="material-icons -ml-1 text-slate-500 transition-transform group-open:rotate-90"
-      >
-        chevron_right
-      </span>
+      />
       {title}
       {contents && <span className="text-xs font-normal text-slate-500">{contents}</span>}
       {(changed > 0 || note) && (
