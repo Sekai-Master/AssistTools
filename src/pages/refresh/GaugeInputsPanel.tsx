@@ -109,7 +109,7 @@ export function GaugeInputsPanel({
                 <Field
                   label="現在のゲージ"
                   htmlFor="rg-gauge"
-                  hint="いまの表示%（0〜100）。ここからの残りを計算します"
+                  hint="いまの表示%（0〜100）"
                 >
                   <div className="flex items-center gap-2">
                     <NeuInput
@@ -129,7 +129,7 @@ export function GaugeInputsPanel({
                 <Field
                   label="次の回復まで"
                   htmlFor="rg-next-decay"
-                  hint="ゲーム内のゲージ画面に出ている残り時間。空欄なら「たった今プレイを止めた」＝30分として計算します"
+                  hint="空欄なら30分（いま止めた）として計算"
                 >
                   <div className="flex items-center gap-2">
                     <NeuInput
@@ -163,7 +163,7 @@ export function GaugeInputsPanel({
 
           <Field
             label="周回ペース"
-            hint="エビ基準の周回 回/時（マッチング・支援者交代・ロード込み）。長い曲は自動で少なくなります。既定28、自分の環境に合わせて調整を"
+            hint="既定28。長い曲は自動で少なくなります"
           >
             <div className="flex items-center gap-2">
               <NeuInput
@@ -206,6 +206,29 @@ export function GaugeInputsPanel({
               </div>
             </details>
           </Field>
+
+          {/* ★ 補足文は 1 行（約 30 字）まで。詳しい説明はここに畳む（UX 監査 2026-11-12、共通の型 2・3）。
+              前は欄の下に 27＋49＋74 字あり、同じ文が 3 ページ（リフレッシュ・周回プラン・必要稼働時間）に出ていた。 */}
+          <details>
+            <summary className="cursor-pointer text-xs text-slate-500">入力について</summary>
+            <ul className="mt-2 space-y-1 text-xs leading-relaxed text-slate-500">
+              {showGauge && (
+                <>
+                  <li>
+                    <b>現在のゲージ</b>: いまの表示%（0〜100）。ここからの残りを計算します。
+                  </li>
+                  <li>
+                    <b>次の回復まで</b>:
+                    ゲーム内のゲージ画面に出ている残り時間。空欄なら「たった今プレイを止めた」＝30分として計算します。
+                  </li>
+                </>
+              )}
+              <li>
+                <b>周回ペース</b>:
+                エビ基準の周回 回/時（マッチング・支援者交代・ロード込み）。長い曲は自動で少なくなります。既定28、自分の環境に合わせて調整を。
+              </li>
+            </ul>
+          </details>
         </div>
       </Panel>
 
