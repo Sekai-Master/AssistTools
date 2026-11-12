@@ -1681,7 +1681,7 @@ export default function EfficiencyRanking() {
         <summary className="cursor-pointer text-base font-bold text-slate-700">
           <span>この数字について</span>
           <span className="ml-2 text-xs font-normal text-slate-500">
-            スコアとPtの式・AP 前提・入れていないもの
+            スコアとPtの式・AP 前提・入れていないもの・効率難易度との違い
           </span>
         </summary>
         <ul className="mt-4 space-y-2 text-xs leading-relaxed text-slate-500">

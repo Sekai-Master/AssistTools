@@ -77,6 +77,8 @@ describe("この数字について", () => {
     const summary = details!.querySelector("summary")!.textContent ?? "";
     expect(summary).toContain("式");
     expect(summary).toContain("AP");
+    // 検分 #245 低-1: 注意枠から移した「効率難易度」との違いも、見出しで分かるように
+    expect(summary).toContain("効率難易度との違い");
   });
 
   it("中身は消さない。注意枠から移した「効率難易度」との違いも入っている", () => {
