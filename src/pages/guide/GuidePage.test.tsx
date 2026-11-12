@@ -99,6 +99,15 @@ describe("初心者向けの層", () => {
     expect(stamps[0].getAttribute("src")).toMatch(/^\/guide\/stamps\/stamp\d{4}\.webp$/);
     expect(stamps[0].getAttribute("alt")).not.toMatch(/^\[/);
     expect(container.textContent).not.toMatch(/［(画像|図|スタンプ)/);
+    // 広い画面は表、狭い画面はカード（表示の切り替えは CSS。両方とも同じ行数）
+    const rows = table.querySelectorAll("[data-stamps-table] tbody tr").length;
+    const cards = table.querySelectorAll("[data-stamps-cards] > li");
+    expect(rows).toBeGreaterThan(5);
+    expect(cards).toHaveLength(rows);
+    expect(table.querySelector("[data-stamps-table]")!.className).toContain("hidden sm:block");
+    expect(table.querySelector("[data-stamps-cards]")!.className).toContain("sm:hidden");
+    expect(cards[0].querySelector("img")).not.toBeNull();
+    expect(cards[0].textContent).toContain("いつ");
   });
 
   it("第 4 章にも同じスタンプ早見表、節の下に「ひとことで」", () => {

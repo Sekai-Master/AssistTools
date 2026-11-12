@@ -135,5 +135,5 @@ export const GUIDE: Guide = buildGuide({
 /** 章の番号順（0 が前置き）。 */
 export const CHAPTERS: readonly Chapter[] = GUIDE.chapters;
 
-/** まとめ画像の 6 枚（alt は docs/guide/cards.md）。 */
-export const CARDS: GuideCard[] = buildCards(docOf("cards.md"));
+/** まとめ画像の 6 枚（1 枚目の alt は入口のページの手順の題から）。 */
+export const CARDS: GuideCard[] = buildCards(GUIDE.start?.sections.map((x) => x.label) ?? []);

@@ -1,9 +1,12 @@
 /**
  * まとめ画像（/guide/cards）。共有しやすい 6 枚の PNG（2400×2000、6:5）と、まとめて保存する zip。
  *
- * - 画像は public/guide/cards/card-1.png〜card-6.png、zip は sekaimaster-guide-cards.zip（指揮が作る）
- * - alt は各枚の文言（docs/guide/cards.md）から。`## 題` ごとに 1 枚（上から 1〜6）で、
- *   alt は「題。本文」（記法と確かさの印は外す）。cards.md に無い枚は「まとめ画像 N」
+ * - 画像は public/guide/cards/card-1.png〜card-6.png、zip は sekaimaster-guide-cards.zip（6 枚入り）
+ * - 題と alt は画像の文言から（指揮 2026-11-12）。文言の元の cards.md はリポジトリに入れず、ここに写してある
+ *   - 1 枚目は入口のページ（docs/guide/start.md）の手順の題を並べた絵なので、alt は手順の題から作る
+ *     （start.md の手順を直せば alt も付いて来る）
+ *   - 2〜6 枚目は、各枚の箇条をつないだ文（確かさの印は外した）
+ * ★ 画像を作り直して文言が変わったら、ここの points も直す
  */
 export interface GuideCard {
   n: number;
@@ -19,62 +22,36 @@ export const CARD_WIDTH = 2400;
 export const CARD_HEIGHT = 2000;
 export const CARDS_ZIP = "sekaimaster-guide-cards.zip";
 
-/** 記法と印を外して地の文にする。 */
-function plain(s: string): string {
-  return s
-    .replace(/〔[^〕]*〕/g, "")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/\*\*|`/g, "")
-    .replace(/^\s*(?:[-*]|\d+\.)\s+/gm, "")
-    .replace(/^［[^］]*］$/gm, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/** 行ごとに地の文にし、句点が無ければ足してつなぐ（箇条の 1 項目＝1 文として読み上げられるように）。 */
-function sentences(lines: string[]): string {
-  return lines
-    .map(plain)
-    .filter(Boolean)
-    .map((l) => (/[。！？!?]$/.test(l) ? l : `${l}。`))
-    .join("");
-}
+/** 各枚の題と、画像に書いてある箇条をつないだ文（1 枚目の points は使わず、手順の題から作る）。 */
+export const CARD_TEXTS: readonly { title: string; points: string }[] = [
+  { title: "はじめての周回の流れ", points: "" },
+  { title: "募集の文の読み方", points: "主は募集者の編成、募は入室条件を表します。@1〜@4は残りの募集人数を表します。主・募の%はリーダーのスキル値です。入室は先頭スキルや内部値（5枚合計）で決まります。募集の文の用語について公式の説明は見当たりません。" },
+  { title: "スタンプの使い分け", points: "抜ける時は「またね」「ありがとう」系を使います。咲希の「おつかれさま！」は部屋主の解散の合図です。「謝罪不要」の部屋では謝るスタンプは要りません。抜けるスタンプを押す時機は揃っていません。スタンプの使い分けに公式の説明は見当たりません。" },
+  { title: "炊き数とイベントポイント", points: "炊き数（使うライボ数）は最大10まで選べます。1〜5炊きは1個あたり5倍（5炊き25倍）です。イベントPは6炊き27倍、10炊き35倍です。資源が多いときは5炊きで走ることが多いです。時間がない時や上位狙いでは7や10で走ります。" },
+  { title: "アンコール", points: "協力のスキルは5人各1回と最後のアンコールです。直前にスコアが一番高かった人が担当します。担当が取るには高い総合力と安定プレイが要ります。譲る側は難易度を下げる考えもあります。アンコールの決まり方に公式の説明は見当たりません。" },
+  { title: "リフレッシュゲージ", points: "100%になるとイベントPやバッジを得られません。手動のライブやマイセカイの採取でゲージが増えます。オートとチャレンジは増えず100%でもPを得られます。前のプレイから5分で休憩。休憩30分ごとに減ります。休憩30分ごとに約8.33%減り、6時間で0%です。" },
+];
 
 /**
- * cards.md を枚ごとに読む。番号 → 題・本文。
- * `## 題` が 1 枚で、番号は上からの順（`## 3. 題` のように番号があればそれを使う）。
+ * 6 枚の台帳。steps は入口のページの手順の題（「1. 部屋を探す・作る」の形。GUIDE.start.sections の label）。
  */
-export function parseCardTexts(src: string): Map<number, { title: string; body: string }> {
-  const out = new Map<number, { title: string; body: string }>();
-  let cur: { n: number; title: string; lines: string[] } | null = null;
-  const flush = () => {
-    if (cur) out.set(cur.n, { title: cur.title, body: sentences(cur.lines) });
-  };
-  for (const line of src.replace(/\r\n?/g, "\n").split("\n")) {
-    const h = /^#{2,3}\s+(.+)$/.exec(line.trim());
-    if (h) {
-      flush();
-      const num = /^(?:まとめ画像\s*)?(\d+)[.．:：]\s*(.*)$/.exec(h[1].trim());
-      const prev: number = cur ? cur.n : 0;
-      const n = num ? Number(num[1]) : prev + 1;
-      cur = { n, title: plain(num ? num[2] : h[1]), lines: [] };
-      continue;
-    }
-    if (/^#\s/.test(line.trim())) continue;
-    cur?.lines.push(line);
-  }
-  flush();
-  return out;
-}
-
-export function buildCards(src: string | undefined): GuideCard[] {
-  const texts = src ? parseCardTexts(src) : new Map<number, { title: string; body: string }>();
-  return Array.from({ length: CARD_COUNT }, (_, i) => {
+export function buildCards(steps: readonly string[]): GuideCard[] {
+  return CARD_TEXTS.map((t, i) => {
     const n = i + 1;
-    const t = texts.get(n);
-    const title = t?.title || `まとめ画像 ${n}`;
-    const alt = t ? [t.title, t.body].filter(Boolean).join("。").replace(/。。/g, "。") : `まとめ画像 ${n}`;
-    return { n, file: `card-${n}.png`, title, alt, width: CARD_WIDTH, height: CARD_HEIGHT };
+    const points =
+      n === 1
+        ? steps.length
+          ? `${steps.map((s) => s.replace(/^(\d+)\.\s*/, "$1 ")).join("、")}の${steps.length}つの手順。`
+          : ""
+        : t.points;
+    return {
+      n,
+      file: `card-${n}.png`,
+      title: t.title,
+      alt: points ? `${t.title}。${points}` : t.title,
+      width: CARD_WIDTH,
+      height: CARD_HEIGHT,
+    };
   });
 }
 

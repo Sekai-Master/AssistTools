@@ -160,8 +160,67 @@ function StampTable() {
       style={{ borderColor: ACCENT }}
     >
       <p className="mb-3 text-[17px] font-bold text-slate-700">{GUIDE.stampsTitle}</p>
-      <GuideBlocks blocks={GUIDE.stamps} variant="start" />
+      <div className="space-y-4">
+        {GUIDE.stamps.map((b, i) =>
+          b.kind === "table" ? (
+            <Fragment key={i}>
+              {/* 広い画面は表、狭い画面（640px 未満）は 1 行を 1 枚のカードに（指揮 2026-11-12） */}
+              <div className="hidden sm:block" data-stamps-table>
+                <GuideBlocks blocks={[b]} variant="start" />
+              </div>
+              <StampCards table={b} />
+            </Fragment>
+          ) : (
+            <GuideBlocks key={i} blocks={[b]} variant="start" />
+          ),
+        )}
+      </div>
     </section>
+  );
+}
+
+/** セルが確かさの印だけか（「確かさ」の列）。カードでは見出しを付けずに最後に置く。 */
+const onlyMarks = (cell: GuideInline[]) =>
+  cell.some((x) => x.kind === "mark") && cell.every((x) => x.kind === "mark" || (x.kind === "text" && !x.text.trim()));
+
+/** 狭い画面のスタンプ早見表。上にスタンプの絵を横に並べ、下に「いつ」「だれが」と確かさの印。 */
+function StampCards({ table }: { table: Extract<GuideBlock, { kind: "table" }> }) {
+  const heads = table.head.map((h) => h.map((x) => ("text" in x ? x.text : "")).join("").trim());
+  const stampCol = table.rows[0]?.findIndex((c) => c.some((x) => x.kind === "stamp")) ?? -1;
+  return (
+    <ul className="space-y-3 sm:hidden" data-stamps-cards>
+      {table.rows.map((r, j) => {
+        const marks = r.filter((c, k) => k !== stampCol && onlyMarks(c));
+        return (
+          <li key={j} className="rounded-lg border border-[color:var(--neu-edge)] bg-[color:var(--neu-hi)] p-3">
+            {stampCol >= 0 && (
+              <div className="flex flex-wrap gap-1">
+                <GuideText parts={r[stampCol]} variant="start" />
+              </div>
+            )}
+            <dl className="mt-2 space-y-1 text-[16px] leading-relaxed text-slate-700">
+              {r.map((c, k) =>
+                k === stampCol || onlyMarks(c) ? null : (
+                  <div key={k} className="flex gap-2">
+                    <dt className="w-14 shrink-0 text-sm font-bold text-slate-500">{heads[k]}</dt>
+                    <dd className="min-w-0 flex-1">
+                      <GuideText parts={c} variant="start" />
+                    </dd>
+                  </div>
+                ),
+              )}
+            </dl>
+            {marks.length > 0 && (
+              <p className="mt-1 text-right text-[15px]">
+                {marks.map((c, k) => (
+                  <GuideText key={k} parts={c} variant="start" />
+                ))}
+              </p>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
