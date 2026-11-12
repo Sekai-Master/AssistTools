@@ -5,7 +5,7 @@
  * その幅を body の右の余白で埋める（スマホはスクロールバーが重なるので幅 0、何もしない）。
  */
 import { useRef } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import { useModalA11y } from "./a11y";
 
@@ -42,5 +42,20 @@ describe("useModalA11y の背面スクロールの停止", () => {
     render(<Modal />);
     expect(document.body.style.overflow).toBe("hidden");
     expect(document.body.style.paddingRight).toBe("");
+  });
+});
+
+describe("useModalA11y のフォーカスの戻し", () => {
+  it("閉じたら開く前の要素へ戻し、そのとき画面をスクロールさせない（preventScroll）", () => {
+    const opener = document.createElement("button");
+    document.body.appendChild(opener);
+    opener.focus();
+    const spy = vi.spyOn(opener, "focus");
+    const { unmount } = render(<Modal />);
+    unmount();
+    expect(spy).toHaveBeenCalledWith({ preventScroll: true });
+    expect(document.activeElement).toBe(opener);
+    spy.mockRestore();
+    opener.remove();
   });
 });
