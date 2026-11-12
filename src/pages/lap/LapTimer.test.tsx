@@ -60,4 +60,12 @@ describe("計測中", () => {
     expect(isBefore(screen.getByText("直近ラップ"), tapButton)).toBe(true);
     expect(howTo().open).toBe(false);
   });
+
+  it("「使い方」を開いたまま計測を始めても閉じる（操作のボタンとラップ一覧の間に挟まらない）", async () => {
+    draw();
+    await userEvent.click(screen.getByText("使い方", { selector: "summary" }));
+    expect(howTo().open).toBe(true);
+    await userEvent.click(startButton());
+    expect(howTo().open).toBe(false);
+  });
 });
