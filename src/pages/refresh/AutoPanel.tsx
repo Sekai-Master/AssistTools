@@ -35,10 +35,14 @@ export function AutoPanel({ config }: { config: AutoConfig }) {
     hasCycleOverride,
     options,
     selected,
+    enabled,
     loading,
-    error,
     runtime,
   } = config;
+
+  // 手で入れた値が数字として読めないとき（空欄は除く）。これだけは利用者の入力の問題なので赤字で知らせる
+  const badPt = ptOverride.trim() !== "" && !hasOverride;
+  const badCycle = cycleOverride.trim() !== "" && !hasCycleOverride;
 
   const capHours = runtime.cycleSec > 0 ? (runtime.dailyCap * runtime.cycleSec) / 3600 : 0;
 
@@ -105,9 +109,11 @@ export function AutoPanel({ config }: { config: AutoConfig }) {
               ))}
             </select>
           ) : (
-            <p className="text-sm text-slate-500">
-              {error
-                ? "楽曲データを読めませんでした。下の「1回のPt」を手で入れれば計算できます。"
+            // 使う（休憩にオートがある）のに候補が無い＝読めなかった。周期も要るので所要まで入れてもらう。
+            // ★ 入れるまでオートは 0 回のまま計画に載るので、灰色でなく注意の色にする（赤字は入力の誤りだけ。検分 #246）
+            <p className={enabled ? "text-sm text-amber-700" : "text-sm text-slate-500"}>
+              {enabled
+                ? "楽曲データを読めませんでした。下の「1回のPt」と「1回の所要」を入れるまで、オートは 0 回で計算します。"
                 : "休憩に「オート」を付けると候補が出ます。"}
             </p>
           )}
@@ -197,33 +203,41 @@ export function AutoPanel({ config }: { config: AutoConfig }) {
         </div>
       </details>
 
-      <p className="mt-3 text-xs text-slate-500">
-        {runtime.ptPerPlay > 0 && runtime.cycleSec > 0 ? (
-          <>
-            1回{" "}
-            <span className="font-bold" style={{ color: "var(--unit-color)" }}>
-              {Math.round(runtime.ptPerPlay).toLocaleString()} pt
-            </span>{" "}
-            ・ 1周期 {Math.round(runtime.cycleSec)}秒 ・ 上限 {runtime.dailyCap}回で{" "}
-            {fmtDuration(capHours * 60)}
-            {(hasOverride || hasCycleOverride) && (
-              <span className="text-slate-400">
-                （{[hasOverride ? "Pt" : null, hasCycleOverride ? "所要" : null]
-                  .filter(Boolean)
-                  .join("・")}
-                は手入力を使用）
-              </span>
-            )}
-          </>
-        ) : runtime.cycleSec <= 0 ? (
-          // 周期が無いと「休憩に何回入るか」が出せない＝回数が0のままになる。
-          <span className="text-rose-600">
-            曲を選ぶか「1回の所要」を入れてください（1回の秒数が分からないと、休憩に何回入るか出せません）。
-          </span>
-        ) : (
-          "「1回のPt」を入れると、休憩ブロックにオートが積み上がります。"
-        )}
-      </p>
+      {/**
+       * ★ 下の 1 行は、赤字を利用者の入力の問題（数字として読めない値）だけにする（UX 監査 2026-11-12、PR-5）。
+       *   前は周期が 0 なら必ず赤字で「曲を選ぶか『1回の所要』を入れてください」と出していたが、周期が 0 になるのは
+       *   ① 休憩にオートを付けていない（初回）② 読み込み中 ③ 読めなかった、のどれかで、どれも利用者の誤りではない。
+       *   その 3 つは上の「オートで回す曲」の欄が落ち着いた文で言うので、ここでは繰り返さない（何も出さない）。
+       */}
+      {(badPt || badCycle || runtime.cycleSec > 0) && (
+        <p className="mt-3 text-xs text-slate-500">
+          {badPt || badCycle ? (
+            <span className="text-rose-600">
+              {[badPt ? "「1回のPt」" : null, badCycle ? "「1回の所要」" : null].filter(Boolean).join("と")}
+              は数字で入れてください（所要は 1 以上の秒数）。
+            </span>
+          ) : runtime.ptPerPlay > 0 && runtime.cycleSec > 0 ? (
+            <>
+              1回{" "}
+              <span className="font-bold" style={{ color: "var(--unit-color)" }}>
+                {Math.round(runtime.ptPerPlay).toLocaleString()} pt
+              </span>{" "}
+              ・ 1周期 {Math.round(runtime.cycleSec)}秒 ・ 上限 {runtime.dailyCap}回で{" "}
+              {fmtDuration(capHours * 60)}
+              {(hasOverride || hasCycleOverride) && (
+                <span className="text-slate-400">
+                  （{[hasOverride ? "Pt" : null, hasCycleOverride ? "所要" : null]
+                    .filter(Boolean)
+                    .join("・")}
+                  は手入力を使用）
+                </span>
+              )}
+            </>
+          ) : (
+            "「1回のPt」を入れると、休憩ブロックにオートが積み上がります。"
+          )}
+        </p>
+      )}
     </Panel>
   );
 }
