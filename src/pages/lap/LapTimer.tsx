@@ -4,7 +4,6 @@ import { Panel } from "../../components/ui/Panel";
 import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { NeuButton } from "../../components/ui/NeuButton";
-import { ActionButton } from "../../components/ui/ActionButton";
 import { TakiInput } from "../../components/ui/TakiInput";
 import { Link } from "react-router-dom";
 import { SaveToProfile } from "../../components/ui/ProfileBar";
@@ -42,6 +41,8 @@ import {
 } from "./lib/lap";
 import { addRun, loadRuns, removeRun } from "./lib/runs";
 import { LapHowTo } from "./LapHowTo";
+import { LapActionBar } from "./LapActionBar";
+import { useTapGuard } from "./useTapGuard";
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 
@@ -149,6 +150,24 @@ export default function LapTimer() {
   const doClear = () => {
     setUndoClear(state);
     update(clearRecords);
+  };
+
+  /**
+   * ★ 状態（計測前・計測中・中断中）が変わった直後の約 600ms は、主ボタン・1つ戻す・全消去・終了して保存の
+   *   押下を捨てる（検分 #241 高-1。二度押しで計測が消える・勝手に始まるのを防ぐ）。中断する・直前を除外は捨てない。
+   */
+  const blocked = useTapGuard(!running ? "idle" : paused ? "paused" : "running");
+
+  /** 主ボタン 1 つで、計測開始・周回した・再開するを状態で替える。 */
+  const onMain = () => {
+    if (!running) {
+      update((s) => tap(s, Date.now()));
+    } else if (paused) {
+      update((s) => resume(s, Date.now()));
+    } else {
+      update((s) => tap(s, Date.now()));
+      if (navigator.vibrate) navigator.vibrate(18);
+    }
   };
 
   /**
@@ -311,221 +330,159 @@ export default function LapTimer() {
         </Panel>
       )}
 
-      {/* ── 計測 ────────────────────────────────────────── */}
-      <Panel>
-        {/**
-         * ★ 計測前は「計測開始」を数字より上に置く（UX 監査 2026-11-12）。計測前の数字は 6 枚とも「—」で、
-         *   その下に置くと 390×844 の初回で 2 画面目に落ちる。計測中の「周回した」は数字の下のまま
-         *   （押すたびに直近ラップを見る並び）。終了の知らせ・消した記録を戻すも計測前だけなので一緒に上へ。
-         */}
-        {!running && (
-          <div className="mb-4">
-            {/* ★ 何で測るのかを、押す直前に見せる。曲が違うとオーバーヘッドが丸ごとずれる。 */}
-            <p className="mb-2 text-center text-xs text-slate-500">
-              <b>{song?.title ?? state.songTitle ?? "曲を選んでください"}</b>
-              {state.songSec > 0 && `（${state.songSec} 秒）`}で計測します
-            </p>
-            <ActionButton
-              className="w-full py-5 text-lg"
-              onClick={() => update((s) => tap(s, Date.now()))}
+      {/* ── 計測前: 終了の知らせ・消した記録を戻す（あるときだけ） ─────────── */}
+      {!running && (finished || undoClear) && (
+        <Panel className="!py-4">
+          {finished && (
+            <p
+              role="status"
+              className="rounded-lg bg-emerald-100 px-3 py-2 text-xs leading-relaxed text-emerald-800"
             >
-              計測開始
-              <span className="mt-1 block text-xs font-normal opacity-90">
-                1周目が始まった瞬間に押す
-              </span>
-            </ActionButton>
-
-            {finished && (
-              <p
-                role="status"
-                className="mt-3 rounded-lg bg-emerald-100 px-3 py-2 text-xs leading-relaxed text-emerald-800"
-              >
-                {finished}
-              </p>
-            )}
-
-            {undoClear && (
-              <div className="mt-3 text-center">
-                <NeuButton
-                  onClick={() => {
-                    setState(undoClear);
-                    setUndoClear(null);
-                  }}
-                >
-                  消した記録を戻す
-                </NeuButton>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat
-            label="直近ラップ"
-            value={
-              segs.filter((g) => !g.excluded).length
-                ? fmtSec(lastPer(segs))
-                : "—"
-            }
-            sub={running ? `通算 ${st.laps} 周` : "計測前"}
-          />
-          <Stat
-            label={`直近${RECENT_LAPS}周の平均`}
-            value={st.recent ? fmtSec(st.recent.avg) : "—"}
-            sub={st.recent ? `${st.recent.n} 周ぶん` : "2周ぶんから"}
-          />
-          <Stat
-            label="全体平均"
-            value={st.avg != null ? fmtSec(st.avg) : "—"}
-            sub={st.avg != null ? `${st.laps} 周 / ${fmtMin(st.sec)}` : "秒"}
-          />
-          <Stat
-            label="オーバーヘッド"
-            value={st.overhead != null ? fmtSec(st.overhead) : "—"}
-            sub={`曲以外の秒数（既定 ${modelOverhead} 秒）`}
-          />
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <Stat
-            label="この時速なら"
-            value={st.runsPerHour != null ? st.runsPerHour.toFixed(1) : "—"}
-            sub="周/時"
-          />
-          <Stat
-            label="時速ポイント"
-            value={
-              st.ptPerHour != null ? `${(st.ptPerHour / 1e6).toFixed(2)}M` : "—"
-            }
-            sub={
-              state.ptPerRun > 0
-                ? `1周 ${state.ptPerRun.toLocaleString()} Pt`
-                : "1周の獲得Ptを入れると出ます"
-            }
-          />
-        </div>
-
-        {/**
-         * ★ ラップが曲より短いことは本来ありえない（曲を最後まで聴かないと終わらない）。
-         *   出たなら押し間違いか、選んでいる曲が違う。差の解説を出すより先にそこを疑わせる。
-         */}
-        {st.overhead != null && st.overhead < 0 && (
-          <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs leading-relaxed text-rose-600">
-            平均ラップが曲の長さ（{state.songSec}{" "}
-            秒）より短くなっています。連打・押し間違いか、
-            <b>選んでいる曲が違います</b>
-            。曲を選び直すか、おかしい区間を除外してください。
-          </p>
-        )}
-        {st.overhead != null && st.overhead >= 0 && (
-          <p className="mt-3 text-xs leading-relaxed text-slate-500">
-            サイト全体の見積りは協力ライブで <b>{modelOverhead} 秒</b>{" "}
-            を置いています。あなたの実測は <b>{fmtSec(st.overhead)} 秒</b>で、
-            {Math.abs(st.overhead - modelOverhead) < 3
-              ? "ほぼ同じです。"
-              : st.overhead < modelOverhead
-                ? `${fmtSec(modelOverhead - st.overhead)} 秒ぶん速く回せています。`
-                : `${fmtSec(st.overhead - modelOverhead)} 秒ぶん余計にかかっています。`}
-          </p>
-        )}
-
-        {running && (
-          <p
-            className="mt-3 text-center text-sm text-slate-500"
-            aria-live="off"
-          >
-            {paused ? (
-              <span className="font-bold text-amber-700">
-                中断中（時計は止まっています）
-              </span>
-            ) : (
-              <>
-                いまの周 <b className="text-base tabular-nums">{elapsed}</b> 秒
-                経過中
-              </>
-            )}
-          </p>
-        )}
-
-        {/* ── 押すところ（計測中。計測前の「計測開始」は数字の上） ──────── */}
-        {running && (
-          <div className="mt-4">
-            {paused ? (
-              <ActionButton
-                className="w-full py-5 text-lg"
-                onClick={() => update((s) => resume(s, Date.now()))}
-              >
-                再開する
-                <span className="mt-1 block text-xs font-normal opacity-90">
-                  中断していたぶんは平均から外れます
-                </span>
-              </ActionButton>
-            ) : (
-              <ActionButton
-                className="w-full py-7 text-xl"
+              {finished}
+            </p>
+          )}
+          {undoClear && (
+            <div className={finished ? "mt-3 text-center" : "text-center"}>
+              <NeuButton
                 onClick={() => {
-                  update((s) => tap(s, Date.now()));
-                  if (navigator.vibrate) navigator.vibrate(18);
+                  setState(undoClear);
+                  setUndoClear(null);
                 }}
               >
-                周回した
-                <span className="mt-1 block text-xs font-normal opacity-90">
-                  {st.laps > 0 ? `通算 ${st.laps} 周` : "1周終わるたびに押す"}
-                </span>
-              </ActionButton>
-            )}
-
-            <div className="mt-3 flex flex-wrap justify-center gap-2">
-              {!paused && (
-                <NeuButton onClick={() => update((s) => pause(s, Date.now()))}>
-                  中断する
-                </NeuButton>
-              )}
-              <NeuButton disabled={paused} onClick={() => update(undo)}>
-                1つ戻す
+                消した記録を戻す
               </NeuButton>
-              <NeuButton
-                disabled={segs.length === 0}
-                onClick={() =>
-                  update((s) => toggleExclude(s, s.marks.length - 2))
-                }
-              >
-                直前を除外
-              </NeuButton>
-              <NeuButton className="!text-rose-600" onClick={doClear}>
-                全消去
-              </NeuButton>
-              {/* ★ 終了は破壊操作ではない（保存してから空にする）ので確認は挟まない。 */}
-              <NeuButton onClick={doFinish}>終了して保存</NeuButton>
             </div>
+          )}
+        </Panel>
+      )}
+
+      {/* ── 計測（計測中だけ） ──────────────────────────────── */}
+      {/**
+       * ★ 計測前の数字は 6 枚とも「—」で中身がないので出さない（検分 #241 高-1）。
+       *   主ボタンは下の固定バー。ここに残るのは数字と、計測中だけの小さな操作の行。
+       */}
+      {running && (
+        <Panel>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat
+              label="直近ラップ"
+              value={
+                segs.filter((g) => !g.excluded).length
+                  ? fmtSec(lastPer(segs))
+                  : "—"
+              }
+              sub={`通算 ${st.laps} 周`}
+            />
+            <Stat
+              label={`直近${RECENT_LAPS}周の平均`}
+              value={st.recent ? fmtSec(st.recent.avg) : "—"}
+              sub={st.recent ? `${st.recent.n} 周ぶん` : "2周ぶんから"}
+            />
+            <Stat
+              label="全体平均"
+              value={st.avg != null ? fmtSec(st.avg) : "—"}
+              sub={st.avg != null ? `${st.laps} 周 / ${fmtMin(st.sec)}` : "秒"}
+            />
+            <Stat
+              label="オーバーヘッド"
+              value={st.overhead != null ? fmtSec(st.overhead) : "—"}
+              sub={`曲以外の秒数（既定 ${modelOverhead} 秒）`}
+            />
           </div>
-        )}
 
-        {wake.failed && running && !paused && (
-          <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-            画面の消灯を止められませんでした。端末の<b>自動ロックを切って</b>
-            ください （iOS は低電力モードだと止められません）。
-          </p>
-        )}
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <Stat
+              label="この時速なら"
+              value={st.runsPerHour != null ? st.runsPerHour.toFixed(1) : "—"}
+              sub="周/時"
+            />
+            <Stat
+              label="時速ポイント"
+              value={
+                st.ptPerHour != null ? `${(st.ptPerHour / 1e6).toFixed(2)}M` : "—"
+              }
+              sub={
+                state.ptPerRun > 0
+                  ? `1周 ${state.ptPerRun.toLocaleString()} Pt`
+                  : "1周の獲得Ptを入れると出ます"
+              }
+            />
+          </div>
 
-        {bad && (
-          <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
-            <b>
-              #{bad.worst.i + 1} が {fmtSec(bad.worst.per)} 秒
-            </b>
-            です。休憩や部屋落ちなら除外、押し忘れなら一覧の ＋
-            で周回数を増やしてください。
-            {bad.n > 1 && ` ほかに ${bad.n - 1} 件。`}
-            このままだと平均が壊れます。
-            <NeuButton
-              className="ml-2 !px-2 !py-0.5 !text-xs"
-              onClick={() => update((s) => toggleExclude(s, bad.worst.i))}
-            >
-              #{bad.worst.i + 1} を除外
+          {/**
+           * ★ ラップが曲より短いことは本来ありえない（曲を最後まで聴かないと終わらない）。
+           *   出たなら押し間違いか、選んでいる曲が違う。差の解説を出すより先にそこを疑わせる。
+           */}
+          {st.overhead != null && st.overhead < 0 && (
+            <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs leading-relaxed text-rose-600">
+              平均ラップが曲の長さ（{state.songSec}{" "}
+              秒）より短くなっています。連打・押し間違いか、
+              <b>選んでいる曲が違います</b>
+              。曲を選び直すか、おかしい区間を除外してください。
+            </p>
+          )}
+          {st.overhead != null && st.overhead >= 0 && (
+            <p className="mt-3 text-xs leading-relaxed text-slate-500">
+              サイト全体の見積りは協力ライブで <b>{modelOverhead} 秒</b>{" "}
+              を置いています。あなたの実測は <b>{fmtSec(st.overhead)} 秒</b>で、
+              {Math.abs(st.overhead - modelOverhead) < 3
+                ? "ほぼ同じです。"
+                : st.overhead < modelOverhead
+                  ? `${fmtSec(modelOverhead - st.overhead)} 秒ぶん速く回せています。`
+                  : `${fmtSec(st.overhead - modelOverhead)} 秒ぶん余計にかかっています。`}
+            </p>
+          )}
+
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            {!paused && (
+              <NeuButton onClick={() => update((s) => pause(s, Date.now()))}>
+                中断する
+              </NeuButton>
+            )}
+            <NeuButton disabled={paused} onClick={() => !blocked() && update(undo)}>
+              1つ戻す
             </NeuButton>
+            <NeuButton
+              disabled={segs.length === 0}
+              onClick={() =>
+                update((s) => toggleExclude(s, s.marks.length - 2))
+              }
+            >
+              直前を除外
+            </NeuButton>
+            <NeuButton className="!text-rose-600" onClick={() => !blocked() && doClear()}>
+              全消去
+            </NeuButton>
+            {/* ★ 終了は破壊操作ではない（保存してから空にする）ので確認は挟まない。 */}
+            <NeuButton onClick={() => !blocked() && doFinish()}>終了して保存</NeuButton>
           </div>
-        )}
-      </Panel>
+
+          {wake.failed && running && !paused && (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              画面の消灯を止められませんでした。端末の<b>自動ロックを切って</b>
+              ください （iOS は低電力モードだと止められません）。
+            </p>
+          )}
+
+          {bad && (
+            <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
+              <b>
+                #{bad.worst.i + 1} が {fmtSec(bad.worst.per)} 秒
+              </b>
+              です。休憩や部屋落ちなら除外、押し忘れなら一覧の ＋
+              で周回数を増やしてください。
+              {bad.n > 1 && ` ほかに ${bad.n - 1} 件。`}
+              このままだと平均が壊れます。
+              <NeuButton
+                className="ml-2 !px-2 !py-0.5 !text-xs"
+                onClick={() => update((s) => toggleExclude(s, bad.worst.i))}
+              >
+                #{bad.worst.i + 1} を除外
+              </NeuButton>
+            </div>
+          )}
+        </Panel>
+      )}
 
       {/* ── 使い方（初回も閉じる。計測のパネルの下） ─────────────── */}
       {/* ★ 計測の開始・終了で key を変えて閉じ直す。開いたまま測り始めると、操作のボタンと
@@ -759,6 +716,36 @@ export default function LapTimer() {
           onClose={() => setSongOpen(false)}
         />
       )}
+
+      {/* ── 主ボタン（画面下に固定。どの状態でも同じ場所・同じ大きさ） ───────── */}
+      <LapActionBar
+        line={
+          !running ? (
+            // ★ 何で測るのかを、押す直前に見せる。曲が違うとオーバーヘッドが丸ごとずれる。
+            <>
+              <b>{song?.title ?? state.songTitle ?? "曲を選んでください"}</b>
+              {state.songSec > 0 && `（${state.songSec} 秒）`}で計測します
+            </>
+          ) : paused ? (
+            <span className="font-bold text-amber-700">中断中（時計は止まっています）</span>
+          ) : (
+            <>
+              いまの周 <b className="tabular-nums">{elapsed}</b> 秒経過中
+            </>
+          )
+        }
+        label={!running ? "計測開始" : paused ? "再開する" : "周回した"}
+        sub={
+          !running
+            ? "1周目が始まった瞬間に押す"
+            : paused
+              ? "中断していたぶんは平均から外れます"
+              : st.laps > 0
+                ? `通算 ${st.laps} 周`
+                : "1周終わるたびに押す"
+        }
+        onPress={() => !blocked() && onMain()}
+      />
     </ToolPage>
   );
 }
