@@ -170,10 +170,11 @@ describe("プライバシーポリシー", () => {
 describe("更新履歴ページ", () => {
   it("CHANGELOG.md の版が並び、先頭に「最新」が付く", () => {
     at(<ChangelogPage />);
-    expect(screen.getByText(`v${__APP_VERSION__}`)).toBeTruthy();
+    // 版の番号は目次にも出るので、見出しで探す
+    expect(screen.getByRole("heading", { name: `v${__APP_VERSION__}`, level: 2 })).toBeTruthy();
     expect(screen.getByText("最新")).toBeTruthy();
     // 最初のリリースまで残っていること（途中で解析が止まっていないか）。
-    expect(screen.getByText("v1.0.0")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "v1.0.0", level: 2 })).toBeTruthy();
   });
 
   /** 版の見出し（v1.28.0 など）が入っている枠。 */
