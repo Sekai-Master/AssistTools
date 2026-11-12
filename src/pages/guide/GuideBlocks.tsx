@@ -65,7 +65,7 @@ function Leaf({ x, variant }: { x: LeafNode; variant: Variant }) {
         height={64}
         loading="lazy"
         decoding="async"
-        className="mr-1 inline-block h-16 w-auto align-middle"
+        className="mr-1 inline-block h-12 w-auto align-middle sm:h-16"
       />
     );
   if (x.kind === "term")
