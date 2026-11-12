@@ -129,7 +129,7 @@ export function GaugeInputsPanel({
                 <Field
                   label="次の回復まで"
                   htmlFor="rg-next-decay"
-                  hint="空欄なら30分（いま止めた）として計算"
+                  hint="ゲージ画面の残り時間。空欄なら30分で計算"
                 >
                   <div className="flex items-center gap-2">
                     <NeuInput
