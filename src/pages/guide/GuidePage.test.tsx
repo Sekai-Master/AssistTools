@@ -153,6 +153,6 @@ describe("初心者向けの層", () => {
     render(<MemoryRouter><GuideCards cards={CARDS} env={zipEnv} /></MemoryRouter>);
     fireEvent.click(screen.getByRole("button", { name: /まとめて保存/ }));
     await waitFor(() => expect(zipEnv.downloadUrl).toHaveBeenCalledWith("/guide/cards/sekaimaster-guide-cards.zip", "sekaimaster-guide-cards.zip"));
-    expect(await screen.findByText(/zip を保存しました/)).toBeTruthy();
+    expect(await screen.findByText(/zip の保存を始めました/)).toBeTruthy();
   });
 });

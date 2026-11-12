@@ -135,6 +135,8 @@ export const PAGE_TITLES: Record<string, string> = {
   "/contact": "お問い合わせ",
   "/knowledge": "知見ノート",
   "/guide": "知識ガイド",
+  "/guide/start": "はじめての周回",
+  "/guide/cards": "まとめ画像",
 };
 
 /**

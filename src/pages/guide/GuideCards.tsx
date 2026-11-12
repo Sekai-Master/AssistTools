@@ -3,34 +3,60 @@ import { Link } from "react-router-dom";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { CARDS_ZIP, cardSrc, type GuideCard } from "./lib/cards";
-import { SAVE_ALL_TEXT, browserSaveAllEnv, saveAllCards, type SaveAllEnv } from "./lib/cardsShare";
+import {
+  SAVE_ALL_TEXT,
+  browserSaveAllEnv,
+  canShareFiles,
+  fetchCardFiles,
+  saveAllCards,
+  type SaveAllEnv,
+} from "./lib/cardsShare";
 
 /**
  * まとめ画像（/guide/cards）。6 枚を 1 枚ずつ保存するか、まとめて保存する。
  * まとめて保存は、スマホでは共有シート（「画像を保存」で写真に入る）、PC では zip（lib/cardsShare.ts）。
+ * ★ Safari は、押してから画像を取りに行くと共有を拒むことがある。ボタンに触れた・指を置いた・
+ *   フォーカスした時点で 6 枚を先読みし、押したときは待たずに共有の画面を開く。
  */
 export function GuideCards({ cards, env }: { cards: GuideCard[]; env?: SaveAllEnv }) {
   const base = import.meta.env.BASE_URL;
   const cached = useRef<File[] | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  const prefetching = useRef(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const shareEnv = () => env ?? browserSaveAllEnv();
+  const items = cards.map((c) => ({ url: cardSrc(base, c.file), fileName: `sekaimaster-guide-${c.file}` }));
+
+  const prefetch = () => {
+    const e = shareEnv();
+    if (cached.current || prefetching.current || !canShareFiles(e)) return;
+    prefetching.current = true;
+    fetchCardFiles({ cards: items }, e)
+      .then((files) => {
+        cached.current = files;
+      })
+      .catch(() => {
+        // 押したときに取り直す
+      })
+      .finally(() => {
+        prefetching.current = false;
+      });
+  };
 
   const saveAll = async () => {
     setBusy(true);
     setNotice(null);
     try {
       const result = await saveAllCards(
-        {
-          cards: cards.map((c) => ({ url: cardSrc(base, c.file), fileName: `sekaimaster-guide-${c.file}` })),
-          zip: { url: cardSrc(base, CARDS_ZIP), fileName: CARDS_ZIP },
-          cached: cached.current,
-        },
-        env ?? browserSaveAllEnv(),
+        { cards: items, zip: { url: cardSrc(base, CARDS_ZIP), fileName: CARDS_ZIP }, cached: cached.current },
+        shareEnv(),
         (files) => {
           cached.current = files;
         },
       );
       setNotice(SAVE_ALL_TEXT[result]);
+    } catch {
+      setNotice("保存できませんでした。1 枚ずつの「保存」を使ってください");
     } finally {
       setBusy(false);
     }
@@ -52,7 +78,7 @@ export function GuideCards({ cards, env }: { cards: GuideCard[]; env?: SaveAllEn
           の要点を 6 枚の画像にまとめました。友だちに送ったり、周回の前に見返したりするのに使ってください。
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <NeuButton onClick={saveAll} disabled={busy}>
+          <NeuButton onClick={saveAll} onPointerEnter={prefetch} onTouchStart={prefetch} onFocus={prefetch} disabled={busy}>
             {busy ? "準備しています…" : "まとめて保存（6 枚）"}
           </NeuButton>
           <span role="status" aria-live="polite" className="text-sm text-slate-500">

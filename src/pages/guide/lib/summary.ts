@@ -28,7 +28,3 @@ export function parseSummaryItems(src: string): SummaryItem[] {
   }
   return out;
 }
-
-export function parseSummaries(src: string): Map<string, GuideInline[]> {
-  return new Map(parseSummaryItems(src).map((s) => [s.id, s.text]));
-}

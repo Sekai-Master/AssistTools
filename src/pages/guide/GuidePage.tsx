@@ -30,12 +30,19 @@ function useChapterTitle(title: string | null): void {
 /**
  * 節のアンカー（/guide/3#s3-2）に着地させる。
  * 遷移の演出は着いたときに先頭へ戻すので、描画が落ち着いてから見出しまで送る。
+ * ★ location.key も見る。同じ節のリンクをもう一度押す（hash が同じ）ときも送り直す。
+ * ★ 壊れたパーセントエンコード（#%E0%A4）で decodeURIComponent が投げても、ページを落とさない。
  */
 function useHashLanding(dep: string): void {
-  const { hash } = useLocation();
+  const { hash, key } = useLocation();
   useEffect(() => {
     if (!hash) return;
-    const id = decodeURIComponent(hash.slice(1));
+    let id = hash.slice(1);
+    try {
+      id = decodeURIComponent(id);
+    } catch {
+      // 生のまま探す
+    }
     let tries = 0;
     let timer = 0;
     const go = () => {
@@ -45,7 +52,7 @@ function useHashLanding(dep: string): void {
     };
     timer = window.setTimeout(go, 50);
     return () => window.clearTimeout(timer);
-  }, [hash, dep]);
+  }, [hash, key, dep]);
 }
 
 function chapterLabel(c: Chapter): string {

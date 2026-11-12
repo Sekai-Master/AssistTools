@@ -114,3 +114,18 @@ describe("実際の cards.md", () => {
     }
   });
 });
+
+describe("まとめて保存（取ってあったのに拒まれる端末）と zip の中身", () => {
+  it("先読みした画像でも NotAllowedError なら、もう一度を求めず zip へ", async () => {
+    const denied = Object.assign(new Error("x"), { name: "NotAllowedError" });
+    const e = env({ share: vi.fn(async () => Promise.reject(denied)), canShare: () => true });
+    const cached = [new File(["x"], "card-1.png", { type: "image/png" })];
+    expect(await saveAllCards({ ...input, cached }, e)).toBe("zip");
+    expect(e.downloadUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("zip に card-1.png〜card-6.png が入っている（画像だけ差し替えて zip が古いまま、を拾う手がかり）", () => {
+    const zip = fs.readFileSync(path.join(DIR, CARDS_ZIP)).toString("latin1");
+    for (let n = 1; n <= CARD_COUNT; n++) expect(zip, `card-${n}.png`).toContain(`card-${n}.png`);
+  });
+});

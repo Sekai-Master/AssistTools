@@ -151,6 +151,15 @@ describe("用語のボタン（第 8 章）", () => {
     expect(terms(para("SFは強い").text)).toEqual(["SF"]);
   });
 
+  it("カタカナの語も、カタカナが続く中では拾わない。前後は切り分ける前の位置で見る", () => {
+    const g = parseGlossary("- **エビ**: 曲の通称。 → 4.2\n- **SF・SUPER FEVER**: 説明。 → 3.3");
+    const para = (src: string) => annotateTerms(P(src).blocks, g)[0] as Extract<GuideBlock, { kind: "para" }>;
+    expect(terms(para("エビデンスの話。エビを叩く。").text)).toEqual(["エビ"]);
+    // 1 つ切り出したあとも、直前の字は元の文字列の位置で見る（XSF の SF は拾わない）
+    expect(terms(para("SF、ASFC と XSF").text)).toEqual(["SF"]);
+    expect(inlineText(para("エビデンスの話。エビを叩く。").text)).toBe("エビデンスの話。エビを叩く。");
+  });
+
   it("見出し・表・印・リンク・太字の中は対象にしない", () => {
     const blocks = annotateTerms(
       P("### 5.1 支援鯖\n\n| 支援 |\n|---|\n| 支援鯖 |\n\n**支援鯖** と [支援鯖](https://e.com) と〔支援〕のあと、支援鯖。").blocks,
@@ -238,5 +247,19 @@ describe("実際の原稿（start.md・stamps.md・summary.md）", () => {
         .blocks.some((b) => (b.kind === "para" || b.kind === "list") && JSON.stringify(b).includes('"kind":"term"'));
     expect(has(8)).toBe(false);
     expect(has(3)).toBe(true);
+  });
+});
+
+describe("ずれやすい直書き", () => {
+  it("/guide/start の説明文の「N つの手順」が start.md の手順の数と合う", async () => {
+    const { PAGES } = await import("../../../seo");
+    const steps = guide.start!.sections.length;
+    expect(PAGES["/guide/start"].description).toContain(`${steps} つの手順`);
+  });
+
+  it("http(s) でない外へのリンク（javascript: など）は文字に落とす", () => {
+    const b = P("[押す](javascript:alert(1)) と [外](https://e.com)").blocks[0] as Extract<GuideBlock, { kind: "para" }>;
+    expect(b.text.filter((x) => x.kind === "link").map((x) => x.kind === "link" && x.href)).toEqual(["https://e.com"]);
+    expect(inlineText(b.text)).toContain("押す");
   });
 });

@@ -27,6 +27,13 @@ export interface SaveAllInput {
   cached?: File[];
 }
 
+/** 6 枚を File にする（先読みにも使う）。 */
+export async function fetchCardFiles(input: Pick<SaveAllInput, "cards">, env: Pick<SaveAllEnv, "fetchBlob">): Promise<File[]> {
+  return Promise.all(
+    input.cards.map(async (c) => new File([await env.fetchBlob(c.url)], c.fileName, { type: "image/png" })),
+  );
+}
+
 /** 共有の画面を出せる端末か（ファイルを渡す前の見込み。最後は File を渡した canShare で決める）。 */
 export function canShareFiles(env: Pick<SaveAllEnv, "share" | "canShare">): boolean {
   if (!env.share || !env.canShare || typeof File === "undefined") return false;
@@ -44,11 +51,7 @@ export async function saveAllCards(
 ): Promise<SaveAllResult> {
   if (canShareFiles(env)) {
     try {
-      const files =
-        input.cached ??
-        (await Promise.all(
-          input.cards.map(async (c) => new File([await env.fetchBlob(c.url)], c.fileName, { type: "image/png" })),
-        ));
+      const files = input.cached ?? (await fetchCardFiles(input, env));
       onFiles?.(files);
       const data: ShareData = { files };
       if (env.canShare!(data)) {
@@ -57,7 +60,8 @@ export async function saveAllCards(
       }
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") return "cancelled";
-      if (e instanceof Error && e.name === "NotAllowedError") return "retry";
+      // 取りに行ったせいで拒まれたなら、もう一度押してもらう。取ってあったのに拒まれる端末は zip へ
+      if (e instanceof Error && e.name === "NotAllowedError" && !input.cached) return "retry";
       // 画像を取れない・共有に失敗した: zip へ回す
     }
   }
@@ -79,7 +83,10 @@ export function browserSaveAllEnv(): SaveAllEnv {
       const a = document.createElement("a");
       a.href = url;
       a.download = fileName;
+      // DOM に付けずに click すると反応しないブラウザがある
+      document.body.appendChild(a);
       a.click();
+      a.remove();
     },
   };
 }
@@ -87,6 +94,6 @@ export function browserSaveAllEnv(): SaveAllEnv {
 export const SAVE_ALL_TEXT: Record<SaveAllResult, string | null> = {
   shared: null,
   cancelled: null,
-  zip: "6 枚をまとめた zip を保存しました",
+  zip: "6 枚をまとめた zip の保存を始めました",
   retry: "準備ができました。もう一度「まとめて保存」を押してください",
 };

@@ -7,7 +7,9 @@ import type { GlossaryEntry } from "./lib/guide";
  * - 点線の下線のボタン。押すと説明と「→ N.M」へのリンクが小さな吹き出しで出る
  * - もう一度押す・外を押す・Escape で閉じる。ボタンなので Tab で届き、Enter / Space で開け閉めできる
  * - 説明の描画は呼ぶ側（GuideText）から受け取る（循環を避けるため）
- * - 吹き出しは画面の右端からはみ出さないよう、開いたときに左へずらす（はみ出すとページが横に揺れる）
+ * - 吹き出しは画面の右端からはみ出さないよう、開いたときに左へずらす（はみ出すとページが横に揺れる）。
+ *   開いたまま画面の向きや幅が変わったら閉じる（ずらし直さずに済ませる）
+ * - Tab で吹き出しの外へ出たら閉じる
  */
 const POP_WIDTH = 288;
 
@@ -48,16 +50,25 @@ export function GuideTerm({
         button.current?.focus();
       }
     };
+    const onResize = () => setOpen(false);
     document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onResize);
     return () => {
       document.removeEventListener("pointerdown", onDown);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onResize);
     };
   }, [open]);
 
   return (
-    <span ref={wrap} className="relative inline">
+    <span
+      ref={wrap}
+      className="relative inline"
+      onBlur={(e) => {
+        if (open && !wrap.current?.contains(e.relatedTarget as Node | null)) setOpen(false);
+      }}
+    >
       <button
         ref={button}
         type="button"
@@ -72,8 +83,8 @@ export function GuideTerm({
         <span
           id={id}
           role="note"
-          style={shift ? { transform: `translateX(${shift}px)` } : undefined}
-          className="absolute left-0 top-full z-30 mt-1 block w-[288px] max-w-[calc(100vw-2rem)] rounded-lg border border-slate-300 bg-neu p-3 text-left text-sm font-normal leading-relaxed text-slate-600 shadow-neu-sm"
+          style={{ width: POP_WIDTH, ...(shift ? { transform: `translateX(${shift}px)` } : {}) }}
+          className="absolute left-0 top-full z-30 mt-1 block max-w-[calc(100vw-2rem)] rounded-lg border border-slate-300 bg-neu p-3 text-left text-sm font-normal leading-relaxed text-slate-600 shadow-neu-sm"
         >
           <span className="block font-bold text-slate-700">{entry.label}</span>
           <span className="mt-1 block">{renderDef(entry)}</span>
@@ -81,7 +92,7 @@ export function GuideTerm({
             <span className="mt-2 block text-xs">
               くわしく →{" "}
               {entry.refs.map((r, i) => (
-                <span key={r.to}>
+                <span key={`${r.to}-${i}`}>
                   {i > 0 && "・"}
                   <Link to={r.to} className="font-bold underline" onClick={() => setOpen(false)}>
                     {r.label}

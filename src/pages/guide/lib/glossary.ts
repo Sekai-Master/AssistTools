@@ -40,30 +40,37 @@ interface Hit {
   entry: GlossaryEntry;
 }
 
-const isAsciiWord = (c: string | undefined) => c != null && /[A-Za-z0-9_]/.test(c);
+/** 語の切れ目を見る文字の種類。英数字とカタカナは、同じ種類が続くと 1 つの語とみなす。 */
+const kindOf = (c: string | undefined): "ascii" | "kana" | null => {
+  if (c == null) return null;
+  if (/[A-Za-z0-9_]/.test(c)) return "ascii";
+  if (/[ァ-ヺー]/.test(c)) return "kana";
+  return null;
+};
 
 /**
- * 語の出る位置。英数字の語は、前後が英数字なら別の語の一部として飛ばす
- * （「SF」を「SFC」の中で拾わない）。
+ * 語の出る位置（from 以降）。語の端が英数字かカタカナで、その外側も同じ種類の字なら、
+ * 別の語の一部として飛ばす（「SF」を「SFC」の中で、「エビ」を「エビデンス」の中で拾わない）。
+ * ★ 前後の字は、切り分ける前の元の文字列の位置で見る（切ったあとの先頭では直前の字が見えない）。
  */
-function indexOfTerm(text: string, term: string): number {
-  for (let at = text.indexOf(term); at >= 0; at = text.indexOf(term, at + 1)) {
-    const before = text[at - 1];
-    const after = text[at + term.length];
-    const okStart = !isAsciiWord(term[0]) || !isAsciiWord(before);
-    const okEnd = !isAsciiWord(term[term.length - 1]) || !isAsciiWord(after);
+function indexOfTerm(text: string, term: string, from: number): number {
+  const head = kindOf(term[0]);
+  const tail = kindOf(term[term.length - 1]);
+  for (let at = text.indexOf(term, from); at >= 0; at = text.indexOf(term, at + 1)) {
+    const okStart = head == null || kindOf(text[at - 1]) !== head;
+    const okEnd = tail == null || kindOf(text[at + term.length]) !== tail;
     if (okStart && okEnd) return at;
   }
   return -1;
 }
 
-/** 文字の中で、まだ使っていない項目の語のうち、いちばん前（同じ位置なら長いほう）に出るもの。 */
-function firstHit(text: string, entries: readonly GlossaryEntry[], used: Set<GlossaryEntry>): Hit | null {
+/** from 以降で、まだ使っていない項目の語のうち、いちばん前（同じ位置なら長いほう）に出るもの。 */
+function firstHit(text: string, from: number, entries: readonly GlossaryEntry[], used: Set<GlossaryEntry>): Hit | null {
   let best: Hit | null = null;
   for (const entry of entries) {
     if (used.has(entry)) continue;
     for (const term of entry.terms) {
-      const at = indexOfTerm(text, term);
+      const at = indexOfTerm(text, term, from);
       if (at < 0) continue;
       if (!best || at < best.at || (at === best.at && term.length > best.term.length)) best = { at, term, entry };
     }
@@ -74,15 +81,16 @@ function firstHit(text: string, entries: readonly GlossaryEntry[], used: Set<Glo
 function annotateInline(xs: GuideInline[], entries: readonly GlossaryEntry[], used: Set<GlossaryEntry>): GuideInline[] {
   return xs.flatMap((x): GuideInline[] => {
     if (x.kind !== "text") return [x];
+    const text = x.text;
     const out: GuideInline[] = [];
-    let rest = x.text;
-    for (let hit = firstHit(rest, entries, used); hit; hit = firstHit(rest, entries, used)) {
-      if (hit.at > 0) out.push({ kind: "text", text: rest.slice(0, hit.at) });
+    let pos = 0;
+    for (let hit = firstHit(text, pos, entries, used); hit; hit = firstHit(text, pos, entries, used)) {
+      if (hit.at > pos) out.push({ kind: "text", text: text.slice(pos, hit.at) });
       out.push({ kind: "term", text: hit.term, entry: hit.entry });
       used.add(hit.entry);
-      rest = rest.slice(hit.at + hit.term.length);
+      pos = hit.at + hit.term.length;
     }
-    if (rest) out.push({ kind: "text", text: rest });
+    if (pos < text.length) out.push({ kind: "text", text: text.slice(pos) });
     return out;
   });
 }

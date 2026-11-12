@@ -147,8 +147,12 @@ export function internalPath(href: string): string | null {
  */
 export function toGuideInline(xs: Inline[]): GuideInline[] {
   return xs.flatMap((x): GuideInline[] => {
-    if (x.kind === "link")
-      return [{ kind: "link", href: x.href, to: internalPath(x.href), parts: leaves(parseInline(x.text)) }];
+    if (x.kind === "link") {
+      const to = internalPath(x.href);
+      // 外へのリンクは http(s) だけ。javascript: などは md.ts が通すので、ここで文字に落とす
+      if (to == null && !/^https?:\/\//i.test(x.href)) return leaves(parseInline(x.text));
+      return [{ kind: "link", href: x.href, to, parts: leaves(parseInline(x.text)) }];
+    }
     return leaves([x]);
   });
 }
@@ -226,7 +230,9 @@ function withToolDescriptions(
   return {
     kind: "table",
     head: insert(b.head, [{ kind: "text", text: "説明" }]),
-    rows: b.rows.map((r) => {
+    rows: b.rows.map((row) => {
+      // セルの足りない行は見出しの数までそろえる（足す位置がずれて列が合わなくなるのを防ぐ）
+      const r = row.length < b.head.length ? [...row, ...Array.from({ length: b.head.length - row.length }, () => [])] : row;
       const path = pathOfRow(r, toolCol, pathCol);
       const tool = path ? toolOfPath(path) : undefined;
       if (!tool) problems.push(`表の行「${inlineText(r[toolCol] ?? [])}」のツールが tools.ts に無い（${path ?? "パスなし"}）`);

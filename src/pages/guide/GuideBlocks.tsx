@@ -184,7 +184,7 @@ function More({ refs }: { refs: { label: string; to: string }[] }) {
     <p className="text-sm text-slate-600">
       くわしく →{" "}
       {refs.map((r, i) => (
-        <Fragment key={r.to}>
+        <Fragment key={`${r.to}-${i}`}>
           {i > 0 && "・"}
           <Link to={r.to} className="font-bold underline">
             {r.label}
