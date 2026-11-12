@@ -95,6 +95,28 @@ describe("更新履歴の版の目次", () => {
     expect(document.activeElement).toBe(screen.getByRole("heading", { name: `v${target.version}`, level: 2 }));
   });
 
+  it("飛ぶときにルーターが history.state に持つ値を消さない", () => {
+    const state = { usr: null, key: "abc", idx: 3 };
+    window.history.replaceState(state, "", "/changelog");
+    renderPage();
+    fireEvent.click(within(sideToc()).getByRole("link", { name: /v1\.0\.0/ }));
+    expect(window.history.state).toEqual(state);
+    expect(window.location.hash).toBe("#v1.0.0");
+  });
+
+  it("Ctrl を押しながらの押下（新しいタブで開く）はブラウザに任せる", () => {
+    renderPage();
+    const click = fireEvent.click(within(sideToc()).getByRole("link", { name: /v1\.0\.0/ }), { ctrlKey: true });
+    expect(click).toBe(true);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("壊れた hash（#%）で直接来ても、ページを落とさない", () => {
+    window.history.replaceState(null, "", "/changelog#%");
+    expect(() => renderPage()).not.toThrow();
+    expect(screen.getByRole("heading", { name: "v1.0.0", level: 2 })).toBeTruthy();
+  });
+
   it("いま読んでいる版（ヘッダーの下を過ぎた最後の版）に印を付ける", async () => {
     renderPage();
     // 3 つ目の版までが上に過ぎ、4 つ目からは下にある、という配置にする

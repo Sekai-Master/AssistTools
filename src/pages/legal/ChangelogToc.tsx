@@ -25,11 +25,19 @@ export interface TocRelease {
 /** 版の見出しが「上に過ぎた」とみなす線。sticky のヘッダー（約 64px）と scroll-mt-20（80px）の間。 */
 const READ_LINE = 96;
 
-/** いま読んでいる版。READ_LINE を過ぎた最後の版。どれも過ぎていなければ先頭（最新）。 */
+/** 横の目次を出す幅（Tailwind の lg）。これより狭いと横の目次は隠れているので、測らない。 */
+const WIDE = "(min-width: 1024px)";
+
+/**
+ * いま読んでいる版。READ_LINE を過ぎた最後の版。どれも過ぎていなければ先頭（最新）。
+ * ページの一番下まで来たときは最後の版（末尾の短い版は見出しが READ_LINE まで上がりきらない）。
+ */
 function useActiveVersion(versions: readonly string[]): string | undefined {
   const [active, setActive] = useState<string | undefined>(versions[0]);
   useEffect(() => {
+    const mql = typeof window.matchMedia === "function" ? window.matchMedia(WIDE) : undefined;
     let frame = 0;
+    let listening = false;
     const measure = () => {
       frame = 0;
       let current = versions[0];
@@ -39,18 +47,37 @@ function useActiveVersion(versions: readonly string[]): string | undefined {
         if (el.getBoundingClientRect().top <= READ_LINE) current = v;
         else break; // 新しい順に上から並んでいるので、ここから先はまだ下
       }
+      const root = document.documentElement;
+      if (window.scrollY > 0 && window.innerHeight + window.scrollY >= root.scrollHeight - 2) {
+        current = versions[versions.length - 1];
+      }
       setActive(current);
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(measure);
     };
-    measure();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    return () => {
+    const start = () => {
+      if (listening) return;
+      listening = true;
+      measure();
+      window.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("resize", onScroll);
+    };
+    const stop = () => {
+      if (!listening) return;
+      listening = false;
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
       if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+    };
+    // 狭い画面では横の目次が隠れていて印を誰も見ないので、スクロールを購読しない
+    const sync = () => (!mql || mql.matches ? start() : stop());
+    sync();
+    mql?.addEventListener("change", sync);
+    return () => {
+      mql?.removeEventListener("change", sync);
+      stop();
     };
   }, [versions]);
   return active;
@@ -64,7 +91,12 @@ function useActiveVersion(versions: readonly string[]): string | undefined {
  */
 function useJumpToHashOnArrival(versions: readonly string[]) {
   useEffect(() => {
-    const hash = decodeURIComponent(window.location.hash.slice(1));
+    let hash: string;
+    try {
+      hash = decodeURIComponent(window.location.hash.slice(1));
+    } catch {
+      return; // 壊れた hash（#% など）は外から来うる。ページを落とさず、何もしない
+    }
     const version = versions.find((v) => releaseAnchor(v) === hash);
     if (!version) return;
     const frame = requestAnimationFrame(() => jumpToRelease(version, { smooth: false }));
@@ -99,6 +131,7 @@ function TocItem({ release, current }: { release: TocRelease; current: boolean }
 /**
  * 広い画面の目次。本文の右の余白に置き、スクロールしても付いてくる（sticky）。
  * 置く側は、版の並び全体を包む relative の要素の中に入れる（その高さいっぱいに付いてくる）。
+ * mb-0 は、親の space-y が付ける下の余白で付いてくる範囲が縮まないようにするため（space-y の規則は詳細度 0）。
  */
 export function ChangelogSideToc({ releases }: { releases: readonly TocRelease[] }) {
   // releases はページのモジュール定数なので参照が変わらない（effect は張り直されない）
@@ -120,7 +153,7 @@ export function ChangelogSideToc({ releases }: { releases: readonly TocRelease[]
   }, [active]);
 
   return (
-    <aside className="absolute top-0 bottom-0 left-full ml-4 hidden w-28 lg:block xl:ml-8 xl:w-36">
+    <aside className="absolute top-0 bottom-0 left-full mb-0 ml-4 hidden w-28 lg:block xl:ml-8 xl:w-36">
       <nav
         ref={navRef}
         aria-label="版の目次"
@@ -144,7 +177,7 @@ export function ChangelogFoldToc({ releases }: { releases: readonly TocRelease[]
   const [open, setOpen] = useState(false);
   const listId = useId();
   return (
-    <div className="neu-panel p-2 lg:hidden">
+    <nav aria-label="版の目次（一覧）" className="neu-panel p-2 lg:hidden">
       <button
         type="button"
         aria-expanded={open}
@@ -166,7 +199,7 @@ export function ChangelogFoldToc({ releases }: { releases: readonly TocRelease[]
           ))}
         </ol>
       )}
-    </div>
+    </nav>
   );
 }
 

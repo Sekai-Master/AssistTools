@@ -3,12 +3,10 @@
  * 部品のファイルから関数を export すると Fast Refresh が効かなくなるので、ここに分けた。
  */
 
+import { prefersReducedMotion } from "../../motion/environment";
+
 /** 版の枠（article）の id。目次の飛び先と同じ値を使う。 */
 export const releaseAnchor = (version: string) => `v${version}`;
-
-function prefersReducedMotion(): boolean {
-  return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
 
 /**
  * その版の枠へ飛び、URL に #v〜 を残し、見出しにフォーカスを移す（読み上げとキーボードの続きをそこから始める）。
