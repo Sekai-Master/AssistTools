@@ -7,7 +7,9 @@
  *   images.test.ts が照合する
  * - 何を載せるかは台帳（images.ts）が決める。ここは渡したフォルダの PNG を全部変換するだけ
  *
- * 使い方: node scripts/make-guide-images.mjs <screenshots-masked のフォルダ>
+ * - 番号の囲みを描き込んだ版（annotated。元は伏せた版）は public/guide/annotated/ に出す
+ *
+ * 使い方: node scripts/make-guide-images.mjs <screenshots-masked か annotated のフォルダ>
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -20,11 +22,12 @@ if (!src || !fs.existsSync(src)) {
   console.error("使い方: node scripts/make-guide-images.mjs <screenshots-masked のフォルダ>");
   process.exit(1);
 }
-if (!/masked/i.test(path.basename(path.resolve(src)))) {
-  console.error("伏せた版（screenshots-masked）のフォルダだけを渡してください");
+const base = path.basename(path.resolve(src));
+if (!/masked|annotated/i.test(base)) {
+  console.error("伏せた版（screenshots-masked）か、それに囲みを描いた版（annotated）のフォルダだけを渡してください");
   process.exit(1);
 }
-const out = path.join(root, "public/guide");
+const out = path.join(root, /annotated/i.test(base) ? "public/guide/annotated" : "public/guide");
 fs.mkdirSync(out, { recursive: true });
 
 for (const f of fs.readdirSync(src).filter((f) => f.endsWith(".png")).sort()) {

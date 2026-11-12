@@ -3,10 +3,13 @@
  *
  * 知識ガイドのページが描画でき、差し込み（図・画像）・第 9 章の説明の列・章の番号の扱いが画面に出ること。
  */
-import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import GuidePage from "./GuidePage";
+import { GuideCards } from "./GuideCards";
+import { CARDS } from "./lib/chapters";
+import type { SaveAllEnv } from "./lib/cardsShare";
 import { TOOLS } from "../../tools";
 
 afterEach(cleanup);
@@ -16,6 +19,8 @@ const at = (path: string) =>
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/guide" element={<GuidePage />} />
+        <Route path="/guide/start" element={<GuidePage />} />
+        <Route path="/guide/cards" element={<GuidePage />} />
         <Route path="/guide/:n" element={<GuidePage />} />
       </Routes>
     </MemoryRouter>,
@@ -71,5 +76,83 @@ describe("知識ガイドのページ", () => {
     cleanup();
     at("/guide/10");
     expect(screen.getByText("その章は見つかりませんでした。")).toBeTruthy();
+  });
+});
+
+describe("初心者向けの層", () => {
+  it("/guide の先頭に入口への導線とまとめ画像へのリンク", () => {
+    at("/guide");
+    const lead = screen.getByRole("link", { name: /はじめての方は、まずここから/ });
+    expect(lead.getAttribute("href")).toBe("/guide/start");
+    expect(screen.getByRole("link", { name: "まとめ画像" }).getAttribute("href")).toBe("/guide/cards");
+  });
+
+  it("/guide/start は手順ごとのカード（番号・ひとことで・画像・くわしく）とスタンプ早見表", () => {
+    const { container } = at("/guide/start");
+    const steps = container.querySelectorAll("section[id^=step]");
+    expect(steps.length).toBeGreaterThanOrEqual(5);
+    expect(container.querySelector("#step1 img")?.getAttribute("src")).toBe("/guide/annotated/02-room-select.webp");
+    expect([...container.querySelectorAll("#step1 a")].map((a) => a.getAttribute("href"))).toContain("/guide/3#s3-1");
+    const table = container.querySelector("[data-stamps]")!;
+    const stamps = table.querySelectorAll("img");
+    expect(stamps.length).toBeGreaterThan(5);
+    expect(stamps[0].getAttribute("src")).toMatch(/^\/guide\/stamps\/stamp\d{4}\.webp$/);
+    expect(stamps[0].getAttribute("alt")).not.toMatch(/^\[/);
+    expect(container.textContent).not.toMatch(/［(画像|図|スタンプ)/);
+  });
+
+  it("第 4 章にも同じスタンプ早見表、節の下に「ひとことで」", () => {
+    const { container } = at("/guide/4");
+    expect(container.querySelector("[data-stamps]")).not.toBeNull();
+    expect(container.querySelector("#s4-1 + [data-summary]")).not.toBeNull();
+  });
+
+  it("用語のボタンは押すと説明と行き先が出て、もう一度押す・Escape・外を押すと閉じる", () => {
+    const { container } = at("/guide/3");
+    const btn = container.querySelector("article button[aria-expanded]") as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(btn);
+    expect(btn.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("note").textContent).toContain("くわしく");
+    fireEvent.click(btn);
+    expect(screen.queryByRole("note")).toBeNull();
+    fireEvent.click(btn);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("note")).toBeNull();
+    fireEvent.click(btn);
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("note")).toBeNull();
+  });
+
+  it("/guide/cards は 6 枚と 1 枚ずつの保存", () => {
+    const { container } = at("/guide/cards");
+    const imgs = container.querySelectorAll("li img");
+    expect(imgs).toHaveLength(6);
+    expect(imgs[0].getAttribute("alt")!.length).toBeGreaterThan(20);
+    const saves = screen.getAllByRole("link", { name: "保存" });
+    expect(saves).toHaveLength(6);
+    expect(saves[0].getAttribute("download")).toBe("sekaimaster-guide-card-1.png");
+  });
+
+  it("まとめて保存: 共有できる端末では共有シート、できなければ zip（navigator はモック）", async () => {
+    const share = vi.fn(async () => {});
+    const shareEnv: SaveAllEnv = {
+      share,
+      canShare: () => true,
+      fetchBlob: async () => new Blob(["x"], { type: "image/png" }),
+      downloadUrl: vi.fn(),
+    };
+    render(<MemoryRouter><GuideCards cards={CARDS} env={shareEnv} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: /まとめて保存/ }));
+    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
+    expect(shareEnv.downloadUrl).not.toHaveBeenCalled();
+    cleanup();
+
+    const zipEnv: SaveAllEnv = { ...shareEnv, share: vi.fn(), canShare: () => false, downloadUrl: vi.fn() };
+    render(<MemoryRouter><GuideCards cards={CARDS} env={zipEnv} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: /まとめて保存/ }));
+    await waitFor(() => expect(zipEnv.downloadUrl).toHaveBeenCalledWith("/guide/cards/sekaimaster-guide-cards.zip", "sekaimaster-guide-cards.zip"));
+    expect(await screen.findByText(/zip を保存しました/)).toBeTruthy();
   });
 });

@@ -45,6 +45,9 @@ export function App() {
               <Route path="/knowledge/:slug" element={<RoutePages.knowledge />} />
               {/* 知識ガイド。/guide が前置きと目次、/guide/:n が章（同じ入口）。 */}
               <Route path="/guide" element={<RoutePages.guide />} />
+              {/* 初心者向けの入口とまとめ画像。/guide/:n より先に照合される（固定のパスが優先） */}
+              <Route path="/guide/start" element={<RoutePages.guide />} />
+              <Route path="/guide/cards" element={<RoutePages.guide />} />
               <Route path="/guide/:n" element={<RoutePages.guide />} />
               {/* ボーダー予測と歴代ボーダー（2026-10-25 にハブへ載せた）。 */}
               <Route path="/border" element={<RoutePages.border />} />

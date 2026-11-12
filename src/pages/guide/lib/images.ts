@@ -12,7 +12,7 @@
  */
 
 export interface GuideImageFile {
-  /** public/guide/ の中のファイル名。 */
+  /** public/guide/ からの相対のファイル名（囲みを描いた版は annotated/…）。 */
   file: string;
   /** 同じ撮影の中で見分けるための短い説明。1 枚だけのときは空。 */
   note: string;
@@ -24,7 +24,11 @@ const W = 1600;
 const H = 1112;
 const one = (file: string, note = ""): GuideImageFile => ({ file, note, width: W, height: H });
 
-export const GUIDE_IMAGES: Readonly<Record<number, readonly GuideImageFile[]>> = {
+/**
+ * 撮影の番号（「3」）と、番号の囲みを描き込んだ撮影（「A1」〜。入口のページ用）→ ファイル。
+ * ★ A の画像は public/guide/annotated/。囲みを描く前の元も伏せた版（screenshots-masked）。
+ */
+export const GUIDE_IMAGES: Readonly<Record<string, readonly GuideImageFile[]>> = {
   1: [one("02-room-select.webp")],
   2: [one("05-private-room.webp")],
   3: [one("09-room-matching.webp")],
@@ -40,11 +44,17 @@ export const GUIDE_IMAGES: Readonly<Record<number, readonly GuideImageFile[]>> =
   ],
   11: [one("30-option-timing-20.webp")],
   12: [one("14-livebonus-consume-countdown.webp")],
+  A1: [one("annotated/02-room-select.webp")],
+  A2: [one("annotated/09-room-matching.webp")],
+  A3: [one("annotated/13-livebonus-consume-matching.webp")],
+  A4: [one("annotated/24-event-top-refresh-tooltip.webp")],
+  A5: [one("annotated/31-result-points.webp")],
 };
 
 /** 台帳に無い番号は undefined（Object のプロトタイプの名前も拾わない）。 */
-export function guideImagesOf(n: number): readonly GuideImageFile[] | undefined {
-  return Object.prototype.hasOwnProperty.call(GUIDE_IMAGES, n) ? GUIDE_IMAGES[n] : undefined;
+export function guideImagesOf(key: string | number): readonly GuideImageFile[] | undefined {
+  const k = String(key);
+  return Object.prototype.hasOwnProperty.call(GUIDE_IMAGES, k) ? GUIDE_IMAGES[k] : undefined;
 }
 
 /** img の src。public からの相対パスに BASE_URL を付ける。 */

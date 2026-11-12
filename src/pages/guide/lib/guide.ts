@@ -1,21 +1,25 @@
 /**
- * 知識ガイドの 1 章を読み取る。
+ * 知識ガイドの 1 章（と、入口のページ・スタンプ早見表）を読み取る。
  *
- * ★ 中身の正本は `docs/guide/chN.md`（知見ノートと同じく、Markdown をページが raw で読む）。
+ * ★ 中身の正本は `docs/guide/*.md`（知見ノートと同じく、Markdown をページが raw で読む）。
  * ★ Markdown の解釈は知見ノートの md.ts をそのまま使い、**md.ts は変えない**（知見ノートの表示を壊さない）。
  *   ガイドだけの書き方は、md.ts の前後の小さな変換でここが足す:
  *   - 行が `［図N: 題］` だけ → 図 N を埋め込む（src/pages/guide/figures/figN-*.svg）
- *   - 行が `［画像N: 題］` だけ → 撮影 N の画像（台帳は images.ts）
+ *   - 行が `［画像N: 題］` だけ → 撮影 N の画像。`［画像A1: 題］` は番号の囲みを描いた撮影（台帳は images.ts）
+ *   - 行が `［スタンプ早見表］` だけ → スタンプ早見表（docs/guide/stamps.md）
+ *   - 段落が `くわしく → 3.2` → その節へのリンク
  *   - 文中の `〔…〕`（確かさの印）→ 印の部品（文字は残す）
  *   - 見出し「ツール」の列がある表（第 9 章）→ パスで src/tools.ts を引いて「説明」の列を足す。
  *     説明文はガイドに書き写さない（ツールの説明を直せばガイドにも出る）
  *   - 自サイトの絶対 URL のリンク → サイトの中の移動にする（新しいタブで開かない）
+ *   - 節の見出しの下に「ひとことで」（summary.md。summary.ts）、用語にタップで出る意味（第 8 章。glossary.ts）
  * ★ HTML 文字列は作らない（md.ts と同じ）。構造だけ返して、描画は React 側。
  */
 import { SITE_URL } from "../../../lib/site";
 import { TOOLS } from "../../../tools";
 import { parseInline, parseMarkdown, type Block, type Inline } from "../../knowledge/lib/md";
 import { guideImagesOf } from "./images";
+import { parseRefs, type Ref } from "./refs";
 
 /** 確かさの印。並びと説明は第 0 章 0.1 の表と同じ。 */
 export const MARK_KINDS = [
@@ -35,11 +39,25 @@ export function markKindOf(inner: string): MarkKind | undefined {
   return MARK_KINDS.find((k) => inner === k.key || inner.startsWith(`${k.key}・`));
 }
 
-type Leaf =
+/** 用語集（第 8 章）の 1 項目。 */
+export interface GlossaryEntry {
+  /** 見出しの語を「・」で割ったもの（「アンコ・アンコール」→ アンコ・アンコール）。 */
+  terms: string[];
+  /** 見出しの語そのまま。 */
+  label: string;
+  def: GuideInline[];
+  refs: Ref[];
+}
+
+export type Leaf =
   | { kind: "text"; text: string }
   | { kind: "strong"; text: string }
   | { kind: "code"; text: string }
-  | { kind: "mark"; text: string; mark: MarkKind | undefined };
+  | { kind: "mark"; text: string; mark: MarkKind | undefined }
+  /** スタンプの絵（スタンプ早見表の「スタンプ」の列）。 */
+  | { kind: "stamp"; asset: string; alt: string }
+  /** タップで意味が出る用語。 */
+  | { kind: "term"; text: string; entry: GlossaryEntry };
 
 export type GuideInline =
   | Leaf
@@ -55,7 +73,11 @@ export type GuideBlock =
   | { kind: "code"; text: string }
   | { kind: "rule" }
   | { kind: "figure"; n: number; title: string }
-  | { kind: "image"; n: number; title: string };
+  /** key は撮影の番号（「3」）か、囲みを描いた撮影の番号（「A1」）。 */
+  | { kind: "image"; key: string; title: string }
+  | { kind: "stamps" }
+  | { kind: "summary"; text: GuideInline[] }
+  | { kind: "more"; refs: Ref[] };
 
 export interface Chapter {
   n: number;
@@ -68,7 +90,18 @@ export interface Chapter {
   problems: string[];
 }
 
-const INSERT_RE = /^［(図|画像)\s*(\d+)\s*[:：]\s*(.+?)\s*］$/;
+export interface ParseOptions {
+  /** 埋め込める図の番号（figures/ にある SVG）。 */
+  figures: ReadonlySet<number>;
+  /** 節のアンカー（s3-2）→「ひとことで」。 */
+  summaries?: ReadonlyMap<string, GuideInline[]>;
+  /** スタンプ早見表を差し込めるか（stamps.md を読めたか）。 */
+  hasStamps?: boolean;
+}
+
+const INSERT_RE = /^［(図|画像)\s*([A-Z]?\d+)\s*[:：]\s*(.+?)\s*］$/;
+const STAMPS_RE = /^［スタンプ早見表］$/;
+const MORE_RE = /^くわしく\s*[:：]?\s*[→⇒]\s*(.+)$/;
 const MARK_RE = /〔([^〕]+)〕/g;
 
 /** 文字の中の〔…〕を印に割る。 */
@@ -89,6 +122,9 @@ function leaves(xs: Inline[]): Leaf[] {
   return xs.flatMap((x): Leaf[] => {
     if (x.kind === "text") return splitMarks(x.text);
     if (x.kind === "link") return [{ kind: "text", text: x.text }];
+    // 太字の中の印（「**…です〔公式〕。**」）も印にする。太字の文字は太字のまま
+    if (x.kind === "strong")
+      return splitMarks(x.text).map((l): Leaf => (l.kind === "text" ? { kind: "strong", text: l.text } : l));
     return [x];
   });
 }
@@ -123,19 +159,25 @@ export function inlineText(xs: GuideInline[]): string {
     .map((x) => {
       if (x.kind === "link") return inlineText(x.parts);
       if (x.kind === "mark") return `〔${x.text}〕`;
+      if (x.kind === "stamp") return x.alt;
       return x.text;
     })
     .join("");
 }
 
-/** 節の見出し「3.2 スキルの発動」→ アンカー「s3-2」。番号が無ければ並びの番号。 */
+/**
+ * 節の見出し「3.2 スキルの発動」→ アンカー「s3-2」。
+ * 入口のページの手順「1. ルームに入る」→「step1」。番号が無ければ並びの番号。
+ */
 export function sectionId(label: string, fallback: number): string {
+  const step = /^(\d+)\.\s/.exec(label);
+  if (step) return `step${step[1]}`;
   const m = /^(\d+(?:\.\d+)*)\s/.exec(label);
   return m ? `s${m[1].replace(/\./g, "-")}` : `h${fallback}`;
 }
 
 /**
- * 差し込みの行（［図N: 題］・［画像N: 題］）の前後に空行を入れる。
+ * 差し込みの行（［図N: 題］・［画像N: 題］・［スタンプ早見表］）の前後に空行を入れる。
  * ★ md.ts は空行の無い連続した行を 1 段落につなぐので、2 つの差し込みが続けて書かれていると
  *   「段落がそれだけ」の判定に掛からなくなる（原稿の第 4 章で実際にそうなっている）。
  */
@@ -143,7 +185,10 @@ export function isolateInserts(src: string): string {
   return src
     .replace(/\r\n?/g, "\n")
     .split("\n")
-    .map((l) => (INSERT_RE.test(l.trim()) ? `\n${l.trim()}\n` : l))
+    .map((l) => {
+      const t = l.trim();
+      return INSERT_RE.test(t) || STAMPS_RE.test(t) || MORE_RE.test(t) ? `\n${t}\n` : l;
+    })
     .join("\n");
 }
 
@@ -190,11 +235,37 @@ function withToolDescriptions(
   };
 }
 
+/** 段落 1 つを差し込み（図・画像・早見表・くわしく）として読む。当てはまらなければ null。 */
+function insertOf(plain: string, opts: ParseOptions, problems: string[]): GuideBlock | null {
+  const m = INSERT_RE.exec(plain);
+  if (m) {
+    if (m[1] === "図") {
+      const num = Number(m[2]);
+      if (!/^\d+$/.test(m[2]) || !opts.figures.has(num)) problems.push(`図${m[2]} の SVG が無い`);
+      return { kind: "figure", n: num, title: m[3] };
+    }
+    if (!guideImagesOf(m[2])) problems.push(`画像${m[2]} が台帳（images.ts）に無い`);
+    return { kind: "image", key: m[2], title: m[3] };
+  }
+  if (STAMPS_RE.test(plain)) {
+    if (opts.hasStamps === false) problems.push("スタンプ早見表（stamps.md）が無い");
+    return { kind: "stamps" };
+  }
+  const more = MORE_RE.exec(plain);
+  if (more) {
+    const refs = parseRefs(more[1]);
+    if (refs.length === 0) problems.push(`「くわしく」の行き先が読めない: ${more[1]}`);
+    return { kind: "more", refs };
+  }
+  return null;
+}
+
 /**
- * 1 章を読む。figures は埋め込める図の番号（figures/ にある SVG）。
- * 章の見出し（## N. 名前）は blocks から外し、title にする。
+ * 1 章（か、入口のページ・早見表）を読む。
+ * 最初の `## ` 見出しは blocks から外し、title にする（「3. 」の番号は外す）。
+ * summaries に節のアンカーがあれば、その見出しのすぐ下に「ひとことで」を置く。
  */
-export function parseChapter(n: number, src: string, figures: ReadonlySet<number>): Chapter {
+export function parseChapter(n: number, src: string, opts: ParseOptions): Chapter {
   const problems: string[] = [];
   const raw: Block[] = parseMarkdown(isolateInserts(src));
   let title = "";
@@ -213,23 +284,13 @@ export function parseChapter(n: number, src: string, figures: ReadonlySet<number
         const id = sectionId(label, i);
         if (b.level === 3) sections.push({ id, label });
         blocks.push({ kind: "heading", level: b.level, id, text });
+        const summary = opts.summaries?.get(id);
+        if (summary) blocks.push({ kind: "summary", text: summary });
         return;
       }
       case "para": {
         const plain = b.text.map((x) => x.text).join("").trim();
-        const m = INSERT_RE.exec(plain);
-        if (m) {
-          const num = Number(m[2]);
-          if (m[1] === "図") {
-            if (!figures.has(num)) problems.push(`図${num} の SVG が無い`);
-            blocks.push({ kind: "figure", n: num, title: m[3] });
-          } else {
-            if (!guideImagesOf(num)) problems.push(`画像${num} が台帳（images.ts）に無い`);
-            blocks.push({ kind: "image", n: num, title: m[3] });
-          }
-          return;
-        }
-        blocks.push({ kind: "para", text: toGuideInline(b.text) });
+        blocks.push(insertOf(plain, opts, problems) ?? { kind: "para", text: toGuideInline(b.text) });
         return;
       }
       case "list":
@@ -264,6 +325,7 @@ export function chapterText(blocks: GuideBlock[]): string {
         case "heading":
         case "para":
         case "quote":
+        case "summary":
           return inlineText(b.text);
         case "list":
           return b.items.map(inlineText).join("\n");
@@ -274,7 +336,10 @@ export function chapterText(blocks: GuideBlock[]): string {
         case "figure":
           return `図${b.n} ${b.title}`;
         case "image":
-          return `画像${b.n} ${b.title}`;
+          return `画像${b.key} ${b.title}`;
+        case "more":
+          return `くわしく ${b.refs.map((r) => r.label).join("・")}`;
+        case "stamps":
         case "rule":
           return "";
       }

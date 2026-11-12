@@ -34,15 +34,35 @@ const MASKED_ONLY = [
   "32-result-score.webp",
 ];
 
+/** 番号の囲みを描き込んだ版（public/guide/annotated/）。元は伏せた版。 */
+const ANNOTATED = [
+  "02-room-select.webp",
+  "09-room-matching.webp",
+  "13-livebonus-consume-matching.webp",
+  "24-event-top-refresh-tooltip.webp",
+  "31-result-points.webp",
+];
+
+/** 直下のファイルだけ（annotated/・stamps/・cards/ のフォルダは別に見る）。 */
+const filesIn = (dir: string) => fs.readdirSync(dir).filter((f) => fs.statSync(path.join(dir, f)).isFile());
+
 const ledger = Object.values(GUIDE_IMAGES).flat();
 
 describe("public/guide/ の中身", () => {
   it("伏せた版から作ったファイルだけがある（一覧を固定して照合）", () => {
-    expect(fs.readdirSync(DIR).sort()).toEqual([...MASKED_ONLY].sort());
+    expect(filesIn(DIR).sort()).toEqual([...MASKED_ONLY].sort());
+    expect(filesIn(path.join(DIR, "annotated")).sort()).toEqual([...ANNOTATED].sort());
+  });
+
+  it("フォルダは annotated・stamps・cards だけ", () => {
+    const dirs = fs.readdirSync(DIR).filter((f) => fs.statSync(path.join(DIR, f)).isDirectory());
+    expect(dirs.sort()).toEqual(["annotated", "cards", "stamps"]);
   });
 
   it("台帳のファイルと public/guide/ のファイルが過不足なく一致する", () => {
-    expect(ledger.map((f) => f.file).sort()).toEqual([...MASKED_ONLY].sort());
+    expect(ledger.map((f) => f.file).sort()).toEqual(
+      [...MASKED_ONLY, ...ANNOTATED.map((f) => `annotated/${f}`)].sort(),
+    );
   });
 });
 
@@ -56,8 +76,8 @@ describe("画像の台帳（images.ts）", () => {
     expect(fs.statSync(file).size).toBeLessThan(MAX_BYTES);
   });
 
-  it("撮影の番号は 1〜12、複数あるときは note で見分けられる", () => {
-    expect(Object.keys(GUIDE_IMAGES).map(Number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  it("撮影の番号は 1〜12 と A1〜A5、複数あるときは note で見分けられる", () => {
+    expect(Object.keys(GUIDE_IMAGES)).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "A1", "A2", "A3", "A4", "A5"]);
     for (const files of Object.values(GUIDE_IMAGES)) {
       if (files.length > 1) {
         const notes = files.map((f) => f.note);
@@ -69,6 +89,9 @@ describe("画像の台帳（images.ts）", () => {
 
   it("台帳に無い番号は undefined（Object のプロトタイプの名前も拾わない）", () => {
     expect(guideImagesOf(13)).toBeUndefined();
+    expect(guideImagesOf("A9")).toBeUndefined();
+    expect(guideImagesOf("A1")).toHaveLength(1);
+    expect(guideImagesOf(3)).toBe(guideImagesOf("3"));
     expect(guideImagesOf("constructor" as unknown as number)).toBeUndefined();
   });
 });

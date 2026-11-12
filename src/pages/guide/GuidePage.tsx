@@ -2,17 +2,19 @@ import { useEffect } from "react";
 import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { NOT_FOUND, PAGES, docTitle, guideChapterMeta } from "../../seo";
-import { GuideBlocks } from "./GuideBlocks";
-import { CHAPTERS, CHAPTER_SOURCES } from "./lib/chapters";
+import { ACCENT, GuideBlocks } from "./GuideBlocks";
+import { GuideCards } from "./GuideCards";
+import { GuideStart } from "./GuideStart";
+import { CARDS, CHAPTERS, CHAPTER_SOURCES, GUIDE } from "./lib/chapters";
 import { chapterParam, type Chapter } from "./lib/guide";
 
 /**
  * 知識ガイド。/guide に前置き（第 0 章）と章の一覧、/guide/:n に章ごと。
+ * 入口のページ（/guide/start）とまとめ画像（/guide/cards）も同じ入口（同じチャンク）で出す。
  *
  * ★ 中身の正本は docs/guide/chN.md（読み込みと変換は lib/）。ページ用にデータを持ち直さない。
  * ★ 第 0 章は /guide に載せる。/guide/0 は /guide へ送る（同じ中身を 2 つの URL で出さない。
  *   書き出しの HTML とサイトマップも 1 章から: scripts/seo/write-pages.ts）。
- * ★ 見た目の仕上げは指揮の設計待ち（2026-11-12）。ここは骨組み。
  */
 
 const PREFACE = CHAPTERS.find((c) => c.n === 0);
@@ -69,6 +71,28 @@ function Index() {
   useHashLanding("index");
   return (
     <ToolPage unit="vs" title="知識ガイド" icon="auto_stories">
+      {/* 入口へのいちばん目立つ導線（初心者向けの層。運営者 2026-11-12） */}
+      {GUIDE.start && (
+        <Link
+          to="/guide/start"
+          className="block rounded-2xl border-2 p-4 text-slate-700 sm:p-6"
+          style={{ borderColor: ACCENT }}
+        >
+          <span className="block text-[18px] font-bold">はじめての方は、まずここから</span>
+          <span className="mt-1 block text-[15px] leading-relaxed text-slate-600">
+            部屋の探し方からスタンプ、休憩まで、{GUIDE.start.sections.length} つの手順で案内します。
+          </span>
+          <span className="mt-2 block text-sm font-bold underline">{GUIDE.start.title}を読む →</span>
+        </Link>
+      )}
+      <p className="text-sm text-slate-600">
+        要点をまとめた画像は
+        <Link to="/guide/cards" className="font-bold underline">
+          まとめ画像
+        </Link>
+        から保存・共有できます。
+      </p>
+
       {PREFACE && (
         <article className="neu-panel p-4 sm:p-6">
           <GuideBlocks blocks={PREFACE.blocks} />
@@ -165,7 +189,21 @@ function NotFoundView() {
 }
 
 export default function GuidePage() {
+  const { pathname } = useLocation();
   const { n: raw } = useParams();
+  // React Router は大文字小文字と末尾の / を区別せずに照合するので、こちらも揃える
+  const page = pathname.replace(/\/+$/, "").toLowerCase();
+  if (page === "/guide/start") return <StartRoute />;
+  if (page === "/guide/cards") return <GuideCards cards={CARDS} />;
+  return <ChapterRoute raw={raw} />;
+}
+
+function StartRoute() {
+  useHashLanding("start");
+  return <GuideStart start={GUIDE.start} />;
+}
+
+function ChapterRoute({ raw }: { raw: string | undefined }) {
   const n = chapterParam(raw);
   const chapter = n != null && n > 0 ? BODY_CHAPTERS.find((c) => c.n === n) : undefined;
   const src = chapter ? CHAPTER_SOURCES.get(chapter.n) : undefined;

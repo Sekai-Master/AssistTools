@@ -29,34 +29,34 @@ const tableOf = (bs: GuideBlock[]) => bs.find((b) => b.kind === "table") as Extr
 
 describe("差し込みの行", () => {
   it("段落が［図N: 題］だけなら図にする", () => {
-    const c = parseChapter(1, "## 1. 章\n\n本文。\n\n［図1: イベントポイントの決まり方］\n\n続き。", new Set([1]));
+    const c = parseChapter(1, "## 1. 章\n\n本文。\n\n［図1: イベントポイントの決まり方］\n\n続き。", { figures: new Set<number>([1]) });
     expect(c.blocks.map((b) => b.kind)).toEqual(["para", "figure", "para"]);
     expect(c.blocks[1]).toEqual({ kind: "figure", n: 1, title: "イベントポイントの決まり方" });
     expect(c.problems).toEqual([]);
   });
 
   it("段落が［画像N: 題］だけなら画像にする（全角・半角のコロンどちらも）", () => {
-    const c = parseChapter(1, "［画像3: ルームの待機画面］\n\n［画像9：イベントのトップ］", new Set());
+    const c = parseChapter(1, "［画像3: ルームの待機画面］\n\n［画像9：イベントのトップ］", { figures: new Set<number>() });
     expect(c.blocks).toEqual([
-      { kind: "image", n: 3, title: "ルームの待機画面" },
-      { kind: "image", n: 9, title: "イベントのトップ" },
+      { kind: "image", key: "3", title: "ルームの待機画面" },
+      { kind: "image", key: "9", title: "イベントのトップ" },
     ]);
   });
 
   /** ★ md.ts は空行の無い連続行を 1 段落につなぐ。原稿の第 4 章に実際にこの形がある。 */
   it("空行なしで続けて書かれた差し込みも 1 つずつ拾う", () => {
-    const c = parseChapter(4, "本文。\n［画像3: 待機画面］\n［画像4: スタンプを選ぶ画面］\n続き。", new Set());
+    const c = parseChapter(4, "本文。\n［画像3: 待機画面］\n［画像4: スタンプを選ぶ画面］\n続き。", { figures: new Set<number>() });
     expect(c.blocks.map((b) => b.kind)).toEqual(["para", "image", "image", "para"]);
     expect(isolateInserts("a\n［図1: x］\nb")).toBe("a\n\n［図1: x］\n\nb");
   });
 
   it("文の途中の［…］は差し込みにしない", () => {
-    const c = parseChapter(1, "これは［図1: 題］の話です。", new Set([1]));
+    const c = parseChapter(1, "これは［図1: 題］の話です。", { figures: new Set<number>([1]) });
     expect(c.blocks[0].kind).toBe("para");
   });
 
   it("存在しない図・画像の番号は problems に出る（テストで落とすため）", () => {
-    const c = parseChapter(1, "［図99: 無い図］\n\n［画像99: 無い画像］", new Set([1]));
+    const c = parseChapter(1, "［図99: 無い図］\n\n［画像99: 無い画像］", { figures: new Set<number>([1]) });
     expect(c.problems).toHaveLength(2);
     expect(c.problems.join()).toContain("図99");
     expect(c.problems.join()).toContain("画像99");
@@ -65,7 +65,7 @@ describe("差し込みの行", () => {
 
 describe("確かさの印", () => {
   it("〔…〕を印に割り、文字は残す", () => {
-    const c = parseChapter(1, "倍率は35倍です〔ゲームのデータ〕。改定は〔公式・2024年9月から〕。", new Set());
+    const c = parseChapter(1, "倍率は35倍です〔ゲームのデータ〕。改定は〔公式・2024年9月から〕。", { figures: new Set<number>() });
     const b = c.blocks[0] as Extract<GuideBlock, { kind: "para" }>;
     const marks = b.text.filter((x) => x.kind === "mark");
     expect(marks.map((m) => m.kind === "mark" && m.text)).toEqual(["ゲームのデータ", "公式・2024年9月から"]);
@@ -92,7 +92,7 @@ describe("確かさの印", () => {
 describe("第 9 章の表（説明の列）", () => {
   it("ツールの列のリンクから tools.ts を引き、説明の列を足す", () => {
     const src = "| カテゴリ | ツール | 出る節 |\n|---|---|---|\n| 編成 | [編成ビルダー](https://sekaimaster.pages.dev/deck) | 2.1 |\n| イベント | [歴代ボーダー](https://sekaimaster.pages.dev/border/history) | 1.4 |";
-    const t = tableOf(parseChapter(9, src, new Set()).blocks);
+    const t = tableOf(parseChapter(9, src, { figures: new Set<number>() }).blocks);
     expect(t.head.map(inlineText)).toEqual(["カテゴリ", "ツール", "説明", "出る節"]);
     expect(inlineText(t.rows[0][2])).toBe(TOOLS.find((x) => x.path === "/deck")!.description);
     expect(inlineText(t.rows[1][2])).toBe(TOOLS.find((x) => x.path === "/border/history")!.description);
@@ -100,19 +100,19 @@ describe("第 9 章の表（説明の列）", () => {
 
   it("「パス」の列があればそちらで引き、その右に足す", () => {
     const src = "| カテゴリ | ツール | パス | 出る節 |\n|---|---|---|---|\n| 計画 | 周回プラン | `/plan` | 1.3 |";
-    const t = tableOf(parseChapter(9, src, new Set()).blocks);
+    const t = tableOf(parseChapter(9, src, { figures: new Set<number>() }).blocks);
     expect(t.head.map(inlineText)).toEqual(["カテゴリ", "ツール", "パス", "説明", "出る節"]);
     expect(inlineText(t.rows[0][3])).toBe(TOOLS.find((x) => x.path === "/plan")!.description);
   });
 
   it("tools.ts に無いパスは problems に出る", () => {
     const src = "| ツール |\n|---|\n| [無い](https://sekaimaster.pages.dev/nope) |";
-    expect(parseChapter(9, src, new Set()).problems).toHaveLength(1);
+    expect(parseChapter(9, src, { figures: new Set<number>() }).problems).toHaveLength(1);
   });
 
   it("ツールの列が無い表は触らない", () => {
     const src = "| 本文の印 | 出どころ |\n|---|---|\n| 〔公式〕 | 公式サイト |";
-    expect(tableOf(parseChapter(0, src, new Set()).blocks).head.map(inlineText)).toEqual(["本文の印", "出どころ"]);
+    expect(tableOf(parseChapter(0, src, { figures: new Set<number>() }).blocks).head.map(inlineText)).toEqual(["本文の印", "出どころ"]);
   });
 });
 
@@ -127,7 +127,7 @@ describe("リンク・見出し・URL の番号", () => {
   });
 
   it("リンクの文字のバッククォートはコードにする", () => {
-    const c = parseChapter(9, "[`/knowledge/overhead`](https://sekaimaster.pages.dev/knowledge/overhead)", new Set());
+    const c = parseChapter(9, "[`/knowledge/overhead`](https://sekaimaster.pages.dev/knowledge/overhead)", { figures: new Set<number>() });
     const b = c.blocks[0] as Extract<GuideBlock, { kind: "para" }>;
     expect(b.text[0]).toEqual({
       kind: "link",
@@ -140,7 +140,7 @@ describe("リンク・見出し・URL の番号", () => {
   it("節の見出しにアンカー（3.2 → s3-2）", () => {
     expect(sectionId("3.2 スキルの発動とアンコール", 0)).toBe("s3-2");
     expect(sectionId("用語", 7)).toBe("h7");
-    const c = parseChapter(3, "## 3. 協力ライブの仕組み\n\n### 3.1 ルーム\n\n本文。\n\n### 3.2 スキル", new Set());
+    const c = parseChapter(3, "## 3. 協力ライブの仕組み\n\n### 3.1 ルーム\n\n本文。\n\n### 3.2 スキル", { figures: new Set<number>() });
     expect(c.title).toBe("協力ライブの仕組み");
     expect(c.sections).toEqual([
       { id: "s3-1", label: "3.1 ルーム" },
@@ -166,7 +166,7 @@ describe("実際の原稿（docs/guide/*.md）", () => {
 
   for (const d of docs) {
     describe(`第${d.n}章`, () => {
-      const c = parseChapter(d.n, d.src, FIGS);
+      const c = parseChapter(d.n, d.src, { figures: FIGS });
 
       it("章の見出し（## N. 名前）が読め、番号がファイル名と合う", () => {
         expect(d.src).toMatch(new RegExp(`^## ${d.n}\\.\\s`, "m"));
@@ -198,7 +198,7 @@ describe("実際の原稿（docs/guide/*.md）", () => {
   }
 
   it("第 9 章の表は全行に説明が付く", () => {
-    const c = parseChapter(9, docs.find((d) => d.n === 9)!.src, FIGS);
+    const c = parseChapter(9, docs.find((d) => d.n === 9)!.src, { figures: FIGS });
     const t = tableOf(c.blocks);
     const col = t.head.map(inlineText).indexOf("説明");
     expect(col).toBeGreaterThan(0);
