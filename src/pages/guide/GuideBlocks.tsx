@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import { Link } from "react-router-dom";
+import { ZoomableImage } from "../../components/ui/ImageLightbox";
 import { GuideTerm } from "./GuideTerm";
 import type { GuideBlock, GuideInline, Leaf as LeafNode } from "./lib/guide";
 import { guideImageSrc, guideImagesOf } from "./lib/images";
@@ -155,7 +156,7 @@ function Figure({ n, title }: { n: number; title: string }) {
   );
 }
 
-/** ゲームの撮影。押すと原寸を新しいタブで開く（スマホでは縮んで字が読めないので）。 */
+/** ゲームの撮影。押すと同じタブの中で全面に出す（スマホでは縮んで字が読めないので、指で広げて読める）。 */
 function Shot({ imageKey, title }: { imageKey: string; title: string }) {
   const files = guideImagesOf(imageKey) ?? [];
   // 囲みを描いた撮影（A1〜）は入口のページ用。番号は読者に意味が無いので題だけ出す
@@ -165,19 +166,16 @@ function Shot({ imageKey, title }: { imageKey: string; title: string }) {
       <div className={files.length > 1 ? "grid gap-3 sm:grid-cols-2" : ""}>
         {files.map((f) => {
           const src = guideImageSrc(import.meta.env.BASE_URL, f);
+          // 押すと同じタブの中で全面に出す（サイト共通のライトボックス。運営者「ガイド内でも画像置くなら共通処理で」）
           return (
-            <a key={f.file} href={src} target="_blank" rel="noopener" className="block">
-              <img
-                src={src}
-                alt={f.note ? `${title}（${f.note}）` : title}
-                width={f.width}
-                height={f.height}
-                loading="lazy"
-                decoding="async"
-                className="block h-auto w-full rounded-lg border border-slate-300"
-              />
-              <span className="sr-only">（原寸を新しいタブで開く）</span>
-            </a>
+            <ZoomableImage
+              key={f.file}
+              src={src}
+              alt={f.note ? `${title}（${f.note}）` : title}
+              width={f.width}
+              height={f.height}
+              title={f.note ? `${caption}（${f.note}）` : caption}
+            />
           );
         })}
         {files.length === 0 && <p className="text-sm text-slate-500">（画像{imageKey} は準備中です）</p>}

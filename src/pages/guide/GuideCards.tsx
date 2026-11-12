@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { NeuButton } from "../../components/ui/NeuButton";
+import { ZoomableImage } from "../../components/ui/ImageLightbox";
 import { CARDS_ZIP, cardSrc, type GuideCard } from "./lib/cards";
 import {
   SHARE_RESULT_TEXT,
@@ -105,18 +106,17 @@ export function GuideCards({ cards, env }: { cards: GuideCard[]; env?: ShareEnv 
           const src = cardSrc(base, c.file);
           return (
             <li key={c.n} className="rounded-2xl border border-[color:var(--neu-edge)] p-3">
-              <a href={src} target="_blank" rel="noopener" className="block">
-                <img
-                  src={cardSrc(base, c.preview)}
-                  alt={c.alt}
-                  width={c.previewWidth}
-                  height={c.previewHeight}
-                  loading="lazy"
-                  decoding="async"
-                  className="block h-auto w-full rounded-lg border border-slate-300"
-                />
-                <span className="sr-only">（原寸を新しいタブで開く）</span>
-              </a>
+              {/* 一覧は縮小版の WebP、押すと同じタブの中で原寸の PNG を全面に出す（サイト共通のライトボックス） */}
+              <ZoomableImage
+                src={cardSrc(base, c.preview)}
+                width={c.previewWidth}
+                height={c.previewHeight}
+                fullSrc={src}
+                fullWidth={c.width}
+                fullHeight={c.height}
+                alt={c.alt}
+                title={`${c.n}. ${c.title}`}
+              />
               <div className="mt-2 flex items-center justify-between gap-2">
                 <span className="text-sm font-bold text-slate-700">
                   {c.n}. {c.title}
