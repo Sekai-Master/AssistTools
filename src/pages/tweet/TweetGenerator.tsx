@@ -8,10 +8,12 @@ import { NeuButton } from "../../components/ui/NeuButton";
 import { Switch } from "../../components/ui/Switch";
 import { Segmented } from "../../components/ui/Segmented";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
+import { MoreSettings } from "../../components/ui/MoreSettings";
 import {
   DEFAULT_TWEET_STATE,
   buildTweetText,
   convertToHalfWidth,
+  countTweetDetailChanged,
   tweetIntentUrl,
   type TweetState,
 } from "./tweetLogic";
@@ -137,26 +139,6 @@ export default function TweetGenerator() {
         <div className="space-y-6 pb-28 lg:pb-0">
       <Panel title="募集内容">
         <div className="space-y-4">
-          <Field label="TL放流">
-            <SegmentedControl
-              options={[
-                { value: "", label: "あり" },
-                { value: "@No_TL", label: "なし" },
-              ]}
-              value={s.tlFlow}
-              onChange={(v) => set("tlFlow", v)}
-            />
-          </Field>
-          <Field label="ルーム">
-            <SegmentedControl
-              options={[
-                { value: "ベテラン", label: "ベテラン" },
-                { value: "フリー", label: "フリー" },
-              ]}
-              value={s.room}
-              onChange={(v) => set("room", v)}
-            />
-          </Field>
           <Field label="楽曲">
             <Segmented
               options={["🦐", "エビ", "ビバハピ", "ロスエン", "Sage", "おまかせ"].map((v) => ({
@@ -191,16 +173,6 @@ export default function TweetGenerator() {
               onChange={(v) => set("remainingSlots", v)}
             />
           </Field>
-          <Field label="ルームID記号">
-            <SegmentedControl
-              options={[
-                { value: "🔑", label: "🔑" },
-                { value: "ルームID", label: "ルームID" },
-              ]}
-              value={s.roomIdSymbol}
-              onChange={(v) => set("roomIdSymbol", v)}
-            />
-          </Field>
           <Field label="ルームID" htmlFor="tg-roomid">
             <NeuInput
               id="tg-roomid"
@@ -214,149 +186,196 @@ export default function TweetGenerator() {
         </div>
       </Panel>
 
-      <Panel title="主（募集主）">
-        <div className="space-y-4">
-          <Switch
-            checked={s.appendPercent}
-            onChange={(b) => set("appendPercent", b)}
-            label="スキル値に % を付ける"
-          />
-          <SkillRow
-            label="主スキル値"
-            show={s.showHostSkill}
-            onShow={(b) => set("showHostSkill", b)}
-            value={s.hostSkill}
-            onValue={(v) => set("hostSkill", digitsOnly(v))}
-            maxLength={3}
-          />
-          <SkillRow
-            label="主内部値"
-            show={s.showHostInnerValue}
-            onShow={(b) => set("showHostInnerValue", b)}
-            value={s.hostInnerValue}
-            onValue={(v) => set("hostInnerValue", digitsOnly(v))}
-            maxLength={6}
-          />
-          <SkillRow
-            label="条件外人数"
-            show={s.showConditionOutside}
-            onShow={(b) => set("showConditionOutside", b)}
-            value={s.conditionOutside}
-            onValue={(v) => set("conditionOutside", digitsOnly(v))}
-            maxLength={2}
-          />
-          <SkillRow
-            label="支援者人数"
-            show={s.showSupporter}
-            onShow={(b) => set("showSupporter", b)}
-            value={s.supporterCount}
-            onValue={(v) => set("supporterCount", digitsOnly(v))}
-            maxLength={2}
-          />
-          <div className="space-y-2">
-            <Switch
-              checked={s.showFreeDescription}
-              onChange={(b) => set("showFreeDescription", b)}
-              label="自由記述"
-            />
-            {s.showFreeDescription && (
-              <NeuTextarea
-                rows={2}
-                value={s.freeDescription}
-                onChange={(e) => set("freeDescription", e.target.value)}
-                placeholder="自由記述を入力"
+      {/**
+       * ★ 主な入力（楽曲・回数・残り枠・ルームID）のほかは「条件を書く」に畳む（UX 監査 2026-11-12、指示書の共通の型 1、PR-6）。
+       *   前は入力 45 個が開いたまま並んでいた。既定値のままで文面が出る挙動はそのまま（状態もプレビューも変えていない）。
+       *   畳んだ中の項目も文面に入るので、既定値から変えた数を見出しに出す。
+       */}
+      <MoreSettings
+        variant="section"
+        title="条件を書く"
+        contents="TL放流・ルーム・ルームID記号・主・募・その他コメント"
+        changed={countTweetDetailChanged(s)}
+      >
+        <Panel title="募集の形">
+          <div className="space-y-4">
+            <Field label="TL放流">
+              <SegmentedControl
+                options={[
+                  { value: "", label: "あり" },
+                  { value: "@No_TL", label: "なし" },
+                ]}
+                value={s.tlFlow}
+                onChange={(v) => set("tlFlow", v)}
               />
-            )}
-          </div>
-        </div>
-      </Panel>
-
-      <Panel title="募（募集）">
-        <div className="space-y-4">
-          <SkillRow
-            label="募集スキル値"
-            show={s.showRequiredSkill}
-            onShow={(b) => set("showRequiredSkill", b)}
-            value={s.requiredSkill}
-            onValue={(v) => set("requiredSkill", digitsOnly(v))}
-            maxLength={3}
-          />
-          <SkillRow
-            label="募集内部値"
-            show={s.showRequiredInnerValue}
-            onShow={(b) => set("showRequiredInnerValue", b)}
-            value={s.requiredInnerValue}
-            onValue={(v) => set("requiredInnerValue", digitsOnly(v))}
-            maxLength={6}
-          />
-          <div className="flex flex-wrap gap-4">
-            <Switch checked={s.showStar4} onChange={(b) => set("showStar4", b)} label="☆４" />
-            <Switch
-              checked={s.showLongSession}
-              onChange={(b) => set("showLongSession", b)}
-              label="長時間できる方"
-            />
-            <Switch
-              checked={s.showSfcNoCare}
-              onChange={(b) => set("showSfcNoCare", b)}
-              label="SFC気にしません"
-            />
-            <Switch
-              checked={s.showMidLeaveOk}
-              onChange={(b) => set("showMidLeaveOk", b)}
-              label="途中抜けOK"
-            />
-            <Switch
-              checked={s.showJudgementStrengthenDisabled}
-              onChange={(b) => set("showJudgementStrengthenDisabled", b)}
-              label="判定強化✖"
-            />
-            <Switch
-              checked={s.showJudgementAndRecoveryDisabled}
-              onChange={(b) => set("showJudgementAndRecoveryDisabled", b)}
-              label="判定・回復✖"
-            />
-          </div>
-          <div className="space-y-2">
-            <Switch
-              checked={s.showRecruitFreeDescription}
-              onChange={(b) => set("showRecruitFreeDescription", b)}
-              label="自由記述"
-            />
-            {s.showRecruitFreeDescription && (
-              <NeuTextarea
-                rows={2}
-                value={s.recruitFreeDescription}
-                onChange={(e) => set("recruitFreeDescription", e.target.value)}
-                placeholder="自由記述を入力"
+            </Field>
+            <Field label="ルーム">
+              <SegmentedControl
+                options={[
+                  { value: "ベテラン", label: "ベテラン" },
+                  { value: "フリー", label: "フリー" },
+                ]}
+                value={s.room}
+                onChange={(v) => set("room", v)}
               />
-            )}
+            </Field>
+            <Field label="ルームID記号">
+              <SegmentedControl
+                options={[
+                  { value: "🔑", label: "🔑" },
+                  { value: "ルームID", label: "ルームID" },
+                ]}
+                value={s.roomIdSymbol}
+                onChange={(v) => set("roomIdSymbol", v)}
+              />
+            </Field>
           </div>
-        </div>
-      </Panel>
+        </Panel>
 
-      <Panel title="その他コメント">
-        <p className="mb-2 text-xs text-slate-500">テンプレ（クリックで追記）</p>
-        <div className="mb-3 flex flex-wrap gap-2">
-          {COMMENT_TEMPLATES.map((tmpl) => (
-            <NeuButton
-              key={tmpl}
-              className="!px-3 !py-1 !text-xs"
-              onClick={() =>
-                set("otherComments", s.otherComments ? `${s.otherComments}\n${tmpl}` : tmpl)
-              }
-            >
-              ＋ {tmpl}
-            </NeuButton>
-          ))}
-        </div>
-        <NeuTextarea
-          rows={3}
-          value={s.otherComments}
-          onChange={(e) => set("otherComments", e.target.value)}
-          placeholder="任意（テンプレを押すと追記されます）"
-        />
-      </Panel>
+        <Panel title="主（募集主）">
+          <div className="space-y-4">
+            <Switch
+              checked={s.appendPercent}
+              onChange={(b) => set("appendPercent", b)}
+              label="スキル値に % を付ける"
+            />
+            <SkillRow
+              label="主スキル値"
+              show={s.showHostSkill}
+              onShow={(b) => set("showHostSkill", b)}
+              value={s.hostSkill}
+              onValue={(v) => set("hostSkill", digitsOnly(v))}
+              maxLength={3}
+            />
+            <SkillRow
+              label="主内部値"
+              show={s.showHostInnerValue}
+              onShow={(b) => set("showHostInnerValue", b)}
+              value={s.hostInnerValue}
+              onValue={(v) => set("hostInnerValue", digitsOnly(v))}
+              maxLength={6}
+            />
+            <SkillRow
+              label="条件外人数"
+              show={s.showConditionOutside}
+              onShow={(b) => set("showConditionOutside", b)}
+              value={s.conditionOutside}
+              onValue={(v) => set("conditionOutside", digitsOnly(v))}
+              maxLength={2}
+            />
+            <SkillRow
+              label="支援者人数"
+              show={s.showSupporter}
+              onShow={(b) => set("showSupporter", b)}
+              value={s.supporterCount}
+              onValue={(v) => set("supporterCount", digitsOnly(v))}
+              maxLength={2}
+            />
+            <div className="space-y-2">
+              <Switch
+                checked={s.showFreeDescription}
+                onChange={(b) => set("showFreeDescription", b)}
+                label="自由記述"
+              />
+              {s.showFreeDescription && (
+                <NeuTextarea
+                  rows={2}
+                  value={s.freeDescription}
+                  onChange={(e) => set("freeDescription", e.target.value)}
+                  placeholder="自由記述を入力"
+                />
+              )}
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title="募（募集）">
+          <div className="space-y-4">
+            <SkillRow
+              label="募集スキル値"
+              show={s.showRequiredSkill}
+              onShow={(b) => set("showRequiredSkill", b)}
+              value={s.requiredSkill}
+              onValue={(v) => set("requiredSkill", digitsOnly(v))}
+              maxLength={3}
+            />
+            <SkillRow
+              label="募集内部値"
+              show={s.showRequiredInnerValue}
+              onShow={(b) => set("showRequiredInnerValue", b)}
+              value={s.requiredInnerValue}
+              onValue={(v) => set("requiredInnerValue", digitsOnly(v))}
+              maxLength={6}
+            />
+            <div className="flex flex-wrap gap-4">
+              <Switch checked={s.showStar4} onChange={(b) => set("showStar4", b)} label="☆４" />
+              <Switch
+                checked={s.showLongSession}
+                onChange={(b) => set("showLongSession", b)}
+                label="長時間できる方"
+              />
+              <Switch
+                checked={s.showSfcNoCare}
+                onChange={(b) => set("showSfcNoCare", b)}
+                label="SFC気にしません"
+              />
+              <Switch
+                checked={s.showMidLeaveOk}
+                onChange={(b) => set("showMidLeaveOk", b)}
+                label="途中抜けOK"
+              />
+              <Switch
+                checked={s.showJudgementStrengthenDisabled}
+                onChange={(b) => set("showJudgementStrengthenDisabled", b)}
+                label="判定強化✖"
+              />
+              <Switch
+                checked={s.showJudgementAndRecoveryDisabled}
+                onChange={(b) => set("showJudgementAndRecoveryDisabled", b)}
+                label="判定・回復✖"
+              />
+            </div>
+            <div className="space-y-2">
+              <Switch
+                checked={s.showRecruitFreeDescription}
+                onChange={(b) => set("showRecruitFreeDescription", b)}
+                label="自由記述"
+              />
+              {s.showRecruitFreeDescription && (
+                <NeuTextarea
+                  rows={2}
+                  value={s.recruitFreeDescription}
+                  onChange={(e) => set("recruitFreeDescription", e.target.value)}
+                  placeholder="自由記述を入力"
+                />
+              )}
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title="その他コメント">
+          <p className="mb-2 text-xs text-slate-500">テンプレ（クリックで追記）</p>
+          <div className="mb-3 flex flex-wrap gap-2">
+            {COMMENT_TEMPLATES.map((tmpl) => (
+              <NeuButton
+                key={tmpl}
+                className="!px-3 !py-1 !text-xs"
+                onClick={() =>
+                  set("otherComments", s.otherComments ? `${s.otherComments}\n${tmpl}` : tmpl)
+                }
+              >
+                ＋ {tmpl}
+              </NeuButton>
+            ))}
+          </div>
+          <NeuTextarea
+            rows={3}
+            value={s.otherComments}
+            onChange={(e) => set("otherComments", e.target.value)}
+            placeholder="任意（テンプレを押すと追記されます）"
+          />
+        </Panel>
+      </MoreSettings>
 
       {history.length > 0 && (
         <Panel title="履歴">

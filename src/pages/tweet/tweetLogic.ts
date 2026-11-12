@@ -79,6 +79,38 @@ export const DEFAULT_TWEET_STATE: TweetState = {
   otherComments: "",
 };
 
+/**
+ * 「条件を書く」（畳んだ段）に入れる項目。チェックと値は 1 項目として数える（UX 監査 2026-11-12、PR-6）。
+ * 主な入力（楽曲・回数・残り枠・ルームID）はここに入れない。
+ */
+const DETAIL_GROUPS: ReadonlyArray<ReadonlyArray<keyof TweetState>> = [
+  ["tlFlow"],
+  ["room"],
+  ["roomIdSymbol"],
+  ["appendPercent"],
+  ["showHostSkill", "hostSkill"],
+  ["showHostInnerValue", "hostInnerValue"],
+  ["showConditionOutside", "conditionOutside"],
+  ["showSupporter", "supporterCount"],
+  ["showFreeDescription", "freeDescription"],
+  ["showRequiredSkill", "requiredSkill"],
+  ["showRequiredInnerValue", "requiredInnerValue"],
+  ["showStar4"],
+  ["showLongSession"],
+  ["showSfcNoCare"],
+  ["showMidLeaveOk"],
+  ["showJudgementStrengthenDisabled"],
+  ["showJudgementAndRecoveryDisabled"],
+  ["showRecruitFreeDescription", "recruitFreeDescription"],
+  ["otherComments"],
+];
+
+/** 「条件を書く」の中で、既定値から変えている項目の数（見出しに出す）。文字は前後の空白を除いて比べる。 */
+export function countTweetDetailChanged(s: TweetState): number {
+  const norm = (v: unknown) => (typeof v === "string" ? v.trim() : v);
+  return DETAIL_GROUPS.filter((keys) => keys.some((k) => norm(s[k]) !== norm(DEFAULT_TWEET_STATE[k]))).length;
+}
+
 /** 全角英数記号→半角、全角スペース→半角スペース。 */
 export function convertToHalfWidth(str: string): string {
   return (str ?? "")
