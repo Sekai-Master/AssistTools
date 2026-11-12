@@ -111,6 +111,14 @@ describe("候補が無いときの案内", () => {
     expect(text).toMatch(/「1回のPt」[^。]*「1回の所要」/);
   });
 
+  // 検分 #246: 読めなかったときは、入れるまでオートが 0 回のまま。赤字ではなく注意の色で、そのことを言う
+  it("③ 読めなかったときの案内は注意の色（amber）で、「入れるまでオートは 0 回」と言う", () => {
+    render(<AutoPanel config={noCandidate({ error: "楽曲データの取得に失敗しました" })} />);
+    const note = [...document.querySelectorAll(".text-amber-700")].find((e) => e.textContent?.includes("楽曲データを読めませんでした"));
+    expect(note).toBeTruthy();
+    expect(note!.textContent).toContain("オートは 0 回");
+  });
+
   it("「1回の所要」に数字でないものが入っているときは、赤字で知らせる（利用者の入力の問題）", () => {
     render(<AutoPanel config={noCandidate({ error: "x", cycleOverride: "abc", hasCycleOverride: false })} />);
     expect(redTexts().join("")).toContain("「1回の所要」");
