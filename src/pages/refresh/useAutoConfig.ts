@@ -48,7 +48,15 @@ export function useAutoConfig({
   /** 1周期の秒の上書き。楽曲データが読めないときはここだけで計算できる。 */
   const [cycleOverride, setCycleOverride] = useState("");
 
-  const { entries, loading, error } = useRankingMusics(enabled);
+  const { entries, loading: fetching, error } = useRankingMusics(enabled);
+  /**
+   * ★ 読み込み中の判定は、届いたかどうかで決める（UX 監査 2026-11-12、PR-5）。
+   *   useRankingMusics の loading は useState(enabled) の初期値だけで決まり、周回プランでは最初 enabled が false なので、
+   *   オートを付けて読み込みが始まっても true に戻らない。その間「候補なし・エラーなし」に見えて、
+   *   赤字の警告と「休憩に『オート』を付けると候補が出ます」（もう付けているのに）が出ていた。
+   *   ランキングのページと共有の hook は変えず、ここで「使うのに、まだ何も届いていない」を読み込み中とみなす。
+   */
+  const loading = enabled && (fetching || (entries.length === 0 && error == null));
 
   const params = useMemo(
     () => ({
@@ -109,6 +117,8 @@ export function useAutoConfig({
   );
 
   return {
+    /** 休憩にオートを積んでいるか（false なら楽曲データを読まず、候補も出さない）。 */
+    enabled,
     course,
     setCourse,
     usedToday,
