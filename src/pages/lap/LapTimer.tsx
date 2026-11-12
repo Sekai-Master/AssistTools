@@ -41,6 +41,7 @@ import {
   type LapState,
 } from "./lib/lap";
 import { addRun, loadRuns, removeRun } from "./lib/runs";
+import { LapHowTo } from "./LapHowTo";
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 
@@ -280,41 +281,6 @@ export default function LapTimer() {
     >
       {condPanel}
 
-      {/* ── 使い方。記録が無いうちは開いて出す ───────────────── */}
-      <details className="neu-panel px-5 py-4 sm:px-6" open={!running}>
-        <summary className="cursor-pointer text-sm font-bold text-slate-600">
-          使い方
-        </summary>
-        <ol className="mt-3 space-y-2 text-sm leading-relaxed text-slate-600">
-          <li>
-            <b>1.</b> 一番上で周回する曲を選ぶ（曲の長さを引いて
-            <b>オーバーヘッド</b>を出すため）。
-          </li>
-          <li>
-            <b>2.</b> 1周目が始まった瞬間に <b>計測開始</b> を押す。
-          </li>
-          <li>
-            <b>3.</b> あとは1周終わるたびに <b>周回した</b> を押すだけ。
-          </li>
-          <li>
-            <b>4.</b> 休憩・部屋落ち・離席は <b>中断</b>。戻ったら <b>再開</b>。
-            <span className="text-slate-500">
-              中断していた時間は自動で平均から外れます。
-            </span>
-          </li>
-          <li>
-            <b>5.</b> 押し忘れた区間は一覧の <b>＋</b> で周回数を増やす。
-            <span className="text-slate-500">
-              区間の時間をその数で割った値がラップになるので、時刻の整合は壊れません。
-            </span>
-          </li>
-        </ol>
-        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
-          計測中は画面の自動ロックを止めます（対応端末のみ）。記録はこの端末にだけ保存され、
-          リロードしても続きから測れます。
-        </p>
-      </details>
-
       {saveError && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm font-bold text-rose-600">
           ⚠️
@@ -347,6 +313,52 @@ export default function LapTimer() {
 
       {/* ── 計測 ────────────────────────────────────────── */}
       <Panel>
+        {/**
+         * ★ 計測前は「計測開始」を数字より上に置く（UX 監査 2026-11-12）。計測前の数字は 6 枚とも「—」で、
+         *   その下に置くと 390×844 の初回で 2 画面目に落ちる。計測中の「周回した」は数字の下のまま
+         *   （押すたびに直近ラップを見る並び）。終了の知らせ・消した記録を戻すも計測前だけなので一緒に上へ。
+         */}
+        {!running && (
+          <div className="mb-4">
+            {/* ★ 何で測るのかを、押す直前に見せる。曲が違うとオーバーヘッドが丸ごとずれる。 */}
+            <p className="mb-2 text-center text-xs text-slate-500">
+              <b>{song?.title ?? state.songTitle ?? "曲を選んでください"}</b>
+              {state.songSec > 0 && `（${state.songSec} 秒）`}で計測します
+            </p>
+            <ActionButton
+              className="w-full py-5 text-lg"
+              onClick={() => update((s) => tap(s, Date.now()))}
+            >
+              計測開始
+              <span className="mt-1 block text-xs font-normal opacity-90">
+                1周目が始まった瞬間に押す
+              </span>
+            </ActionButton>
+
+            {finished && (
+              <p
+                role="status"
+                className="mt-3 rounded-lg bg-emerald-100 px-3 py-2 text-xs leading-relaxed text-emerald-800"
+              >
+                {finished}
+              </p>
+            )}
+
+            {undoClear && (
+              <div className="mt-3 text-center">
+                <NeuButton
+                  onClick={() => {
+                    setState(undoClear);
+                    setUndoClear(null);
+                  }}
+                >
+                  消した記録を戻す
+                </NeuButton>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat
             label="直近ラップ"
@@ -435,51 +447,34 @@ export default function LapTimer() {
           </p>
         )}
 
-        {/* ── 押すところ ──────────────────────────────── */}
-        <div className="mt-4">
-          {!running ? (
-            <>
-              {/* ★ 何で測るのかを、押す直前に見せる。曲が違うとオーバーヘッドが丸ごとずれる。 */}
-              <p className="mb-2 text-center text-xs text-slate-500">
-                <b>{song?.title ?? state.songTitle ?? "曲を選んでください"}</b>
-                {state.songSec > 0 && `（${state.songSec} 秒）`}で計測します
-              </p>
+        {/* ── 押すところ（計測中。計測前の「計測開始」は数字の上） ──────── */}
+        {running && (
+          <div className="mt-4">
+            {paused ? (
               <ActionButton
                 className="w-full py-5 text-lg"
-                onClick={() => update((s) => tap(s, Date.now()))}
+                onClick={() => update((s) => resume(s, Date.now()))}
               >
-                計測開始
+                再開する
                 <span className="mt-1 block text-xs font-normal opacity-90">
-                  1周目が始まった瞬間に押す
+                  中断していたぶんは平均から外れます
                 </span>
               </ActionButton>
-            </>
-          ) : paused ? (
-            <ActionButton
-              className="w-full py-5 text-lg"
-              onClick={() => update((s) => resume(s, Date.now()))}
-            >
-              再開する
-              <span className="mt-1 block text-xs font-normal opacity-90">
-                中断していたぶんは平均から外れます
-              </span>
-            </ActionButton>
-          ) : (
-            <ActionButton
-              className="w-full py-7 text-xl"
-              onClick={() => {
-                update((s) => tap(s, Date.now()));
-                if (navigator.vibrate) navigator.vibrate(18);
-              }}
-            >
-              周回した
-              <span className="mt-1 block text-xs font-normal opacity-90">
-                {st.laps > 0 ? `通算 ${st.laps} 周` : "1周終わるたびに押す"}
-              </span>
-            </ActionButton>
-          )}
+            ) : (
+              <ActionButton
+                className="w-full py-7 text-xl"
+                onClick={() => {
+                  update((s) => tap(s, Date.now()));
+                  if (navigator.vibrate) navigator.vibrate(18);
+                }}
+              >
+                周回した
+                <span className="mt-1 block text-xs font-normal opacity-90">
+                  {st.laps > 0 ? `通算 ${st.laps} 周` : "1周終わるたびに押す"}
+                </span>
+              </ActionButton>
+            )}
 
-          {running && (
             <div className="mt-3 flex flex-wrap justify-center gap-2">
               {!paused && (
                 <NeuButton onClick={() => update((s) => pause(s, Date.now()))}>
@@ -503,30 +498,8 @@ export default function LapTimer() {
               {/* ★ 終了は破壊操作ではない（保存してから空にする）ので確認は挟まない。 */}
               <NeuButton onClick={doFinish}>終了して保存</NeuButton>
             </div>
-          )}
-
-          {finished && !running && (
-            <p
-              role="status"
-              className="mt-3 rounded-lg bg-emerald-100 px-3 py-2 text-xs leading-relaxed text-emerald-800"
-            >
-              {finished}
-            </p>
-          )}
-
-          {undoClear && !running && (
-            <div className="mt-3 text-center">
-              <NeuButton
-                onClick={() => {
-                  setState(undoClear);
-                  setUndoClear(null);
-                }}
-              >
-                消した記録を戻す
-              </NeuButton>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {wake.failed && running && !paused && (
           <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
@@ -553,6 +526,9 @@ export default function LapTimer() {
           </div>
         )}
       </Panel>
+
+      {/* ── 使い方（初回も閉じる。計測のパネルの下） ─────────────── */}
+      <LapHowTo />
 
       {/* ── 曲と条件 ─────────────────────────────────── */}
       {/* ── ラップ一覧 ───────────────────────────────── */}
