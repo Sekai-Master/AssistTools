@@ -51,6 +51,25 @@ describe("parseRoomBest（部屋でいちばん高い実効値の欄）", () => 
   it("数でない文字は弾く", () => {
     expect(parseRoomBest("abc")).toEqual({ kind: "invalid" });
   });
+
+  it("全角のマイナスも負として扱う", () => {
+    expect(parseRoomBest("－5")).toEqual({ kind: "negative" });
+    expect(parseRoomBest("−5")).toEqual({ kind: "negative" });
+  });
+
+  it("16 進・指数の書き方は通さない（数字と小数点だけ）", () => {
+    expect(parseRoomBest("0x1F4")).toEqual({ kind: "invalid" });
+    expect(parseRoomBest("1e3")).toEqual({ kind: "invalid" });
+  });
+
+  it("小数は読む", () => {
+    expect(parseRoomBest("262.5")).toEqual({ kind: "ok", value: 262.5 });
+  });
+
+  it("1000 を超える値は弾く（編成の先頭スキルの上限と同じ）", () => {
+    expect(parseRoomBest("1000")).toEqual({ kind: "ok", value: 1000 });
+    expect(parseRoomBest("1001")).toEqual({ kind: "tooLarge", max: 1000 });
+  });
 });
 
 describe("encoreVerdict（取りに行くか譲るか）", () => {
@@ -128,6 +147,13 @@ describe("encoreGap（最高の人が取った場合 − 自分が取った場�
     const gap = encoreGap(entry(), 300, 200, 300_000);
     expect(gap!.points!).toBeLessThan(0);
     expect(gap!.ratio).toBeLessThan(0);
+  });
+
+  it("割合の分母は、実効値の低いほうが取ったときのスコア（自分が高いときは最高の人が取ったとき）", () => {
+    // 自分 300・ほかの最高 200: 通常の 5 枠の平均 = (300 + 200 × 4) ÷ 5 = 220
+    // 最高の人（200）が取ったときの rate = 1.15 + 220 × 0.35 ÷ 100 + 200 × 0.15 ÷ 100 = 2.22
+    const gap = encoreGap(entry(), 300, 200, 300_000);
+    expect(gap!.ratio).toBeCloseTo(-0.15 / 2.22, 4);
   });
 
   it("曲の重みが大きいほど差も大きい", () => {

@@ -35,7 +35,7 @@ const pts = (n: number) => `${Math.abs(n).toLocaleString("ja-JP")} 点`;
  *
  * ★ 既定は閉じる（煩雑さの直し #247 の MoreSettings と同じ考え方）。#247 がまだ main に無いので
  *   素の <details> で作り、見た目（neu-panel・min-h-11 の見出し・data-icon の矢印）を合わせた。
- * ★ 楽曲データ（難易度別で 428KB）は段を開いてから読む。
+ * ★ 楽曲データ（musicScoreData.json と transformedMusics.json、圧縮前で約 1.7MB）は段を開いてから読む。
  * ★ 判定は「実効値で比べて誰が取ると部屋が得か」。実際に誰が取るかは直前のスコアで決まる
  *   （運営者の実感・プレイヤーの間の話で、公式の説明は無い）ので、「取れる」とは書かない。
  *
@@ -125,60 +125,79 @@ export function EncoreAdvice({
           />
         </Field>
 
-        {myEffective === null ? (
-          <p className="text-sm text-slate-500">上で自分の実効値が出ると判定します。</p>
-        ) : best.kind === "negative" ? (
-          <p className="text-sm text-amber-700">0 以上の数で入れてください。</p>
-        ) : best.kind === "invalid" ? (
-          <p className="text-sm text-amber-700">数字で入れてください。</p>
-        ) : (
-          verdict &&
-          best.kind === "ok" && (
-            <div>
-              <p className="text-base font-bold" style={{ color: "var(--unit-color)" }}>
-                {verdict === "take"
-                  ? "取りに行ってよい"
-                  : verdict === "yield"
-                    ? "譲るほうが部屋の全員のスコアが上がります"
-                    : "発動スキル値の候補によって分かれます"}
-              </p>
-              <p className="mt-1 text-sm text-slate-600">
-                {mineLabel} は、ほかの 4 人の最高 {best.value}
-                {verdict === "take" ? " と同じか上です。" : verdict === "yield" ? " より下です。" : " をまたいでいます。"}
-              </p>
-            </div>
-          )
-        )}
+        <div role="status">
+          {myEffective === null ? (
+            <p className="text-sm text-slate-500">上で自分の実効値が出ると判定します。</p>
+          ) : best.kind === "empty" ? (
+            <p className="text-sm text-slate-500">ほかの 4 人でいちばん高い実効値を入れると判定します。</p>
+          ) : best.kind === "negative" ? (
+            <p className="text-sm text-amber-700">0 以上の数で入れてください。</p>
+          ) : best.kind === "invalid" ? (
+            <p className="text-sm text-amber-700">数字で入れてください。</p>
+          ) : best.kind === "tooLarge" ? (
+            <p className="text-sm text-amber-700">{best.max} 以下で入れてください。</p>
+          ) : (
+            verdict &&
+            best.kind === "ok" && (
+              <div>
+                <p className="text-base font-bold" style={{ color: "var(--unit-color)" }}>
+                  {verdict === "take"
+                    ? "取りに行ってよい"
+                    : verdict === "yield"
+                      ? "アンコールの分では、譲るほうが部屋のスコアが上がります"
+                      : "発動スキル値の候補によって分かれます"}
+                </p>
+                <p className="mt-1 text-sm text-slate-600">
+                  {mineLabel} は、ほかの 4 人の最高 {best.value}
+                  {verdict === "take" ? " と同じか上です。" : verdict === "yield" ? " より下です。" : " をまたいでいます。"}
+                </p>
+              </div>
+            )
+          )}
+        </div>
+        <p className="text-sm text-slate-600">
+          アンコールを取るには、高い総合力と安定したプレイが要ります
+          <Mark>走っている人の実感</Mark>。
+        </p>
 
         <div className="space-y-2">
           <p className="text-sm font-bold text-slate-600">曲ごとの差の目安</p>
           {error && <p className="text-sm text-rose-600">{error}</p>}
           <div className="flex flex-wrap items-center gap-2">
-            <NeuButton className="!py-1.5" onClick={() => setPicking(true)} disabled={loading}>
+            <NeuButton
+              className="!py-1.5"
+              onClick={() => setPicking(true)}
+              disabled={loading}
+              aria-label={entry ? `曲を選ぶ（いまは ${entry.title}）` : undefined}
+            >
               {entry ? entry.title : loading ? "読み込み中…" : "曲を選ぶ"}
             </NeuButton>
-            {songDifficulties.map((d) => (
-              <NeuButton key={d} className="!px-3 !py-1.5" active={entry?.difficulty === d} onClick={() => setDifficulty(d)}>
-                {DIFFICULTY_LABEL[d]}
-              </NeuButton>
-            ))}
+            <div role="group" aria-label="難易度" className="flex flex-wrap gap-2">
+              {songDifficulties.map((d) => (
+                <NeuButton key={d} className="!px-3 !py-1.5" active={entry?.difficulty === d} onClick={() => setDifficulty(d)}>
+                  {DIFFICULTY_LABEL[d]}
+                </NeuButton>
+              ))}
+            </div>
           </div>
           {judged && entry && verdict !== "split" && (
-            <p className="text-sm text-slate-600">
+            <p role="status" className="text-sm text-slate-600">
               {gap === null
                 ? "この曲は協力ライブの重みのデータが無いので、差を出せません。"
                 : gap.ratio === 0
                   ? "誰が取っても 1 人あたりのスコアは同じで、差はありません。"
-                  : `${verdict === "yield" ? "いちばん高い人が取ると" : "自分が取ると"}、1 人あたりのスコアが約 ${
-                      gap.points !== null ? `${pts(gap.points)}（${pct(gap.ratio)}）` : `${pct(gap.ratio)} `
-                    }上がります。`}
+                  : `${verdict === "yield" ? "いちばん高い人が取ると" : "自分が取ると"}、${
+                      gap.points !== null
+                        ? `自分のスコアが約 ${pts(gap.points)}（${pct(gap.ratio)}）上がります（ほかの人も同じ割合）。`
+                        : `1 人あたりのスコアが約 ${pct(gap.ratio)} 上がります。`
+                    }`}
             </p>
           )}
           <p className="text-xs leading-relaxed text-slate-500">
-            その曲のアンコールの重みで出した目安です。割合は、ほかの 3 人もいちばん高い人と同じ実効値として出しています。
-            {power === null
-              ? "編成の総合力を「入力に反映」で読み込むと、点でも出ます。"
-              : `点は、編成から読んだ自分の総合力（${(power / 10_000).toFixed(1)} 万）で出しています。`}
+            その曲のアンコールの重みで出した目安です。割合は実効値の低いほうが取ったときのスコアに対してで、ほかの 3 人もいちばん高い人と同じ実効値として出しています。
+            {power !== null && power > 0
+              ? `点は、編成から読んだ自分の総合力（${(power / 10_000).toFixed(1)} 万）で出しています（別の編成なら、もう一度「入力に反映」）。`
+              : "設定で総合力つきの編成を登録して「入力に反映」を押すと、点でも出ます。"}
           </p>
         </div>
 
@@ -187,17 +206,18 @@ export function EncoreAdvice({
           <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600">
             <li>
               自分の難易度を下げる
-              <Mark>プレイヤーの間で</Mark>
+              <Mark>プレイヤーの間で</Mark>。下げると、自分のスコアはその分下がります
+              <Mark>このサイトの計算</Mark>
             </li>
             <li>
-              取らせたい人の判定位置を調整して（「判定プラス 20」など）数ノーツ先に叩かせ、アンコールを取らせる手法もあります
+              取らせたい人に判定位置を調整してもらい（「判定プラス 20」など）、数ノーツ先に叩いてアンコールを取ってもらう手法もあります
               <Mark>走っている人の実感</Mark>
             </li>
           </ul>
         </div>
 
         <p className="text-xs leading-relaxed text-slate-500">
-          〔〕は出どころです。「走っている人の実感」はこのサイトの運営者の実感、「プレイヤーの間で」はプレイヤーの間で共有されている話で、どちらも公式の裏付けはありません。
+          〔〕は出どころです。「このサイトの計算」はこのサイトのコードによる計算、「走っている人の実感」はこのサイトの運営者の実感、「プレイヤーの間で」はプレイヤーの間で共有されている話で、後の 2 つは公式の裏付けがありません。
         </p>
       </div>
 

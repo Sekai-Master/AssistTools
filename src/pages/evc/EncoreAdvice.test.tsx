@@ -4,7 +4,7 @@
  * 実効値計算機の「アンコールは誰が取るとよいか」の段。
  *
  * ★ 縛ること
- *   - 既定は閉じる（読まなくてよい人の邪魔をしない）。楽曲データ（428KB）は開くまで読まない
+ *   - 既定は閉じる（読まなくてよい人の邪魔をしない）。楽曲データ（圧縮前で約 1.7MB）は開くまで読まない
  *   - 入力は 1 つ（ほかの 4 人でいちばん高い実効値）。境目は「同じなら取りに行ってよい」
  *   - 総合力が無ければ点を出さず割合だけ
  *   - アンコールの決まり方を公式の仕様のように書かない（印と「公式の説明は見当たりません」）
@@ -79,7 +79,9 @@ describe("判定", () => {
     render(<EncoreAdvice myEffective={262} myRange={null} power={null} />);
     await open();
     await userEvent.type(bestInput(), "280");
-    expect(details().textContent).toContain("譲るほうが部屋の全員のスコアが上がります");
+    // 何の比較かを限定する（難易度を下げて譲ると、譲った本人のスコアは下がるため。検分 G2 M1）
+    expect(details().textContent).toContain("アンコールの分では、譲るほうが部屋のスコアが上がります");
+    expect(details().textContent).not.toContain("全員のスコアが上がります");
   });
 
   it("同じ値なら「取りに行ってよい」で、差は無い", async () => {
@@ -109,6 +111,21 @@ describe("判定", () => {
     await open();
     expect(details().textContent).not.toContain("取りに行ってよい");
     expect(details().textContent).not.toContain("譲るほうが");
+  });
+
+  it("1000 を超える値は判定せず、上限を出す", async () => {
+    render(<EncoreAdvice myEffective={262} myRange={null} power={null} />);
+    await open();
+    await userEvent.type(bestInput(), "1001");
+    expect(details().textContent).not.toContain("取りに行ってよい");
+    expect(details().textContent).toContain("1000 以下");
+  });
+
+  it("判定の文は読み上げの対象（role=status）の中にある", async () => {
+    render(<EncoreAdvice myEffective={262} myRange={null} power={null} />);
+    await open();
+    await userEvent.type(bestInput(), "280");
+    expect(screen.getByText(/譲るほうが/).closest('[role="status"]')).not.toBeNull();
   });
 
   it("負の値は判定せず、直し方を出す", async () => {
@@ -186,8 +203,22 @@ describe("差の文言", () => {
     await open();
     await userEvent.type(bestInput(), "262");
     const text = details().textContent ?? "";
-    expect(text).toMatch(/自分が取ると、1 人あたりのスコアが約 32,(39[89]|40[0-2]) 点/);
+    expect(text).toMatch(/自分が取ると、自分のスコアが約 32,(39[89]|40[0-2]) 点（1\.[0-9]%）上がります（ほかの人も同じ割合）/);
     expect(text).not.toContain("-");
+  });
+
+  it("総合力が無いときの案内は、編成を登録していない人にも通じる（設定で登録して「入力に反映」）", async () => {
+    render(<EncoreAdvice myEffective={262} myRange={null} power={null} />);
+    await open();
+    expect(details().textContent).toContain("設定で総合力つきの編成を登録して「入力に反映」を押すと、点でも出ます");
+  });
+
+  it("総合力が 0 なら点を出さず、総合力が無いときの案内を出す", async () => {
+    render(<EncoreAdvice myEffective={262} myRange={null} power={0} />);
+    await open();
+    await userEvent.type(bestInput(), "280");
+    expect(details().textContent).not.toMatch(/[0-9,]+ ?点/);
+    expect(details().textContent).not.toContain("0.0 万");
   });
 
   it("総合力を使ったときは、その値を書く", async () => {
@@ -225,6 +256,24 @@ describe("文言の確かさ", () => {
     expect(text).toContain("公式の説明は見当たりません");
     expect(text).toContain("〔走っている人の実感〕");
     expect(text).toContain("〔プレイヤーの間で〕");
+  });
+
+  it("取るには高い総合力と安定したプレイが要る（走っている人の実感、台帳 4.5）", async () => {
+    render(<EncoreAdvice myEffective={262} myRange={null} power={null} />);
+    await open();
+    expect(details().textContent).toMatch(/高い総合力と安定したプレイが要ります〔走っている人の実感〕/);
+  });
+
+  it("難易度を下げると自分のスコアは下がることを書く", async () => {
+    render(<EncoreAdvice myEffective={262} myRange={null} power={null} />);
+    await open();
+    expect(details().textContent).toMatch(/下げると、自分のスコアはその分下がります〔このサイトの計算〕/);
+  });
+
+  it("印の説明に「このサイトの計算」も入っている", async () => {
+    render(<EncoreAdvice myEffective={262} myRange={null} power={null} />);
+    await open();
+    expect(details().textContent).toContain("「このサイトの計算」はこのサイトのコードによる計算");
   });
 
   it("譲り方: 難易度を下げる（プレイヤーの間で）と、判定位置の調整（走っている人の実感）", async () => {

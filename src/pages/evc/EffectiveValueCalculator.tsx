@@ -181,7 +181,8 @@ export default function EffectiveValueCalculator() {
             setDetailMode(false);
             setInner(String(p.skillTotal));
           }
-          setPower(p.power ?? null);
+          // 0 以下は「総合力なし」と同じ扱い（点を出さない）
+          setPower(p.power != null && p.power > 0 ? p.power : null);
         }}
       />
       <SegmentedControl

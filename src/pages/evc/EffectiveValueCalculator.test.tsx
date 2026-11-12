@@ -15,7 +15,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import type { RankingMusic } from "../ranking/useRankingMusics";
 
-// アンコールの段が開いたときに読む楽曲データ（本物は 428KB の fetch）を差し替える
+// アンコールの段が開いたときに読む楽曲データ（本物は圧縮前で約 1.7MB の fetch）を差し替える
 const envyExpert: RankingMusic = {
   musicId: "074",
   title: "独りんぼエンヴィー",
@@ -198,6 +198,16 @@ describe("アンコールの段", () => {
     await userEvent.type(best(), "999");
     expect(details().textContent).toContain(`平均 ${avg}）`);
     expect(details().textContent).toMatch(/候補 \d+〜\d+/);
+  });
+
+  it("総合力 0 の編成を反映しても、点は出さない", async () => {
+    setActiveProfile(createProfile("テスト", { power: 0, skillLeader: 150, skillTotal: 710 }).id);
+    draw();
+    await userEvent.click(screen.getByRole("button", { name: "入力に反映" }));
+    await userEvent.click(summary());
+    await userEvent.type(best(), "280");
+    expect(details().textContent).not.toMatch(/[0-9,]+ ?点（/);
+    expect(details().textContent).not.toContain("0.0 万");
   });
 
   it("逆算のときは出さない", async () => {

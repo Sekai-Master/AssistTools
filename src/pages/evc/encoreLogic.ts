@@ -21,23 +21,34 @@ import {
   skillWeights,
   type EfficiencyEntry,
 } from "../ranking/lib/efficiency";
+import { PROFILE_FIELDS } from "../../lib/profiles";
 import { toHalfWidthNumber } from "./evcLogic";
 
 /** アンコールの枠（skillScoreMulti の 6 番目＝最後）。 */
 const ENCORE_SLOT = SKILL_SLOTS - 1;
+
+/** 実効値の欄の上限。編成の先頭スキルの上限（PROFILE_FIELDS）と同じ。 */
+export const ROOM_BEST_MAX = PROFILE_FIELDS.find((f) => f.key === "skillLeader")?.max ?? 1000;
 
 /** 部屋でいちばん高い実効値の欄の読み取り結果。空は 0 にしない（#239 と同じ考え方）。 */
 export type RoomBestInput =
   | { kind: "empty" }
   | { kind: "invalid" }
   | { kind: "negative" }
+  | { kind: "tooLarge"; max: number }
   | { kind: "ok"; value: number };
 
 export function parseRoomBest(raw: string): RoomBestInput {
   if ((raw ?? "").trim() === "") return { kind: "empty" };
-  const v = toHalfWidthNumber(raw);
+  // 全角のマイナス（－・−）も負として扱う
+  const signed = raw.replace(/[－−]/g, "-");
+  const v = toHalfWidthNumber(signed);
   if (v === null) return { kind: "invalid" };
+  // 16 進（0x1F4）・指数（1e3）は Number() が読んでしまうので、数字と小数点だけに絞る
+  const half = signed.replace(/[０-９．]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+  if (!/^-?[0-9,，]*\.?[0-9]+$/.test(half.trim())) return { kind: "invalid" };
   if (v < 0) return { kind: "negative" };
+  if (v > ROOM_BEST_MAX) return { kind: "tooLarge", max: ROOM_BEST_MAX };
   return { kind: "ok", value: v };
 }
 
@@ -118,6 +129,9 @@ export function encoreGap(
   const hasPower = power != null && power > 0;
   const forRatio = gapAt(hasPower ? power : RATIO_POWER);
   if (forRatio == null) return null;
-  const ratio = forRatio.mineTakes > 0 ? forRatio.gap / forRatio.mineTakes : 0;
+  // 分母は実効値の低いほうが取ったときのスコア（「替えると何 % 上がるか」の、替える前）。
+  // 自分が低ければ自分が取ったとき、自分が高ければ最高の人が取ったとき（= 自分が取ったとき + 差）
+  const denom = forRatio.gap >= 0 ? forRatio.mineTakes : forRatio.mineTakes + forRatio.gap;
+  const ratio = denom > 0 ? forRatio.gap / denom : 0;
   return { points: hasPower ? forRatio.gap : null, ratio };
 }
