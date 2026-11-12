@@ -113,11 +113,14 @@ export function AutoPanel({ config }: { config: AutoConfig }) {
           )}
         </Field>
 
+        {/* ★ 下の2つが空欄のときに使うのは「オートで回す曲」（未選択なら効率1位。useAutoConfig の
+            selected）。周回プランで「上の曲」はページ上部の手動の曲を指す呼び名なので、補足文では
+            そう呼ばない（UX 監査 2026-11-12。前は「上の曲から」と書いていて取り違えを招いた）。 */}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
             label="1回のPt"
             htmlFor="pl-auto-pt"
-            hint="空欄なら上の曲から計算します。実測があれば入れてください（そちらが優先）"
+            hint="空欄なら「オートで回す曲」の値。実測を入れればそちらが優先"
           >
             <div className="flex items-center gap-2">
               <NeuInput
@@ -137,7 +140,7 @@ export function AutoPanel({ config }: { config: AutoConfig }) {
           <Field
             label="1回の所要"
             htmlFor="pl-auto-cycle"
-            hint="曲の長さ＋ロス。空欄なら上の曲から計算します"
+            hint="空欄なら「オートで回す曲」の長さ＋ロス"
           >
             <div className="flex items-center gap-2">
               <NeuInput
