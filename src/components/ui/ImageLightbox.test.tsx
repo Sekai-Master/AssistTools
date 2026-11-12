@@ -80,14 +80,39 @@ describe("ZoomableImage", () => {
     expect(screen.getByRole("dialog", { name: "画像の拡大表示" })).toBeTruthy();
   });
 
-  it("キーボードで開ける（ボタンなので Enter で押せる）", () => {
+  it("キーボードで開ける: Tab で止まる素の button（Enter・Space の押下はブラウザが click にする）", () => {
     renderImage();
     const button = trigger();
+    // div+onClick ではなく button なので、Tab で止まり Enter・Space で押せる。jsdom はキーから click を
+    // 作らないので、ここでは「フォーカスできる素の button であること」と「click で開くこと」を縛る
+    expect(button.tabIndex).toBe(0);
+    expect(button.hasAttribute("disabled")).toBe(false);
     button.focus();
-    // ネイティブの button は Enter で click を出す。jsdom はそれを再現しないので click で代える
-    fireEvent.keyDown(button, { key: "Enter" });
+    expect(document.activeElement).toBe(button);
     fireEvent.click(button);
     expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("読み上げ: ダイアログの説明として画像の alt を結ぶ（フォーカスが閉じるに入っても中身が伝わる）", () => {
+    renderImage();
+    press(trigger());
+    const dialog = screen.getByRole("dialog");
+    const describedBy = dialog.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)?.getAttribute("alt")).toBe(ALT);
+  });
+
+  it("ピンチ拡大を止めない（touch-action を絞らない）・画像の高さは枠に従う", () => {
+    renderImage();
+    press(trigger());
+    const dialog = screen.getByRole("dialog");
+    for (const el of [dialog, ...dialog.querySelectorAll("*")]) {
+      expect(el.className.toString()).not.toMatch(/touch-(none|pan|pinch|manipulation)/);
+      expect((el as HTMLElement).style.touchAction).toBe("");
+    }
+    const big = dialog.querySelector("img")!;
+    expect(big.className.split(" ")).toContain("max-h-full");
+    expect(big.className.split(" ")).toContain("max-w-full");
   });
 
   it("開いている間は、フォーカスがダイアログの中にある", () => {

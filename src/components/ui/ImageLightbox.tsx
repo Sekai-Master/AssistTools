@@ -14,6 +14,11 @@ import { FOCUS_RING, useModalA11y } from "../../lib/a11y";
  * - **ブラウザの拡大（ピンチ）は止めない。** touch-action や touch の preventDefault を書かない。
  *   スマホでは全面に出しても字が小さいので、指で広げて読む前提
  * - 幕と文字は黒と白の固定値。このサイトの slate はダークで階調が反転するので使わない
+ * - 読み上げ: ダイアログの名前は題、説明（aria-describedby）は画像の alt。開いた直後にフォーカスが
+ *   「閉じる」に入っても、画像の中身まで伝わる
+ *
+ * ★ onClose は useCallback などで固定して渡すこと。useModalA11y の deps に入るので、毎回作り直すと
+ *   スクロール停止とフォーカスの記憶がやり直され、閉じたときのフォーカスの戻し先が狂う
  */
 export function ImageLightbox({
   open,
@@ -28,13 +33,14 @@ export function ImageLightbox({
   onClose: () => void;
   src: string;
   alt: string;
-  /** 読み上げのラベルと、画像の下の題。無いときは「画像の拡大表示」。長い alt はラベルにしない。 */
+  /** 読み上げのラベルと、画像の下の題。無いときは「画像の拡大表示」。長い alt はラベルにしない（説明として結ぶ）。 */
   title?: string;
   width?: number;
   height?: number;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  const imgId = useId();
   // 押し始めが画像の上だったか。画像の上で押して背景で離したときに閉じないため
   const downOnImage = useRef(false);
   useModalA11y(open, onClose, dialogRef);
@@ -52,8 +58,9 @@ export function ImageLightbox({
       aria-modal="true"
       aria-labelledby={title ? titleId : undefined}
       aria-label={title ? undefined : "画像の拡大表示"}
+      aria-describedby={alt ? imgId : undefined}
       tabIndex={-1}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-2 bg-black/90 px-2 pt-14 pb-3 outline-none sm:px-6 sm:pb-5"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-2 overscroll-contain bg-black/90 px-2 pt-14 pb-3 outline-none sm:px-6 sm:pb-5"
       onMouseDown={(e: MouseEvent) => {
         downOnImage.current = !isBackdrop(e.target);
       }}
@@ -75,13 +82,15 @@ export function ImageLightbox({
       </button>
       <div className="flex min-h-0 w-full flex-1 items-center justify-center">
         <img
+          id={imgId}
           src={src}
           alt={alt}
           width={width}
           height={height}
           decoding="async"
-          // width・height の属性は寸法の目安にだけ使い、表示は auto に戻して画面の大きさで縮める
-          className="block h-auto max-h-[calc(100vh-6rem)] w-auto max-w-full rounded-md object-contain supports-[height:100dvh]:max-h-[calc(100dvh-6rem)]"
+          // width・height の属性は寸法の目安にだけ使い、表示は auto に戻して枠の大きさで縮める。
+          // 高さの上限は枠（flex-1・min-h-0）に従わせる。題が 2 行に折り返しても画像がはみ出さない
+          className="block h-auto max-h-full w-auto max-w-full rounded-md object-contain"
         />
       </div>
       {title && (
