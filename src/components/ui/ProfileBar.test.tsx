@@ -10,7 +10,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { SaveToProfile } from "./ProfileBar";
+import { MemoryRouter } from "react-router-dom";
+import { ProfileBar, SaveToProfile } from "./ProfileBar";
 import {
   createProfile,
   getProfiles,
@@ -73,5 +74,34 @@ describe("SaveToProfile", () => {
     expect(after?.bonus).toBe(927);
     // 空欄だった時速は消えない
     expect(after?.hourlyRate).toBe(2_946_000);
+  });
+});
+
+/**
+ * ★ 編成が 1 つも無いときの ProfileBar（evc・analyzer・plan・ranking・worktime の 5 ページの先頭に出る）。
+ *   前は「設定で編成を登録しておくと、ここの初期値になります。」の 26 字を毎ページの先頭に出していた
+ *   （UX 監査 2026-11-12、共通の型 3）。見えるのは状態の短い 1 行にし、説明と設定へのリンクは閉じた段へ畳む（消さない）。
+ */
+describe("ProfileBar（編成が無いとき）", () => {
+  const draw = () =>
+    render(
+      <MemoryRouter>
+        <ProfileBar apply={() => {}} />
+      </MemoryRouter>,
+    );
+
+  it("見えるのは「編成: 未登録」の 1 行だけで、説明は閉じた段の中", () => {
+    draw();
+    const summary = screen.getByText("編成: 未登録", { selector: "summary" });
+    const details = summary.closest("details")!;
+    expect(details.open).toBe(false);
+    expect(details.textContent).toContain("ここの初期値になります");
+  });
+
+  it("畳んだ中に設定へのリンクを残す", () => {
+    draw();
+    const link = screen.getByRole("link", { name: "設定", hidden: true });
+    expect(link.getAttribute("href")).toBe("/settings");
+    expect(link.closest("details")).not.toBeNull();
   });
 });
