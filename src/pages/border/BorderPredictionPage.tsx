@@ -162,6 +162,9 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
       )}
       {snap.predicted && (
         <p className="mt-3 max-w-lg text-xs leading-5 text-slate-500">
+          {/* ★ 予測の数字の近くでも「非公式で外れる」を言う（前はページ下の「しくみ」だけ。指揮 2026-11-12）。
+              外挿の回は上の参考値の枠が「大きく外れることがあります」と言っているので重ねない */}
+          {snap.extrapolatedFrom == null && "非公式の予測で、外れることがあります。"}
           確度は8割の幅の広さです。高＝±5%くらい、中＝±15%くらい、目安＝それより広い（序盤）。
           序盤の目安は、全体の熱さを読むためのものとして見てください。
         </p>
