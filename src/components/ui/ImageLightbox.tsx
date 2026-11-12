@@ -70,6 +70,9 @@ type Point = { x: number; y: number };
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
+/** 画像の切り替えの直後、2 回目の押下を無視する時間（ダブルタップの 2 回目）。 */
+const DOUBLE_TAP_MS = 300;
+
 /** 全面表示のボタン（閉じる・原寸の切り替え）。押せる大きさの基準 44px を満たす（py-2 だけだと高さ 36px）。 */
 const OVERLAY_BUTTON = `inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-full bg-white/15 px-3 py-2 text-sm font-bold text-white hover:bg-white/25 ${FOCUS_RING}`;
 
@@ -115,6 +118,10 @@ function LightboxDialog({
   const [canZoom, setCanZoom] = useState(false);
   /** 原寸にしたときに画面の中央へ持ってくる所（画像の幅・高さに対する割合）。 */
   const focusPoint = useRef<Point>({ x: 0.5, y: 0.5 });
+  /** 画面に合わせるへ戻したあと、フォーカスを切り替えのボタンへ移すか（戻す前に原寸の枠にフォーカスがあった）。 */
+  const refocusToggle = useRef(false);
+  /** 最後に切り替えた時刻。続けて 2 回押したとき（ダブルタップ）に、原寸が一瞬出て戻るのを防ぐ。 */
+  const lastToggleAt = useRef(0);
 
   /** 画面に合わせているときの表示の大きさと画素数を比べる。原寸のときは表示＝画素数なので測らない。 */
   const measure = useCallback(() => {
@@ -142,14 +149,16 @@ function LightboxDialog({
 
   // 切り替えた直後に、描く前に整える。
   // - 画面に合わせるへ戻したとき: 原寸の間に画面の大きさが変わっていても判定を古いまま残さないよう測り直す。
-  //   原寸の枠（Tab で止まる）にフォーカスがあったら切り替えのボタンへ移す（枠は Tab で止まらなくなる）
+  //   原寸の枠にフォーカスがあったら切り替えのボタンへ移す（枠は tabindex を外すのでフォーカスを持てなくなる。
+  //   そのままだと body に落ち、次の Tab で背面のページへ抜ける）
   // - 原寸にしたとき: 中央に持ってくる所へスクロールを合わせる（左上が一瞬見えることはない）
   useLayoutEffect(() => {
     const box = scrollRef.current;
     const img = imgRef.current;
     if (!box || !img) return;
     if (zoom === "fit") {
-      if (document.activeElement === box) (toggleRef.current ?? closeRef.current)?.focus({ preventScroll: true });
+      if (refocusToggle.current) (toggleRef.current ?? closeRef.current)?.focus({ preventScroll: true });
+      refocusToggle.current = false;
       measure();
       return;
     }
@@ -161,7 +170,22 @@ function LightboxDialog({
   const toggle = (point?: Point) => {
     if (zoom === "fit" && !canZoom) return;
     focusPoint.current = point ?? { x: 0.5, y: 0.5 };
+    // 戻す前に判定する（戻したあとは枠が tabindex を持たず、フォーカスがもう外れている）
+    refocusToggle.current = zoom === "actual" && document.activeElement === scrollRef.current;
+    lastToggleAt.current = Date.now();
     setZoom(zoom === "fit" ? "actual" : "fit");
+  };
+
+  /** 画像を押したとき。切り替えた直後 300ms の 2 回目は無視する（ダブルタップで原寸が一瞬出て戻らないように）。 */
+  const onImageClick = (e: MouseEvent<HTMLImageElement>) => {
+    if (Date.now() - lastToggleAt.current < DOUBLE_TAP_MS) return;
+    if (actual) return toggle();
+    const r = e.currentTarget.getBoundingClientRect();
+    toggle(
+      r.width > 0 && r.height > 0
+        ? { x: clamp01((e.clientX - r.left) / r.width), y: clamp01((e.clientY - r.top) / r.height) }
+        : undefined,
+    );
   };
 
   /** 画像と操作部品（ボタン）以外を押したら閉じる。余白のどこを押しても閉じられるように。 */
@@ -214,9 +238,11 @@ function LightboxDialog({
       <div
         ref={scrollRef}
         data-lightbox-scroll=""
-        // 原寸のときだけ、矢印キーで動かせるよう Tab で止まる枠にする（画面に合わせるときは -1: 押して
-        // フォーカスが載っても Tab の巡回には入らない）
-        tabIndex={actual ? 0 : -1}
+        // 原寸のときだけ、矢印キーで動かせるよう Tab で止まる枠にする。
+        // ★ 画面に合わせるときは tabindex を付けない（-1 にしない）。-1 だと画像を押したときにフォーカスが
+        //   この枠に載り、useModalA11y の巡回（tabindex=-1 を外す）から漏れて、次の Tab で背面へ抜ける
+        //  （検分 gate-257-259 の 259-高-1）。付けなければ、フォーカスはダイアログ本体に載る（#256 と同じ）
+        tabIndex={actual ? 0 : undefined}
         role={actual ? "group" : undefined}
         aria-label={actual ? "原寸の画像（矢印キーで動かせます）" : undefined}
         className={`relative flex min-h-0 w-full flex-1 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${
@@ -237,15 +263,7 @@ function LightboxDialog({
             if (img.naturalWidth) setNatural({ w: img.naturalWidth, h: img.naturalHeight });
             measure();
           }}
-          onClick={(e) => {
-            if (actual) return toggle();
-            const r = e.currentTarget.getBoundingClientRect();
-            toggle(
-              r.width > 0 && r.height > 0
-                ? { x: clamp01((e.clientX - r.left) / r.width), y: clamp01((e.clientY - r.top) / r.height) }
-                : undefined,
-            );
-          }}
+          onClick={onImageClick}
           style={actual ? { width: natural.w, height: natural.h } : undefined}
           // 画面に合わせるとき: width・height の属性は寸法の目安にだけ使い、表示は auto に戻して枠の大きさで縮める。
           //   高さの上限は枠（flex-1・min-h-0）に従わせる。題が 2 行に折り返しても画像がはみ出さない

@@ -15,12 +15,19 @@ let natural = { w: 1200, h: 1000 };
 let shown = { w: 600, h: 500, left: 100, top: 80 };
 const viewport = { w: 800, h: 600 };
 const scrolls = new WeakMap<Element, { left: number; top: number }>();
+/** 差し替えた時計。画像の切り替えの直後 300ms の 2 回目は無視されるので、続けて押すテストは later() で間を空ける。 */
+let now = 1_000_000;
+const later = () => {
+  now += 1000;
+};
 
 function defineGetter(proto: object, name: string, get: (this: HTMLElement) => number) {
   Object.defineProperty(proto, name, { configurable: true, get });
 }
 
 beforeEach(() => {
+  now = 1_000_000;
+  vi.spyOn(Date, "now").mockImplementation(() => now);
   natural = { w: 1200, h: 1000 };
   shown = { w: 600, h: 500, left: 100, top: 80 };
   defineGetter(HTMLImageElement.prototype, "naturalWidth", () => natural.w);
@@ -107,6 +114,7 @@ describe("ライトボックスの原寸の切り替え", () => {
     expect(box.scrollLeft).toBe(900 - viewport.w / 2);
     expect(box.scrollTop).toBe(800 - viewport.h / 2);
     // 原寸の画像を押すと戻る。どちらでも閉じない
+    later();
     fireEvent.mouseDown(img);
     fireEvent.click(img);
     expect(img.dataset.zoom).toBe("fit");
@@ -127,7 +135,7 @@ describe("ライトボックスの原寸の切り替え", () => {
 
   it("原寸のときは、画像の枠がキーボードでも動かせる（Tab で止まり、矢印で送れる）", () => {
     const { dialog } = openLightbox();
-    expect(scrollBox(dialog).tabIndex).toBe(-1);
+    expect(scrollBox(dialog).hasAttribute("tabindex")).toBe(false);
     fireEvent.click(zoomButton("原寸で見る")!);
     const box = scrollBox(dialog);
     expect(box.tabIndex).toBe(0);
@@ -194,10 +202,49 @@ describe("ライトボックスの原寸の切り替え", () => {
     const { dialog, img } = openLightbox();
     fireEvent.click(zoomButton("原寸で見る")!);
     scrollBox(dialog).focus();
+    later();
     fireEvent.mouseDown(img);
     fireEvent.click(img);
     expect(img.dataset.zoom).toBe("fit");
     expect(document.activeElement).toBe(zoomButton("原寸で見る"));
+  });
+
+  it("画面に合わせるときに画像を押しても、フォーカスは巡回から外れた要素（tabindex=-1）に載らない（Tab で背面へ抜けない）", () => {
+    // 検分 gate-257-259 の 259-高-1。ブラウザは押した所から一番近いフォーカスできる祖先にフォーカスを移す。
+    // それが tabindex=-1 の枠だと useModalA11y の巡回から漏れ、次の Tab が背面のページへ進んでいた。
+    // jsdom は押下でフォーカスを動かさず Tab も進めないので、「載る先がダイアログ本体であること」で縛る
+    for (const [n, s] of [
+      [{ w: 1200, h: 1000 }, { w: 600, h: 500, left: 100, top: 80 }], // 原寸にできる画像
+      [{ w: 400, h: 300 }, { w: 400, h: 300, left: 200, top: 150 }], // 原寸にしても大きくならない画像
+    ] as const) {
+      natural = { ...n };
+      shown = { ...s };
+      const { dialog, img } = openLightbox();
+      // 原寸にできる画像は、押して原寸にしてから戻した後の状態も見る
+      if (zoomButton("原寸で見る")) {
+        fireEvent.click(zoomButton("原寸で見る")!);
+        fireEvent.click(zoomButton("画面に合わせる")!);
+      }
+      expect(img.dataset.zoom).toBe("fit");
+      expect(img.parentElement!.closest("[tabindex]")).toBe(dialog);
+      expect([...dialog.querySelectorAll('[tabindex="-1"]')]).toEqual([]);
+      cleanup();
+    }
+  });
+
+  it("画像を続けて 2 回押したとき（ダブルタップ）は、2 回目を無視して原寸のままにする", () => {
+    const { img } = openLightbox();
+    fireEvent.mouseDown(img);
+    fireEvent.click(img);
+    expect(img.dataset.zoom).toBe("actual");
+    now += 120; // 120ms 後の 2 回目
+    fireEvent.mouseDown(img);
+    fireEvent.click(img);
+    expect(img.dataset.zoom).toBe("actual");
+    later();
+    fireEvent.mouseDown(img);
+    fireEvent.click(img);
+    expect(img.dataset.zoom).toBe("fit");
   });
 
   it("Esc は原寸のときも閉じる。開き直すと画面に合わせるに戻っている", () => {
