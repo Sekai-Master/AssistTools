@@ -2,6 +2,14 @@ import { useEffect, type ReactNode } from "react";
 import { ActionButton } from "../../components/ui/ActionButton";
 
 /**
+ * バーの高さ（約 125px＋safe-area）より少し大きい、ページの下に取る余白。
+ * ★ safe-area: バーの下の内側の余白に env(safe-area-inset-bottom) を足している（ついぼのバーと同じ）。
+ *   サイトの viewport に viewport-fit=cover が無いので、iOS ではこの値は 0 で、ホームバーの上は
+ *   ブラウザが空ける。viewport-fit=cover はサイト全体の上下の余白に効くので、ここでは足さない。
+ */
+const BAR_SPACE = "9rem";
+
+/**
  * 主ボタン（計測開始・周回した・再開する）の固定バー。**画面の下に 1 つだけ、どの状態でも同じ場所・同じ大きさ。**
  *
  * ★ 検分 #241 高-1: 主ボタンをページの流れの中に置くと、曲の段（開始で閉じる）や数字の段の高さで
@@ -30,10 +38,15 @@ export function LapActionBar({
    */
   useEffect(() => {
     const body = document.body;
+    const root = document.documentElement;
     const before = body.style.paddingBottom;
-    body.style.paddingBottom = "9rem";
+    const beforeScroll = root.style.scrollPaddingBottom;
+    body.style.paddingBottom = BAR_SPACE;
+    // ★ キーボードで移ったとき・scrollIntoView のとき、送り先がバーの下に隠れないよう、送りの余白もバーの高さぶん取る（検分 #241 中-A）
+    root.style.scrollPaddingBottom = BAR_SPACE;
     return () => {
       body.style.paddingBottom = before;
+      root.style.scrollPaddingBottom = beforeScroll;
     };
   }, []);
 

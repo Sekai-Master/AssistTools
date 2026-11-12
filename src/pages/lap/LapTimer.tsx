@@ -155,6 +155,7 @@ export default function LapTimer() {
   /**
    * ★ 状態（計測前・計測中・中断中）が変わった直後の約 600ms は、主ボタン・1つ戻す・全消去・終了して保存の
    *   押下を捨てる（検分 #241 高-1。二度押しで計測が消える・勝手に始まるのを防ぐ）。中断する・直前を除外は捨てない。
+   *   曲の段の「曲を選ぶ」も捨てる（終了の直後の 2 回目がそこに来て、検索の画面が勝手に開くため。中-A の直しで並びが変わった）。
    */
   const blocked = useTapGuard(!running ? "idle" : paused ? "paused" : "running");
 
@@ -203,7 +204,8 @@ export default function LapTimer() {
         >
           <button
             type="button"
-            onClick={() => setSongOpen(true)}
+            // ★ 終了の直後の二度押しがここに来る（操作の行が上にあるため）。状態の変わり目では捨てる
+            onClick={() => !blocked() && setSongOpen(true)}
             disabled={loading}
             className="neu-raised neu-tactile flex w-full items-center gap-3 rounded-xl p-3 text-left disabled:opacity-50"
           >
@@ -363,6 +365,34 @@ export default function LapTimer() {
        */}
       {running && (
         <Panel>
+          {/**
+           * ★ 操作の行は数字の上に置く（検分 #241 中-A）。数字 6 枚の下だと、390×664・375×667（Safari に近い高さ）や
+           *   390×844 の 1 周後で、行が画面下の固定バーに隠れた。
+           */}
+          <div className="mb-4 flex flex-wrap justify-center gap-2">
+            {!paused && (
+              <NeuButton onClick={() => update((s) => pause(s, Date.now()))}>
+                中断する
+              </NeuButton>
+            )}
+            <NeuButton disabled={paused} onClick={() => !blocked() && update(undo)}>
+              1つ戻す
+            </NeuButton>
+            <NeuButton
+              disabled={segs.length === 0}
+              onClick={() =>
+                update((s) => toggleExclude(s, s.marks.length - 2))
+              }
+            >
+              直前を除外
+            </NeuButton>
+            <NeuButton className="!text-rose-600" onClick={() => !blocked() && doClear()}>
+              全消去
+            </NeuButton>
+            {/* ★ 終了は破壊操作ではない（保存してから空にする）ので確認は挟まない。 */}
+            <NeuButton onClick={() => !blocked() && doFinish()}>終了して保存</NeuButton>
+          </div>
+
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat
               label="直近ラップ"
@@ -432,30 +462,6 @@ export default function LapTimer() {
                   : `${fmtSec(st.overhead - modelOverhead)} 秒ぶん余計にかかっています。`}
             </p>
           )}
-
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
-            {!paused && (
-              <NeuButton onClick={() => update((s) => pause(s, Date.now()))}>
-                中断する
-              </NeuButton>
-            )}
-            <NeuButton disabled={paused} onClick={() => !blocked() && update(undo)}>
-              1つ戻す
-            </NeuButton>
-            <NeuButton
-              disabled={segs.length === 0}
-              onClick={() =>
-                update((s) => toggleExclude(s, s.marks.length - 2))
-              }
-            >
-              直前を除外
-            </NeuButton>
-            <NeuButton className="!text-rose-600" onClick={() => !blocked() && doClear()}>
-              全消去
-            </NeuButton>
-            {/* ★ 終了は破壊操作ではない（保存してから空にする）ので確認は挟まない。 */}
-            <NeuButton onClick={() => !blocked() && doFinish()}>終了して保存</NeuButton>
-          </div>
 
           {wake.failed && running && !paused && (
             <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
