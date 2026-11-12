@@ -335,6 +335,7 @@
     "dancerCount": 3,
     "expertLevel": 26,
     "masterLevel": 30,
+    "appendLevel": 31,
     "masterNotes": 979
   },
   {
@@ -11483,7 +11484,8 @@
     "default": 1341101,
     "Unit": "2_MMJ",
     "categories": [
-      "original"
+      "original",
+      "mv_2d"
     ],
     "publishedAt": 1716530400000,
     "published": true,
@@ -18842,6 +18844,32 @@
     "expertLevel": 23,
     "masterLevel": 27,
     "masterNotes": 568
+  },
+  {
+    "id": "810",
+    "title": "ノーモアフィクション",
+    "pronunciation": "のーもあふぃくしょん",
+    "creatorArtistId": 288,
+    "artistName": "晴いちばん",
+    "default": 2371201,
+    "Unit": "2_MMJ",
+    "categories": [
+      "mv_2d"
+    ],
+    "publishedAt": 1794376800000,
+    "published": true,
+    "isNewlyWrittenMusic": true,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_810.webp",
+    "music_time": 125.1,
+    "event_rate": 114,
+    "singers": [5, 6, 7, 8, 21, 22],
+    "maxSingers": 5,
+    "dancerCount": 1,
+    "expertLevel": 24,
+    "masterLevel": 30,
+    "masterNotes": 1104,
+    "bannerCharacterId": 8
   },
   {
     "id": "811",
