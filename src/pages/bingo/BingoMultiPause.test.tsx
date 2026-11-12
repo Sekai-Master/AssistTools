@@ -285,7 +285,8 @@ describe("中断用の書き出し", () => {
     choose(fileOf(exported(incoming)));
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("10/12 15:03 に書き出したカード 2 枚を読み込みました"));
     expect(confirm).not.toHaveBeenCalled();
-    expect(savedSet().cards).toEqual(incoming);
+    // ★ 保存は描画の後の効果なので、知らせが出た時点ではまだのことがある（下の「読めないカード」のテストと同じ競合）
+    await waitFor(() => expect(savedSet().cards).toEqual(incoming));
     expect(screen.getByRole("heading", { name: "わたし" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "カード2（休止中）" })).toBeTruthy();
   });
@@ -331,7 +332,10 @@ describe("中断用の書き出し", () => {
     choose(fileOf(exported([entry("x1", broken, { name: "前のカード" }), entry("a1", encodeOdaiSeed(ODAI_A))])));
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("読めないカードが 1 枚あります"));
     expect(screen.getByText(/このカードは読めません/)).toBeTruthy();
-    expect(savedSet().cards.map((c) => c.code)).toEqual([broken, encodeOdaiSeed(ODAI_A)]);
+    // ★ 端末への保存は描画の後の効果（useMultiSet の saveMulti）なので、知らせが出た時点ではまだ書かれていないことがある。
+    //   読み込みはファイルの読み取り（非同期）の後なので act の外で進み、効果の流し込みが遅れる。待ってから見る
+    //   （2026-11-12 の CI で 1 件だけ読めた＝保存の前の値を見ていた。保存を 50ms 遅らせると毎回赤になった）。
+    await waitFor(() => expect(savedSet().cards.map((c) => c.code)).toEqual([broken, encodeOdaiSeed(ODAI_A)]));
   });
 
   it("カードが無いときは書き出せない（読み込みはできる）", () => {
