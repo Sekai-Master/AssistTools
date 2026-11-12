@@ -4,7 +4,7 @@ import { GuideTerm } from "./GuideTerm";
 import type { GuideBlock, GuideInline, Leaf as LeafNode } from "./lib/guide";
 import { guideImageSrc, guideImagesOf } from "./lib/images";
 import { FIGURES, GUIDE } from "./lib/chapters";
-import { stampSrc } from "./lib/stamps";
+import { STAMPS, stampSrc } from "./lib/stamps";
 
 /**
  * 知識ガイドの本文の描画。章のページは知見ノート（KnowledgePage）の本文にそろえ、
@@ -56,7 +56,9 @@ function Leaf({ x, variant }: { x: LeafNode; variant: Variant }) {
       </span>
     );
   }
-  if (x.kind === "stamp")
+  if (x.kind === "stamp") {
+    // 文字・数字のスタンプは絵の中の字が小さく、暗い地に沈むので、大きめに・白い台の上に出す（検分 G1 の L2）
+    const textStamp = STAMPS.get(x.asset)?.name.startsWith("[テキストスタンプ]") ?? false;
     return (
       <img
         src={stampSrc(import.meta.env.BASE_URL, x.asset)}
@@ -65,9 +67,12 @@ function Leaf({ x, variant }: { x: LeafNode; variant: Variant }) {
         height={64}
         loading="lazy"
         decoding="async"
-        className="mr-1 inline-block h-12 w-auto align-middle sm:h-16"
+        className={`mr-1 inline-block w-auto align-middle ${
+          textStamp ? "h-14 rounded-md bg-white p-0.5 sm:h-20" : "h-12 sm:h-16"
+        }`}
       />
     );
+  }
   if (x.kind === "term")
     return (
       <GuideTerm text={x.text} entry={x.entry} renderDef={(e) => <GuideText parts={e.def} variant="body" />} />
@@ -75,10 +80,30 @@ function Leaf({ x, variant }: { x: LeafNode; variant: Variant }) {
   return <>{text(x.text)}</>;
 }
 
+/** 印のすぐ後の句読点。印と一緒に送って、「。」だけが次の行に落ちないようにする（検分 G1 の L3）。 */
+const PUNCT_AFTER_MARK = /^[。、，．）」』]+/;
+
 export function GuideText({ parts, variant = "body" }: { parts: GuideInline[]; variant?: Variant }) {
   return (
     <>
       {parts.map((p, i) => {
+        const prev = parts[i - 1];
+        if (p.kind === "text" && prev?.kind === "mark" && PUNCT_AFTER_MARK.test(p.text)) {
+          // 句読点は直前の印の側で出したので、残りだけ
+          const rest = p.text.replace(PUNCT_AFTER_MARK, "");
+          return rest ? <Leaf key={i} x={{ kind: "text", text: rest }} variant={variant} /> : null;
+        }
+        if (p.kind === "mark") {
+          const next = parts[i + 1];
+          const punct = next?.kind === "text" ? PUNCT_AFTER_MARK.exec(next.text)?.[0] : undefined;
+          if (punct)
+            return (
+              <span key={i} className="whitespace-nowrap">
+                <Leaf x={p} variant={variant} />
+                {punct}
+              </span>
+            );
+        }
         if (p.kind !== "link") return <Leaf key={i} x={p} variant={variant} />;
         const inner = p.parts.map((x, j) => <Leaf key={j} x={x} variant={variant} />);
         return p.to ? (
@@ -105,13 +130,26 @@ function Figure({ n, title }: { n: number; title: string }) {
   return (
     <figure className="!my-6">
       {svg ? (
-        // viewBox の幅は 440。広い画面で伸びすぎないよう上限を付ける
-        <div className="mx-auto w-full max-w-[520px]" dangerouslySetInnerHTML={{ __html: svg }} />
+        /**
+         * viewBox の幅は 440。広い画面で伸びすぎないよう上限を付ける。
+         * ★ 狭い画面（640px 未満）では縮めずに元の幅で出し、図の枠の中だけ横に送れるようにする。
+         *   縮めると字が 7〜8px になって読めない（検分 G1 の M3）。ページ全体は横に動かさない
+         */
+        <div
+          className="-mx-1 overflow-x-auto px-1 sm:mx-0 sm:overflow-visible sm:px-0"
+          tabIndex={0}
+          role="group"
+          aria-label={`図${n} ${title}（横に動かせます）`}
+          data-figure-scroll
+        >
+          <div className="mx-auto w-[440px] sm:w-full sm:max-w-[520px]" dangerouslySetInnerHTML={{ __html: svg }} />
+        </div>
       ) : (
         <p className="text-sm text-slate-500">（図{n} は準備中です）</p>
       )}
       <figcaption className="mt-2 text-center text-xs font-bold text-slate-500">
         図{n} {title}
+        {svg && <span className="mt-0.5 block font-normal sm:hidden">図は横に動かせます</span>}
       </figcaption>
     </figure>
   );
@@ -277,7 +315,7 @@ export function GuideBlocks({ blocks, variant = "body" }: { blocks: GuideBlock[]
                 <a
                   href={`#${b.id}`}
                   className="ml-2 text-sm font-normal text-slate-400 no-underline hover:text-slate-600"
-                  aria-label="この節へのリンク"
+                  aria-label={`「${b.text.map((x) => ("text" in x ? x.text : "")).join("")}」へのリンク`}
                 >
                   #
                 </a>
@@ -310,7 +348,8 @@ export function GuideBlocks({ blocks, variant = "body" }: { blocks: GuideBlock[]
             return (
               // 表だけ横に逃がす。ページ本体が横スクロールしないように。
               <div key={i} className="overflow-x-auto">
-                <table className={`w-full min-w-[22rem] text-left ${big ? "text-[15px]" : "text-sm"}`}>
+                {/* 2 列の表は折り返して収める（横に送れることが分かりにくい。L1）。3 列以上は最小の幅を付けて表の中だけ横に送る */}
+                <table className={`w-full text-left ${b.head.length > 2 ? "min-w-[22rem]" : ""} ${big ? "text-[15px]" : "text-sm"}`}>
                   <thead>
                     <tr className="border-b border-[color:var(--neu-lo)]">
                       {b.head.map((c, j) => (
@@ -324,7 +363,12 @@ export function GuideBlocks({ blocks, variant = "body" }: { blocks: GuideBlock[]
                     {b.rows.map((r, j) => (
                       <tr key={j} className="border-b border-[color:var(--neu-lo)]/60">
                         {r.map((c, k) => (
-                          <td key={k} className="px-2 py-1.5 align-middle text-slate-600">
+                          <td
+                            key={k}
+                            className={`px-2 py-1.5 align-middle text-slate-600 ${
+                              c.some((x) => x.kind === "stamp") ? "min-w-[10.5rem]" : ""
+                            }`}
+                          >
                             <GuideText parts={c} variant={variant} />
                           </td>
                         ))}

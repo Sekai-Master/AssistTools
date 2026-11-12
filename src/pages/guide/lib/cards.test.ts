@@ -1,13 +1,14 @@
 /**
- * まとめ画像の台帳と「まとめて保存」の分岐（navigator はモック）。
+ * まとめ画像の台帳・zip の中身と、「写真に保存（共有）」の分岐（navigator・matchMedia はモック）。
  */
 /// <reference types="node" />
 import fs from "node:fs";
 import path from "node:path";
+import zlib from "node:zlib";
 import sharp from "sharp";
 import { describe, expect, it, vi } from "vitest";
-import { buildCards, CARD_COUNT, CARD_HEIGHT, CARD_TEXTS, CARD_WIDTH, CARDS_ZIP } from "./cards";
-import { canShareFiles, saveAllCards, type SaveAllEnv } from "./cardsShare";
+import { buildCards, CARD_COUNT, CARD_HEIGHT, CARD_TEXTS, CARD_WIDTH, CARDS_ZIP, PREVIEW_HEIGHT, PREVIEW_WIDTH } from "./cards";
+import { canShareToPhotos, shareCards, type ShareEnv } from "./cardsShare";
 
 const DIR = path.join(__dirname, "../../../../public/guide/cards");
 
@@ -35,63 +36,86 @@ describe("まとめ画像の台帳", () => {
     }
   });
 
-  it("public/guide/cards/ に 6 枚（2400×2000 の PNG）と zip がある", async () => {
+  it("原寸は 2400×2000 の PNG、一覧に見せる縮小版は 1200×1000 の WebP で 120KB 未満", async () => {
     for (const c of buildCards([])) {
-      const meta = await sharp(path.join(DIR, c.file)).metadata();
-      expect(meta.format, c.file).toBe("png");
-      expect([meta.width, meta.height], c.file).toEqual([CARD_WIDTH, CARD_HEIGHT]);
+      const png = await sharp(path.join(DIR, c.file)).metadata();
+      expect(png.format, c.file).toBe("png");
+      expect([png.width, png.height], c.file).toEqual([CARD_WIDTH, CARD_HEIGHT]);
+      const preview = path.join(DIR, c.preview);
+      const meta = await sharp(preview).metadata();
+      expect(meta.format, c.preview).toBe("webp");
+      expect([meta.width, meta.height], c.preview).toEqual([PREVIEW_WIDTH, PREVIEW_HEIGHT]);
+      expect(fs.statSync(preview).size, c.preview).toBeLessThan(120 * 1024);
     }
-    expect(fs.existsSync(path.join(DIR, CARDS_ZIP))).toBe(true);
+  });
+});
+
+/** zip の中央ディレクトリから、ファイル名 → CRC32 を読む。 */
+function zipCrcs(buf: Buffer): Map<string, number> {
+  const out = new Map<string, number>();
+  const SIG = Buffer.from([0x50, 0x4b, 0x01, 0x02]); // 中央ディレクトリの見出し
+  for (let at = buf.indexOf(SIG); at >= 0; ) {
+    const crc = buf.readUInt32LE(at + 16);
+    const nameLen = buf.readUInt16LE(at + 28);
+    const extraLen = buf.readUInt16LE(at + 30);
+    const commentLen = buf.readUInt16LE(at + 32);
+    out.set(buf.subarray(at + 46, at + 46 + nameLen).toString("utf8"), crc);
+    at = buf.indexOf(SIG, at + 46 + nameLen + extraLen + commentLen);
+  }
+  return out;
+}
+
+describe("zip の中身", () => {
+  /** ★ 名前だけでなく中身を見る。画像だけ差し替えて zip を作り直し忘れると落ちる（検分 G1 の M4）。 */
+  it("zip に入っている card-1〜6.png は、public/guide/cards/ の PNG と同じ中身（CRC32 が一致）", () => {
+    const crcs = zipCrcs(fs.readFileSync(path.join(DIR, CARDS_ZIP)));
+    expect([...crcs.keys()].sort()).toEqual(buildCards([]).map((c) => c.file).sort());
+    for (const c of buildCards([])) {
+      expect(crcs.get(c.file), c.file).toBe(zlib.crc32(fs.readFileSync(path.join(DIR, c.file))));
+    }
   });
 });
 
 const input = {
   cards: [1, 2, 3, 4, 5, 6].map((n) => ({ url: `/guide/cards/card-${n}.png`, fileName: `card-${n}.png` })),
-  zip: { url: "/guide/cards/z.zip", fileName: "z.zip" },
 };
 
-function env(over: Partial<SaveAllEnv> = {}): SaveAllEnv & { downloadUrl: ReturnType<typeof vi.fn> } {
+function env(over: Partial<ShareEnv> = {}): ShareEnv & { fetchBlob: ReturnType<typeof vi.fn> } {
   return {
+    coarse: () => true,
     fetchBlob: vi.fn(async () => new Blob(["png"], { type: "image/png" })),
-    downloadUrl: vi.fn(),
     ...over,
-  } as SaveAllEnv & { downloadUrl: ReturnType<typeof vi.fn> };
+  } as ShareEnv & { fetchBlob: ReturnType<typeof vi.fn> };
 }
 
-describe("まとめて保存", () => {
-  it("canShare が真なら、6 枚を File にして共有シートを開く（zip は落とさない）", async () => {
+describe("「写真に保存（共有）」を出すか", () => {
+  it("指で操作する端末で canShare({ files }) が真のときだけ", () => {
+    expect(canShareToPhotos(env({ share: vi.fn(), canShare: () => true }))).toBe(true);
+    // パソコンの Chrome・Edge は canShare が真でも出さない（OS の共有の画面に「保存」が無い）
+    expect(canShareToPhotos(env({ share: vi.fn(), canShare: () => true, coarse: () => false }))).toBe(false);
+    expect(canShareToPhotos(env({ share: vi.fn(), canShare: () => false }))).toBe(false);
+    expect(canShareToPhotos(env())).toBe(false);
+    expect(canShareToPhotos(env({ share: vi.fn(), canShare: () => { throw new Error("x"); } }))).toBe(false);
+  });
+});
+
+describe("写真に保存（共有）", () => {
+  it("6 枚を File にして共有の画面を開く", async () => {
     const share = vi.fn(async () => {});
-    const e = env({ share, canShare: () => true });
     const got: File[][] = [];
-    expect(await saveAllCards(input, e, (f) => got.push(f))).toBe("shared");
+    expect(await shareCards(input, env({ share, canShare: () => true }), (f) => got.push(f))).toBe("shared");
     const data = (share.mock.calls[0] as unknown as [ShareData])[0];
     expect(data.files).toHaveLength(6);
     expect(data.files![0].name).toBe("card-1.png");
     expect(data.files![0].type).toBe("image/png");
-    expect(e.downloadUrl).not.toHaveBeenCalled();
     expect(got[0]).toHaveLength(6);
   });
 
-  it("canShare が偽（PC）なら zip をダウンロード。画像は取りに行かない", async () => {
-    const share = vi.fn(async () => {});
-    const e = env({ share, canShare: () => false });
-    expect(await saveAllCards(input, e)).toBe("zip");
-    expect(e.downloadUrl).toHaveBeenCalledWith("/guide/cards/z.zip", "z.zip");
-    expect(share).not.toHaveBeenCalled();
-    expect(e.fetchBlob).not.toHaveBeenCalled();
-  });
-
-  it("navigator.share が無ければ zip", async () => {
-    const e = env();
-    expect(canShareFiles(e)).toBe(false);
-    expect(await saveAllCards(input, e)).toBe("zip");
-  });
-
-  it("共有シートを閉じただけ（AbortError）なら、zip に切り替えない", async () => {
+  it("共有の画面を閉じただけ（AbortError）なら何も出さない", async () => {
     const abort = Object.assign(new Error("x"), { name: "AbortError" });
-    const e = env({ share: vi.fn(async () => Promise.reject(abort)), canShare: () => true });
-    expect(await saveAllCards(input, e)).toBe("cancelled");
-    expect(e.downloadUrl).not.toHaveBeenCalled();
+    expect(await shareCards(input, env({ share: vi.fn(async () => Promise.reject(abort)), canShare: () => true }))).toBe(
+      "cancelled",
+    );
   });
 
   it("押してから時間が空いて拒まれた（NotAllowedError）ら、もう一度押してもらう。2 回目は取りに行かない", async () => {
@@ -99,31 +123,23 @@ describe("まとめて保存", () => {
     const share = vi.fn().mockRejectedValueOnce(denied).mockResolvedValueOnce(undefined);
     const e = env({ share, canShare: () => true });
     let cached: File[] | undefined;
-    expect(await saveAllCards(input, e, (f) => (cached = f))).toBe("retry");
+    expect(await shareCards(input, e, (f) => (cached = f))).toBe("retry");
     expect(e.fetchBlob).toHaveBeenCalledTimes(6);
-    expect(await saveAllCards({ ...input, cached }, e)).toBe("shared");
+    expect(await shareCards({ ...input, cached }, e)).toBe("shared");
     expect(e.fetchBlob).toHaveBeenCalledTimes(6);
   });
 
-  it("canShare が投げる端末・画像を取れないときは zip", async () => {
-    const throws = env({ share: vi.fn(), canShare: () => { throw new Error("x"); } });
-    expect(await saveAllCards(input, throws)).toBe("zip");
-    const noFetch = env({ share: vi.fn(), canShare: () => true, fetchBlob: async () => Promise.reject(new Error("404")) });
-    expect(await saveAllCards(input, noFetch)).toBe("zip");
-  });
-});
-
-describe("まとめて保存（取ってあったのに拒まれる端末）と zip の中身", () => {
-  it("先読みした画像でも NotAllowedError なら、もう一度を求めず zip へ", async () => {
+  it("先読みした画像でも拒まれる・画像を取れない・パソコンでは failed（zip を案内する）", async () => {
     const denied = Object.assign(new Error("x"), { name: "NotAllowedError" });
-    const e = env({ share: vi.fn(async () => Promise.reject(denied)), canShare: () => true });
     const cached = [new File(["x"], "card-1.png", { type: "image/png" })];
-    expect(await saveAllCards({ ...input, cached }, e)).toBe("zip");
-    expect(e.downloadUrl).toHaveBeenCalledTimes(1);
-  });
-
-  it("zip に card-1.png〜card-6.png が入っている（画像だけ差し替えて zip が古いまま、を拾う手がかり）", () => {
-    const zip = fs.readFileSync(path.join(DIR, CARDS_ZIP)).toString("latin1");
-    for (let n = 1; n <= CARD_COUNT; n++) expect(zip, `card-${n}.png`).toContain(`card-${n}.png`);
+    expect(await shareCards({ ...input, cached }, env({ share: vi.fn(async () => Promise.reject(denied)), canShare: () => true }))).toBe(
+      "failed",
+    );
+    expect(
+      await shareCards(input, env({ share: vi.fn(), canShare: () => true, fetchBlob: vi.fn(async () => Promise.reject(new Error("404"))) })),
+    ).toBe("failed");
+    const pc = vi.fn();
+    expect(await shareCards(input, env({ share: pc, canShare: () => true, coarse: () => false }))).toBe("failed");
+    expect(pc).not.toHaveBeenCalled();
   });
 });

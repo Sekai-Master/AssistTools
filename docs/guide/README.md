@@ -10,3 +10,5 @@
 - 第 9 章の表: 見出しが「ツール」の列（またはパスの列）から `src/tools.ts` を引き、説明の列はページが足す（ここに書き写さない）
 
 存在しない図・画像の番号、知らない印、書き損じの差し込み、tools.ts に無いツールは `src/pages/guide/lib/guide.test.ts` が落とす。画像は伏せた版から作ったもの以外を `public/guide/` に置かない（`images.test.ts` がファイル名の一覧を固定して照合する。作り方は `scripts/make-guide-images.mjs`）。
+
+`public/guide/` の画像・zip を差し替えたら、`src/pages/guide/lib/images.test.ts` の SHA-256 の一覧（`ASSET_SHA256`）を、テストが落ちたときに出る今の値で書き換える（中身を確かめてから書き換える。伏せる前の撮影の紛れ込みを拾うための一覧）。

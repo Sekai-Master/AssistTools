@@ -211,6 +211,7 @@ function StartRoute() {
 }
 
 function ChapterRoute({ raw }: { raw: string | undefined }) {
+  const { hash } = useLocation();
   const n = chapterParam(raw);
   const chapter = n != null && n > 0 ? BODY_CHAPTERS.find((c) => c.n === n) : undefined;
   const src = chapter ? CHAPTER_SOURCES.get(chapter.n) : undefined;
@@ -219,7 +220,8 @@ function ChapterRoute({ raw }: { raw: string | undefined }) {
     raw == null ? docTitle("/guide", PAGES["/guide"]) : meta ? docTitle(meta.path, meta) : docTitle("/404", NOT_FOUND),
   );
   if (raw == null) return <Index />;
-  if (n === 0) return <Navigate to="/guide" replace />;
+  // 節のアンカー（/guide/0#s0-1）は付けたまま送る（検分 G1 の L4）
+  if (n === 0) return <Navigate to={{ pathname: "/guide", hash }} replace />;
   if (!chapter) return <NotFoundView />;
   return <ChapterView chapter={chapter} />;
 }

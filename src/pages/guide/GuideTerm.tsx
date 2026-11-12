@@ -9,7 +9,11 @@ import type { GlossaryEntry } from "./lib/guide";
  * - 説明の描画は呼ぶ側（GuideText）から受け取る（循環を避けるため）
  * - 吹き出しは画面の右端からはみ出さないよう、開いたときに左へずらす（はみ出すとページが横に揺れる）。
  *   開いたまま画面の向きや幅が変わったら閉じる（ずらし直さずに済ませる）
- * - Tab で吹き出しの外へ出たら閉じる
+ * - Tab で吹き出しの外へ出たら閉じる。吹き出しの中（説明の文）を押しても閉じない（吹き出しを tabIndex=-1 にして
+ *   フォーカスの行き先にする。検分 G1 の M2）
+ * - 下に入らないときは上に開く（L9）
+ * - ボタンは span[role=button]。button は行の途中で折り返せず、「③」だけが行末に残る（L12）。
+ *   Enter・Space で開け閉めできるようにしてある
  */
 const POP_WIDTH = 288;
 
@@ -24,8 +28,9 @@ export function GuideTerm({
 }) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLSpanElement>(null);
-  const button = useRef<HTMLButtonElement>(null);
+  const button = useRef<HTMLSpanElement>(null);
   const [shift, setShift] = useState(0);
+  const [up, setUp] = useState(false);
   const id = useId();
 
   /** 開くときに、吹き出し（幅 POP_WIDTH、狭い画面では画面幅 − 32px）が右端からはみ出す分だけ左へずらす。 */
@@ -33,8 +38,10 @@ export function GuideTerm({
     if (!open && wrap.current) {
       const vw = document.documentElement.clientWidth;
       const width = Math.min(POP_WIDTH, vw - 32);
-      const left = wrap.current.getBoundingClientRect().left;
-      setShift(Math.min(0, vw - 16 - (left + width)));
+      const rect = wrap.current.getBoundingClientRect();
+      setShift(Math.min(0, vw - 16 - (rect.left + width)));
+      // 吹き出しの高さはおおよそ 240px まで。下に入らず上に入るなら上に開く
+      setUp(rect.bottom + 240 > window.innerHeight && rect.top > 240);
     }
     setOpen((v) => !v);
   };
@@ -69,22 +76,32 @@ export function GuideTerm({
         if (open && !wrap.current?.contains(e.relatedTarget as Node | null)) setOpen(false);
       }}
     >
-      <button
+      <span
         ref={button}
-        type="button"
+        role="button"
+        tabIndex={0}
         aria-expanded={open}
         aria-controls={open ? id : undefined}
         onClick={toggle}
-        className="cursor-help border-b border-dotted border-current text-inherit [font:inherit] focus:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            toggle();
+          }
+        }}
+        className="cursor-help border-b border-dotted border-current focus:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-[color:var(--unit-color)]"
       >
         {text}
-      </button>
+      </span>
       {open && (
         <span
           id={id}
           role="note"
+          tabIndex={-1}
           style={{ width: POP_WIDTH, ...(shift ? { transform: `translateX(${shift}px)` } : {}) }}
-          className="absolute left-0 top-full z-30 mt-1 block max-w-[calc(100vw-2rem)] rounded-lg border border-slate-300 bg-neu p-3 text-left text-sm font-normal leading-relaxed text-slate-600 shadow-neu-sm"
+          className={`absolute left-0 z-30 block max-w-[calc(100vw-2rem)] rounded-lg border border-slate-300 bg-neu p-3 text-left text-sm font-normal leading-relaxed text-slate-600 shadow-neu-sm focus:outline-none ${
+            up ? "bottom-full mb-1" : "top-full mt-1"
+          }`}
         >
           <span className="block font-bold text-slate-700">{entry.label}</span>
           <span className="mt-1 block">{renderDef(entry)}</span>

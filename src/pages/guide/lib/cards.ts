@@ -1,7 +1,9 @@
 /**
  * まとめ画像（/guide/cards）。共有しやすい 6 枚の PNG（2400×2000、6:5）と、まとめて保存する zip。
  *
- * - 画像は public/guide/cards/card-1.png〜card-6.png、zip は sekaimaster-guide-cards.zip（6 枚入り）
+ * - 画像は public/guide/cards/card-1.png〜card-6.png、zip は sekaimaster-guide-cards.zip（6 枚入り）。
+ *   一覧に見せるのは縮小版の WebP（preview/card-N.webp、幅 1200。scripts/make-guide-images.mjs）で、
+ *   PNG は保存・共有のときだけ読む（開いただけで 2.8MB を読まないように。検分 G1 の M1）
  * - 題と alt は画像の文言から（指揮 2026-11-12）。文言の元の cards.md はリポジトリに入れず、ここに写してある
  *   - 1 枚目は入口のページ（docs/guide/start.md）の手順の題を並べた絵なので、alt は手順の題から作る
  *     （start.md の手順を直せば alt も付いて来る）
@@ -10,7 +12,12 @@
  */
 export interface GuideCard {
   n: number;
+  /** 保存・共有に使う原寸の PNG。 */
   file: string;
+  /** 一覧に見せる縮小版（public/guide/cards/ からの相対）。 */
+  preview: string;
+  previewWidth: number;
+  previewHeight: number;
   title: string;
   alt: string;
   width: number;
@@ -21,6 +28,8 @@ export const CARD_COUNT = 6;
 export const CARD_WIDTH = 2400;
 export const CARD_HEIGHT = 2000;
 export const CARDS_ZIP = "sekaimaster-guide-cards.zip";
+export const PREVIEW_WIDTH = 1200;
+export const PREVIEW_HEIGHT = 1000;
 
 /** 各枚の題と、画像に書いてある箇条をつないだ文（1 枚目の points は使わず、手順の題から作る）。 */
 export const CARD_TEXTS: readonly { title: string; points: string }[] = [
@@ -47,6 +56,9 @@ export function buildCards(steps: readonly string[]): GuideCard[] {
     return {
       n,
       file: `card-${n}.png`,
+      preview: `preview/card-${n}.webp`,
+      previewWidth: PREVIEW_WIDTH,
+      previewHeight: PREVIEW_HEIGHT,
       title: t.title,
       alt: points ? `${t.title}。${points}` : t.title,
       width: CARD_WIDTH,

@@ -8,4 +8,4 @@
 - 絵は取得したまま（変換していない）。ファイル名は asset 名（`stamp0014.webp` など）
 - ゲームの素材の権利は株式会社セガ・Colorful Palette Inc. にある。サイトは非公式のファンサイト
 
-足すときは manifest.json にも同じ形で行を足す（`src/pages/guide/lib/stamps.test.ts` が、早見表の asset 名がここにあり manifest に載っていることを照合する）。
+足すときは manifest.json にも同じ形で行を足す（`src/pages/guide/lib/beginner.test.ts` が、早見表の asset 名がここにあり manifest に載っていることを照合する）。

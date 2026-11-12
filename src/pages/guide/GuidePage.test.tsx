@@ -9,7 +9,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import GuidePage from "./GuidePage";
 import { GuideCards } from "./GuideCards";
 import { CARDS } from "./lib/chapters";
-import type { SaveAllEnv } from "./lib/cardsShare";
+import type { ShareEnv } from "./lib/cardsShare";
 import { TOOLS } from "../../tools";
 
 afterEach(cleanup);
@@ -116,9 +116,9 @@ describe("初心者向けの層", () => {
     expect(container.querySelector("#s4-1 + [data-summary]")).not.toBeNull();
   });
 
-  it("用語のボタンは押すと説明と行き先が出て、もう一度押す・Escape・外を押すと閉じる", () => {
+  it("用語のボタンは押すと説明と行き先が出て、もう一度押す・Escape・外を押すと閉じる。吹き出しの中を押しても閉じない", () => {
     const { container } = at("/guide/3");
-    const btn = container.querySelector("article button[aria-expanded]") as HTMLButtonElement;
+    const btn = container.querySelector('article [role="button"][aria-expanded]') as HTMLElement;
     expect(btn).not.toBeNull();
     expect(btn.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(btn);
@@ -132,36 +132,71 @@ describe("初心者向けの層", () => {
     fireEvent.click(btn);
     fireEvent.pointerDown(document.body);
     expect(screen.queryByRole("note")).toBeNull();
+    // 吹き出しの中を押す: pointerdown は中、フォーカスは吹き出しへ移る（blur の行き先が吹き出し）
+    fireEvent.click(btn);
+    const note = screen.getByRole("note");
+    expect(note.getAttribute("tabindex")).toBe("-1");
+    fireEvent.pointerDown(note);
+    fireEvent.blur(btn, { relatedTarget: note });
+    expect(screen.queryByRole("note")).not.toBeNull();
+    // Tab で外へ出ると閉じる
+    fireEvent.blur(note, { relatedTarget: document.body });
+    expect(screen.queryByRole("note")).toBeNull();
+    // Enter・Space でも開け閉めできる
+    fireEvent.keyDown(btn, { key: "Enter" });
+    expect(btn.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.keyDown(btn, { key: " " });
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("/guide/cards は 6 枚と 1 枚ずつの保存", () => {
+  it("図は狭い画面では元の幅（440px）で出し、枠の中だけ横に送る", () => {
+    const { container } = at("/guide/1");
+    const scroll = container.querySelector("[data-figure-scroll]")!;
+    expect(scroll.className).toContain("overflow-x-auto");
+    expect(scroll.firstElementChild!.className).toContain("w-[440px]");
+    expect(container.textContent).toContain("図は横に動かせます");
+  });
+
+  it("/guide/cards は縮小版の 6 枚と 1 枚ずつの保存（PNG）と、いつも出る zip のダウンロード", () => {
     const { container } = at("/guide/cards");
     const imgs = container.querySelectorAll("li img");
     expect(imgs).toHaveLength(6);
+    expect(imgs[0].getAttribute("src")).toBe("/guide/cards/preview/card-1.webp");
     expect(imgs[0].getAttribute("alt")!.length).toBeGreaterThan(20);
-    const saves = screen.getAllByRole("link", { name: "保存" });
+    const saves = screen.getAllByRole("link", { name: /を保存$/ });
     expect(saves).toHaveLength(6);
+    expect(saves[0].getAttribute("href")).toBe("/guide/cards/card-1.png");
     expect(saves[0].getAttribute("download")).toBe("sekaimaster-guide-card-1.png");
+    const zip = screen.getByRole("link", { name: "まとめてダウンロード（zip）" });
+    expect(zip.getAttribute("href")).toBe("/guide/cards/sekaimaster-guide-cards.zip");
+    expect(zip.getAttribute("download")).toBe("sekaimaster-guide-cards.zip");
   });
 
-  it("まとめて保存: 共有できる端末では共有シート、できなければ zip（navigator はモック）", async () => {
+  it("写真に保存（共有）: 指で操作して共有できる端末だけに出し、押すと共有の画面。パソコンには出さない（navigator はモック）", async () => {
     const share = vi.fn(async () => {});
-    const shareEnv: SaveAllEnv = {
+    const phone: ShareEnv = {
       share,
       canShare: () => true,
+      coarse: () => true,
       fetchBlob: async () => new Blob(["x"], { type: "image/png" }),
-      downloadUrl: vi.fn(),
     };
-    render(<MemoryRouter><GuideCards cards={CARDS} env={shareEnv} /></MemoryRouter>);
-    fireEvent.click(screen.getByRole("button", { name: /まとめて保存/ }));
+    render(<MemoryRouter><GuideCards cards={CARDS} env={phone} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: "写真に保存（共有）" }));
     await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
-    expect(shareEnv.downloadUrl).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: "まとめてダウンロード（zip）" })).toBeTruthy();
     cleanup();
 
-    const zipEnv: SaveAllEnv = { ...shareEnv, share: vi.fn(), canShare: () => false, downloadUrl: vi.fn() };
-    render(<MemoryRouter><GuideCards cards={CARDS} env={zipEnv} /></MemoryRouter>);
-    fireEvent.click(screen.getByRole("button", { name: /まとめて保存/ }));
-    await waitFor(() => expect(zipEnv.downloadUrl).toHaveBeenCalledWith("/guide/cards/sekaimaster-guide-cards.zip", "sekaimaster-guide-cards.zip"));
-    expect(await screen.findByText(/zip の保存を始めました/)).toBeTruthy();
+    // パソコンの Chrome・Edge: canShare は真でも、指で操作しないので出さない。zip だけ
+    render(<MemoryRouter><GuideCards cards={CARDS} env={{ ...phone, share: vi.fn(), coarse: () => false }} /></MemoryRouter>);
+    expect(screen.queryByRole("button", { name: "写真に保存（共有）" })).toBeNull();
+    expect(screen.getByRole("link", { name: "まとめてダウンロード（zip）" })).toBeTruthy();
+    cleanup();
+
+    // 共有を取り消した（AbortError）ときは何も出さない
+    const abort = Object.assign(new Error("x"), { name: "AbortError" });
+    render(<MemoryRouter><GuideCards cards={CARDS} env={{ ...phone, share: vi.fn(async () => Promise.reject(abort)) }} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: "写真に保存（共有）" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "写真に保存（共有）" })).not.toHaveProperty("disabled", true));
+    expect(screen.getByRole("status").textContent).toBe("");
   });
 });
