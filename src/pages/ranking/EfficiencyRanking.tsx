@@ -807,13 +807,12 @@ export default function EfficiencyRanking() {
          * **1枠かつ巻き込み成功を前提にした理想値**で、こちらとは前提が違う。
          * 黙っていると、知っている人からは順位が間違って見えるし、
          * 知らない人は低難易度が強いと誤解する。**どちらにも嘘になる。**
+         *
+         * ★ 枠は 1 行に縮め、要る事実（含まないもの・2〜5枠の実感に近い）だけ表の前に残す。
+         *   「効率難易度」との違いの詳しい話は、ページ下の「この数字について」へ移した（UX 監査 2026-11-12、PR-4）。
          */}
         <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
-          この順位は<b>1枠補正と巻き込みを含みません</b>
-          。スキルの発動位置を平均で置いた計算なので、
-          <b>2〜5枠での実感に近い</b>数字です。
-          1枠を取って巻き込みまで決める場合は低い難易度がもっと強くなることがあり、
-          コミュニティで見かける「効率難易度」はそちらの理想値を指しています。
+          <b>1枠補正・巻き込みは含まず</b>、2〜5枠の実感に近い値
         </p>
 
         <div className="mt-5 flex flex-wrap items-center gap-2">
@@ -1677,8 +1676,21 @@ export default function EfficiencyRanking() {
         )}
       </Panel>
 
-      <Panel title="この数字について">
-        <ul className="space-y-2 text-xs leading-relaxed text-slate-500">
+      {/* ★ 開いたままだった（約 730 字）。閉じた段にし、見出しだけで中身が分かるようにする（UX 監査 2026-11-12、PR-4） */}
+      <details className="neu-panel p-4 sm:p-6">
+        <summary className="cursor-pointer text-base font-bold text-slate-700">
+          <span>この数字について</span>
+          <span className="ml-2 text-xs font-normal text-slate-500">
+            スコアとPtの式・AP 前提・入れていないもの
+          </span>
+        </summary>
+        <ul className="mt-4 space-y-2 text-xs leading-relaxed text-slate-500">
+          <li>
+            この順位は<span className="font-bold text-slate-600">1枠補正と巻き込みを含みません</span>
+            。スキルの発動位置を平均で置いた計算なので、2〜5枠での実感に近い数字です。
+            1枠を取って巻き込みまで決める場合は低い難易度がもっと強くなることがあり、
+            コミュニティで見かける「効率難易度」はそちらの理想値を指しています。
+          </li>
           <li>
             スコアは{" "}
             <code>(base + Σ 実効スキル% × 枠重み ÷ 100) × 総合力 × 4</code>{" "}
@@ -1726,7 +1738,7 @@ export default function EfficiencyRanking() {
             どの曲にもほぼ一律に乗るぶんなので順位はほとんど動きませんが、表示Ptは実際よりわずかに低めです。
           </li>
         </ul>
-      </Panel>
+      </details>
     </ToolPage>
   );
 }
