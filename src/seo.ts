@@ -103,6 +103,11 @@ export const PAGES: Record<string, PageMeta> = {
     description:
       "プロセカの計算式・仕様・通例のうち、公式にもゲーム内にも書かれていないものを、どこまで確かめられているかと一緒に置いています。",
   },
+  "/guide": {
+    title: "知識ガイド｜プロセカのイベランと協力ライブ",
+    description:
+      "プロセカのイベント周回（イベラン）や協力ライブに入ってみたい人向けのガイド。イベントポイントの決まり方・編成・協力ライブの仕組み・募集の読み方・稼働の計画を、公式かどうかの区別を付けて書いています。",
+  },
   "/changelog": {
     title: "更新履歴",
     description: `${SITE_NAME} の更新履歴。`,
@@ -245,16 +250,44 @@ export function knowledgeMeta(slug: string, src: string): KnowledgeMeta {
   return { slug, title, description, updated };
 }
 
+/**
+ * 知識ガイドの 1 章（docs/guide/chN.md）の、検索向けの題と説明文。
+ * 第 0 章（前置き）は /guide の一覧のページに載せるので、章のページは 1 章から。
+ * 説明文は章の見出しのあと最初の段落。差し込みの行（［図N: 題］）と確かさの印（〔公式〕）は外す。
+ */
+export function guideChapterMeta(n: number, src: string): PageMeta & { path: string } {
+  const lines = src.replace(/\r\n?/g, "\n").split("\n");
+  const name = (lines.find((l) => /^##\s/.test(l)) ?? "").replace(/^##\s+(\d+\.\s*)?/, "").trim() || `第${n}章`;
+  const para: string[] = [];
+  for (const l of lines) {
+    const t = l.trim();
+    if (!t) {
+      if (para.length) break;
+      continue;
+    }
+    if (/^(#|\||[-*+]\s|>|```|\d+\.\s|［)/.test(t)) {
+      if (para.length) break;
+      continue;
+    }
+    para.push(t);
+  }
+  const description = clip(plainText(para.join("").replace(/〔[^〕]*〕/g, "")) || name);
+  return { path: `/guide/${n}`, title: `第${n}章 ${name}｜プロセカの知識ガイド`, description };
+}
+
 /** sitemap.xml。noindex のページは載せない。 */
 export function renderSitemap(
   pages: Record<string, PageMeta>,
   notes: KnowledgeMeta[],
+  /** 知識ガイドの章のパス（/guide/1 など）。 */
+  guide: string[] = [],
 ): string {
   const urls = [
     ...Object.entries(pages)
       .filter(([, m]) => !m.noindex)
       .map(([path]) => ({ loc: SITE_URL + path, lastmod: "" })),
     ...notes.map((n) => ({ loc: `${SITE_URL}/knowledge/${n.slug}`, lastmod: n.updated })),
+    ...guide.map((p) => ({ loc: SITE_URL + p, lastmod: "" })),
   ];
   const body = urls
     .map(

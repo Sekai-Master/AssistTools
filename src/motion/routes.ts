@@ -44,6 +44,8 @@ export const PAGE_LOADERS: Record<string, Loader> = {
   "/contact": () => import("../pages/contact/ContactPage"),
   // 知見ノート。一覧と記事で同じチャンクを使う（/knowledge/:slug も同じ入口）。
   "/knowledge": () => import("../pages/knowledge/KnowledgePage"),
+  // 知識ガイド。目次と章で同じチャンクを使う（/guide/:n も同じ入口）。
+  "/guide": () => import("../pages/guide/GuidePage"),
 };
 
 const ALL_LOADERS: Record<string, Loader> = { ...ROUTE_LOADERS, ...PAGE_LOADERS };
@@ -117,6 +119,7 @@ export const RoutePages = {
   changelog: lazyOf("/changelog"),
   contact: lazyOf("/contact"),
   knowledge: lazyOf("/knowledge"),
+  guide: lazyOf("/guide"),
   border: lazyOf("/border"),
   borderHistory: lazyOf("/border/history"),
   compare: lazyOf("/compare"),
@@ -131,6 +134,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/changelog": "更新履歴",
   "/contact": "お問い合わせ",
   "/knowledge": "知見ノート",
+  "/guide": "知識ガイド",
 };
 
 /**

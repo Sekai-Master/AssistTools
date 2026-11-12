@@ -224,6 +224,13 @@ function Index() {
         <b>前提条件・いつの情報か・どこまで確かめられているか</b>
         が抜けたまま伝わりがちです。ここでは結論より先に、その3つを書きます。
       </p>
+      <p className="text-xs leading-relaxed text-slate-500">
+        イベランや協力ライブに初めて入る人向けの、仕組みと慣習の通しの説明は
+        <Link to="/guide" className="font-bold underline">
+          知識ガイド
+        </Link>
+        にあります。
+      </p>
 
       <div className="space-y-4">
         {ENTRIES.map((e) => (
