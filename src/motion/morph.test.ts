@@ -45,8 +45,8 @@ describe("出発点の指名", () => {
   // 一覧には同じ印のカードが何枚も並ぶので、採寸だけでは「どれ」か決まらない。
   it("候補が複数あるとき、指名が無ければ何もしない", () => {
     const stage = mount(`
-      <a id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>
-      <a id="a2"><div ${MORPH_ATTR}="tool:y" id="c2"></div></a>`);
+      <a href="/t" id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>
+      <a href="/t" id="a2"><div ${MORPH_ATTR}="tool:y" id="c2"></div></a>`);
     sized(stage.querySelector("#c1")!, 10, 10, 200, 100);
     sized(stage.querySelector("#c2")!, 10, 220, 200, 100);
 
@@ -101,8 +101,8 @@ describe("出発点の指名", () => {
 
   it("押下で指名すればその1枚が持ち上がる", () => {
     const stage = mount(`
-      <a id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>
-      <a id="a2"><div ${MORPH_ATTR}="tool:y" id="c2"></div></a>`);
+      <a href="/t" id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>
+      <a href="/t" id="a2"><div ${MORPH_ATTR}="tool:y" id="c2"></div></a>`);
     const c1 = sized(stage.querySelector("#c1")!, 10, 10, 200, 100);
     sized(stage.querySelector("#c2")!, 10, 220, 200, 100);
 
@@ -115,20 +115,22 @@ describe("出発点の指名", () => {
   // ★ カードはリンクの「子」。キーボードの Enter やリンク自体の押下では
   //   target がリンクになるので、closest だけだと届かない（実際に踏んだ）。
   it("押された点が印の外側（親リンク）でも見つける", () => {
-    const stage = mount(`<a id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>`);
+    const stage = mount(`<a href="/t" id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>`);
     sized(stage.querySelector("#c1")!, 10, 10, 200, 100);
 
     aimMorph(stage.querySelector("#a1"));
+    captureMorph(stage); // 遷移が始まってから持ち上がる
     expect(boxes().length).toBe(1);
   });
 
   it("押された点が印の内側（カードの中の見出し）でも見つける", () => {
     const stage = mount(
-      `<a id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"><h3 id="h"></h3></div></a>`
+      `<a href="/t" id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"><h3 id="h"></h3></div></a>`
     );
     sized(stage.querySelector("#c1")!, 10, 10, 200, 100);
 
     aimMorph(stage.querySelector("#h"));
+    captureMorph(stage); // 遷移が始まってから持ち上がる
     expect(boxes().length).toBe(1);
   });
 
@@ -144,9 +146,10 @@ describe("出発点の指名", () => {
 
 describe("飛行", () => {
   function setup() {
-    const stage = mount(`<a id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>`);
+    const stage = mount(`<a href="/t" id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>`);
     sized(stage.querySelector("#c1")!, 400, 100, 200, 120);
     aimMorph(stage.querySelector("#c1"));
+    captureMorph(stage); // 遷移が始まってから持ち上がる
     return stage;
   }
 
@@ -201,13 +204,14 @@ describe("飛行", () => {
   //   飛ぶはずの複製がページと一緒に溶けて消える。初回は印がまだ無いので成功し、
   //   2回目以降だけ壊れる ＝ 「一覧からの移動が2回目から消える」の正体。
   it("複製にカスケードの印を持ち込まない", () => {
-    const stage = mount(`<a id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>`);
+    const stage = mount(`<a href="/t" id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>`);
     const c1 = sized(stage.querySelector("#c1")!, 400, 100, 200, 120);
     // 前の遷移で付いた印が残っている状態
     c1.setAttribute(DIV_ATTR, "near");
     c1.style.setProperty(DIV_T, "0.500");
 
     aimMorph(c1);
+    captureMorph(stage); // 遷移が始まってから持ち上がる
     const layer = document.getElementById("morph-layer")!;
     expect(layer.querySelectorAll(`[${DIV_ATTR}]`).length).toBe(0);
     const copy = layer.querySelector(".morph-inner")?.firstElementChild as HTMLElement;
@@ -246,9 +250,10 @@ describe("飛行", () => {
     expect(boxes().length).toBe(2);
 
     // 着地を待たずに次のページへ
-    stage.innerHTML = `<a id="a2"><div ${MORPH_ATTR}="tool:y" id="c2"></div></a>`;
+    stage.innerHTML = `<a href="/t" id="a2"><div ${MORPH_ATTR}="tool:y" id="c2"></div></a>`;
     const c2 = sized(stage.querySelector("#c2")!, 300, 40, 250, 150);
     aimMorph(c2);
+    captureMorph(stage); // 遷移が始まってから持ち上がる
 
     // 前の2枚は畳まれ、新しい1枚だけが生きている
     expect(boxes().length).toBe(1);
@@ -319,6 +324,7 @@ describe("ページ全体を隠さない", () => {
 
     // 隠れたカードは押下を受けないので、target はリンクになる
     aimMorph(stage.querySelector("#a1"), stage);
+    captureMorph(stage); // 遷移が始まってから持ち上がる
     expect(document.documentElement.style.visibility).toBe("");
     // 持ち上がったのはカードの複製1枚だけ
     expect(boxes().length).toBe(1);
@@ -332,19 +338,21 @@ describe("ページ全体を隠さない", () => {
   });
 
   it("ステージの外にある印は拾わない", () => {
-    document.body.innerHTML = `<div ${MORPH_ATTR}="tool:x" id="outer"><div class="stage"><a id="a1"></a></div></div>`;
+    document.body.innerHTML = `<div ${MORPH_ATTR}="tool:x" id="outer"><div class="stage"><a href="/t" id="a1"></a></div></div>`;
     const outer = sized(document.getElementById("outer")!, 0, 0, 800, 600);
     const stage = document.querySelector(".stage") as HTMLElement;
 
     aimMorph(stage.querySelector("#a1"), stage);
+    captureMorph(stage); // 遷移が始まってから持ち上がる
     expect(boxes().length).toBe(0);
     expect(outer.style.visibility).toBe("");
   });
 
   function setupCard() {
-    const stage = mount(`<a id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>`);
+    const stage = mount(`<a href="/t" id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>`);
     sized(stage.querySelector("#c1")!, 400, 100, 200, 120);
     aimMorph(stage.querySelector("#c1"), stage);
+    captureMorph(stage); // 遷移が始まってから持ち上がる
     return stage;
   }
 });
@@ -363,9 +371,10 @@ describe("飛行中のスクロール", () => {
   afterEach(() => scrollTo(0, 0));
 
   function flying() {
-    const stage = mount(`<a id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>`);
+    const stage = mount(`<a href="/t" id="a1"><div ${MORPH_ATTR}="tool:x" id="c1"></div></a>`);
     sized(stage.querySelector("#c1")!, 400, 100, 200, 120);
     aimMorph(stage.querySelector("#c1"), stage);
+    captureMorph(stage); // 遷移が始まってから持ち上がる
     stage.innerHTML = `<h1 ${MORPH_ATTR}="tool:x" id="t"></h1>`;
     sized(stage.querySelector("#t")!, 24, 16, 700, 48);
     expect(flyMorph(stage, TIMING)).toBe(true);
@@ -409,5 +418,123 @@ describe("飛行中のスクロール", () => {
     expect(layer.style.transform).toBe("");
     scrollTo(0, 800);
     expect(layer.style.transform).toBe("");
+  });
+});
+
+/**
+ * ★ 2026-11-12 報告「トップのツール集で文字を選んでからスクロールすると、行が枠の外に浮く」の再発防止。
+ *   押下の時点で持ち上げていたので、遷移にならない押下（文字を選ぶドラッグ・枠の余白・Ctrl+クリック・
+ *   見出しそのもの・動きを減らす設定）でも行が隠れ、fixed の複製が画面に貼り付いたまま残っていた。
+ */
+describe("遷移にならない押下では何も隠さない", () => {
+  const PLAIN = { button: 0, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false };
+  function hub() {
+    const stage = mount(`
+      <section id="dir"><h1 id="head">ツール集</h1>
+        <div id="panel">
+          <a href="/deck" id="a1"><span ${MORPH_ATTR}="tool:deck" id="c1">編成ビルダー</span></a>
+          <a href="/plan" id="a2"><span ${MORPH_ATTR}="tool:plan" id="c2">周回プラン</span></a>
+        </div>
+      </section>`);
+    const c1 = sized(stage.querySelector("#c1")!, 240, 156, 160, 44);
+    const c2 = sized(stage.querySelector("#c2")!, 290, 156, 160, 44);
+    return { stage, c1, c2 };
+  }
+  const hiddenCount = (stage: Element) =>
+    Array.from(stage.querySelectorAll<HTMLElement>(`[${MORPH_ATTR}]`)).filter((el) => el.style.visibility === "hidden")
+      .length;
+
+  // 見出しから下の枠までドラッグして選ぶと、click は両者の共通の祖先（section）に届く
+  it("文字を選ぶドラッグ（click が共通の祖先に届く）では持ち上げない", () => {
+    const { stage } = hub();
+    aimMorph(stage.querySelector("#dir"), stage, PLAIN);
+    expect(boxes().length).toBe(0);
+    expect(hiddenCount(stage)).toBe(0);
+    // 遷移が始まっても、指名が無く候補が複数なので何もしない
+    captureMorph(stage);
+    expect(boxes().length).toBe(0);
+  });
+
+  it("枠の余白の押下では持ち上げない", () => {
+    const { stage } = hub();
+    aimMorph(stage.querySelector("#panel"), stage, PLAIN);
+    captureMorph(stage);
+    expect(boxes().length).toBe(0);
+    expect(hiddenCount(stage)).toBe(0);
+  });
+
+  it("リンクの外にある印そのもの（ツールページの見出し）の押下では持ち上げない", () => {
+    const stage = mount(`<h1 ${MORPH_ATTR}="tool:x" id="t"></h1><p id="p"></p>`);
+    const t = sized(stage.querySelector("#t")!, 10, 10, 600, 48);
+    aimMorph(t, stage, PLAIN);
+    expect(boxes().length).toBe(0);
+    expect(t.style.visibility).toBe("");
+  });
+
+  it("押下で指名しただけでは、行は隠れず複製も出ない（遷移が始まるまで見た目を変えない）", () => {
+    const { stage, c1 } = hub();
+    aimMorph(c1, stage, PLAIN);
+    expect(boxes().length).toBe(0);
+    expect(c1.style.visibility).toBe("");
+    expect(document.documentElement.dataset.morphing).toBeUndefined();
+  });
+
+  it("Ctrl/⌘/Shift/Alt・中ボタンの押下は指名しない（別タブ・別窓で開く）", () => {
+    for (const mod of [
+      { ctrlKey: true },
+      { metaKey: true },
+      { shiftKey: true },
+      { altKey: true },
+      { button: 1 },
+    ]) {
+      const { stage, c1 } = hub();
+      aimMorph(c1, stage, { ...PLAIN, ...mod });
+      captureMorph(stage);
+      expect(boxes().length).toBe(0);
+      expect(c1.style.visibility).toBe("");
+      cancelMorph();
+    }
+  });
+
+  it("新しいタブで開くリンク・保存のリンクは指名しない", () => {
+    for (const attr of [`target="_blank"`, "download"]) {
+      const stage = mount(`
+        <a href="/x" ${attr} id="a1"><span ${MORPH_ATTR}="tool:x" id="c1"></span></a>
+        <a href="/y" id="a2"><span ${MORPH_ATTR}="tool:y" id="c2"></span></a>`);
+      sized(stage.querySelector("#c1")!, 10, 10, 200, 40);
+      sized(stage.querySelector("#c2")!, 60, 10, 200, 40);
+      aimMorph(stage.querySelector("#c1"), stage, PLAIN);
+      captureMorph(stage);
+      expect(boxes().length).toBe(0);
+    }
+  });
+
+  it("古い指名（賞味期限切れ）は使わない", () => {
+    const { stage, c1 } = hub();
+    const spy = vi.spyOn(performance, "now").mockReturnValue(1000);
+    try {
+      aimMorph(c1, stage, PLAIN);
+      spy.mockReturnValue(1000 + 1500);
+      captureMorph(stage);
+      expect(boxes().length).toBe(0);
+      expect(c1.style.visibility).toBe("");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  // 空振りの押下が残っていると、次の本物の押下の変形まで失われていた
+  it("空振りの押下の後でも、次に押した行がちゃんと持ち上がって飛ぶ", () => {
+    const { stage, c1, c2 } = hub();
+    aimMorph(stage.querySelector("#dir"), stage, PLAIN);
+    aimMorph(c2, stage, PLAIN);
+    captureMorph(stage, "*");
+    expect(boxes().length).toBe(1);
+    expect(c2.style.visibility).toBe("hidden");
+    expect(c1.style.visibility).toBe("");
+
+    stage.innerHTML = `<h1 ${MORPH_ATTR}="tool:plan" id="t"></h1>`;
+    sized(stage.querySelector("#t")!, 24, 16, 700, 48);
+    expect(flyMorph(stage, TIMING)).toBe(true);
   });
 });
