@@ -115,7 +115,7 @@ export function AutoPanel({ config }: { config: AutoConfig }) {
 
         {/* ★ 下の2つが空欄のときに使うのは「オートで回す曲」（未選択なら効率1位。useAutoConfig の
             selected）。周回プランで「上の曲」はページ上部の手動の曲を指す呼び名なので、補足文では
-            そう呼ばない（UX 監査 2026-11-12。前は「上の曲から」と書いていて取り違えを招いた）。 */}
+            そう呼ばない（UX 監査 2026-11-12。前の「上の曲から」はどちらの曲か紛らわしかった）。 */}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
             label="1回のPt"

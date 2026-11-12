@@ -80,15 +80,20 @@ export default function EffectiveValueCalculator() {
     return ocSkillCandidates(level, slotVals);
   }, [leaderKind, presetLeader, train, rank, level, charType, units, slotVals]);
 
-  const ocCandidateLabel = isOc ? formatCandidates(ocSkillCandidates(level, slotVals)) : "";
-
   /**
-   * ★ 単一入力の内部値が空なら結果を出さない（UX 監査 2026-11-12）。
-   *   前は空を 0 として計算し、先頭 150 なら 120 を大きな字で出していた。入れる前から
-   *   意味のない数字が出るうえ、「取り込む」で内部値 0 を編成に保存できてしまう。
+   * ★ 内部値が欠けていたら結果を出さない（UX 監査 2026-11-12・検分 #239 中-1）。
+   *   前は空を 0 として計算し、単一入力なら先頭 150 で 120、個別入力の全部空なら 150、
+   *   OC の全部空なら 80(4) を大きな字で出していた。入れる前から意味のない数字が出るうえ、
+   *   「取り込む」でその内部値を編成に保存できてしまう。
+   *   2〜5 枠は 1 つでも空なら欠け扱い（残りを 0 として計算した値も意味がない）。
    *   明示の「0」は入れた値なので計算する（toHalfWidthNumber が null を返すのは空と非数値だけ）。
    */
-  const innerMissing = !(detailMode || isOc) && toHalfWidthNumber(inner) === null;
+  const usesSlots = detailMode || isOc;
+  const slotsMissing = slots.some((s) => toHalfWidthNumber(s) === null);
+  const innerMissing = usesSlots ? slotsMissing : toHalfWidthNumber(inner) === null;
+
+  const ocCandidateLabel =
+    isOc && !slotsMissing ? formatCandidates(ocSkillCandidates(level, slotVals)) : "";
 
   // 実効値（候補ごと、個数付き）
   const forwardResults = useMemo(() => {
@@ -311,7 +316,11 @@ export default function EffectiveValueCalculator() {
           <Panel>
             {innerMissing ? (
               // 「この編成の実効値は／—／です。」の3行のままだと文が繋がらないので、1行に差し替える
-              <p className="text-sm text-slate-500">この編成の実効値は、内部値を入れると出ます。</p>
+              <p className="text-sm text-slate-500">
+                {usesSlots
+                  ? "この編成の実効値は、2〜5枠目のスキル値をすべて入れると出ます。"
+                  : "この編成の実効値は、内部値を入れると出ます。"}
+              </p>
             ) : (
               <>
                 <p className="text-sm text-slate-500">この編成の実効値は</p>
