@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import {
   NOT_FOUND,
   PAGES,
+  guideChapterMeta,
   htmlFileOf,
   knowledgeMeta,
   renderHead,
@@ -43,8 +44,19 @@ for (const n of notes) {
   write(htmlFileOf(p), renderHead(shell, p, { title: n.title, description: n.description }));
 }
 
+// 知識ガイドの章（第 0 章は /guide の一覧に載せるので、章のページは 1 章から）
+const guideDir = path.join(root, "docs/guide");
+const chapters = fs
+  .readdirSync(guideDir)
+  .flatMap((f) => {
+    const m = /^ch(\d+)\.md$/.exec(f);
+    return m && Number(m[1]) > 0 ? [guideChapterMeta(Number(m[1]), fs.readFileSync(path.join(guideDir, f), "utf8"))] : [];
+  })
+  .sort((a, b) => a.path.localeCompare(b.path, "en", { numeric: true }));
+for (const c of chapters) write(htmlFileOf(c.path), renderHead(shell, c.path, c));
+
 write("404.html", renderHead(shell, "/404", NOT_FOUND));
-write("sitemap.xml", renderSitemap(PAGES, notes));
+write("sitemap.xml", renderSitemap(PAGES, notes, chapters.map((c) => c.path)));
 write("robots.txt", renderRobots());
 
-console.log(`seo: ${Object.keys(PAGES).length} ページ・知見ノート ${notes.length} 本・404・sitemap・robots を書いた`);
+console.log(`seo: ${Object.keys(PAGES).length} ページ・知見ノート ${notes.length} 本・ガイド ${chapters.length} 章・404・sitemap・robots を書いた`);

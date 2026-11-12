@@ -51,6 +51,9 @@ export function SiteFooter() {
           <Link to="/knowledge" className={LINK}>
             知見ノート
           </Link>
+          <Link to="/guide" className={LINK}>
+            知識ガイド
+          </Link>
           <Link to="/changelog" className={LINK}>
             更新履歴
           </Link>
