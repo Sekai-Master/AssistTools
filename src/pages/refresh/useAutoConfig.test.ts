@@ -1,46 +1,54 @@
 /**
  * @vitest-environment jsdom
  *
- * オートの設定の「読み込み中」の判定（UX 監査 2026-11-12、PR-5）。
+ * オートの設定が、楽曲データの読み込みの状態（読み込み中・読めなかった）と、オートを使っているか（enabled）を
+ * そのまま画面に渡すこと（UX 監査 2026-11-12、PR-5）。
  *
- * ★ useRankingMusics の loading は useState(enabled) の初期値だけで決まる。周回プランでは最初 enabled が false
- *   （休憩にオートが無い）なので loading は false で始まり、オートを付けて読み込みが始まっても true に戻らない。
- *   そのため読み込みの間は「候補なし・エラーなし・読み込み中でない」に見え、赤字の警告と
- *   「休憩に『オート』を付けると候補が出ます」（もう付けているのに）が出ていた。
- *   ランキングのページと共有の useRankingMusics は変えず、こちらで「使うのに、まだ何も届いていない」を読み込み中とみなす。
+ * ★ 読み込み中の判定そのものは useRankingMusics の側（#251）で直し、そちらのテストが縛っている。
+ *   ここでは本物の hook を通し、fetch だけを作り物にする。前の版はこの穴を模したモック（使うのに loading が false）で
+ *   useAutoConfig 側の回避を縛っていたが、回避を外したので、本物の動きに合わせて書き直した。
+ * ★ このファイルは #251 が入った上で緑になる（「あとで使い始めたら読み込み中」は hook の直しが要る）。
  */
-import { describe, expect, it, vi } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { useAutoConfig } from "./useAutoConfig";
 
-const musics = vi.hoisted(() => ({
-  value: { entries: [] as unknown[], loading: false, error: null as string | null },
-}));
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
-vi.mock("../ranking/useRankingMusics", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../ranking/useRankingMusics")>()),
-  useRankingMusics: () => musics.value,
-}));
+/** 応答を手で返せる fetch。 */
+function deferredFetch() {
+  let reject!: (e: unknown) => void;
+  const pending = new Promise<Response>((_, rej) => {
+    reject = rej;
+  });
+  const fetchMock = vi.fn(() => pending);
+  vi.stubGlobal("fetch", fetchMock);
+  return { fetchMock, fail: () => reject(new Error("offline")) };
+}
 
-const hook = (enabled: boolean) => renderHook(() => useAutoConfig({ enabled, power: 0, bonus: 0 })).result.current;
+const useConfig = (enabled: boolean) => useAutoConfig({ enabled, power: 0, bonus: 0 });
 
-describe("読み込み中の判定", () => {
-  it("オートを使うのに、まだ何も届いていない（エラーも無い）間は読み込み中", () => {
-    musics.value = { entries: [], loading: false, error: null };
-    expect(hook(true).loading).toBe(true);
+describe("読み込みの状態とオートの有無を渡す", () => {
+  it("オートを使っていないときは読み込み中ではなく、読みにも行かない。enabled は false", () => {
+    const { fetchMock } = deferredFetch();
+    const { result } = renderHook(() => useConfig(false));
+    expect(result.current.loading).toBe(false);
+    expect(result.current.enabled).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("オートを使っていないときは読み込み中ではない（読みにも行かない）", () => {
-    musics.value = { entries: [], loading: false, error: null };
-    const c = hook(false);
-    expect(c.loading).toBe(false);
-    expect(c.enabled).toBe(false);
-  });
-
-  it("読めなかったときは読み込み中ではない（エラーを出す）", () => {
-    musics.value = { entries: [], loading: false, error: "楽曲データの取得に失敗しました" };
-    const c = hook(true);
-    expect(c.loading).toBe(false);
-    expect(c.error).toBe("楽曲データの取得に失敗しました");
+  it("休憩にオートを付けた（あとで使い始めた）ら、届くまで読み込み中。読めなかったらエラーを渡す", async () => {
+    const { fetchMock, fail } = deferredFetch();
+    const { result, rerender } = renderHook(({ on }) => useConfig(on), { initialProps: { on: false } });
+    rerender({ on: true });
+    expect(fetchMock).toHaveBeenCalled();
+    expect(result.current.enabled).toBe(true);
+    expect(result.current.loading).toBe(true);
+    expect(result.current.options).toEqual([]);
+    await act(async () => fail());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).not.toBeNull();
   });
 });
