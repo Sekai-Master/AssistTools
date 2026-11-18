@@ -57,10 +57,9 @@ export function EncoreAdvice({
   const [songId, setSongId] = useState(ENVY_ID);
   const [difficulty, setDifficulty] = useState<Difficulty>(DEFAULT_DIFFICULTY);
   const [picking, setPicking] = useState(false);
-  const { entries, error } = useRankingMusics(open);
-  // ★ main の useRankingMusics は後から enabled にしても loading が false のまま（#251 で直す）。
-  //   ここでは「開いていて、まだ何も無く、失敗もしていない」を読み込み中として扱う
-  const loading = open && entries.length === 0 && !error;
+  // 読み込み中かどうかは hook の loading に従う（#251 で、後から enabled にしても true になる）。
+  // 「まだ何も無い」で判定すると、読めたのに該当が 0 件のとき「読み込み中…」のまま押せなくなる
+  const { entries, loading, error } = useRankingMusics(open);
 
   const songs = useMemo(() => {
     const seen = new Map<string, RankingMusic>();
