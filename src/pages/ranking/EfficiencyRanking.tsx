@@ -51,10 +51,12 @@ const ROW_LIMIT = 50;
 
 const MODE_OPTIONS: { value: RankingMode; label: string }[] = [
   // ゲームの公式名「みんなでライブ」「ひとりでライブ」に合わせる（2026-11-18 に「手動周回」から改名）。
-  { value: "manual", label: "みんなで周回" },
+  // ★ ラベルは /compare の切り替えと同じ短い形（2026-11-19 検分 R1）。「みんなで周回」の 6 文字は、
+  //   本番の字体（M PLUS Rounded 1c）だと 390px でも折れた。何のライブかは見出しの文で言う。
+  { value: "manual", label: "みんなで" },
   // みんなでライブが止まったイベント（2026-11-18〜）向け。
-  { value: "solo", label: "ひとりで周回" },
-  { value: "auto", label: "オート周回" },
+  { value: "solo", label: "ひとりで" },
+  { value: "auto", label: "オート" },
   { value: "challenge", label: "チャレライ" },
 ];
 
@@ -838,14 +840,15 @@ export default function EfficiencyRanking() {
         }}
       />
       <Panel>
-        {/* ★ 4択で「みんなで周回」「ひとりで周回」が6文字あるので詰めて描く（既定だと 390px で折れる）。
-              360px 以下では収まらないので、折れるときは文節で折る（「みんなで周／回」と1字だけ落ちていた）。 */}
+        {/* ★ 4択で「チャレライ」が5文字あるので詰めて描く（既定の大きさだと 390px で折れる）。
+              320px では詰めても「チャレラ／イ」と1字だけ落ちたので、折らない（ボタンの左右の余白に収まる）。
+              min-w-0 は等幅を保つため（無いと折らない字の幅でボタンが広がり、つまみの位置とずれる）。 */}
         <SegmentedControl
           options={MODE_OPTIONS}
           value={mode}
           onChange={changeMode}
           compact
-          buttonClassName="[word-break:auto-phrase]"
+          buttonClassName="min-w-0 whitespace-nowrap"
         />
         <p className="mt-4 text-sm font-bold text-slate-600">{note.headline}</p>
         <p className="mt-1 text-xs leading-relaxed text-slate-500">
@@ -865,10 +868,14 @@ export default function EfficiencyRanking() {
          *
          * ★ 枠は 1 行に縮め、要る事実（含まないもの・2〜5枠の実感に近い）だけ表の前に残す。
          *   「効率難易度」との違いの詳しい話は、ページ下の「この数字について」へ移した（UX 監査 2026-11-12、PR-4）。
+         * ★ 「2〜5枠」はみんなでライブの部屋の枠のこと。ひとりで・オート・チャレライには枠が無いので、
+         *   みんなでのタブにだけ出す（2026-11-19 検分 R5）。
          */}
-        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
-          <b>1枠補正・巻き込みは含まず</b>、2〜5枠の実感に近い値
-        </p>
+        {mode === "manual" && (
+          <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
+            <b>1枠補正・巻き込みは含まず</b>、2〜5枠の実感に近い値
+          </p>
+        )}
 
         <div className="mt-5 flex flex-wrap items-center gap-2">
           <span className="mr-1 text-xs font-bold text-slate-500">難易度</span>
@@ -1137,7 +1144,7 @@ export default function EfficiencyRanking() {
                 </Field>
                 <Field
                   label="ライボが足りなくなったら"
-                  hint="手持ちを使い切れる長さの時間だと、「そこで止める」は通常のオート周回と同じ順位になります"
+                  hint="手持ちを使い切れる長さの時間だと、「そこで止める」は「1回あたりのPt」順と同じ順位になります"
                 >
                   <SegmentedControl
                     options={[
@@ -1715,7 +1722,7 @@ export default function EfficiencyRanking() {
                   <span className="font-bold text-slate-600">262</span>。
                 </p>
                 <p className="mt-2">
-                  ソロ（ひとりで周回・オート・チャレライ）は別勘定で、編成5枚が1回ずつ発動するので
+                  ソロ（ひとりで・オート・チャレライのタブ）は別勘定で、編成5枚が1回ずつ発動するので
                   内部値 ÷ 5
                   が平均、最後の6回目だけリーダーがもう1回発動します。 そのため
                   <span className="font-bold text-slate-600">
@@ -1762,7 +1769,7 @@ export default function EfficiencyRanking() {
             <code>(base + Σ 実効スキル% × 枠重み ÷ 100) × 総合力 × 4</code>{" "}
             で計算しています。base と枠重みは楽曲ごとの実データで、
             譜面上のスキル発動位置が反映されています。タブごとに使うデータを変えていて、
-            みんなで周回はみんなでライブ用（フィーバー加点込み）、オートはオート用、ひとりで周回とチャレライはソロ用です。
+            「みんなで」のタブはみんなでライブ用（フィーバー加点込み）、「オート」はオート用、「ひとりで」と「チャレライ」はソロ用です。
           </li>
           <li>
             イベントポイントの式は

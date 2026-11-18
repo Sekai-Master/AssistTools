@@ -80,6 +80,8 @@ const folded = (el: Element) => {
 describe("表の前の注意枠", () => {
   it("1 行（26 字以内）に縮め、「1枠補正と巻き込みを含まない」「2〜5枠」は畳まずに残す", () => {
     draw();
+    // 注はみんなでライブの部屋の枠の話なので、みんなでのタブにだけ出る（下のテスト）
+    fireEvent.click(screen.getByRole("radio", { name: "みんなで" }));
     const box = [...document.querySelectorAll("p.bg-amber-50")].find((p) => p.textContent?.includes("1枠補正"))!;
     expect(box).toBeTruthy();
     const text = box.textContent ?? "";
@@ -88,6 +90,18 @@ describe("表の前の注意枠", () => {
     expect(text).toContain("巻き込み");
     expect(text).toContain("2〜5枠");
     expect(folded(box)).toBe(false);
+  });
+
+  // ★ 2026-11-19 検分 R5: 「2〜5枠」はみんなでライブの部屋の枠のこと。ひとりで・オート・チャレライには枠が無いので出さない。
+  it("「1枠補正・2〜5枠」の注は、みんなでのタブにだけ出す", () => {
+    draw();
+    const box = () => [...document.querySelectorAll("p.bg-amber-50")].find((p) => p.textContent?.includes("1枠補正"));
+    for (const name of ["ひとりで", "オート", "チャレライ"]) {
+      fireEvent.click(screen.getByRole("radio", { name }));
+      expect(box()).toBeUndefined();
+    }
+    fireEvent.click(screen.getByRole("radio", { name: "みんなで" }));
+    expect(box()).toBeTruthy();
   });
 });
 
@@ -129,28 +143,30 @@ describe("ひとりで周回", () => {
 
   const tab = (name: string) => screen.getByRole("radio", { name });
   // タブの直後の段落が見出し、その次が説明
-  const headline = () => tab("みんなで周回").closest('[role="radiogroup"]')!.nextElementSibling!;
+  const headline = () => tab("みんなで").closest('[role="radiogroup"]')!.nextElementSibling!;
   const body = () => headline().nextElementSibling!.textContent ?? "";
 
-  it("タブは4つ。みんなで周回・ひとりで周回・オート周回・チャレライの順", () => {
+  // ★ 2026-11-19 検分 R1: 本番の字体（M PLUS Rounded 1c）だと「みんなで周回」の 6 文字は 390px でも折れる。
+  //   /compare と同じ短い形にそろえる（見出しと説明の文はそのまま）。
+  it("タブは4つ。みんなで・ひとりで・オート・チャレライの順（/compare の切り替えと同じ短い形）", () => {
     draw();
-    const group = tab("みんなで周回").closest('[role="radiogroup"]') as HTMLElement;
+    const group = tab("みんなで").closest('[role="radiogroup"]') as HTMLElement;
     expect(within(group).getAllByRole("radio").map((b) => b.textContent)).toEqual([
-      "みんなで周回",
-      "ひとりで周回",
-      "オート周回",
+      "みんなで",
+      "ひとりで",
+      "オート",
       "チャレライ",
     ]);
   });
 
   it("選ぶと「ひとりでライブ」の時間あたりPtの説明になり、「協力」と書かない。長さは他のタブ並み", () => {
     draw();
-    const others = ["みんなで周回", "オート周回", "チャレライ"].map((name) => {
+    const others = ["みんなで", "オート", "チャレライ"].map((name) => {
       fireEvent.click(tab(name));
       return body().length;
     });
-    fireEvent.click(tab("ひとりで周回"));
-    expect(tab("ひとりで周回").getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(tab("ひとりで"));
+    expect(tab("ひとりで").getAttribute("aria-checked")).toBe("true");
     expect(headline().textContent).toBe("ひとりでライブ・時間あたりのイベントポイント");
     expect(headline().textContent + body()).not.toContain("協力");
     expect(body().length).toBeLessThanOrEqual(Math.max(...others));
@@ -159,7 +175,7 @@ describe("ひとりで周回", () => {
   it("自分の条件で計算するとき、焚き数を入れられ、ロスの補足は「表示にだけ使う」と言わない", () => {
     localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true }));
     draw();
-    fireEvent.click(tab("ひとりで周回"));
+    fireEvent.click(tab("ひとりで"));
     const labels = [...document.querySelectorAll("label")].map((l) => l.textContent);
     expect(labels).toContain("焚き数");
     expect(labels).toContain("1曲あたりのロス（秒）");
@@ -183,7 +199,7 @@ describe("ひとりで周回", () => {
     it("入力なしの順位の前提に「ロス 33秒（仮）」と出す。ほかのタブには出さない", () => {
       draw();
       expect(premise()).toContain(`／ロス ${DEFAULT_OVERHEAD_SEC.solo}秒（仮）`);
-      fireEvent.click(tab("みんなで周回"));
+      fireEvent.click(tab("みんなで"));
       expect(premise()).toContain(`／ロス ${DEFAULT_OVERHEAD_SEC.manual}秒`);
       expect(premise()).not.toContain("仮");
     });
@@ -192,7 +208,7 @@ describe("ひとりで周回", () => {
       localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true }));
       draw();
       expect(lossHint()).toContain("仮");
-      fireEvent.click(tab("みんなで周回"));
+      fireEvent.click(tab("みんなで"));
       expect(lossHint()).not.toContain("仮");
     });
 
@@ -219,7 +235,7 @@ describe("ひとりで周回", () => {
     it("何も入れていなければ、ひとりで周回で開いたときの欄は ひとりでライブの既定（みんなでライブの 54 ではない）", () => {
       localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true }));
       draw();
-      expect(tab("ひとりで周回").getAttribute("aria-checked")).toBe("true");
+      expect(tab("ひとりで").getAttribute("aria-checked")).toBe("true");
       expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.solo));
     });
 
@@ -227,9 +243,9 @@ describe("ひとりで周回", () => {
       localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true, overhead: "40" }));
       draw();
       expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.solo));
-      fireEvent.click(tab("みんなで周回"));
+      fireEvent.click(tab("みんなで"));
       expect(input().value).toBe("40");
-      fireEvent.click(tab("ひとりで周回"));
+      fireEvent.click(tab("ひとりで"));
       expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.solo));
     });
 
@@ -240,9 +256,9 @@ describe("ひとりで周回", () => {
       expect(input().value).toBe("45");
       expect(stored().overheadSolo).toBe("45");
       expect(stored().overhead).toBeUndefined();
-      fireEvent.click(tab("みんなで周回"));
+      fireEvent.click(tab("みんなで"));
       expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.manual));
-      fireEvent.click(tab("ひとりで周回"));
+      fireEvent.click(tab("ひとりで"));
       expect(input().value).toBe("45");
       cleanup();
 
@@ -253,20 +269,20 @@ describe("ひとりで周回", () => {
     it("ほかの3つのタブの間の差し替えは今までどおり（触っていなければ既定へ、手で入れた値は残す）", () => {
       localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true }));
       draw();
-      fireEvent.click(tab("みんなで周回"));
+      fireEvent.click(tab("みんなで"));
       expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.manual));
-      fireEvent.click(tab("ひとりで周回"));
-      fireEvent.click(tab("オート周回"));
+      fireEvent.click(tab("ひとりで"));
+      fireEvent.click(tab("オート"));
       expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.auto));
-      fireEvent.click(tab("みんなで周回"));
+      fireEvent.click(tab("みんなで"));
       expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.manual));
       cleanup();
 
       localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true, overhead: "40" }));
       draw();
-      fireEvent.click(tab("みんなで周回"));
-      fireEvent.click(tab("ひとりで周回"));
-      fireEvent.click(tab("オート周回"));
+      fireEvent.click(tab("みんなで"));
+      fireEvent.click(tab("ひとりで"));
+      fireEvent.click(tab("オート"));
       expect(input().value).toBe("40");
     });
   });
@@ -281,7 +297,7 @@ describe("ひとりで周回", () => {
     for (const raw of blobs) {
       if (raw != null) localStorage.setItem(STORE_KEY, raw);
       draw();
-      expect(tab("ひとりで周回").getAttribute("aria-checked")).toBe("true");
+      expect(tab("ひとりで").getAttribute("aria-checked")).toBe("true");
       expect(headline().textContent).toBe("ひとりでライブ・時間あたりのイベントポイント");
       cleanup();
     }
@@ -290,7 +306,7 @@ describe("ひとりで周回", () => {
   it("再開したら（印が false）、みんなで周回で開く", () => {
     suspension.value = false;
     draw();
-    expect(tab("みんなで周回").getAttribute("aria-checked")).toBe("true");
+    expect(tab("みんなで").getAttribute("aria-checked")).toBe("true");
     expect(headline().textContent).toBe("みんなでライブ・時間あたりのイベントポイント");
   });
 });
@@ -306,7 +322,7 @@ describe("画面の文に「協力」が無い", () => {
   it("どのタブでも、自分の条件で計算する欄を開いていても「協力」と書かない", () => {
     localStorage.setItem("sekai-master:ranking-inputs", JSON.stringify({ v: 2, custom: true }));
     draw();
-    for (const name of ["みんなで周回", "ひとりで周回", "オート周回", "チャレライ"]) {
+    for (const name of ["みんなで", "ひとりで", "オート", "チャレライ"]) {
       fireEvent.click(tab(name));
       expect(document.body.textContent ?? "").not.toContain("協力");
     }
@@ -315,9 +331,9 @@ describe("画面の文に「協力」が無い", () => {
   it("実効値の補足は「みんなでライブ」と書く", () => {
     localStorage.setItem("sekai-master:ranking-inputs", JSON.stringify({ v: 2, custom: true }));
     draw();
-    fireEvent.click(tab("ひとりで周回"));
+    fireEvent.click(tab("ひとりで"));
     expect(screen.getByText(/（みんなでライブ用。このタブでは使いません）/)).toBeTruthy();
-    fireEvent.click(tab("みんなで周回"));
+    fireEvent.click(tab("みんなで"));
     expect(screen.getByText(/（みんなでライブで発動する値）/)).toBeTruthy();
   });
 });
