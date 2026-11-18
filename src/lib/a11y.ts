@@ -91,7 +91,10 @@ export function useModalA11y(
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
       document.body.style.paddingRight = "";
-      prevFocus?.focus?.();
+      // ★ preventScroll。押した要素は開く時点で見えていたので、戻すときに画面を動かさない。
+      //   無いと、下が画面外にはみ出た縦長の要素（更新履歴の告知画像など）で、閉じた瞬間に
+      //   その要素を画面内へ送るぶんスクロールが飛ぶ（1280×800 で 293px、2026-11-12 実測）
+      prevFocus?.focus?.({ preventScroll: true });
     };
   }, [isOpen, onClose, containerRef]);
 }
