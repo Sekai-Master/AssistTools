@@ -1,3 +1,5 @@
+import type { LapLiveKind } from "./lib/lap";
+
 /**
  * 使い方。**初回も閉じておき、計測のパネルの下に置く**（UX 監査 2026-11-12）。
  *
@@ -7,7 +9,7 @@
  *   開いたままでも計測のパネルの下なので、押すところは動かない。開閉の状態は持たず、
  *   計測の開始・終了で閉じ直すのは呼ぶ側（LapTimer の key）。
  */
-export function LapHowTo() {
+export function LapHowTo({ kind }: { kind: LapLiveKind }) {
   return (
     <details className="neu-panel px-5 py-4 sm:px-6">
       <summary className="cursor-pointer text-sm font-bold text-slate-600">使い方</summary>
@@ -23,7 +25,8 @@ export function LapHowTo() {
           <b>3.</b> あとは1周終わるたびに <b>周回した</b> を押すだけ。
         </li>
         <li>
-          <b>4.</b> 休憩・部屋落ち・離席は <b>中断</b>。戻ったら <b>再開</b>。
+          {/* ★ 部屋落ちはみんなでライブだけ（ひとりでライブには部屋が無い） */}
+          <b>4.</b> {kind === "multi" ? "休憩・部屋落ち・離席" : "休憩・離席"}は <b>中断</b>。戻ったら <b>再開</b>。
           <span className="text-slate-500">中断していた時間は自動で平均から外れます。</span>
         </li>
         <li>

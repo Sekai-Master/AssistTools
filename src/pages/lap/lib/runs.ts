@@ -43,6 +43,8 @@ export function loadRuns(): LapRun[] {
       .filter(valid)
       .map((r) => ({
         ...r,
+        // ★ 種類を持たない記録は、みんなでライブ決め打ちの頃（2026-11-18 より前）に測ったもの
+        liveKind: r.liveKind === "solo" ? ("solo" as const) : ("multi" as const),
         marks: numArr(r.marks),
         lapsPerSegment: numArr(r.lapsPerSegment),
         excluded: numArr(r.excluded),

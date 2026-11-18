@@ -1,14 +1,21 @@
 import { describe, expect, it } from "vitest";
+import { OVERHEAD_SEC } from "../../../lib/overhead";
 import {
   clearRecords,
+  defaultLiveKind,
   DOUBLE_TAP_MS,
   exportObj,
   initialState,
+  isProvisionalOverhead,
+  liveKindOf,
+  modelOverheadSec,
   normalize,
   pause,
   resume,
   segments,
   setLapCount,
+  setLiveKind,
+  SOLO_OVERHEAD_PLACEHOLDER,
   stats,
   suspects,
   tap,
@@ -298,5 +305,121 @@ describe("記録として閉じる", () => {
     const o = runToExport(toRun(run([100]), "id", T0)!);
     expect(o.startedAt).toBe(new Date(T0).toISOString());
     expect(o.totalLaps).toBe(1);
+  });
+});
+
+/**
+ * ★ ライブの種類（みんなでライブ／ひとりでライブ、2026-11-18）。
+ *   「利用者が選んだ種類」（liveKind、未選択は null）と「いま測っている計測の種類」（runKind、計測開始で固める）を分けて持つ。
+ *   未選択の人は MULTI_LIVE_SUSPENDED に従うので、再開して false に戻せば既定もみんなでライブへ戻る。
+ *   期待する秒数は OVERHEAD_SEC から読む（Nori が実測して overhead.ts を直しても、このテストは書き換えなくてよい）。
+ */
+describe("ライブの種類", () => {
+  it("既定は、みんなでライブが止まっている間はひとりでライブ、再開したらみんなでライブ", () => {
+    expect(defaultLiveKind(true)).toBe("solo");
+    expect(defaultLiveKind(false)).toBe("multi");
+  });
+
+  it("選んでいなければ既定に従い、選んだ種類は既定より優先する", () => {
+    const s = initialState();
+    expect(s.liveKind).toBeNull();
+    expect(liveKindOf(s, true)).toBe("solo");
+    expect(liveKindOf(s, false)).toBe("multi");
+    expect(liveKindOf({ ...s, liveKind: "multi" }, true)).toBe("multi");
+    expect(liveKindOf({ ...s, liveKind: "solo" }, false)).toBe("solo");
+  });
+
+  it("計測していない間は選び直せる", () => {
+    const s = setLiveKind(initialState(), "multi");
+    expect(s.liveKind).toBe("multi");
+    expect(setLiveKind(s, "solo").liveKind).toBe("solo");
+  });
+
+  it("計測中・中断中は種類を変えられない（同じ状態を返す）", () => {
+    const running = run([100], { ...initialState(), liveKind: "solo" });
+    expect(setLiveKind(running, "multi")).toBe(running);
+    const paused = pause(running, T0 + 101_000);
+    expect(setLiveKind(paused, "multi")).toBe(paused);
+  });
+
+  it("計測開始で種類を固める。既定が変わっても、測っている計測の種類は変わらない", () => {
+    const s = tap({ ...initialState(), liveKind: "solo" }, T0);
+    expect(s.runKind).toBe("solo");
+    expect(liveKindOf(s, false)).toBe("solo");
+    // 選んでいない人は、開始した時点の既定で固まる
+    const d = tap(initialState(), T0);
+    expect(d.runKind).toBe(liveKindOf(initialState()));
+    expect(liveKindOf(d, true)).toBe(d.runKind);
+    expect(liveKindOf(d, false)).toBe(d.runKind);
+  });
+
+  it("計測を始めても、選んだ種類（liveKind）には書き込まない（未選択は未選択のまま）", () => {
+    expect(tap(initialState(), T0).liveKind).toBeNull();
+  });
+
+  it("記録を消すと計測の種類は外れ、選んだ種類は残る", () => {
+    const s = clearRecords(run([100], { ...initialState(), liveKind: "multi" }));
+    expect(s.runKind).toBeNull();
+    expect(s.liveKind).toBe("multi");
+  });
+
+  it("1つ戻して記録が空になったら計測の種類も外す。残っていれば外さない", () => {
+    const one = run([100], { ...initialState(), liveKind: "solo" });
+    expect(undo(one).runKind).toBe("solo");
+    expect(undo(undo(one)).runKind).toBeNull();
+  });
+
+  it("種類は集計（平均・オーバーヘッド・時速）を変えない", () => {
+    const solo = run([120, 120], { ...initialState(), liveKind: "solo" });
+    const multi = run([120, 120], { ...initialState(), liveKind: "multi" });
+    expect(stats(solo)).toEqual(stats(multi));
+    expect(suspects(solo)).toEqual(suspects(multi));
+  });
+
+  it("比べる既定のロスは overhead.ts の値（みんなでライブは今まで通り）", () => {
+    expect(modelOverheadSec("multi")).toBe(OVERHEAD_SEC.multi);
+    expect(modelOverheadSec("solo")).toBe(OVERHEAD_SEC.solo);
+  });
+
+  it("ひとりでライブのロスは、仮の値のままの間だけ「仮」。みんなでライブは仮ではない", () => {
+    expect(isProvisionalOverhead("multi")).toBe(false);
+    expect(isProvisionalOverhead("solo", SOLO_OVERHEAD_PLACEHOLDER)).toBe(true);
+    expect(isProvisionalOverhead("solo", SOLO_OVERHEAD_PLACEHOLDER + 8)).toBe(false);
+  });
+
+  it("記録には計測の種類を残し、書き出しにも出す", () => {
+    const s = run([100, 100], { ...initialState(), liveKind: "solo" });
+    const r = toRun(s, "id", T0)!;
+    expect(r.liveKind).toBe("solo");
+    expect(runToExport(r).liveKind).toBe("solo");
+    expect(exportObj(s).liveKind).toBe("solo");
+    const m = toRun(run([100], { ...initialState(), liveKind: "multi" }), "m", T0)!;
+    expect(m.liveKind).toBe("multi");
+  });
+});
+
+describe("ライブの種類の保存データ", () => {
+  it("往復して元に戻る（選んだ種類・計測の種類とも）", () => {
+    const s = run([100, 200], { ...initialState(), liveKind: "multi" });
+    expect(normalize(JSON.parse(JSON.stringify(s)))).toEqual(s);
+  });
+
+  it("種類を持たない古い保存は「未選択」として読む（保存値に既定を書き込まない）", () => {
+    expect(normalize({ songSec: 120 }).liveKind).toBeNull();
+    expect(normalize({ liveKind: "auto" }).liveKind).toBeNull();
+    expect(normalize({ liveKind: "solo" }).liveKind).toBe("solo");
+  });
+
+  /** ★ 種類を持たないのに計測中の保存は、この機能より前に始めた計測。前はみんなでライブ決め打ちだった。 */
+  it("種類を持たない計測中の古い保存は、みんなでライブの計測として読む", () => {
+    const s = normalize({ marks: [1000, 2000] });
+    expect(s.runKind).toBe("multi");
+    expect(liveKindOf(s, true)).toBe("multi");
+  });
+
+  it("計測していなければ計測の種類は持たない", () => {
+    expect(normalize({ marks: [], runKind: "solo" }).runKind).toBeNull();
+    expect(normalize({ marks: [1000, 2000], runKind: "solo" }).runKind).toBe("solo");
+    expect(normalize({ marks: [1000, 2000], runKind: "x" }).runKind).toBe("multi");
   });
 });
