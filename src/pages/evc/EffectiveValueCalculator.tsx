@@ -20,6 +20,7 @@ import {
   vsSkillValue,
   REVERSE_DEFAULT_LEADERS,
 } from "./evcLogic";
+import { EncoreAdvice } from "./EncoreAdvice";
 
 const LEADER_PRESETS = [150, 140, 130, 120, 110, 100];
 const SKILL_LEVELS: SkillLevel[] = [1, 2, 3, 4];
@@ -61,6 +62,8 @@ export default function EffectiveValueCalculator() {
   // 逆算
   const [effInput, setEffInput] = useState("");
   const [revLeader, setRevLeader] = useState("");
+  // 総合力は入力欄を持たない。「入力に反映」で読んだ編成の値を、アンコールの差の目安にだけ使う
+  const [power, setPower] = useState<number | null>(null);
 
   const isOc = leaderKind === "bulfes" && train === "untrained" && charType === "oc";
   const slotVals = slots.map((s) => toHalfWidthNumber(s) ?? 0);
@@ -123,6 +126,19 @@ export default function EffectiveValueCalculator() {
     return Math.round(forwardResults.reduce((a, r) => a + r.effective * r.count, 0) / total);
   }, [forwardResults, forwardEffectiveCandidates]);
 
+  // アンコールの判断に渡す自分の実効値。候補が 1 つならその値、複数（OC）なら画面に出している平均
+  const encoreMine =
+    forwardEffectiveCandidates.length === 0
+      ? null
+      : forwardEffectiveCandidates.length === 1
+        ? forwardEffectiveCandidates[0].value
+        : forwardAvg;
+  const encoreRange = useMemo<readonly [number, number] | null>(() => {
+    if (forwardEffectiveCandidates.length <= 1) return null;
+    const values = forwardEffectiveCandidates.map((c) => c.value);
+    return [Math.min(...values), Math.max(...values)];
+  }, [forwardEffectiveCandidates]);
+
   // 逆算
   const reverseResults = useMemo(() => {
     const eff = toHalfWidthNumber(effInput);
@@ -165,6 +181,8 @@ export default function EffectiveValueCalculator() {
             setDetailMode(false);
             setInner(String(p.skillTotal));
           }
+          // 0 以下は「総合力なし」と同じ扱い（点を出さない）
+          setPower(p.power != null && p.power > 0 ? p.power : null);
         }}
       />
       <SegmentedControl
@@ -356,6 +374,13 @@ export default function EffectiveValueCalculator() {
               )
             )}
           </Panel>
+
+          {/* 結果の枠の外に兄弟として置く（枠の中に枠を入れない。design-system.md 6 節） */}
+          <EncoreAdvice
+            myEffective={encoreMine}
+            myRange={encoreRange}
+            power={power}
+          />
         </>
       ) : (
         <>
