@@ -8,10 +8,11 @@
  * ★ 「この数字について」（約 730 字）は開いたままだったので、閉じた段にする。見出しだけで中身が分かる言い方にする。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import EfficiencyRanking from "./EfficiencyRanking";
 import type { RankingMusic } from "./useRankingMusics";
+import { DEFAULT_OVERHEAD_SEC } from "./lib/efficiency";
 
 // 独りんぼエンヴィー MASTER（public/MusicDatas の値。QuickCompare.test.tsx と同じ）
 const ENVY: RankingMusic = {
@@ -88,5 +89,89 @@ describe("この数字について", () => {
     expect(text).toContain("協力ライブの活躍ボーナス");
     expect(text).toContain("効率難易度");
     expect(text).toContain("1枠を取って巻き込みまで決める場合は低い難易度がもっと強くなることがあり");
+  });
+});
+
+/**
+ * ひとりで周回（2026-11-18〜 みんなでライブが止まったイベント向け）。
+ *
+ * ★ 既存の3つのタブのラベルは変えない。新しい説明には公式名「ひとりでライブ」を使い、「協力」と書かない。
+ */
+describe("ひとりで周回", () => {
+  // EfficiencyRanking.tsx の STORE_KEY。保存の鍵は変えない（変えると既存の利用者の入力が消える）。
+  const STORE_KEY = "sekai-master:ranking-inputs";
+  afterEach(() => localStorage.clear());
+
+  const tab = (name: string) => screen.getByRole("radio", { name });
+  // タブの直後の段落が見出し、その次が説明
+  const headline = () => tab("手動周回").closest('[role="radiogroup"]')!.nextElementSibling!;
+  const body = () => headline().nextElementSibling!.textContent ?? "";
+
+  it("タブは4つ。既存の3つのラベルは変えず、手動周回の隣に足す", () => {
+    draw();
+    const group = tab("手動周回").closest('[role="radiogroup"]') as HTMLElement;
+    expect(within(group).getAllByRole("radio").map((b) => b.textContent)).toEqual([
+      "手動周回",
+      "ひとりで周回",
+      "オート周回",
+      "チャレライ",
+    ]);
+  });
+
+  it("選ぶと「ひとりでライブ」の時間あたりPtの説明になり、「協力」と書かない。長さは他のタブ並み", () => {
+    draw();
+    const others = ["手動周回", "オート周回", "チャレライ"].map((name) => {
+      fireEvent.click(tab(name));
+      return body().length;
+    });
+    fireEvent.click(tab("ひとりで周回"));
+    expect(tab("ひとりで周回").getAttribute("aria-checked")).toBe("true");
+    expect(headline().textContent).toBe("ひとりでライブ・時間あたりのイベントポイント");
+    expect(headline().textContent + body()).not.toContain("協力");
+    expect(body().length).toBeLessThanOrEqual(Math.max(...others));
+  });
+
+  it("自分の条件で計算するとき、焚き数を入れられ、ロスの補足は「表示にだけ使う」と言わない", () => {
+    localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true }));
+    draw();
+    fireEvent.click(tab("ひとりで周回"));
+    const labels = [...document.querySelectorAll("label")].map((l) => l.textContent);
+    expect(labels).toContain("焚き数");
+    expect(labels).toContain("1曲あたりのロス（秒）");
+    // このタブではロスが順位を動かす。オート用の「所要時間の表示にだけ使う」は嘘になる
+    expect(screen.queryByText(/所要時間の表示にだけ使う/)).toBeNull();
+    expect(screen.getByText("ロード・リザルトの合計")).toBeTruthy();
+  });
+
+  it("触っていないロス（手動周回の既定 54）はタブの既定へ差し替え、手で入れた値は残す", () => {
+    localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true, overhead: "54" }));
+    draw();
+    fireEvent.click(tab("ひとりで周回"));
+    const input = () =>
+      [...document.querySelectorAll("label")]
+        .find((l) => l.textContent === "1曲あたりのロス（秒）")!
+        .parentElement!.querySelector("input")!;
+    expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.solo));
+    expect(input().value).not.toBe("54");
+    cleanup();
+
+    localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true, overhead: "40" }));
+    draw();
+    fireEvent.click(tab("ひとりで周回"));
+    expect(input().value).toBe("40");
+  });
+
+  it("保存値に知らない mode・古い版・壊れた JSON が入っていても落ちずに手動周回で開く", () => {
+    const blobs = [
+      JSON.stringify({ v: 2, mode: "solo-legacy", overhead: "54" }),
+      JSON.stringify({ v: 1, mode: "solo" }),
+      "{broken",
+    ];
+    for (const raw of blobs) {
+      localStorage.setItem(STORE_KEY, raw);
+      draw();
+      expect(tab("手動周回").getAttribute("aria-checked")).toBe("true");
+      cleanup();
+    }
   });
 });

@@ -49,9 +49,15 @@ const ROW_LIMIT = 50;
 
 const MODE_OPTIONS: { value: RankingMode; label: string }[] = [
   { value: "manual", label: "手動周回" },
+  // みんなでライブが止まったイベント（2026-11-18〜）向け。ゲームの公式名に合わせる。
+  { value: "solo", label: "ひとりで周回" },
   { value: "auto", label: "オート周回" },
   { value: "challenge", label: "チャレライ" },
 ];
+
+/** ソロ（ひとりでライブ・オート・チャレライ）のスキルの効き方。3つのタブで同じ文。 */
+const SOLO_SKILL_HINT =
+  "ソロは1曲のなかで6回スキルが発動します（編成5枚が1回ずつ＋最後にリーダーがもう1回）。1〜5回目の発動順は選べないので、5枚は内部値÷5の平均で計算し、6回目だけリーダーの値を当てています。";
 
 /** タブごとに「どのライブの・何を最大化しているか」を明示する。混同すると最適解が真逆になる。 */
 const MODE_NOTE: Record<
@@ -65,19 +71,23 @@ const MODE_NOTE: Record<
     skillHint:
       "協力ライブは1曲のなかで6回スキルが発動します（参加5人が1回ずつ＋アンコール1回）。各発動で乗るのが実効値です。強い人を呼ぶと単価が上がるのは、イベントポイントの式に他4人の合計スコアが入るからで、曲の順位そのものは部屋の顔ぶれでは変わりません。",
   },
+  solo: {
+    headline: "ひとりでライブ・時間あたりのイベントポイント",
+    body: "手で叩くので律速は時間。短い曲ほど有利になります。ひとりでライブのスコアとイベントポイントの式で計算しています。",
+    metricLabel: "Pt/時",
+    skillHint: SOLO_SKILL_HINT,
+  },
   auto: {
     headline: "オート・1プレイあたりのイベントポイント",
     body: "放置するので時間はコストになりません。律速はライブボーナスなので、1回で多く稼げる長尺・高基礎点の曲が有利です。手動とは最適解が逆になります。",
     metricLabel: "Pt/回",
-    skillHint:
-      "ソロは1曲のなかで6回スキルが発動します（編成5枚が1回ずつ＋最後にリーダーがもう1回）。1〜5回目の発動順は選べないので、5枚は内部値÷5の平均で計算し、6回目だけリーダーの値を当てています。",
+    skillHint: SOLO_SKILL_HINT,
   },
   challenge: {
     headline: "チャレンジライブ・1プレイあたりのスコア",
     body: "1日1回なので時間もライボも関係ありません。イベント基礎点も無関係で、純粋にスコアだけを見ます。",
     metricLabel: "スコア",
-    skillHint:
-      "ソロは1曲のなかで6回スキルが発動します（編成5枚が1回ずつ＋最後にリーダーがもう1回）。1〜5回目の発動順は選べないので、5枚は内部値÷5の平均で計算し、6回目だけリーダーの値を当てています。",
+    skillHint: SOLO_SKILL_HINT,
   },
 };
 
@@ -787,10 +797,12 @@ export default function EfficiencyRanking() {
         }}
       />
       <Panel>
+        {/* ★ 4択で「ひとりで周回」が6文字あるので詰めて描く（既定だと 390px で折れる）。 */}
         <SegmentedControl
           options={MODE_OPTIONS}
           value={mode}
           onChange={changeMode}
+          compact
         />
         <p className="mt-4 text-sm font-bold text-slate-600">{note.headline}</p>
         <p className="mt-1 text-xs leading-relaxed text-slate-500">
@@ -1586,7 +1598,7 @@ export default function EfficiencyRanking() {
                   }}
                 />
               </Field>
-              {mode === "manual" && (
+              {(mode === "manual" || mode === "solo") && (
                 <Field label="焚き数">
                   <TakiInput
                     value={taki}
@@ -1603,7 +1615,10 @@ export default function EfficiencyRanking() {
                   hint={
                     mode === "manual"
                       ? "ロード・リザルト・部屋待ちの合計"
-                      : "ロード・リザルトの合計。所要時間の表示にだけ使う"
+                      : // ★ ひとりで周回はロスが順位を動かすので「表示にだけ使う」とは書かない。
+                        mode === "solo"
+                        ? "ロード・リザルトの合計"
+                        : "ロード・リザルトの合計。所要時間の表示にだけ使う"
                   }
                 >
                   <NeuInput
@@ -1696,7 +1711,7 @@ export default function EfficiencyRanking() {
             <code>(base + Σ 実効スキル% × 枠重み ÷ 100) × 総合力 × 4</code>{" "}
             で計算しています。base と枠重みは楽曲ごとの実データで、
             譜面上のスキル発動位置が反映されています。タブごとに使うデータを変えていて、
-            手動周回は協力ライブ用（フィーバー加点込み）、オートはオート用、チャレライはソロ用です。
+            手動周回は協力ライブ用（フィーバー加点込み）、オートはオート用、ひとりで周回とチャレライはソロ用です。
           </li>
           <li>
             イベントポイントの式は

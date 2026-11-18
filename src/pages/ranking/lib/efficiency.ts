@@ -1,11 +1,12 @@
 /**
  * 楽曲の効率ランキング。用途によって「効率」の定義も、使うスコア式も変わるのが要点。
  *
- *   手動周回 : 協力ライブ  律速は時間     → Pt / 時間
- *   オート周回: ソロ(オート) 律速はライボ   → Pt / プレイ（放置なので時間はコストにならない）
- *   チャレライ: ソロ        1日1回        → スコア / プレイ
+ *   手動周回    : 協力ライブ  律速は時間     → Pt / 時間
+ *   ひとりで周回: ソロ        律速は時間     → Pt / 時間（みんなでライブが無いイベント向け）
+ *   オート周回  : ソロ(オート) 律速はライボ   → Pt / プレイ（放置なので時間はコストにならない）
+ *   チャレライ  : ソロ        1日1回        → スコア / プレイ
  *
- * 同じ「効率」という言葉で3つとも別物を指すので、混ぜて並べると必ず誤読される。
+ * 同じ「効率」という言葉で4つとも別物を指すので、混ぜて並べると必ず誤読される。
  * 実際、手動1位の独りんぼエンヴィーはオートでは3600位台、
  * オート1位級のメルト・初音天地開闢神話は手動では3600位台に沈む。
  *
@@ -59,14 +60,21 @@ import { calcLivePt, calcMultiLivePt } from "../../analyzer/lib/calcLivePt";
 import { OVERHEAD_SEC } from "../../../lib/overhead";
 import { playsUntilEmpty } from "./lbRun";
 
-/** ランキングの種類。 */
-export type RankingMode = "manual" | "auto" | "challenge";
+/**
+ * ランキングの種類。
+ *
+ * solo は「ひとりでライブを手で周回する」。みんなでライブが止まったイベント
+ * （2026-11-18 23:00〜）で手動周回の代わりに使う。スコアはチャレライと同じソロ式、
+ * イベントPtは calcLivePt（ひとりでライブの式）、並べ替えは手動周回と同じ時間あたり。
+ */
+export type RankingMode = "manual" | "solo" | "auto" | "challenge";
 
 /** スコア式の種別。ランキングの種類から一意に決まる。 */
 export type LiveType = "multi" | "solo" | "auto";
 
 export const LIVE_BY_MODE: Record<RankingMode, LiveType> = {
   manual: "multi",
+  solo: "solo",
   auto: "auto",
   challenge: "solo",
 };
@@ -158,6 +166,13 @@ export const DEFAULT_PARAMS: EfficiencyParams = {
  */
 export const DEFAULT_OVERHEAD_SEC: Record<RankingMode, number> = {
   manual: OVERHEAD_SEC.multi,
+  /**
+   * ★ ひとりでライブの手動周回を実測した値はまだ無い。編成ビルダーと楽曲比較が
+   *   ソロの Pt/時 に使っている値（下の OVERHEAD_BY_LIVE.solo）にそろえ、
+   *   画面ごとに違うソロのロスを持たない。ユーザーは「1曲あたりのロス」で上書きできる。
+   *   測れたら src/lib/overhead.ts を直す（ここに数字を書かない）。
+   */
+  solo: OVERHEAD_SEC.challenge,
   auto: OVERHEAD_SEC.auto,
   challenge: OVERHEAD_SEC.challenge,
 };
@@ -248,7 +263,8 @@ export function eventPtFor(
  * ランキングを作る。返り値は metric の降順。
  *
  * metric の定義:
- *   manual    … 時間あたりイベントPt
+ *   manual    … 時間あたりイベントPt（協力ライブの式）
+ *   solo      … 時間あたりイベントPt（ひとりでライブの式）
  *   auto      … 1プレイあたりイベントPt（放置前提なので時間を割らない）
  *   challenge … 1プレイあたりスコア
  */
@@ -258,12 +274,14 @@ export function rankSongs<T extends EfficiencyEntry>(
   mode: RankingMode,
 ): (T & EfficiencyMetrics)[] {
   const live = LIVE_BY_MODE[mode];
+  // 手で叩くモード（協力・ひとり）は時間が律速なので、時間あたりで並べる。
+  const perHour = mode === "manual" || mode === "solo";
   const scored: (T & Omit<EfficiencyMetrics, "index">)[] = [];
 
   for (const e of entries) {
     // 必須フィールドはモードごとに違う。チャレライは曲長も基礎点も metric に無関係なので、
     // それを理由に曲を落とすと「メタが揃っていない新曲だけ消える」ことになる。
-    if (mode === "manual" && e.musicTime == null) continue;
+    if (perHour && e.musicTime == null) continue;
     if (mode !== "challenge" && e.eventRate == null) continue;
 
     const score = calcScore(e, params, live);
@@ -273,7 +291,7 @@ export function rankSongs<T extends EfficiencyEntry>(
     const eventPt = mode === "challenge" ? 0 : eventPtFor(live, score, e.eventRate!, params);
     const ptPerHour = cycleSec > 0 ? (eventPt / cycleSec) * 3600 : 0;
 
-    const metric = mode === "manual" ? ptPerHour : mode === "auto" ? eventPt : score;
+    const metric = perHour ? ptPerHour : mode === "auto" ? eventPt : score;
     scored.push({ ...e, score, eventPt, cycleSec, metric, ptPerHour });
   }
 
