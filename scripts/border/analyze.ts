@@ -20,6 +20,7 @@ import { resultText } from '../../workers/border/src/posts.ts'
 import type { PostPayload } from '../../workers/border/src/snapshot.ts'
 import { buildReport, resultRanks, type PredictionLog, type Report } from './report.ts'
 import { checkModel, scoreboard, scoreboardLines } from './guard.ts'
+import { SOLO_ONLY_EVENTS, isSpecialReport } from '../../workers/border/src/special.ts'
 import { FINAL_RANKS, announceAt, confirmedFinal, historyMeta, historyPostText, isTestEvent, mergeSeed, parseHistory, unknownMemories, type HistoryEvent, type MasterEvent } from './history.ts'
 import { addInsights } from '../claude/border-insight-run.ts'
 
@@ -350,6 +351,12 @@ async function main() {
   say(`- モデル: ${summary.version}（学習 ${summary.poolSize} 件・期間 ${summary.durations.join('/')}h）`)
   const thin = summary.thinDurations ?? []
   if (thin.length > 0) say(`- 標本1〜2件の長さ（直近の回を混ぜた参考値の表）: ${thin.map((t) => `${t.duration}h（${t.samples}件・${t.latestEventId}）`).join('・')}`)
+  // みんなでライブ停止中の回（special.ts）。学習から外した回と、曲線を焼いた回（日程のわかっている回だけ）
+  if (model.special) {
+    const baked = model.special.curves.map((c) => c.eventId)
+    const waiting = model.special.events.filter((id) => !baked.includes(id))
+    say(`- 特別モデル: ${model.special.version}（学習から外す回 ${model.special.events.join('・')}／曲線を焼いた回 ${baked.join('・') || 'なし'}${waiting.length > 0 ? `／日程がまだ無い回 ${waiting.join('・')}` : ''}）`)
+  }
   for (const r of summary.ranks) {
     const mae = r.medianAbsError.map((x) => `${x.p}:${x.value == null ? '-' : (x.value * 100).toFixed(1)}`).join(' ')
     const cov = r.coverage.map((x) => `${x.covered}/${x.total}`).join(' ')
@@ -404,8 +411,12 @@ async function main() {
         posted = true
       }
     }
-    // ③ 一言解説・④ 改善案（Claude）。失敗しても解析ジョブは止めない
-    if (!DRY) {
+    // ③ 一言解説・④ 改善案（Claude）。失敗しても解析ジョブは止めない。
+    // みんなでライブ停止中の回は出さない（一言解説の材料は「8割の幅の中／外」で数えるが、特別モデルの帯は8割を狙っていない。
+    // 改善案はふだんのモデルの改善を探すもので、学習から外した回を根拠にしない）
+    if (isSpecialReport(report, SOLO_ONLY_EVENTS)) {
+      say(`- Claude の補足: ${e.id} はみんなでライブ停止中の回（特別モデル）なので飛ばす`)
+    } else if (!DRY) {
       await addInsights({ report, summary, posted, queue: (p) => write('PUT', '/admin/posts', p), say }).catch((err) =>
         say(`- Claude の補足: 失敗（${err instanceof Error ? err.message : String(err)}）`),
       )

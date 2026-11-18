@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleRequest } from '../src/api.ts'
 import { parseLive, parseSchedule, runCron } from '../src/collect.ts'
-import { kvGet, putModel, upsertEvents } from '../src/db.ts'
+import { kvGet, predictionsFor, putModel, upsertEvents } from '../src/db.ts'
 import type { Env } from '../src/env.ts'
-import { GRID, type Model } from '../src/model.ts'
+import { GRID, RANKS, type Model } from '../src/model.ts'
+import { SOLO_NOTE, xWeight } from '../src/posts.ts'
+import { SPECIAL_DEFAULT_PARAMS, predictSpecial, specialSelection, type SpecialModel } from '../src/special.ts'
 import { createD1 } from './d1shim.ts'
 
 const H = 3_600_000
@@ -202,6 +204,154 @@ describe('runCron', () => {
       expect(r).toEqual({ status: 'event_mismatch', expected: 230, got: 218 })
       expect(await kvGet(env.DB, 'current')).toBeNull()
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// みんなでライブ停止中の回（特別モデル、special.ts。2026-11-19）
+// ---------------------------------------------------------------------------
+describe('runCron: みんなでライブ停止中の回（特別モデル）', () => {
+  // 226: 11/20 15:00 〜 11/24 20:59:59（日本時間）・102時間
+  const S226 = Date.UTC(2026, 10, 20, 6, 0)
+  const E226 = { id: 226, name: 'ワンダーランズ×ショウタイム Memories', type: 'marathon', unit: 'wonderland_showtime', startAt: S226, aggregateAt: S226 + 102 * H - 1000 }
+  const SPAN226 = E226.aggregateAt + 60_000 - S226
+
+  function fetchFor(event: typeof E226 | typeof EVENT, live: () => unknown): typeof fetch {
+    return (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith('/CardDatas/bonuses.json')) return Response.json({ events: [event] })
+      if (url.includes('/event/live')) return Response.json(live())
+      return new Response('nf', { status: 404 })
+    }) as typeof fetch
+  }
+
+  /** 追い込みあり＝p²、なし＝線形の曲線（日程は 226 のもの） */
+  const special = (over: Partial<SpecialModel> = {}): SpecialModel => ({
+    algorithm: 'solo-special-v1',
+    version: 'solo-special-v1@abc12345',
+    events: [226],
+    params: { ...SPECIAL_DEFAULT_PARAMS },
+    curves: [
+      {
+        eventId: 226,
+        startAt: E226.startAt,
+        aggregateAt: E226.aggregateAt,
+        ranks: Object.fromEntries(RANKS.map((r) => [String(r), { spurt: GRID.map((p) => p * p), flat: GRID.map((p) => p) }])),
+      },
+    ],
+    ...over,
+  })
+  /** ふだんのモデル（102h は標本2件の thin。札の数字は 150） */
+  const base: Model = {
+    ...linear,
+    version: 'share-median-v1@e225-test',
+    knownDurations: [150],
+    thinDurations: [{ duration: 102, samples: 2, latestEventId: 222, weight: 0.3 }],
+    ranks: Object.fromEntries(
+      Object.entries(linear.ranks).map(([r, rm]) => [r, { ...rm, tables: { ...rm.tables, '150': rm.tables.all, far_short: rm.tables.all, 'thin:102': rm.tables.all } }]),
+    ),
+  }
+  const withSpecial = (sp: SpecialModel = special()): Model => ({ ...base, special: sp })
+
+  async function run(model: Model, event: typeof E226 | typeof EVENT, hoursIn: number, scale: (p: number) => number) {
+    await putModel(env.DB, model, { version: model.version }, 0)
+    const span = event.aggregateAt + 60_000 - event.startAt
+    const t = event.startAt + hoursIn * H
+    return runCron(env, t + 5 * 60_000, fetchFor(event, () => liveBody(event.id, t, scale((t - event.startAt) / span))))
+  }
+  type Snap = Record<string, unknown> & { ranks: { rank: number; predicted: number | null; confidence: string | null; visible: boolean }[] }
+  const current = async () => JSON.parse((await kvGet(env.DB, 'current')) as string) as Snap
+
+  it('一覧の回は特別モデルで出す: 版は solo-special-v1@…、スナップショットに special と参考値の札（extrapolatedFrom）', async () => {
+    const r = await run(withSpecial(), E226, 30, (p) => p)
+    expect(r).toMatchObject({ status: 'collected', eventId: 226, predictions: 6 })
+    const snap = await current()
+    expect(snap.special).toBe('solo')
+    expect(snap.modelVersion).toBe('solo-special-v1@abc12345')
+    // 古い Bot は special を読まないので、参考値の札（extrapolatedFrom）とふだんの表の出どころ（102h = thin・2回）を付ける
+    expect(snap).toMatchObject({ extrapolatedFrom: 150, referenceSource: 'thin', thin: { duration: 102, samples: 2 } })
+    expect(snap.ranks.every((x) => x.confidence === 'rough' && x.visible)).toBe(true)
+    const logged = await predictionsFor(env.DB, 226)
+    expect(logged).toHaveLength(6)
+    expect(new Set(logged.map((x) => x.model_version))).toEqual(new Set(['solo-special-v1@abc12345']))
+  })
+
+  it('開始24時間の投稿の文面: 確度も「8割」も名乗らず、特別対応の目安と書く。280 に収まる', async () => {
+    const r = await run(withSpecial(), E226, 24.5, (p) => p)
+    expect(r.status === 'collected' && r.queued).toEqual(['226:h24'])
+    const req = new Request('https://w/admin/posts?unsent=x', { headers: { Authorization: 'Bearer secret-token' } })
+    const body = (await (await handleRequest(req, env)).json()) as { posts: { text: string; payload: string }[] }
+    const text = body.posts[0].text
+    expect(text).toContain('【ボーダー予測・参考値】')
+    expect(text).toContain(SOLO_NOTE)
+    expect(text).not.toContain('確度')
+    expect(text).not.toContain('8割')
+    // 控えの本文（Bot が画像を作れないとき・代替テキスト）。長い名前だと、ふだんの参考値の文面と同じく下の順位から削る
+    expect(xWeight(text)).toBeLessThanOrEqual(280)
+    expect(text.split('\n').filter((l) => /^\d+位 /.test(l)).length).toBeGreaterThan(0)
+    expect(JSON.parse(body.posts[0].payload).snapshot.special).toBe('solo')
+  })
+
+  it('24時間前の実測（D1 の samples）を窓の始まりに使う', async () => {
+    const shape = (p: number) => p ** 1.4
+    await run(withSpecial(), E226, 10, shape)
+    await run(withSpecial(), E226, 34, shape)
+    const t1 = S226 + 10 * H
+    const t2 = S226 + 34 * H
+    const value = (t: number, rank: number) => Math.round((shape((t - S226) / SPAN226) * 1e8) / rank)
+    const model = withSpecial()
+    const meta = { id: 226, name: E226.name, eventType: 'marathon', unit: E226.unit, startAt: S226, aggregateAt: E226.aggregateAt }
+    const sel = specialSelection(model, meta)
+    if (!sel) throw new Error('特別モデルが選ばれない')
+    const expected = predictSpecial(model, sel, meta, 1000, value(t2, 1000), t2, [[t1, value(t1, 1000)]])
+    const fromStart = predictSpecial(model, sel, meta, 1000, value(t2, 1000), t2, [])
+    const r1000 = (await current()).ranks.find((x) => x.rank === 1000)
+    expect(r1000?.predicted).toBe(Math.round(expected?.predicted ?? NaN))
+    expect(Math.round(expected?.predicted ?? NaN)).not.toBe(Math.round(fromStart?.predicted ?? NaN))
+  })
+
+  it('入れる順に依らない: special の無いモデル（今の版）なら、新しい Worker でも 226 は今と同じ thin の参考値で出す', async () => {
+    await run(base, E226, 30, (p) => p)
+    const snap = await current()
+    expect('special' in snap).toBe(false)
+    expect(snap.modelVersion).toBe(base.version)
+    expect(snap).toMatchObject({ extrapolatedFrom: 150, referenceSource: 'thin' })
+    expect(new Set((await predictionsFor(env.DB, 226)).map((x) => x.model_version))).toEqual(new Set([base.version]))
+  })
+
+  it('一覧にあっても、曲線の日程が違う・曲線が壊れている・曲線が無いときは今と同じ表で出す', async () => {
+    const curves = special().curves[0]
+    const cases: SpecialModel[] = [
+      special({ curves: [{ ...curves, aggregateAt: E226.aggregateAt + 2 * H }] }),
+      special({ curves: [{ ...curves, ranks: { ...curves.ranks, '1000': { spurt: [1], flat: [1] } } }] }),
+      special({ curves: [] }),
+    ]
+    for (const sp of cases) {
+      env = { DB: createD1(), ADMIN_TOKEN: 'secret-token', SITE_ORIGIN: 'https://sekaimaster.pages.dev' }
+      await run(withSpecial(sp), E226, 30, (p) => p)
+      const snap = await current()
+      expect('special' in snap).toBe(false)
+      expect(snap.modelVersion).toBe(base.version)
+    }
+  })
+
+  it('一覧に無い回の出力は、special の有無で1文字も変わらない（予測ログも同じ）', async () => {
+    const out = async (model: Model) => {
+      env = { DB: createD1(), ADMIN_TOKEN: 'secret-token', SITE_ORIGIN: 'https://sekaimaster.pages.dev' }
+      await run(model, EVENT, 76, (p) => p)
+      await run(model, EVENT, 100, (p) => p ** 1.2)
+      return {
+        current: await kvGet(env.DB, 'current'),
+        history: await kvGet(env.DB, 'history:219'),
+        preds: JSON.stringify(await predictionsFor(env.DB, 219)),
+      }
+    }
+    const a = await out(base)
+    const b = await out(withSpecial())
+    expect(b.current).toBe(a.current)
+    expect(b.history).toBe(a.history)
+    expect(b.preds).toBe(a.preds)
+    expect(a.current).not.toContain('special')
   })
 })
 

@@ -47,6 +47,7 @@ import {
   type ThinDuration,
 } from './model.ts'
 import { fitRate, rateShareTable } from './rate.ts'
+import { SOLO_ONLY_EVENTS, SPECIAL_ALGORITHM, SPECIAL_DEFAULT_PARAMS, type SpecialEventCurves, type SpecialModel } from './special.ts'
 
 export const ALGORITHM = 'share-median-v1' as const
 
@@ -517,7 +518,7 @@ function upcomingByDuration(events: readonly EventMeta[], now: number): Map<numb
   return out
 }
 
-function historyFrom(events: readonly EventMeta[], shapes: readonly Shape[], now: number): HistoryEvent[] {
+function historyFrom(events: readonly EventMeta[], shapes: readonly Shape[], now: number, exclude: ReadonlySet<number>): HistoryEvent[] {
   const byEvent = new Map<number, Map<number, Shape>>()
   for (const s of shapes) {
     const m = byEvent.get(s.eventId) ?? new Map<number, Shape>()
@@ -525,13 +526,59 @@ function historyFrom(events: readonly EventMeta[], shapes: readonly Shape[], now
     byEvent.set(s.eventId, m)
   }
   return events
-    .filter((e) => e.eventType === 'marathon' && e.aggregateAt < now && byEvent.has(e.id))
+    .filter((e) => e.eventType === 'marathon' && e.aggregateAt < now && byEvent.has(e.id) && !exclude.has(e.id))
     .sort((a, b) => a.startAt - b.startAt)
     .map((meta) => ({ meta, shapes: byEvent.get(meta.id) as Map<number, Shape> }))
 }
 
-export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[], now: number): FitResult {
-  const history = historyFrom(events, shapes, now)
+// ---------------------------------------------------------------------------
+// みんなでライブ停止中の回（特別モデル、special.ts。2026-11-19）
+//
+// 一覧（SOLO_ONLY_EVENTS）の回は、ひとりでライブなどだけで開いた回で、ほかの回と伸び方が違う。学習（王者の表・thin の3割・率の当てはめ・
+// 帯の標本・序盤の差し替えの採点）には入れない（Nori「学習からは外しましょう」）。答え合わせ（analyze.ts）は自分の予測ログで作る。
+// 一覧の回のうち日程のわかっている回には、その日程の率モデルの曲線（追い込みあり S_spurt・なし S_flat）を焼き、model.special で Worker に渡す
+// ---------------------------------------------------------------------------
+
+export interface FitOptions {
+  /** 学習から外し、特別モデルの曲線を焼く回。既定は SOLO_ONLY_EVENTS（テストで差し替える） */
+  specialEvents?: readonly number[]
+}
+
+/**
+ * model.special を作る。一覧が空なら undefined（版のハッシュもこれまでと同じになる）。
+ * 曲線は、一覧の回のうち日程のわかっている（events にある）マラソンだけ。率モデルが当てはまらない順位があれば、その回は曲線を焼かない
+ * （Worker は曲線の無い回をふだんの表で出す）
+ */
+export function bakeSpecial(events: readonly EventMeta[], history: readonly HistoryEvent[], list: readonly number[]): SpecialModel | undefined {
+  if (list.length === 0) return undefined
+  const params = { ...SPECIAL_DEFAULT_PARAMS }
+  const curves: SpecialEventCurves[] = []
+  for (const id of list) {
+    const meta = events.find((e) => e.id === id && e.eventType === 'marathon')
+    if (!meta) continue
+    const ranks: SpecialEventCurves['ranks'] = {}
+    let ok = true
+    for (const rank of RANKS) {
+      const fit = fitRate(history, rank)
+      if (!fit) {
+        ok = false
+        break
+      }
+      ranks[String(rank)] = {
+        spurt: rateShareTable(fit, meta).map(round5),
+        flat: rateShareTable(fit, meta, { remaining: false }).map(round5),
+      }
+    }
+    if (ok) curves.push({ eventId: id, startAt: meta.startAt, aggregateAt: meta.aggregateAt, ranks })
+  }
+  const ids = [...list]
+  const version = `${SPECIAL_ALGORITHM}@${fnv1a(JSON.stringify({ events: ids, params, curves }))}`
+  return { algorithm: SPECIAL_ALGORITHM, version, events: ids, params, curves }
+}
+
+export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[], now: number, opts: FitOptions = {}): FitResult {
+  const specialList = opts.specialEvents ?? SOLO_ONLY_EVENTS
+  const history = historyFrom(events, shapes, now, new Set(specialList))
   if (history.length < 5) throw new Error(`学習に使えるマラソンが ${history.length} 件しかない`)
   const trainedThrough = history[history.length - 1].meta.id
   const durations = [...new Set(history.map((h) => durationHours(h.meta)))].sort((a, b) => a - b)
@@ -661,9 +708,13 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
     })
   }
 
+  const special = bakeSpecial(events, history, specialList)
   // 版名には中身のハッシュを入れる。学習データが同じでもロジックを直せば別の版になり、切り替わる（レビュー 2026-09-30）
-  const version = `${ALGORITHM}@e${trainedThrough}-${fnv1a(JSON.stringify({ ranks, knownDurations, thinDurations }))}`
-  const model: Model = { version, createdAt, algorithm: ALGORITHM, grid: [...GRID], ranks, knownDurations, thinDurations }
+  // ★ special もハッシュに入れる。入れないと、表が同じまま一覧や曲線だけが変わったとき版名が同じになり、Worker の putModel が
+  //   「同じ版」として書き込まない（227 を足しても Worker に届かない）。special が無ければ、ハッシュの入力はこれまでと同じ
+  const hashInput = special ? { ranks, knownDurations, thinDurations, special } : { ranks, knownDurations, thinDurations }
+  const version = `${ALGORITHM}@e${trainedThrough}-${fnv1a(JSON.stringify(hashInput))}`
+  const model: Model = { version, createdAt, algorithm: ALGORITHM, grid: [...GRID], ranks, knownDurations, thinDurations, ...(special ? { special } : {}) }
   const summary: ModelSummary = {
     version,
     algorithm: ALGORITHM,

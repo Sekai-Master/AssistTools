@@ -5,6 +5,7 @@
  * モデル: 終値予測 = 現在の実測ボーダー ÷ シェア表(期間, 順位帯, 経過率)
  * 誤差の定義: err = 予測 ÷ 実測終値 − 1（マイナス＝低く外した）
  */
+import type { SpecialKind, SpecialModel } from './special.ts'
 
 export const RANKS = [50, 100, 200, 500, 1000, 2000] as const
 export type Rank = (typeof RANKS)[number]
@@ -380,6 +381,11 @@ export interface Model {
    * 参考値（extrapolatedFrom）にして帯を広げる。古い版のモデルには無い。古い Worker はこの鍵を読まない（far_* か all のまま）
    */
   thinDurations?: ThinDuration[]
+  /**
+   * みんなでライブ停止中の回の特別モデル（special.ts）。一覧と、その回の日程で焼いた曲線。解析ジョブが SOLO_ONLY_EVENTS から書く。
+   * 古い版のモデルには無い（そのときは一覧の回もふだんの表で出す）。古い Worker はこの欄を読まない
+   */
+  special?: SpecialModel
 }
 
 /**
@@ -517,6 +523,8 @@ export interface Prediction {
   /** 参考値の表の出どころ（thin / rate / borrow）。参考値でなければ null */
   referenceSource: ReferenceSource | null
   visible: boolean
+  /** 特別モデル（special.ts の predictSpecial）で出したときだけ 'solo'。ふだんの predict() は付けない */
+  special?: SpecialKind
 }
 
 export function predict(model: Model, meta: EventMeta, rank: number, current: number, t: number): Prediction | null {

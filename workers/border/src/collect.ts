@@ -14,13 +14,15 @@ import {
   kvGet,
   kvSet,
   queuePost,
+  samplesBetween,
   upsertEvents,
   type LiveSample,
 } from './db.ts'
 import type { Env } from './env.ts'
-import { RANKS, durationHours, predict, type EventMeta, type Prediction } from './model.ts'
+import { RANKS, durationHours, predict, type EventMeta, type Prediction, type Sample } from './model.ts'
 import { milestoneText, postReferenceOf } from './posts.ts'
 import type { PostPayload, Snapshot } from './snapshot.ts'
+import { predictSpecial, specialAnchorRange, specialSelection, type SpecialSelection } from './special.ts'
 
 export const LIVE_URL = 'https://api.sekai.best/event/live'
 export const USER_AGENT = 'sekaimaster-border/1.0 (+https://sekaimaster.pages.dev)'
@@ -111,10 +113,12 @@ async function refreshSchedule(env: Env, now: number, fetcher: Fetcher): Promise
   return changed
 }
 
-function snapshotOf(event: EventMeta, now: number, samples: LiveSample[], preds: Map<number, Prediction>, modelVersion: string | null): Snapshot {
+function snapshotOf(event: EventMeta, now: number, samples: LiveSample[], preds: Map<number, Prediction>, modelVersion: string | null, special: boolean): Snapshot {
   const sampleAt = Math.max(...samples.map((s) => s.ts))
   const span = event.aggregateAt + 60_000 - event.startAt
   return {
+    // 特別モデルの回だけ印を付ける（ふだんの回の出力は1文字も変えない）
+    ...(special ? { special: 'solo' as const } : {}),
     event: {
       id: event.id,
       name: event.name,
@@ -149,6 +153,24 @@ function snapshotOf(event: EventMeta, now: number, samples: LiveSample[], preds:
   }
 }
 
+/**
+ * 特別モデルの直近の窓の始まりの前後の実測（順位ごと）。開始から窓の長さまでは引かない（窓を開始から取る）。
+ * 読めなくても予測は止めない（窓を開始から取る形に戻る）
+ */
+async function windowSamples(env: Env, event: EventMeta, special: SpecialSelection, t: number): Promise<Map<number, Sample[]> | null> {
+  const range = specialAnchorRange(event, special.params, t)
+  if (!range) return null
+  try {
+    const rows = await samplesBetween(env.DB, event.id, range[0], range[1])
+    const out = new Map<number, Sample[]>()
+    for (const r of rows) out.set(r.rank, [...(out.get(r.rank) ?? []), [r.ts, r.score]])
+    return out
+  } catch (err) {
+    console.error('special: 窓の始まりの実測を読めなかった', event.id, err)
+    return null
+  }
+}
+
 export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): Promise<CronResult> {
   let actives = await activeEvents(env.DB, now)
   if (actives.length === 0) {
@@ -180,28 +202,34 @@ export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): 
 
   const preds = new Map<number, Prediction>()
   const model = event.eventType === 'marathon' ? await activeModel(env.DB) : null
+  // みんなでライブ停止中の回（model.special の一覧にあり、この回の日程で焼いた曲線がある）は特別モデルで当てる（special.ts）
+  const special = model ? specialSelection(model.model, event) : null
+  const version = special?.version ?? model?.version ?? null
   if (model) {
+    const nearby = special ? await windowSamples(env, event, special, sampleAt) : null
     for (const s of live.samples) {
       // 1順位の表が壊れていても、残りの順位と実測の保存は止めない
       try {
-        const p = predict(model.model, event, s.rank, s.score, s.ts)
+        const p = special
+          ? predictSpecial(model.model, special, event, s.rank, s.score, s.ts, nearby?.get(s.rank) ?? [])
+          : predict(model.model, event, s.rank, s.score, s.ts)
         if (p) preds.set(s.rank, p)
       } catch (err) {
-        console.error('predict failed', model.version, s.rank, err)
+        console.error('predict failed', version, s.rank, err)
       }
     }
     if (!stale) {
       await insertPredictions(
         env.DB,
         event.id,
-        model.version,
+        version as string,
         live.samples.filter((s) => preds.has(s.rank)).map((s) => ({ ts: s.ts, p: preds.get(s.rank) as Prediction })),
         now,
       )
     }
   }
 
-  const snap = snapshotOf(event, now, live.samples, preds, model?.version ?? null)
+  const snap = snapshotOf(event, now, live.samples, preds, version, special != null)
   await kvSet(env.DB, 'current', snap, now)
   if (!stale) {
     const row = [snap.sampleAt, snap.progress, snap.ranks.map((r) => [r.rank, r.current, r.predicted, r.low, r.high, r.visible ? 1 : 0])]

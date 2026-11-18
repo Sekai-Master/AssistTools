@@ -13,12 +13,13 @@
  * ★ CPU 10ms の枠: ふだんの回は events を1回引いて終わる。積む回だけ歴代の表（約90KB）を parse する（1イベントに1回）
  */
 import { MILESTONES } from './collect.ts'
-import { kvGet, queuePost, toMeta, type EventRow } from './db.ts'
+import { activeSpecialEvents, kvGet, queuePost, toMeta, type EventRow } from './db.ts'
 import type { Env } from './env.ts'
 import { historyMeta, parseHistory, type HistoryType } from './history.ts'
 import { dailyTimes } from './pace.ts'
 import { formatMan, xWeight } from './posts.ts'
 import type { PostPayload } from './snapshot.ts'
+import { SOLO_ONLY_EVENTS } from './special.ts'
 
 const M = 60_000
 const H = 60 * M
@@ -109,6 +110,9 @@ export async function runStart(env: Env, now: number): Promise<StartResult> {
 
   const stored = await kvGet(env.DB, 'finals')
   const table = stored ? parseHistory(JSON.parse(stored)) : []
+  // みんなでライブ停止中の回（ひとりでライブなどだけで開いた回）は、前例にしない（227 の告知で 226 の終値を「同じ長さの前回」と出さない）。
+  // 一覧はこのファイルに入れた一覧と、有効な版のモデルの一覧（解析ジョブが書く。Worker を反映し直さなくても足せる）を合わせる
+  const special = new Set([...SOLO_ONLY_EVENTS, ...(await activeSpecialEvents(env.DB))])
   const prevRow = table
     // 本文に出す 100位・1000位の終値がそろっている回だけ（欠けた回を「前回」にすると本文が崩れる。#173 レビュー L2）
     .filter(
@@ -116,6 +120,7 @@ export async function runStart(env: Env, now: number): Promise<StartResult> {
         e.type === meta.type &&
         e.hours === meta.hours &&
         e.id < ev.id &&
+        !special.has(e.id) &&
         (e.type as HistoryType) !== 'world_bloom' &&
         typeof e.finals['100'] === 'number' &&
         typeof e.finals['1000'] === 'number',

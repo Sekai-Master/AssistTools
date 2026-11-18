@@ -1,7 +1,7 @@
 /**
  * D1 へのアクセスはここに集める。SQL は必ずパラメータバインド（?N）で書く。
  */
-import type { EventMeta, Model, Prediction, Shape } from './model.ts'
+import { RANKS, type EventMeta, type Model, type Prediction, type Shape } from './model.ts'
 
 export interface EventRow {
   id: number
@@ -104,6 +104,18 @@ export async function insertSamples(db: D1Database, eventId: number, samples: re
   await db.batch(samples.map((s) => stmt.bind(eventId, s.rank, s.ts, s.score)))
 }
 
+/**
+ * 実測のうち、時刻が from〜to の点（6順位）。特別モデル（special.ts）が直近の窓の始まりの値に使う。
+ * ★ rank も WHERE に入れて主キー（event_id, rank, ts）の範囲で引く（rank を外すと回の全行をなめる）。読むのは1順位あたり数行
+ */
+export async function samplesBetween(db: D1Database, eventId: number, from: number, to: number): Promise<LiveSample[]> {
+  const r = await db
+    .prepare(`SELECT rank, ts, score FROM samples WHERE event_id = ?1 AND rank IN (${RANKS.join(', ')}) AND ts >= ?2 AND ts <= ?3 ORDER BY rank, ts`)
+    .bind(eventId, from, to)
+    .all<LiveSample>()
+  return r.results
+}
+
 export async function insertPredictions(
   db: D1Database,
   eventId: number,
@@ -171,6 +183,21 @@ export async function activeModel(db: D1Database): Promise<ActiveModel | null> {
   const r = await db.prepare('SELECT version, body FROM models WHERE active = 1 LIMIT 1').first<{ version: string; body: string }>()
   if (!r) return null
   return { version: r.version, model: JSON.parse(r.body) as Model }
+}
+
+/**
+ * 有効な版のモデルの特別モデルの一覧（model.special.events）。開始の告知（start.ts）が前例から外す回に使う。
+ * ★ モデルの本文（数百KB）を Worker で parse しないよう、D1 の json_extract で一覧だけ取り出す。無い・読めなければ空
+ */
+export async function activeSpecialEvents(db: D1Database): Promise<number[]> {
+  try {
+    const r = await db.prepare("SELECT json_extract(body, '$.special.events') AS ev FROM models WHERE active = 1 LIMIT 1").first<{ ev: string | null }>()
+    const list: unknown = r?.ev ? JSON.parse(r.ev) : []
+    return Array.isArray(list) ? list.filter((x): x is number => Number.isInteger(x)) : []
+  } catch (err) {
+    console.error('special: 有効な版の一覧を読めなかった', err)
+    return []
+  }
 }
 
 export async function activeModelSummary(db: D1Database): Promise<string | null> {

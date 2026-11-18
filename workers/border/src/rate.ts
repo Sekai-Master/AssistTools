@@ -263,8 +263,15 @@ export function rateComponents(fit: RateFit, elapsedH: number, remainingH: numbe
 /**
  * 指定の日程のシェア表（GRID の51点。0 → 1 の単調増加）を作る。
  * base(t) = exp(f(t) + g(span − t) + h(c0 + t)) を細かい刻みの中点則で積分し、全体で割る。
+ * remaining: false のときは g（残り時間の折れ線＝終盤の追い込み）を外す。みんなでライブ停止中の回の特別モデル（special.ts）の
+ * 「追い込みなし」の曲線 S_flat に使う
  */
-export function rateShareTable(fit: RateFit, meta: Pick<EventMeta, 'startAt' | 'aggregateAt'>): (number | null)[] {
+export function rateShareTable(
+  fit: RateFit,
+  meta: Pick<EventMeta, 'startAt' | 'aggregateAt'>,
+  opts: { remaining?: boolean } = {},
+): (number | null)[] {
+  const useRemaining = opts.remaining !== false
   const spanH = (eventEndMs(meta) - meta.startAt) / HOUR_MS
   const c0 = jstClock(meta.startAt)
   const steps = Math.max(1, Math.ceil(spanH / STEP_H))
@@ -276,7 +283,7 @@ export function rateShareTable(fit: RateFit, meta: Pick<EventMeta, 'startAt' | '
   for (let i = 0; i < steps; i++) {
     const t = (i + 0.5) * dt
     const c = rateComponents(fit, t, spanH - t, c0 + t)
-    logs[i] = c.f + c.g + c.h
+    logs[i] = c.f + (useRemaining ? c.g : 0) + c.h
     if (logs[i] > top) top = logs[i]
   }
   const cum = new Float64Array(steps + 1)

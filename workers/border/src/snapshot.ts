@@ -4,6 +4,7 @@
  * ★ sekaimaster-bot（別リポジトリ）の src/border/client.ts が同じ形を読む。フィールドを変えたらそちらも直す。
  */
 import type { Confidence, ReferenceSource, ThinDuration } from './model.ts'
+import type { SpecialKind } from './special.ts'
 
 export interface SnapshotEvent {
   id: number
@@ -52,6 +53,11 @@ export interface Snapshot {
    * 文面の書き分けに使う（#175）。古い版の Worker の出力には無いので、読む側は referenceOf を通す
    */
   referenceSource?: ReferenceSource | null
+  /**
+   * みんなでライブ停止中の回を特別モデル（special.ts）で出しているとき 'solo'。ふだんの回には欄そのものが無い。
+   * 古い Bot はこの欄を読まないので、同じスナップショットに extrapolatedFrom（と表の出どころ）も付けて「参考値」と出させる
+   */
+  special?: SpecialKind | null
   predicted: boolean
   ranks: SnapshotRank[]
 }
