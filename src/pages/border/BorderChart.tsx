@@ -49,21 +49,24 @@ function LineKey({ dashed }: { dashed?: boolean }) {
   );
 }
 
-function Legend() {
+/** 帯の呼び名。ふだんは過去の外れ方から作った「8割の幅」。みんなでライブ停止中の特別モデルの回は8割を狙っていないので「目安の幅」 */
+const BAND_LABEL = "8割の幅";
+
+function Legend({ bandLabel }: { bandLabel: string }) {
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
       <li className="flex items-center gap-2"><LineKey />実測</li>
       <li className="flex items-center gap-2"><LineKey dashed />その時点の予測（最終値）</li>
       <li className="flex items-center gap-2">
         <span aria-hidden className="inline-block h-2.5 w-4 rounded-sm" style={{ background: PRED, opacity: 0.2 }} />
-        8割の幅
+        {bandLabel}
       </li>
     </ul>
   );
 }
 
 /** 値が先、名前が後（読む人は系列を知っていて数字が欲しい） */
-function Tooltip({ p, left, width }: { p: HistoryPoint; left: number; width: number }) {
+function Tooltip({ p, left, width, bandLabel }: { p: HistoryPoint; left: number; width: number; bandLabel: string }) {
   // ★ 触った位置の割合だけ自分の幅をずらす。左右に振る形は、狭いグラフで画面の外へ出た（スマホ 390px で 7px、320px で 43px）
   const ratio = width > 0 ? Math.min(1, Math.max(0, left / width)) : 0;
   const side: CSSProperties = { left, transform: `translateX(${-ratio * 100}%)` };
@@ -83,13 +86,13 @@ function Tooltip({ p, left, width }: { p: HistoryPoint; left: number; width: num
         </p>
       )}
       {p.low != null && p.high != null && (
-        <p className="whitespace-nowrap tabular-nums text-slate-500">8割の幅 {formatRange(p.low, p.high)}</p>
+        <p className="whitespace-nowrap tabular-nums text-slate-500">{bandLabel} {formatRange(p.low, p.high)}</p>
       )}
     </div>
   );
 }
 
-function RankChart({ rank, points, startAt, endAt }: { rank: number; points: HistoryPoint[]; startAt: number; endAt: number }) {
+function RankChart({ rank, points, startAt, endAt, bandLabel }: { rank: number; points: HistoryPoint[]; startAt: number; endAt: number; bandLabel: string }) {
   const [ref, width] = useWidth();
   /** 選んでいる点。"latest" はいちばん新しい点（10分ごとの読み直しで点が増えても付いていく） */
   const [active, setActive] = useState<number | "latest" | null>(null);
@@ -212,14 +215,14 @@ function RankChart({ rank, points, startAt, endAt }: { rank: number; points: His
             )}
           </svg>
         )}
-        {a && width > 0 && <Tooltip p={a} left={x(a.t)} width={width} />}
+        {a && width > 0 && <Tooltip p={a} left={x(a.t)} width={width} bandLabel={bandLabel} />}
       </div>
     </figure>
   );
 }
 
 /** グラフと同じ数字を表でも読めるようにする（グラフに触れない人・読み上げのため）。開いたときだけ作る */
-function HistoryTable({ series }: { series: readonly (readonly [number, HistoryPoint[]])[] }) {
+function HistoryTable({ series, bandLabel }: { series: readonly (readonly [number, HistoryPoint[]])[]; bandLabel: string }) {
   const [open, setOpen] = useState(false);
   return (
     <details className="mt-4 text-xs" onToggle={(e) => setOpen(e.currentTarget.open)}>
@@ -233,7 +236,7 @@ function HistoryTable({ series }: { series: readonly (readonly [number, HistoryP
                 <tr>
                   <th className="py-1 font-normal">時刻</th>
                   <th className="py-1 font-normal">実測</th>
-                  <th className="py-1 font-normal">予測（8割の幅）</th>
+                  <th className="py-1 font-normal">予測（{bandLabel}）</th>
                 </tr>
               </thead>
               <tbody className="text-slate-700">
@@ -261,11 +264,13 @@ export function BorderCharts({
   ranks,
   startAt,
   endAt,
+  bandLabel = BAND_LABEL,
 }: {
   history: Map<number, HistoryPoint[]>;
   ranks: readonly number[];
   startAt: number;
   endAt: number;
+  bandLabel?: string;
 }) {
   const series = ranks.map((r) => [r, history.get(r) ?? []] as const).filter(([, pts]) => pts.length > 0);
   if (series.length === 0) return null;
@@ -274,17 +279,17 @@ export function BorderCharts({
   const xEnd = visibleEnd(startAt, endAt, lastT);
   return (
     <div style={VARS}>
-      <Legend />
+      <Legend bandLabel={bandLabel} />
       {xEnd < endAt && (
         <p className="mt-1 text-xs text-slate-500">横軸は開始から最新の少し先まで（時間が経つと終了の {formatJst(endAt)} まで広がります）</p>
       )}
       {/* PC は 3 列（ページの幅が 1152px なので 1 枚 340px 前後）。768px の幅で 3 列にすると 1 枚 215px で横軸の日付が間引かれたので、当時は 2 列だった（2026-10-26 Nori） */}
       <div className="mt-3 grid gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
         {series.map(([rank, pts]) => (
-          <RankChart key={rank} rank={rank} points={pts} startAt={startAt} endAt={xEnd} />
+          <RankChart key={rank} rank={rank} points={pts} startAt={startAt} endAt={xEnd} bandLabel={bandLabel} />
         ))}
       </div>
-      <HistoryTable series={series} />
+      <HistoryTable series={series} bandLabel={bandLabel} />
     </div>
   );
 }

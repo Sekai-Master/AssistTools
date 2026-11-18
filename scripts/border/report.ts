@@ -5,7 +5,8 @@
 import type { ModelSummary } from '../../workers/border/src/fit.ts'
 import { RANKS, durationHours, type EventMeta } from '../../workers/border/src/model.ts'
 import type { ResultRank } from '../../workers/border/src/posts.ts'
-import type { ResultPostRank } from '../../workers/border/src/snapshot.ts'
+import type { PostPayload, ResultPostRank } from '../../workers/border/src/snapshot.ts'
+import { isSpecialReport } from '../../workers/border/src/special.ts'
 
 /** Worker の /admin/predictions が返す1行 */
 export interface PredictionLog {
@@ -113,6 +114,19 @@ export function buildReport(
     generatedAt: new Date(now).toISOString(),
     modelVersions: [...new Set(preds.map((p) => p.model_version))],
     ranks,
+  }
+}
+
+/**
+ * 答え合わせの投稿に添える画像用のデータ。みんなでライブ停止中の回（特別モデルで出した回）には special: 'solo' を付ける
+ * （Bot は帯を「目安の幅」と書く。ふだんの回の payload は今と1文字も変えない）
+ */
+export function resultPayload(e: EventMeta, report: Pick<Report, 'eventId' | 'modelVersions'>, ranks: readonly ResultPostRank[]): PostPayload {
+  return {
+    kind: 'result',
+    event: { id: e.id, name: e.name, type: e.eventType, unit: e.unit, startAt: e.startAt, aggregateAt: e.aggregateAt, durationHours: durationHours(e) },
+    ranks: ranks.map(({ rank, final, predicted, progress, error, inBand, low, high }) => ({ rank, final, predicted, progress, error, inBand, low, high })),
+    ...(isSpecialReport(report) ? { special: 'solo' as const } : {}),
   }
 }
 

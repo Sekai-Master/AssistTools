@@ -14,13 +14,15 @@ import {
   kvGet,
   kvSet,
   queuePost,
+  samplesBetween,
   upsertEvents,
   type LiveSample,
 } from './db.ts'
 import type { Env } from './env.ts'
-import { RANKS, durationHours, predict, type EventMeta, type Prediction } from './model.ts'
+import { RANKS, durationHours, predict, type EventMeta, type Prediction, type Sample } from './model.ts'
 import { milestoneText, postReferenceOf } from './posts.ts'
 import type { PostPayload, Snapshot } from './snapshot.ts'
+import { SOLO_FALLBACK_SUFFIX, predictSpecial, soloEventIds, specialAnchorRange, specialSelection, type SpecialSelection } from './special.ts'
 
 export const LIVE_URL = 'https://api.sekai.best/event/live'
 export const USER_AGENT = 'sekaimaster-border/1.0 (+https://sekaimaster.pages.dev)'
@@ -111,10 +113,20 @@ async function refreshSchedule(env: Env, now: number, fetcher: Fetcher): Promise
   return changed
 }
 
-function snapshotOf(event: EventMeta, now: number, samples: LiveSample[], preds: Map<number, Prediction>, modelVersion: string | null): Snapshot {
+function snapshotOf(
+  event: EventMeta,
+  now: number,
+  samples: LiveSample[],
+  preds: Map<number, Prediction>,
+  modelVersion: string | null,
+  special: 'model' | 'fallback' | null,
+): Snapshot {
   const sampleAt = Math.max(...samples.map((s) => s.ts))
   const span = event.aggregateAt + 60_000 - event.startAt
   return {
+    // 特別扱いの回だけ印を付ける（ふだんの回の出力は1文字も変えない）。曲線が使えずふだんの数字を出している回は specialFallback も
+    ...(special ? { special: 'solo' as const } : {}),
+    ...(special === 'fallback' ? { specialFallback: true } : {}),
     event: {
       id: event.id,
       name: event.name,
@@ -149,6 +161,24 @@ function snapshotOf(event: EventMeta, now: number, samples: LiveSample[], preds:
   }
 }
 
+/**
+ * 特別モデルの直近の窓の始まりの前後の実測（順位ごと）。開始から窓の長さまでは引かない（窓を開始から取る）。
+ * 読めなくても予測は止めない（窓を開始から取る形に戻る）
+ */
+async function windowSamples(env: Env, event: EventMeta, special: SpecialSelection, t: number): Promise<Map<number, Sample[]> | null> {
+  const range = specialAnchorRange(event, special.params, t)
+  if (!range) return null
+  try {
+    const rows = await samplesBetween(env.DB, event.id, range[0], range[1])
+    const out = new Map<number, Sample[]>()
+    for (const r of rows) out.set(r.rank, [...(out.get(r.rank) ?? []), [r.ts, r.score]])
+    return out
+  } catch (err) {
+    console.error('special: 窓の始まりの実測を読めなかった', event.id, err)
+    return null
+  }
+}
+
 export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): Promise<CronResult> {
   let actives = await activeEvents(env.DB, now)
   if (actives.length === 0) {
@@ -178,30 +208,59 @@ export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): 
 
   await insertSamples(env.DB, event.id, live.samples)
 
-  const preds = new Map<number, Prediction>()
+  let preds = new Map<number, Prediction>()
   const model = event.eventType === 'marathon' ? await activeModel(env.DB) : null
-  if (model) {
+  // 特別扱いの回か（このファイルの一覧 ∪ 有効な版の一覧。開始の告知・歴代ボーダーの投稿と同じ判定。検分 G1）
+  const solo = model != null && soloEventIds(model.model.special?.events).has(event.id)
+  // 特別扱いの回で、この回の日程で焼いた曲線があれば特別モデルで当てる（special.ts）。無ければ下でふだんの数字を広めの目安として出す
+  let special = model && solo ? specialSelection(model.model, event) : null
+  const predictAll = (one: (s: LiveSample) => Prediction | null, label: string | null) => {
+    const out = new Map<number, Prediction>()
     for (const s of live.samples) {
       // 1順位の表が壊れていても、残りの順位と実測の保存は止めない
       try {
-        const p = predict(model.model, event, s.rank, s.score, s.ts)
-        if (p) preds.set(s.rank, p)
+        const p = one(s)
+        if (p) out.set(s.rank, p)
       } catch (err) {
-        console.error('predict failed', model.version, s.rank, err)
+        console.error('predict failed', label, s.rank, err)
       }
     }
+    return out
+  }
+  const predictNormal = (m: NonNullable<typeof model>) =>
+    predictAll((s) => predict(m.model, event, s.rank, s.score, s.ts, { soloFallback: solo }), solo ? `${m.version}${SOLO_FALLBACK_SUFFIX}` : m.version)
+  if (model && special) {
+    const sel = special
+    const nearby = await windowSamples(env, event, sel, sampleAt)
+    preds = predictAll((s) => predictSpecial(model.model, sel, event, s.rank, s.score, s.ts, nearby?.get(s.rank) ?? []), sel.version)
+    // 特別モデルが1順位も出せず（曲線の中身がおかしい等）、ふだんの表なら出せるときだけ、この回をふだんの表に戻す（予測が丸ごと消えないように）。
+    // ★ 終了後の確定の点（経過が 1 を少し超える）はどちらも出さないので、特別モデルの印を付けたままにする（終わった回の表示を「8割の幅」に戻さない）
+    if (preds.size === 0) {
+      const normal = predictNormal(model)
+      if (normal.size > 0) {
+        console.error('special: 特別モデルで1順位も出せなかったので、ふだんの表で出す', event.id, sel.version)
+        special = null
+        preds = normal
+      }
+    }
+  } else if (model) {
+    preds = predictNormal(model)
+  }
+  // 特別扱いの回なのに曲線が使えずふだんの数字で出した予測は、ふだんの版の後ろに印を付けて記録する（ふだんの予測と混ぜない）
+  const version = special?.version ?? (model ? (solo ? `${model.version}${SOLO_FALLBACK_SUFFIX}` : model.version) : null)
+  if (model) {
     if (!stale) {
       await insertPredictions(
         env.DB,
         event.id,
-        model.version,
+        version as string,
         live.samples.filter((s) => preds.has(s.rank)).map((s) => ({ ts: s.ts, p: preds.get(s.rank) as Prediction })),
         now,
       )
     }
   }
 
-  const snap = snapshotOf(event, now, live.samples, preds, model?.version ?? null)
+  const snap = snapshotOf(event, now, live.samples, preds, version, special ? 'model' : solo ? 'fallback' : null)
   await kvSet(env.DB, 'current', snap, now)
   if (!stale) {
     const row = [snap.sampleAt, snap.progress, snap.ranks.map((r) => [r.rank, r.current, r.predicted, r.low, r.high, r.visible ? 1 : 0])]

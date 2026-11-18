@@ -3,6 +3,7 @@ import { Panel } from "../../components/ui/Panel";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { CONFIDENCE_LABEL, RANKS, type Confidence } from "../../../workers/border/src/model";
 import { formatMan, formatRange } from "../../../workers/border/src/posts";
+import { isSpecialReport } from "../../../workers/border/src/special";
 import { DocLink } from "../legal/LegalDoc";
 import { BorderCharts } from "./BorderChart";
 import {
@@ -11,6 +12,7 @@ import {
   formatJst,
   formatPercent,
   hiddenReason,
+  isSpecialSnapshot,
   isStale,
   phaseOf,
   rankViews,
@@ -18,6 +20,8 @@ import {
   recordRows,
   referenceDetail,
   signedPercent,
+  SPECIAL_BAND_LABEL,
+  SPECIAL_LABEL,
   type ModelSummary,
   type Report,
   type Snapshot,
@@ -61,11 +65,17 @@ export default function BorderPredictionPage() {
         <section id="trend" className="scroll-mt-20">
         <Panel title="推移">
           <p className="mb-3 max-w-lg text-xs leading-6 text-slate-500">
-            30分ごとの実測（実線）と、その時点で出していた最終値の予測（破線）・8割の幅（帯）です。
+            30分ごとの実測（実線）と、その時点で出していた最終値の予測（破線）・{isSpecialSnapshot(current) ? SPECIAL_BAND_LABEL : "8割の幅"}（帯）です。
             帯はその時点の予測なので、終了時の実測（＝最終値）が最後の帯の中に入れば当たりです。
             グラフに触れる（キーボードなら左右キー）と、その時刻の数字が出ます。
           </p>
-          <BorderCharts history={history} ranks={RANKS} startAt={current.event.startAt} endAt={current.event.aggregateAt + 60_000} />
+          <BorderCharts
+            history={history}
+            ranks={RANKS}
+            startAt={current.event.startAt}
+            endAt={current.event.aggregateAt + 60_000}
+            bandLabel={isSpecialSnapshot(current) ? SPECIAL_BAND_LABEL : undefined}
+          />
         </Panel>
         </section>
       )}
@@ -86,6 +96,9 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
   const phase = phaseOf(snap, now);
   const rows = rankViews(snap, model);
   const marathon = snap.event.type === "marathon";
+  // ★ みんなでライブ停止中の特別モデルの回は extrapolatedFrom も付いている（古い Bot に「参考値」と出させるため）。参考値の表示より先に見る
+  const special = isSpecialSnapshot(snap);
+  const chip: ChipKind = special ? "special" : snap.extrapolatedFrom != null ? "reference" : "confidence";
   // 予測を1つも出していない間、出し始めが全順位で同じなら、6行に同じ文を並べず冒頭で1回だけ言う。
   // 出し始めが分からない（モデルがまだ無い）ときは、冒頭の「まだ出ていません」だけで足りる
   const sameStart =
@@ -133,10 +146,10 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
               <div>
                 <p className="flex items-baseline gap-2">
                   <span className="text-lg font-bold tabular-nums text-slate-800">{formatMan(r.predicted)}</span>
-                  {r.confidence && <ConfidenceChip value={r.confidence} reference={snap.extrapolatedFrom != null} />}
+                  {r.confidence && <ConfidenceChip value={r.confidence} kind={chip} />}
                 </p>
                 <p className="text-xs tabular-nums text-slate-500">
-                  {r.low != null && r.high != null && <>8割の幅 {formatRange(r.low, r.high)}・</>}
+                  {r.low != null && r.high != null && <>{special ? SPECIAL_BAND_LABEL : "8割の幅"} {formatRange(r.low, r.high)}・</>}
                   いま {formatMan(r.current)}
                 </p>
               </div>
@@ -154,14 +167,34 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
           </li>
         ))}
       </ul>
-      {snap.predicted && snap.extrapolatedFrom != null && (
+      {snap.predicted && special && (
+        // ★ 「非公式の予測で、外れることがあります」はこの枠の中で 1 回だけ言う（11/18 の決まり。確度の説明・しくみの段では重ねない）。
+        //   当たり方を確かめようがないので「確度は8割の幅の広さです」は出さない（指示書 2026-11-19）
+        <p className="mt-3 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-700">
+          <b>{SPECIAL_LABEL}</b>
+          <br />
+          {snap.specialFallback ? (
+            // 特別モデルの曲線がまだ使えず、ふだんのモデルの数字を広めの目安として出している間（検分 G1）
+            <>
+              みんなでライブが止まったまま開催しているので、ふだんのモデルの数字を、幅を広げた目安として出しています（この回のための作りに切り替える準備中です）。
+            </>
+          ) : (
+            <>
+              みんなでライブが止まったまま開催しているので、ふだんのモデルとは別のしくみで出しています。
+              この回の直近の伸びと過去の時間帯ごとの伸び方から、終盤の追い込みがいつもどおりある場合と無い場合の両方を計算し、どちらも入るよう幅を広めに取っています。
+            </>
+          )}
+          同じ条件の回が過去に無いので、当たり方は確かめられていません。非公式の予測で、外れることがあります。
+        </p>
+      )}
+      {snap.predicted && !special && snap.extrapolatedFrom != null && (
         <p className="mt-3 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-700">
           <b>この回の予測は参考値です。</b>
           {referenceDetail(snap)}
           （102 時間の回では、1000位の開始24時間の予測 約1,640万を、終了の数時間前に実測が上回りました）。
         </p>
       )}
-      {snap.predicted && (
+      {snap.predicted && !special && (
         <p className="mt-3 max-w-lg text-xs leading-5 text-slate-500">
           {/* ★ 予測の数字の近くでも「非公式で外れる」を言う（前はページ下の「しくみ」だけ。指揮 2026-11-12）。
               外挿の回は上の参考値の枠が「大きく外れることがあります」と言っているので重ねない */}
@@ -181,9 +214,15 @@ const CONFIDENCE_TONE: Record<Confidence, string> = {
   rough: "border border-dashed border-slate-400 text-slate-500",
 };
 
-function ConfidenceChip({ value, reference }: { value: Confidence; reference: boolean }) {
+type ChipKind = "confidence" | "reference" | "special";
+
+function ConfidenceChip({ value, kind }: { value: Confidence; kind: ChipKind }) {
+  // みんなでライブ停止中の特別モデルの回は、確度も参考値も名乗らず「目安」と書く（2026-11-19）
+  if (kind === "special") {
+    return <span className="rounded-full border border-dashed border-amber-600 px-2 py-0.5 text-xs font-bold text-amber-700">目安</span>;
+  }
   // 過去に無い長さ（外挿）のときは確度を名乗らず「参考値」と書く（2026-10-25、221 の 1000位が大きく外れた）
-  if (reference) {
+  if (kind === "reference") {
     return <span className="rounded-full border border-dashed border-amber-600 px-2 py-0.5 text-xs font-bold text-amber-700">参考値</span>;
   }
   return (
@@ -240,6 +279,7 @@ function ReportTable({ rep }: { rep: Report }) {
         {rep.name}
         <span className="ml-2 text-xs font-normal text-slate-500">{formatJst(rep.aggregateAt + 60_000).split(" ")[0]} 終了</span>
       </h3>
+      {isSpecialReport(rep) && <p className="mt-1 text-xs text-amber-700">{SPECIAL_LABEL}の予測（幅は8割を狙ったものではありません）</p>}
       <table className="mt-2 w-full table-fixed text-left text-xs tabular-nums">
         <thead className="text-slate-500">
           <tr>

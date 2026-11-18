@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { kvSet, unsentPosts, upsertEvents } from '../src/db.ts'
+import { kvSet, putModel, unsentPosts, upsertEvents } from '../src/db.ts'
 import type { Env } from '../src/env.ts'
+import type { Model } from '../src/model.ts'
 import { xWeight } from '../src/posts.ts'
-import { START_TEXT_MAX_WEIGHT, firstPredictionAt, runStart, startText } from '../src/start.ts'
+import { START_SOLO_NOTE, START_TEXT_MAX_WEIGHT, firstPredictionAt, runStart, startText } from '../src/start.ts'
 import { createD1 } from './d1shim.ts'
 
 const H = 3_600_000
@@ -147,5 +148,106 @@ describe('開始の告知を積む（runStart）', () => {
     expect(await runStart(await setup({ type: 'world_bloom' }), START - 30 * M)).toEqual({ status: 'idle' })
     expect(await runStart(await setup({ asset: null }), START - 30 * M)).toMatchObject({ status: 'skip', reason: '素材名がまだ無い' })
     expect(await runStart(await setup({ name: 'テストイベント' }), START - 30 * M)).toMatchObject({ status: 'skip' })
+  })
+})
+
+/**
+ * みんなでライブ停止中の回（226 など。special.ts）は「同じ種別・同じ長さの前回」にしない（2026-11-19 指示書）。
+ * 227（Leo/need Memories）が 102時間なら、226（同じ Memories・102時間）を飛ばして 222 を出す
+ */
+describe('開始の告知: みんなでライブ停止中の回を前例にしない', () => {
+  // 227 を仮に 11/25 15:00 開始・102時間とする
+  const S227 = Date.UTC(2026, 10, 25, 6, 0)
+  const A227 = S227 + 102 * H - 1000
+  const table = {
+    events: [
+      row(222, 'MORE MORE JUMP！ Memories', 'memories', 102, { '50': 1, '100': 2, '1000': 3 }),
+      row(226, 'ワンダーランズ×ショウタイム Memories', 'memories', 102, { '50': 4, '100': 5, '1000': 6 }),
+      row(227, 'Leo/need Memories', 'memories', 102, { '50': 7, '100': 8, '1000': 9 }),
+    ],
+  }
+  async function envWith(id: number, start: number, agg: number, asset: string) {
+    const env: Env = { DB: createD1(), SITE_ORIGIN: SITE, ADMIN_TOKEN: 'tok' }
+    await upsertEvents(env.DB, [{ id, name: `e${id}`, eventType: 'marathon', unit: 'none', startAt: start, aggregateAt: agg, asset }])
+    await kvSet(env.DB, 'finals', table, 0)
+    return env
+  }
+  const prevOf = async (env: Env) => {
+    const [post] = await unsentPosts(env.DB, 'x')
+    return JSON.parse(post.payload as string).prev as { id: number } | null
+  }
+
+  it('このファイルの一覧（SOLO_ONLY_EVENTS）の 226 は飛ばす', async () => {
+    const env = await envWith(227, S227, A227, 'event_memories_ln_2026')
+    expect(await runStart(env, S227 - 30 * M)).toMatchObject({ status: 'queued' })
+    expect(await prevOf(env)).toMatchObject({ id: 222 })
+  })
+
+  it('有効な版のモデルの一覧（model.special.events）に足した回も飛ばす（Worker を反映し直さなくてよい）', async () => {
+    const S228 = S227 + 6 * 24 * H
+    const env = await envWith(228, S228, S228 + 102 * H - 1000, 'event_memories_vs_2026')
+    const model = { version: 'share-median-v1@e225-x', createdAt: '', algorithm: 'share-median-v1', grid: [], ranks: {}, special: { events: [226, 227] } }
+    await putModel(env.DB, model as unknown as Model, {}, 0)
+    await runStart(env, S228 - 30 * M)
+    expect(await prevOf(env)).toMatchObject({ id: 222 })
+  })
+
+  it('有効な版のモデルが無い・一覧が無いときは、このファイルの一覧だけで飛ばす', async () => {
+    const S228 = S227 + 6 * 24 * H
+    const env = await envWith(228, S228, S228 + 102 * H - 1000, 'event_memories_vs_2026')
+    await putModel(env.DB, { version: 'v', createdAt: '', algorithm: 'share-median-v1', grid: [], ranks: {} } as unknown as Model, {}, 0)
+    await runStart(env, S228 - 30 * M)
+    expect(await prevOf(env)).toMatchObject({ id: 227 })
+  })
+
+  /**
+   * 一覧の回そのものの告知（226 は 11/20 14:45）。みんなでライブのある回の終値は比べ物にならないので、
+   * 「同じ長さの前回の終値」の行を特別対応の一文に替え、画像のデータ（payload）にも前回を載せない（2026-11-19 指揮）
+   */
+  it('一覧の回そのものの告知は、前回の終値の行を特別対応の一文に替え、payload の prev は null', async () => {
+    const S226 = Date.UTC(2026, 10, 20, 6, 0)
+    const env = await envWith(226, S226, S226 + 102 * H - 1000, 'event_memories_wxs_2026')
+    await upsertEvents(env.DB, [{ id: 226, name: 'ワンダーランズ×ショウタイム Memories', eventType: 'marathon', unit: 'none', startAt: S226, aggregateAt: S226 + 102 * H - 1000, asset: 'event_memories_wxs_2026' }])
+    expect(await runStart(env, S226 - 30 * M)).toMatchObject({ status: 'queued', id: '226:start' })
+    const [post] = await unsentPosts(env.DB, 'x')
+    expect(post.text).toBe(
+      [
+        'まもなく15:00から「ワンダーランズ×ショウタイム Memories」開始🎶（11/24 20:59まで・102時間）',
+        '',
+        START_SOLO_NOTE,
+        '予測は11/21 15時ごろから、日報は毎日21時ごろ。',
+        'https://sekaimaster.pages.dev/border/history',
+      ].join('\n'),
+    )
+    expect(post.text).not.toContain('前回')
+    expect(post.text).not.toContain('過去にありません')
+    expect(xWeight(post.text)).toBeLessThanOrEqual(START_TEXT_MAX_WEIGHT)
+    const payload = JSON.parse(post.payload as string)
+    expect(payload).toMatchObject({ kind: 'start', prev: null, special: 'solo', event: { id: 226, type: 'memories', hours: 102 } })
+    expect(JSON.stringify(payload)).not.toContain('MORE MORE JUMP')
+  })
+
+  it('有効な版のモデルの一覧に足した回（227 など）の告知も同じにする。一覧に無い回の payload には special を付けない', async () => {
+    const env = await envWith(227, S227, A227, 'event_memories_ln_2026')
+    const model = { version: 'share-median-v1@e225-x', createdAt: '', algorithm: 'share-median-v1', grid: [], ranks: {}, special: { events: [226, 227] } }
+    await putModel(env.DB, model as unknown as Model, {}, 0)
+    await runStart(env, S227 - 30 * M)
+    const [post] = await unsentPosts(env.DB, 'x')
+    expect(post.text).toContain(START_SOLO_NOTE)
+    expect(JSON.parse(post.payload as string)).toMatchObject({ prev: null, special: 'solo' })
+
+    const plain = await envWith(227, S227, A227, 'event_memories_ln_2026')
+    await runStart(plain, S227 - 30 * M)
+    const [p2] = await unsentPosts(plain.DB, 'x')
+    expect(p2.text).not.toContain(START_SOLO_NOTE)
+    expect('special' in JSON.parse(p2.payload as string)).toBe(false)
+  })
+
+  it('名前がとても長くても、特別対応の一文を残したまま重みの上限に収める', () => {
+    for (const n of [10, 40, 80, 200]) {
+      const t = startText({ name: '長'.repeat(n), startAt: START, aggregateAt: AGG, hours: 102, typeLabel: 'Memories', prev: null, firstPredictionAt: START + 24 * H, dailyAt: START + 6 * H, special: true }, SITE)
+      expect(xWeight(t), String(n)).toBeLessThanOrEqual(START_TEXT_MAX_WEIGHT)
+      expect(t).toContain(START_SOLO_NOTE)
+    }
   })
 })

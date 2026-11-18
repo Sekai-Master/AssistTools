@@ -2,11 +2,11 @@ import fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { handleRequest } from '../src/api.ts'
 import { parseSchedule } from '../src/collect.ts'
-import { kvGet, kvGetStamped, kvSet, putFinalsIfUnchanged, unsentPosts, upsertEvents } from '../src/db.ts'
+import { kvGet, kvGetStamped, kvSet, putFinalsIfUnchanged, putModel, unsentPosts, upsertEvents } from '../src/db.ts'
 import { FINALS_CRON } from '../src/index.ts'
 import type { Env } from '../src/env.ts'
 import { FINALS_GIVE_UP_MS, endOf, runFinals } from '../src/finals.ts'
-import type { EventMeta } from '../src/model.ts'
+import type { EventMeta, Model } from '../src/model.ts'
 import { createD1 } from './d1shim.ts'
 
 const M = 60_000
@@ -50,6 +50,21 @@ describe('終わった直後の回を歴代の表へ（finals.ts）', () => {
     expect(post.id).toBe('222:history')
     expect(JSON.parse(post.payload as string)).toEqual({ kind: 'history', eventId: 222, postAt: Date.UTC(2026, 10, 3, 12, 20) })
     expect(post.text).toContain('https://site.example/border/history?event=222')
+  })
+
+  // みんなでライブ停止中の回（special.ts の一覧 ∪ 有効な版の一覧）は、Bot が「みんなでライブ停止中の開催」の印を付けられるよう special を足す
+  it('一覧の回（226）の歴代ボーダーの投稿は payload に special: solo。有効な版の一覧に足した回も同じ', async () => {
+    const ev226: EventMeta = { ...EV, id: 226, asset: 'event_memories_wxs_2026' }
+    const a = await setup(ev226)
+    expect(await runFinals(a.env, endOf(AGG) + 15 * M, a.fetcher(liveBody(226, AGG + 13 * M)))).toMatchObject({ status: 'added', queued: true })
+    const [p226] = await unsentPosts(a.env.DB, 'x')
+    expect(JSON.parse(p226.payload as string)).toEqual({ kind: 'history', eventId: 226, postAt: Date.UTC(2026, 10, 3, 12, 20), special: 'solo' })
+
+    const b = await setup()
+    await putModel(b.env.DB, { version: 'v', createdAt: '', algorithm: 'share-median-v1', grid: [], ranks: {}, special: { events: [222] } } as unknown as Model, {}, 0)
+    await runFinals(b.env, endOf(AGG) + 15 * M, b.fetcher(liveBody(222, AGG + 13 * M)))
+    const [p222] = await unsentPosts(b.env.DB, 'x')
+    expect(JSON.parse(p222.payload as string)).toMatchObject({ eventId: 222, special: 'solo' })
   })
 
   it('終了から15分より前と、3時間より後は何もしない（D1 を1回引くだけ）', async () => {

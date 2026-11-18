@@ -9,6 +9,7 @@ import {
   EARLY_CHECKPOINTS,
   TARGET_COVERAGE,
   WIDE_TAILS,
+  bakeSpecial,
   bandSamples,
   blendErrors,
   blendTable,
@@ -23,6 +24,7 @@ import {
   walkEarlyBlend,
 } from '../src/fit.ts'
 import { fitRate, rateShareTable } from '../src/rate.ts'
+import { SOLO_ONLY_EVENTS, SPECIAL_DEFAULT_PARAMS } from '../src/special.ts'
 import {
   CANDIDATES,
   GRID,
@@ -661,5 +663,120 @@ describe('fitModel の予定の回（rate:長さ）', () => {
     const c = fitModel([...past, upcoming(300, 246, 5, now)], shapes, now).model.version
     expect(b).not.toBe(a)
     expect(c).toBe(b)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// みんなでライブ停止中の回（特別モデル、special.ts。2026-11-19）
+// ---------------------------------------------------------------------------
+describe('fitModel: みんなでライブ停止中の回（一覧）を学習から外し、曲線を焼く', () => {
+  const DAY = 24 * H
+  /** 150h を5件、198h を3件、171h を1件、102h を2件（221・222 のように標本2件の thin） */
+  const LENGTHS = [150, 198, 171, 150, 198, 150, 198, 150, 150, 102, 102]
+  const marathon = (id: number, startAt: number, hours: number): EventMeta => ({
+    id, name: `e${id}`, eventType: 'marathon', unit: 'none', startAt, aggregateAt: startAt + hours * H - 60_000,
+  })
+  function fixture() {
+    const past = LENGTHS.map((h, i) => marathon(200 + i, Date.UTC(2026, 0, 1) + i * 10 * DAY, h))
+    const shapes: Shape[] = past.flatMap((e, i) =>
+      RANKS.map((rank) => ({ eventId: e.id, rank, final: 1e7 * (1 + i / 20), share: GRID.map((p) => (durationHours(e) === 102 ? p ** 1.6 : p ** (1 + i / 50))) })),
+    )
+    const hist: HistoryEvent[] = past.map((meta) => ({ meta, shapes: new Map(shapes.filter((s) => s.eventId === meta.id).map((s) => [s.rank, s])) }))
+    // 一覧の回（102h、終わったあと）。ほかの回と形がまるで違う（ひとりでライブだけの回のつもり）
+    const listed = marathon(290, past[past.length - 1].aggregateAt + 5 * DAY, 102)
+    const listedShapes: Shape[] = RANKS.map((rank) => ({ eventId: 290, rank, final: 3e6, share: GRID.map((p) => p ** 3) }))
+    const now = listed.aggregateAt + DAY
+    return { past, shapes, hist, listed, listedShapes, now }
+  }
+
+  it('一覧の回の形は、表・thin・率の当てはめ・帯・序盤の差し替え・要約のどれも変えない（102h は標本2件のまま）', () => {
+    const { past, shapes, listed, listedShapes, now } = fixture()
+    const withListed = fitModel([...past, listed], [...shapes, ...listedShapes], now, { specialEvents: [290] })
+    const withoutShapes = fitModel([...past, listed], shapes, now, { specialEvents: [290] })
+    expect(withListed.model.ranks).toEqual(withoutShapes.model.ranks)
+    expect(withListed.model.knownDurations).toEqual(withoutShapes.model.knownDurations)
+    expect(withListed.model.thinDurations).toEqual(withoutShapes.model.thinDurations)
+    expect(withListed.summary.ranks).toEqual(withoutShapes.summary.ranks)
+    expect(withListed.summary.poolSize).toBe(LENGTHS.length)
+    expect(withListed.model.version).toBe(withoutShapes.model.version)
+    expect(withListed.model.thinDurations?.find((t) => t.duration === 102)).toMatchObject({ samples: 2, latestEventId: 210 })
+    // 外さなければ学習に入って表が変わる（上の確かめが空振りでないことの裏。102h が標本3件になり自分の表ができる）
+    const included = fitModel([...past, listed], [...shapes, ...listedShapes], now, { specialEvents: [] })
+    expect(included.model.knownDurations).toContain(102)
+    expect(included.model.ranks).not.toEqual(withoutShapes.model.ranks)
+  })
+
+  it('一覧の回のうち日程のわかっている回に、その日程の率モデルの曲線（追い込みあり・なし）を焼く。日程の無い回は一覧にだけ載る', () => {
+    const { past, shapes, hist, now } = fixture()
+    const u = marathon(300, now + 5 * DAY, 102)
+    const { model } = fitModel([...past, u], shapes, now, { specialEvents: [300, 301] })
+    const sp = model.special
+    if (!sp) throw new Error('special が無い')
+    expect(sp.algorithm).toBe('solo-special-v1')
+    expect(sp.version).toMatch(/^solo-special-v1@[0-9a-f]{8}$/)
+    expect(sp.events).toEqual([300, 301])
+    expect(sp.params).toEqual(SPECIAL_DEFAULT_PARAMS)
+    expect(sp.curves.map((c) => c.eventId)).toEqual([300])
+    expect(sp.curves[0]).toMatchObject({ startAt: u.startAt, aggregateAt: u.aggregateAt })
+    for (const rank of RANKS) {
+      const fit = fitRate(hist, rank)
+      if (!fit) throw new Error('率モデルが当てはまらない')
+      expect(sp.curves[0].ranks[String(rank)].spurt).toEqual(round5(rateShareTable(fit, u)))
+      expect(sp.curves[0].ranks[String(rank)].flat).toEqual(round5(rateShareTable(fit, u, { remaining: false })))
+    }
+    // 予定の回なので、古い Worker 向けの thin:102（予定の日程の率モデル混ぜ）はこれまでどおり焼く（一覧に入れても表は1点も変わらない）
+    expect(model.ranks).toEqual(fitModel([...past, u], shapes, now, { specialEvents: [] }).model.ranks)
+  })
+
+  it('一覧が空なら special を付けず、版のハッシュの入力もこれまでと同じ', () => {
+    const { past, shapes, now } = fixture()
+    const { model } = fitModel(past, shapes, now, { specialEvents: [] })
+    expect(model.special).toBeUndefined()
+    const hash = fnv1a(JSON.stringify({ ranks: model.ranks, knownDurations: model.knownDurations, thinDurations: model.thinDurations }))
+    expect(model.version).toBe(`share-median-v1@e210-${hash}`)
+  })
+
+  it('special だけが変わっても版名が変わる（同じ版名だと Worker が書き込まず、227 を足しても届かない）', () => {
+    const { past, shapes, now } = fixture()
+    const u = marathon(300, now + 5 * DAY, 102)
+    const a = fitModel([...past, u], shapes, now, { specialEvents: [300] }).model
+    const b = fitModel([...past, u], shapes, now, { specialEvents: [300, 301] }).model
+    expect(b.ranks).toEqual(a.ranks)
+    expect(b.version).not.toBe(a.version)
+    expect(b.special?.version).not.toBe(a.special?.version)
+  })
+
+  it('既定の一覧は SOLO_ONLY_EVENTS', () => {
+    const { past, shapes, now } = fixture()
+    expect(fitModel(past, shapes, now).model.special?.events).toEqual([...SOLO_ONLY_EVENTS])
+  })
+})
+
+describe('bakeSpecial: 曲線を焼けなかった回の理由（検分 G2）', () => {
+  const DAY = 24 * H
+  const marathon = (id: number, startAt: number, hours: number, type = 'marathon'): EventMeta => ({
+    id, name: `e${id}`, eventType: type, unit: 'none', startAt, aggregateAt: startAt + hours * H - 60_000,
+  })
+  const past = [150, 150, 150, 150, 198].map((h, i) => marathon(200 + i, Date.UTC(2026, 0, 1) + i * 10 * DAY, h))
+  const hist = (ranks: readonly number[]): HistoryEvent[] =>
+    past.map((meta, i) => ({ meta, shapes: new Map(ranks.map((rank) => [rank, { eventId: meta.id, rank, final: 1e7, share: GRID.map((p) => p ** (1 + i / 20)) }])) }))
+  const u = marathon(300, Date.UTC(2026, 3, 1), 102)
+
+  it('日程の無い回は no_schedule、マラソンでない回は not_marathon、率モデルが当てはまらない順位があれば rate_fit_failed（どれも曲線は焼かない）', () => {
+    const cc = marathon(301, Date.UTC(2026, 3, 10), 24, 'cheerful_carnival')
+    const ok = bakeSpecial([...past, u, cc], hist(RANKS), [300, 301, 302])
+    expect(ok.special?.curves.map((c) => c.eventId)).toEqual([300])
+    expect(ok.missing).toEqual([
+      { eventId: 301, reason: 'not_marathon', detail: 'マラソンでない（cheerful_carnival）' },
+      { eventId: 302, reason: 'no_schedule', detail: '日程（マスタ）にまだ無い' },
+    ])
+    // 2000位の形が1回も無い → 2000位の率モデルが当てはまらない
+    const bad = bakeSpecial([...past, u], hist([50, 100, 200, 500, 1000]), [300])
+    expect(bad.special?.curves).toEqual([])
+    expect(bad.missing).toEqual([{ eventId: 300, reason: 'rate_fit_failed', detail: '2000位の率モデルが当てはまらなかった（その順位の形がある学習の回 0 回）' }])
+  })
+
+  it('一覧が空なら special も理由も無い', () => {
+    expect(bakeSpecial([...past, u], hist(RANKS), [])).toEqual({ special: undefined, missing: [] })
   })
 })

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { ModelSummary } from '../../workers/border/src/fit.ts'
 import type { EventMeta } from '../../workers/border/src/model.ts'
 import { formatMan } from '../../workers/border/src/posts.ts'
-import { REPORT_CHECKPOINTS, buildReport, resultRanks, type PredictionLog, type Report } from './report.ts'
+import { REPORT_CHECKPOINTS, buildReport, resultPayload, resultRanks, type PredictionLog, type Report } from './report.ts'
 
 const H = 3_600_000
 const SUMMARY = { ranks: [] } as unknown as ModelSummary
@@ -165,4 +165,21 @@ describe('過去の実データ（219〜223）で、答え合わせが投稿し�
       expect(resultRanks(report)).toHaveLength(6)
     })
   }
+})
+
+// みんなでライブ停止中の回（特別モデル）の答え合わせの payload には special を付け、Bot が帯を「目安の幅」と書けるようにする
+describe('答え合わせの payload（resultPayload）', () => {
+  const ranks = [{ rank: 1000, final: 1000, predicted: 1100, progress: 0.85, error: 0.1, inBand: true, low: 900, high: 1300 }]
+  it('ふだんの回は今と同じ形（special の欄を付けない）', () => {
+    const p = resultPayload(EVENT, { eventId: 1, modelVersions: ['share-median-v1@e225-x'] }, ranks)
+    expect(p).toEqual({
+      kind: 'result',
+      event: { id: 1, name: 'テストの回', type: 'marathon', unit: 'none', startAt: 0, aggregateAt: 100 * H - 1000, durationHours: 100 },
+      ranks,
+    })
+  })
+  it('一覧の回・特別モデルの版で出した回には special: solo を付ける', () => {
+    expect(resultPayload(EVENT, { eventId: 226, modelVersions: ['share-median-v1@e225-x'] }, ranks)).toMatchObject({ special: 'solo' })
+    expect(resultPayload(EVENT, { eventId: 1, modelVersions: ['solo-special-v1@abc'] }, ranks)).toMatchObject({ special: 'solo' })
+  })
 })

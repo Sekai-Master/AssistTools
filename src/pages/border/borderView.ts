@@ -4,6 +4,7 @@
 import type { ModelSummary } from "../../../workers/border/src/fit";
 import { CANDIDATE_LABEL, eventEndMs, type Confidence } from "../../../workers/border/src/model";
 import { referenceOf, type Snapshot } from "../../../workers/border/src/snapshot";
+import { isSpecialReport } from "../../../workers/border/src/special";
 import type { Report } from "../../../scripts/border/report";
 
 export type { ModelSummary, Report, Snapshot };
@@ -47,6 +48,19 @@ export function referenceDetail(s: Pick<Snapshot, "event" | "extrapolatedFrom" |
       : `いちばん近い ${s.extrapolatedFrom} 時間の回の伸び方を借りて出しているので`;
   return `このイベントは ${hours} 時間で、過去に同じ長さの回がありません。${how}、大きく外れることがあります`;
 }
+
+/**
+ * みんなでライブ停止中の回を特別モデル（workers/border/src/special.ts）で出しているか。
+ * この回は extrapolatedFrom も付いている（古い Bot に「参考値」と出させるため）ので、参考値の表示より先にこれを見る
+ */
+export function isSpecialSnapshot(s: Pick<Snapshot, "special">): boolean {
+  return s.special === "solo";
+}
+
+/** 特別モデルの回の札と見出し（2026-11-19 指揮） */
+export const SPECIAL_LABEL = "みんなでライブ停止中の特別対応・目安";
+/** 特別モデルの回の帯の呼び名。過去の外れ方から作った帯ではないので「8割」と書かない */
+export const SPECIAL_BAND_LABEL = "目安の幅";
 
 export function formatPercent(x: number, digits = 0): string {
   return `${(x * 100).toFixed(digits)}%`;
@@ -145,9 +159,10 @@ export function recordRows(report: Report): RecordRow[] {
 /**
  * 畳んだ回のうち、実測が 8 割の幅から外れた順位の数と、そもそも判定できた順位の数。
  * ★ 本番の予測が無い回（再現だけの回）は判定できない。分母を出さないと「全部当たった」に読める。
+ * ★ みんなでライブ停止中の回（特別モデルの帯は 8 割を狙っていない）は数えない。表はほかの回と同じに載せる
  */
 export function bandSummary(reports: Report[]): { out: number; judged: number } {
-  const judged = reports.flatMap(recordRows).filter((r) => r.inBand != null);
+  const judged = reports.filter((rep) => !isSpecialReport(rep)).flatMap(recordRows).filter((r) => r.inBand != null);
   return { out: judged.filter((r) => r.inBand === false).length, judged: judged.length };
 }
 

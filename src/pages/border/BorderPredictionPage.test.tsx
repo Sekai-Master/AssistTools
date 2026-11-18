@@ -280,3 +280,78 @@ describe("しくみを畳む・予測の確かさの表示は畳まない", () =
     expect(folded(screen.getByText("この回の予測は参考値です。"))).toBe(false);
   });
 });
+
+/**
+ * ★ みんなでライブ停止中の回（226 など）は特別モデルで出す（workers/border/src/special.ts、2026-11-19）。
+ *   「みんなでライブ停止中の特別対応・目安」と書き、当たり方を確かめようがないので「確度は8割の幅の広さです」は出さない。
+ *   11/18 の決まり（「非公式の予測で、外れることがあります」はページに 1 回だけ）は、この回でも守る。
+ *   スナップショットには古い Bot 向けに extrapolatedFrom（参考値の札）も付いているが、参考値の枠は出さない
+ */
+describe("みんなでライブ停止中の特別対応の回", () => {
+  const special = (over: Record<string, unknown> = {}) => ({
+    ...snapshot(-72, 30),
+    special: "solo",
+    extrapolatedFrom: 150,
+    referenceSource: "thin",
+    thin: { duration: 102, samples: 2, latestEventId: 222, weight: 0.3 },
+    modelVersion: "solo-special-v1@abcd1234",
+    ranks: RANKS.map((r) => ({ ...r, confidence: "rough" })),
+    ...over,
+  });
+  const currentPanel = () => screen.getByRole("heading", { name: "開催中のイベント" }).closest("section")!;
+
+  it("特別対応の札を出し、「確度は8割の幅の広さです」と参考値の枠は出さない。「8割の幅」とも書かない", async () => {
+    serve(special());
+    await show();
+    const panel = currentPanel();
+    expect(within(panel).getByText("みんなでライブ停止中の特別対応・目安")).toBeTruthy();
+    expect(screen.queryByText(/確度は8割の幅の広さです/)).toBeNull();
+    expect(within(panel).queryByText("この回の予測は参考値です。")).toBeNull();
+    expect(within(panel).queryByText("参考値")).toBeNull();
+    expect(within(panel).getAllByText("目安")).toHaveLength(6);
+    expect(panel.textContent).not.toContain("8割");
+    expect(panel.textContent).toContain("目安の幅");
+  });
+
+  it("予測が出ている回は「非公式の予測で、外れることがあります」を特別対応の枠の中で 1 回だけ言う（しくみの段で重ねない）", async () => {
+    serve(special());
+    await show();
+    const all = screen.getAllByText(/非公式の予測で、外れることがあります/);
+    expect(all).toHaveLength(1);
+    expect(all[0].textContent).toContain("みんなでライブ停止中の特別対応・目安");
+  });
+
+  it("予測がまだ出ていない間は、しくみの段で 1 回だけ言う", async () => {
+    serve(special({ predicted: false }));
+    await show();
+    const all = screen.getAllByText(/非公式の予測で、外れることがあります/);
+    expect(all).toHaveLength(1);
+    expect(all[0].textContent).toContain("序盤は幅が広い「目安」");
+  });
+
+  // ★ 曲線がまだ使えず、ふだんのモデルの数字を広めの目安で出している間（specialFallback。検分 G1）も、「8割」「確度は8割の幅の広さです」を出さない
+  it("曲線が使えずふだんの数字で出している間（specialFallback）も特別対応の札で、「8割」を出さず、非公式の 1 文は 1 回", async () => {
+    serve(special({ specialFallback: true, modelVersion: "share-median-v1@e225-x+solo-fallback" }));
+    await show();
+    const panel = currentPanel();
+    expect(within(panel).getByText("みんなでライブ停止中の特別対応・目安")).toBeTruthy();
+    expect(panel.textContent).toContain("ふだんのモデルの数字を、幅を広げた目安として出しています");
+    expect(panel.textContent).not.toContain("8割");
+    expect(screen.queryByText(/確度は8割の幅の広さです/)).toBeNull();
+    expect(within(panel).queryByText("この回の予測は参考値です。")).toBeNull();
+    expect(screen.getAllByText(/非公式の予測で、外れることがあります/)).toHaveLength(1);
+  });
+
+  it("推移の説明と凡例も「目安の幅」と書く", async () => {
+    const now = Date.now();
+    serve(special(), { eventId: 226, rows: [[now - H, 0.49, RANKS.map((r) => [r.rank, r.current, r.predicted, r.low, r.high, 1])]] });
+    await show();
+    const trend = await vi.waitFor(() => {
+      const el = document.getElementById("trend");
+      if (!el) throw new Error("推移がまだ無い");
+      return el;
+    });
+    expect(trend.textContent).toContain("目安の幅（帯）");
+    expect(trend.textContent).not.toContain("8割");
+  });
+});

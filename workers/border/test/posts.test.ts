@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { X_LIMIT, formatMan, formatRange, milestoneText, postReferenceOf, resultText, xWeight } from '../src/posts.ts'
+import { SOLO_NOTE, X_LIMIT, formatMan, formatRange, milestoneText, postReferenceOf, resultText, xWeight } from '../src/posts.ts'
 import { referenceOf } from '../src/snapshot.ts'
 
 describe('formatRange', () => {
@@ -108,5 +108,27 @@ describe('resultText', () => {
     expect(t).toContain('1000位 実測1,530万／予測1,503万（-1.8%）')
     expect(t).toContain('経過85%')
     expect(xWeight(t)).toBeLessThanOrEqual(X_LIMIT)
+  })
+})
+
+describe('みんなでライブ停止中の特別モデルの回（special.ts）', () => {
+  const thin = { duration: 102, samples: 2, latestEventId: 222, weight: 0.3 }
+  it('スナップショットに special があれば、表の出どころ（古い Bot 向けの thin など）より先に solo とする', () => {
+    expect(postReferenceOf({ extrapolatedFrom: 150, thin, referenceSource: 'thin', special: 'solo' })).toEqual({ source: 'solo' })
+    expect(postReferenceOf({ extrapolatedFrom: 150, thin, referenceSource: 'thin', special: null })).toEqual({ source: 'thin', samples: 2 })
+  })
+
+  it('文面は確度も「8割」も名乗らず、特別対応の目安と書く。注記はふだんの参考値の注記より短い', () => {
+    const t = milestoneText('After the Fire', '開始24時間', ranks.map((r) => ({ ...r, confidence: 'rough' as const })), { source: 'solo' }) as string
+    expect(t).toContain('【ボーダー予測・参考値】After the Fire（開始24時間）')
+    expect(t).toContain(SOLO_NOTE)
+    expect(t).not.toContain('確度')
+    expect(t).not.toContain('8割')
+    expect(xWeight(t)).toBeLessThanOrEqual(X_LIMIT)
+    // 280 に入らない順位は下から削る（ふだんと同じ）。注記が短いので、同じ長さの回が少ない回の文面より多く載る
+    const lines = (x: string) => x.split('\n').filter((l) => /^\d+位 /.test(l)).length
+    const thinNote = milestoneText('After the Fire', '開始24時間', ranks, { source: 'thin', samples: 2 }) as string
+    expect(lines(t)).toBeGreaterThanOrEqual(lines(thinNote))
+    expect(xWeight(SOLO_NOTE)).toBeLessThan(xWeight('同じ長さの回が少ない（2回）イベントで、外れやすい参考値です。括弧は8割の幅の目安です。'))
   })
 })

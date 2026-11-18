@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { eventUnitColor } from "../../lib/units";
 import { formatMan } from "../../../workers/border/src/posts";
-import { formatJst, phaseOf, type Snapshot } from "../border/borderView";
+import { SPECIAL_BAND_LABEL, formatJst, isSpecialSnapshot, phaseOf, type Snapshot } from "../border/borderView";
 import { captionKind, elapsedRatio, endAt, formatCountdown, logoSrc, rankBar, tickMs } from "./hubView";
 import { useCurrentBorder } from "./useCurrentBorder";
 
@@ -114,7 +114,8 @@ function Hero({ snap }: { snap: Snapshot }) {
             <span className="hidden items-center gap-3 sm:flex" aria-hidden>
               <Swatch className="h-1.5 w-3 rounded-full bg-slate-500" label="いま" />
               <Swatch className="h-3 w-0.5 rounded-full bg-slate-800" label="予測" />
-              <Swatch className="h-2.5 w-3 rounded-sm border-[1.5px] border-slate-700" label="8割の幅" />
+              {/* みんなでライブ停止中の特別モデルの回は、帯が8割を狙っていないので「目安の幅」（2026-11-19） */}
+              <Swatch className="h-2.5 w-3 rounded-sm border-[1.5px] border-slate-700" label={isSpecialSnapshot(snap) ? SPECIAL_BAND_LABEL : "8割の幅"} />
             </span>
           )}
           {Number.isFinite(snap.sampleAt) && (

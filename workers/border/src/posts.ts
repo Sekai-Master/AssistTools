@@ -80,9 +80,11 @@ function fitLines(head: string[], body: string[], tail: string[]): string {
  *   thin … 同じ長さの回が少ない（samples 回）。「過去に無い長さ」と書くと、前例のある 222（102h、前例 221）で事実と食い違う
  *   rate / borrow … 過去に無い長さ。本文は借り方に触れないので同じ文面
  */
-export type PostReference = { source: 'thin'; samples: number } | { source: 'rate' | 'borrow' }
+export type PostReference = { source: 'thin'; samples: number } | { source: 'rate' | 'borrow' } | { source: 'solo' }
 
-export function postReferenceOf(s: Pick<Snapshot, 'extrapolatedFrom' | 'thin' | 'referenceSource'>): PostReference | null {
+export function postReferenceOf(s: Pick<Snapshot, 'extrapolatedFrom' | 'thin' | 'referenceSource' | 'special'>): PostReference | null {
+  // みんなでライブ停止中の特別モデル（special.ts）。当たり方を確かめようがないので「8割」とも「確度」とも書かない
+  if (s.special === 'solo') return { source: 'solo' }
   const source = referenceOf(s)
   if (source == null) return null
   return source === 'thin' && s.thin ? { source, samples: s.thin.samples } : { source: source === 'rate' ? 'rate' : 'borrow' }
@@ -90,10 +92,14 @@ export function postReferenceOf(s: Pick<Snapshot, 'extrapolatedFrom' | 'thin' | 
 
 /** 参考値の注記（投稿の末尾の1文目） */
 function referenceNote(ref: PostReference): string {
+  if (ref.source === 'solo') return SOLO_NOTE
   return ref.source === 'thin'
     ? `同じ長さの回が少ない（${ref.samples}回）イベントで、外れやすい参考値です。括弧は8割の幅の目安です。`
     : '過去に無い長さのイベントで、外れやすい参考値です。括弧は8割の幅の目安です。'
 }
+
+/** 特別モデルの回の注記。帯は過去の外れ方から作っていない（広めに取った目安）ので、8割とは書かない */
+export const SOLO_NOTE = 'みんなでライブ停止中の特別対応で、外れやすい目安です。括弧は広めに取った幅です。'
 
 /**
  * 開催中のマイルストーン（開始24時間・経過50%・85%）の予測ポスト。label は「開始24時間」「経過51%」など。

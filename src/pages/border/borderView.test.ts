@@ -138,4 +138,11 @@ describe("bandSummary", () => {
     expect(bandSummary([report([null, null])])).toEqual({ out: 0, judged: 0 });
     expect(bandSummary([])).toEqual({ out: 0, judged: 0 });
   });
+
+  // ★ みんなでライブ停止中の回（特別モデルの帯は 8 割を狙っていない）は「幅の外」の数に入れない
+  it("一覧の回・特別モデルの版の回は数えない", () => {
+    const special = { ...report([false, false]), eventId: 300, modelVersions: ["solo-special-v1@abcd1234"] } as unknown as Report;
+    const listed = { ...report([false]), eventId: 226, modelVersions: ["share-median-v1@e225-x"] } as unknown as Report;
+    expect(bandSummary([report([true, false]), special, listed])).toEqual({ out: 1, judged: 2 });
+  });
 });

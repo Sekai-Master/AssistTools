@@ -8,8 +8,9 @@
  * 閾値は実測（当たり率 80〜85%、|誤差|中央 0.5 で 3〜8%・0.9 で 1.4〜3.6%、新÷旧 0.85〜1.25）より十分ゆるく取り、
  * 正常な版を止めずに、壊れた版・明らかに悪化した版だけを止める。
  */
-import type { ModelSummary } from '../../workers/border/src/fit.ts'
+import type { ModelSummary, SpecialBakeSummary } from '../../workers/border/src/fit.ts'
 import { GRID, RANKS, median, type Model } from '../../workers/border/src/model.ts'
+import { SPECIAL_ALGORITHM, isSpecialReport } from '../../workers/border/src/special.ts'
 import type { ProspectiveScore, Report } from './report.ts'
 
 export interface GuardResult {
@@ -141,6 +142,24 @@ export function checkModel(model: Model, summary: ModelSummary, active: ModelSum
     for (const [key, t] of Object.entries(rm.tables)) checkTable(`${rank}位 表 ${key}`, t, problems)
     checkBand(`${rank}位`, rm.band.lo, rm.band.hi, problems)
   }
+  // G1' 特別モデルの曲線（みんなでライブ停止中の回。special.ts）。壊れた曲線で一覧の回の予測が崩れないよう、表と同じ検査をかける。
+  // 版の名前の形も見る（Worker は形の違う special を使わず、ふだんの表に戻る。気づかないまま特別モデルが効かないのを防ぐ）
+  const sp = model.special
+  if (sp) {
+    if (!sp.version?.startsWith(`${SPECIAL_ALGORITHM}@`)) problems.push(`特別モデル: 版の名前 ${sp.version} が ${SPECIAL_ALGORITHM}@… でない`)
+    for (const c of sp.curves ?? []) {
+      for (const rank of RANKS) {
+        const r = c.ranks?.[String(rank)]
+        if (!r) {
+          problems.push(`特別モデル ${c.eventId}: ${rank}位の曲線が無い`)
+          continue
+        }
+        checkTable(`特別モデル ${c.eventId} ${rank}位 追い込みあり`, r.spurt, problems)
+        checkTable(`特別モデル ${c.eventId} ${rank}位 追い込みなし`, r.flat, problems)
+      }
+    }
+    notes.push(`特別モデル ${sp.version}: 一覧 ${sp.events.join('・') || 'なし'}／曲線 ${sp.curves.map((c) => c.eventId).join('・') || 'なし'}`)
+  }
 
   // G2 要約の健全さ
   for (const r of summary.ranks) {
@@ -183,6 +202,22 @@ export function checkModel(model: Model, summary: ModelSummary, active: ModelSum
   }
 
   return { ok: problems.length === 0, problems, notes }
+}
+
+/**
+ * 特別モデルの焼き具合を要約の行と、ジョブの画面に出すエラーに分ける（検分 G2、2026-11-19）。
+ * 日程がまだ無い回は知らせるだけ（載れば次の実行で焼ける）。日程があるのに焼けなかった回はエラー（Worker はその回をふだんの数字で出し続ける）
+ */
+export function specialBakeReport(s: SpecialBakeSummary | undefined): { lines: string[]; errors: string[] } {
+  if (!s) return { lines: [], errors: [] }
+  const waiting = s.missing.filter((m) => m.reason === 'no_schedule')
+  const failed = s.missing.filter((m) => m.reason !== 'no_schedule')
+  const lines = [
+    `- 特別モデル: ${s.version}（学習から外す回 ${s.events.join('・') || 'なし'}／曲線を焼いた回 ${s.baked.join('・') || 'なし'}${waiting.length > 0 ? `／日程がまだ無い回 ${waiting.map((m) => m.eventId).join('・')}` : ''}）`,
+    ...failed.map((m) => `  - 曲線を焼けなかった回 ${m.eventId}: ${m.detail}`),
+  ]
+  const errors = failed.map((m) => `${m.eventId} の特別モデルの曲線を焼けなかった（${m.detail}）。Worker はこの回をふだんの数字の広めの目安で出し続ける`)
+  return { lines, errors }
 }
 
 // ---------------------------------------------------------------------------
@@ -248,6 +283,8 @@ export function scoreboard(reports: readonly Report[], window: number = SCOREBOA
   const rows: ScoreRow[] = []
   for (const rep of [...reports].sort((a, b) => b.aggregateAt - a.aggregateAt)) {
     if (picked.length >= window) break
+    // みんなでライブ停止中の回（特別モデルで出した回）は見張りに入れない（帯は8割を狙っていない・当たり方を確かめられない）
+    if (isSpecialReport(rep)) continue
     const entries = rep.ranks.flatMap((x) => x.prospective)
     const scored = entries.filter(usable)
     if (scored.length === 0) continue

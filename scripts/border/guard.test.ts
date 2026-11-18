@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { ModelSummary, RankSummary } from '../../workers/border/src/fit.ts'
 import { GRID, RANKS, type Model, type RankModel } from '../../workers/border/src/model.ts'
-import { checkModel, scoreboard, scoreboardLines } from './guard.ts'
+import { SPECIAL_DEFAULT_PARAMS, type SpecialModel } from '../../workers/border/src/special.ts'
+import { checkModel, scoreboard, scoreboardLines, specialBakeReport } from './guard.ts'
 import type { ProspectiveScore, Report } from './report.ts'
 
 // ---- 模型の部品（正常な値）-------------------------------------------------
@@ -291,5 +292,75 @@ describe('見張り scoreboard', () => {
     expect(sb.coverage).toBeNull()
     expect(sb.alarms).toEqual([])
     expect(scoreboardLines(sb).some((l) => l.includes('-（0 点）'))).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// みんなでライブ停止中の回（特別モデル、special.ts。2026-11-19）
+// ---------------------------------------------------------------------------
+describe('特別モデル（みんなでライブ停止中の回）', () => {
+  const curves = (spurt = healthyTable()) => ({ spurt, flat: GRID.map((p) => p) })
+  const special = (edit?: (s: SpecialModel) => void): SpecialModel => {
+    const s: SpecialModel = {
+      algorithm: 'solo-special-v1',
+      version: 'solo-special-v1@abcd1234',
+      events: [226],
+      params: { ...SPECIAL_DEFAULT_PARAMS },
+      curves: [{ eventId: 226, startAt: 0, aggregateAt: 1, ranks: Object.fromEntries(RANKS.map((r) => [String(r), curves()])) }],
+    }
+    edit?.(s)
+    return s
+  }
+
+  it('関所: special の付いた正常な版は通る（曲線の無い一覧だけの版も通る）', () => {
+    const res = checkModel({ ...makeModel(), special: special() }, makeSummary('share-median-v1@e300-new'), active)
+    expect(res.problems).toEqual([])
+    expect(res.notes.join()).toContain('特別モデル solo-special-v1@abcd1234')
+    expect(checkModel({ ...makeModel(), special: special((s) => (s.curves = [])) }, makeSummary('share-median-v1@e300-new'), active).ok).toBe(true)
+  })
+
+  it('関所: 壊れた曲線（1.05 超・大きな逆戻り・欠けた順位）や形の違う版名は止める', () => {
+    const bad = [
+      special((s) => (s.curves[0].ranks['1000'] = curves(GRID.map((p) => p * 2)))),
+      special((s) => (s.curves[0].ranks['50'] = curves(GRID.map((p) => (p > 0.5 ? 0.3 : p))))),
+      special((s) => delete s.curves[0].ranks['2000']),
+      special((s) => (s.version = 'share-median-v1@x')),
+    ]
+    for (const sp of bad) expect(checkModel({ ...makeModel(), special: sp }, makeSummary('share-median-v1@e300-new'), active).ok).toBe(false)
+  })
+
+  it('見張り: 一覧の回・特別モデルの版の回は直近8回に入れない（その分だけ前の回が入る）', () => {
+    const special226: Report = { ...report(226), modelVersions: ['solo-special-v1@abcd1234'] }
+    const listedOnly: Report = { ...report(227), eventId: 226 }
+    const sb = scoreboard([...events(8), special226, listedOnly])
+    expect(sb.rows.map((r) => r.eventId)).not.toContain(226)
+    expect(sb.rows).toHaveLength(8)
+    // 特別モデルの帯が全部外れていても、警告にならない
+    const allMiss: Report = { ...report(300, { hit: 0 }), modelVersions: ['solo-special-v1@abcd1234'] }
+    expect(scoreboard([...events(8), allMiss, allMiss, allMiss]).alarms).toEqual([])
+  })
+})
+
+describe('特別モデルの焼き具合の要約（specialBakeReport、検分 G2）', () => {
+  it('日程がまだ無い回は要約に書くだけ。日程があるのに焼けなかった回は理由つきでエラーにする', () => {
+    const r = specialBakeReport({
+      version: 'solo-special-v1@abcd1234',
+      events: [226, 227, 228],
+      baked: [226],
+      missing: [
+        { eventId: 227, reason: 'no_schedule', detail: '日程（マスタ）にまだ無い' },
+        { eventId: 228, reason: 'rate_fit_failed', detail: '2000位の率モデルが当てはまらなかった（その順位の形がある学習の回 0 回）' },
+      ],
+    })
+    expect(r.lines[0]).toBe('- 特別モデル: solo-special-v1@abcd1234（学習から外す回 226・227・228／曲線を焼いた回 226／日程がまだ無い回 227）')
+    expect(r.lines[1]).toContain('曲線を焼けなかった回 228: 2000位の率モデルが当てはまらなかった')
+    expect(r.errors).toHaveLength(1)
+    expect(r.errors[0]).toContain('228 の特別モデルの曲線を焼けなかった（2000位の率モデルが当てはまらなかった')
+    expect(r.errors.join()).not.toContain('227')
+  })
+
+  it('一覧が空（special が無い）なら何も出さない。全部焼けていればエラーは無い', () => {
+    expect(specialBakeReport(undefined)).toEqual({ lines: [], errors: [] })
+    expect(specialBakeReport({ version: 'solo-special-v1@x', events: [226], baked: [226], missing: [] }).errors).toEqual([])
   })
 })
