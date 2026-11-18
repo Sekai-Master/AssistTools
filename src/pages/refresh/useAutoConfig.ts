@@ -48,6 +48,10 @@ export function useAutoConfig({
   /** 1周期の秒の上書き。楽曲データが読めないときはここだけで計算できる。 */
   const [cycleOverride, setCycleOverride] = useState("");
 
+  /**
+   * ★ 読み込み中は useRankingMusics の loading をそのまま使う。オートを付けた後の読み込みの間も true になるのは
+   *   #251（hook の直し）が前提。こちらで推し量る回避は二重になるので入れない（#246 の検分、2026-11-12）。
+   */
   const { entries, loading, error } = useRankingMusics(enabled);
 
   const params = useMemo(
@@ -109,6 +113,8 @@ export function useAutoConfig({
   );
 
   return {
+    /** 休憩にオートを積んでいるか（false なら楽曲データを読まず、候補も出さない）。 */
+    enabled,
     course,
     setCourse,
     usedToday,

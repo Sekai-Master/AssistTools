@@ -10,7 +10,7 @@
  *   - 窓口・サイト名が site.ts と一致していること（各ページに直書きされていない）
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { ReactElement } from "react";
 import TermsPage from "./TermsPage";
@@ -195,11 +195,24 @@ describe("更新履歴ページ", () => {
       expect(img.getAttribute("height"), `v${version} の height`).toBe(String(image.height));
       expect(img.getAttribute("loading"), `v${version} の loading`).toBe("lazy");
       expect(img.getAttribute("src"), `v${version} の src`).toMatch(new RegExp(`images/changelog/${version.replace(/\./g, "\\.")}\\.webp$`));
-      // 見出しのすぐ下に置き、押すと同じ画像を開く。
-      const link = img.closest("a");
-      expect(link?.getAttribute("href"), `v${version} のリンク`).toBe(img.getAttribute("src"));
-      expect(releaseArticle(version).querySelector("header")?.nextElementSibling, `v${version} の位置`).toBe(link);
+      // 見出しのすぐ下に置き、押すと同じタブの中で全面に出す（新しいタブのリンクにしない）。
+      const button = img.closest("button");
+      expect(button, `v${version} の押せる枠`).not.toBeNull();
+      expect(img.closest("a"), `v${version} が新しいタブのリンクのまま`).toBeNull();
+      expect(releaseArticle(version).querySelector("header")?.nextElementSibling, `v${version} の位置`).toBe(button);
     }
+  });
+
+  it("告知画像を押すと、同じタブの中で版の名前を題にして全面に出し、Esc で閉じる", () => {
+    at(<ChangelogPage />);
+    const version = CHANGELOG_IMAGE_VERSIONS[0];
+    const button = within(releaseArticle(version)).getByRole("button", { name: /拡大して表示/ });
+    fireEvent.click(button);
+    const dialog = screen.getByRole("dialog", { name: `v${version} の告知画像` });
+    expect(dialog.querySelector("img")?.getAttribute("alt")).toBe(changelogImageOf(version)!.alt);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(button);
   });
 
   it("告知画像の無い版は画像を出さない", () => {

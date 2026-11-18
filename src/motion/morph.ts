@@ -186,7 +186,16 @@ function clone(el: HTMLElement, content: Rect, boxRect: Rect = content): HTMLEle
 }
 
 let captured: Captured | null = null;
-let aimedAt = -Infinity;
+/**
+ * 押下で指名された出発点（まだ持ち上げていない）。持ち上げるのは遷移が始まってから（captureMorph）。
+ *
+ * ★ 押下の時点で持ち上げてはいけない（2026-11-12 報告「ツール集で文字を選んでからスクロールすると浮く」）。
+ *   押下が遷移になるとは限らない ── 文字を選ぶドラッグ・枠の余白の押下・Ctrl+クリック（新しいタブ）・
+ *   見出しそのものの押下・動きを減らす設定（変形を使わない）では遷移も変形も始まらず、
+ *   誰も片付けないので、行が隠れたまま fixed の複製だけが画面に貼り付き、スクロールすると
+ *   枠の外へずれて見えていた。指名は記録だけにして、見た目は何も変えない。
+ */
+let aimed: { el: HTMLElement; at: number } | null = null;
 let boxes: HTMLElement[] = [];
 /**
  * 隠した本物（出発点と到着点）。後片付けで必ず全部見せ直す。
@@ -273,23 +282,36 @@ function lift(el: HTMLElement): Captured | null {
  * 一覧には同じ印のカードが何枚もあるので、採寸だけでは「どれ」か決まらない。
  * 押下でここに手を挙げてもらう（キーボードの Enter も click になる）。
  *
+ * 指名するのは「同じタブでページ内の遷移になるリンクの押下」だけ。持ち上げはしない（上の aimed）。
+ *
  * @param within 探してよい範囲（ステージ）。closest がこの外まで遡って拾わないように。
+ * @param click 押下のボタンと修飾キー。Ctrl/⌘/Shift/Alt や主ボタン以外は別タブ・別窓・保存になる。
  */
-export function aimMorph(target: EventTarget | null, within?: Element | null): void {
+export function aimMorph(target: EventTarget | null, within?: Element | null, click?: ClickLike): void {
   if (!(target instanceof Element)) return;
+  if (click && (click.button !== 0 || click.ctrlKey || click.metaKey || click.shiftKey || click.altKey)) return;
+  // ★ リンクの内側の押下だけを見る。文字を選ぶドラッグで押した点と離した点が違う要素だと、
+  //   click は**両者の共通の祖先**（ツール集の section）に届く。そこから下を探すと
+  //   最初の印（編成ビルダー）を拾っていた。枠の余白の押下も同じ（target が枠）。
+  const link = target.closest<HTMLAnchorElement>("a[href]");
+  if (!link || (within && !within.contains(link))) return;
+  if ((link.target && link.target !== "_self") || link.hasAttribute("download")) return;
   // ★ 上下どちらも見る。押された点が印の内側とは限らない ──
   //   ハブのカードはリンクの**子**なので、キーボードの Enter や
   //   リンク自体をクリックした場合は target がリンクになり、closest では届かない。
   //   着地待ちで隠れているカードも押下を受けず、target はリンクになる。
   const up = target.closest<HTMLElement>(`[${MORPH_ATTR}]`);
-  const el =
-    (up && (!within || within.contains(up)) ? up : null) ??
-    target.querySelector<HTMLElement>(`[${MORPH_ATTR}]`);
-  if (!el || captured) return;
-  const next = lift(el);
-  if (!next) return;
-  captured = next;
-  aimedAt = now();
+  const el = (up && link.contains(up) ? up : null) ?? link.querySelector<HTMLElement>(`[${MORPH_ATTR}]`);
+  aimed = el ? { el, at: now() } : null;
+}
+
+/** aimMorph が見る押下の情報（MouseEvent の一部）。 */
+export interface ClickLike {
+  button: number;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
 }
 
 /**
@@ -300,9 +322,16 @@ export function aimMorph(target: EventTarget | null, within?: Element | null): v
  * これで足りる（＝戻る/進むでも同じ動きになる）。
  */
 export function captureMorph(stage: Element | null, destKey?: string | null): void {
-  if (captured && now() - aimedAt < AIM_TTL_MS) return; // 押下で指名済み
+  // 指名した要素がいまのステージの中に居るときだけ使う。木から外れた要素（指名の後に前の遷移の
+  // commit が来た）も contains で落ちるので、isConnected は別に見ない（#255 の検分 中1）。
+  const pick = aimed && now() - aimed.at < AIM_TTL_MS && stage?.contains(aimed.el) ? aimed.el : null;
   cancelMorph();
   if (!stage) return;
+  // 押下で指名済みなら、その1枚を持ち上げる（行き先の照合は飛ぶときにやる）。
+  if (pick) {
+    captured = lift(pick);
+    return;
+  }
   // ★ 行き先が印を持たないなら持ち上げない。持ち上げると本文だけ沈んで
   //   **機能名だけが宙に残り**、行き先が見つからずに消える（issue #3）。
   //   ツール→ツールがまさにこれで、印はどちらにもあるがキーが違う。
@@ -339,7 +368,7 @@ export interface FlightTiming {
 export function flyMorph(stage: Element | null, timing: FlightTiming): boolean {
   const from = captured;
   captured = null;
-  aimedAt = -Infinity;
+  aimed = null;
   if (!from) return false;
   // 持ち上げた複製が既に外されている（＝別の遷移に片付けられた）なら飛ばせない。
   if (!from.box.isConnected) {
@@ -407,7 +436,7 @@ export function flyMorph(stage: Element | null, timing: FlightTiming): boolean {
 /** 遷移が中断された・対応が見つからなかったときの後片付け。 */
 export function cancelMorph(): void {
   captured = null;
-  aimedAt = -Infinity;
+  aimed = null;
   cleanup();
   delete document.documentElement.dataset[BUSY_FLAG];
 }

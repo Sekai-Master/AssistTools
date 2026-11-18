@@ -19026,6 +19026,31 @@
     "masterNotes": 928
   },
   {
+    "id": "826",
+    "title": "スロウライト",
+    "pronunciation": "すろうらいと",
+    "creatorArtistId": 352,
+    "artistName": "パンタレイ",
+    "default": 1171301,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1794808800000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_826.webp",
+    "music_time": 121.9,
+    "event_rate": 112,
+    "singers": [21],
+    "maxSingers": 1,
+    "dancerCount": 1,
+    "expertLevel": 26,
+    "masterLevel": 29,
+    "masterNotes": 1075
+  },
+  {
     "id": "828",
     "title": "プレデター",
     "pronunciation": "ぷれでたー",
