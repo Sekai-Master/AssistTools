@@ -218,6 +218,18 @@ describe("ライブ種別（みんなで／ひとりで／オート）", () => {
     expect(radio("みんなで").getAttribute("aria-checked")).toBe("true");
   });
 
+  // ★ 2026-11-19 検分 R7: すでに選ばれている側を押しただけで保存すると、見た目は何も変わらないのに
+  //   「止まっている間に選び直した ひとりで」が残り、再開後もひとりでで開いてしまう。
+  it("すでに選ばれている側を押しても保存しない（値が変わったときだけ保存する）", async () => {
+    localStorage.setItem(KEY, JSON.stringify({ rows: [ROW], live: "multi", taki: 5 }));
+    draw();
+    const user = userEvent.setup();
+    await user.click(radio("ひとりで"));
+    expect(radio("ひとりで").getAttribute("aria-checked")).toBe("true");
+    expect(saved().live).toBe("multi");
+    expect(saved().liveInSuspension).toBeUndefined();
+  });
+
   it("保存値がオートなら、止まっている間もオートで開く", () => {
     localStorage.setItem(KEY, JSON.stringify({ rows: [ROW], live: "auto", taki: 5 }));
     draw();

@@ -8,8 +8,7 @@ import { SongSearchModal } from "../../components/SongSearchModal";
 import { DIFFICULTY_LABEL, type Difficulty, type RankingMusic } from "../ranking/useRankingMusics";
 import { ENVY_ID } from "../analyzer/lib/constants";
 import { DEFAULT_PARAMS, OVERHEAD_BY_LIVE, type LiveType } from "../ranking/lib/efficiency";
-import { initialLive, overheadBasisNote } from "../compare/lib/quickCompare";
-import { MULTI_LIVE_SUSPENDED } from "../../lib/liveSuspension";
+import { overheadBasisNote } from "../compare/lib/quickCompare";
 import { SOLO_OVERHEAD_PROVISIONAL } from "../../lib/overhead";
 import { ProfileBar } from "../../components/ui/ProfileBar";
 import { getActiveProfile } from "../../lib/profiles";
@@ -54,8 +53,8 @@ export function ComparePanel({
   const { entries, loading, error } = music;
   const [songId, setSongId] = useState(ENVY_ID);
   const [difficulty, setDifficulty] = useState<Difficulty>("master");
-  // ★ みんなでライブが止まっている間は ひとりでライブ で開く（楽曲比較と同じ initialLive。ここは保存しない）。
-  const [live, setLive] = useState<LiveType>(() => initialLive({}, MULTI_LIVE_SUSPENDED));
+  // ★ 編成ビルダーは機能の保留中（2026-11-18 Nori）。停止期間でも既定は変えない（文の言い換えだけ。検分 R3）。
+  const [live, setLive] = useState<LiveType>("multi");
   // ★ スキル値は**編成ごとに計算する**ので、ここでは持たない（カードのSLから出る）。
   //   共通なのは叩き方の前提（曲・ライブ種別・焚き数）だけ。
   const [taki, setTaki] = useState(() => getActiveProfile()?.taki ?? DEFAULT_PARAMS.taki);

@@ -68,6 +68,8 @@ export function QuickCompare({ entries, loading, error }: { entries: RankingMusi
    */
   const [livePick, setLivePick] = useState(() => ({ live: saved.live, liveInSuspension: saved.liveInSuspension }));
   const pickLive = (next: LiveType) => {
+    // ★ すでに選ばれている側を押しただけでは保存しない（見た目が変わらないのに「選び直した」ことになる。検分 R7）
+    if (next === live) return;
     setLive(next);
     setLivePick({ live: next, liveInSuspension: MULTI_LIVE_SUSPENDED });
   };
