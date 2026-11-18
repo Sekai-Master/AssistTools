@@ -1,4 +1,5 @@
 import { ToolPage } from "../../components/ui/ToolPage";
+import { ZoomableImage } from "../../components/ui/ImageLightbox";
 import { DocIntro, DocLink } from "./LegalDoc";
 import { parseChangelog } from "./changelogParser";
 import { changelogImageOf } from "./changelogImages";
@@ -26,8 +27,8 @@ const GROUP_TONE: Record<string, string> = {
  *   本文が 1 行 27 字ほどに細くなり、画像の中の説明の字も 5px ほどに縮んで読めないから。
  *   上に置けば PC で 688px 幅になり、画像の中の説明の字が 13px ほどで読める
  * - 線の囲みを付けるのは、暗いテーマでパネルの地（#2a2d33）と画像の地が同じ色で縁が消えるから
- * - 押すと原寸（幅 1200px）を新しいタブで開く。スマホでは縮んで字が読めないので、拡大して読む用。
- *   ページ内で拡大するわけではないので、カーソルは虫めがねにしない（ふつうのリンクの指）
+ * - 押すと同じタブの中で画面いっぱいに出す（ZoomableImage。以前は原寸を新しいタブで開いていた）。
+ *   スマホでは縮んで字が読めないので、全面に出してから指で広げて読む用。カーソルは虫めがね
  *
  * 画像を作っていない版では何も出さない（文章だけ）。
  */
@@ -36,19 +37,14 @@ function ReleaseImage({ version }: { version: string }) {
   if (!image) return null;
   const src = `${import.meta.env.BASE_URL}${image.src}`;
   return (
-    <a href={src} target="_blank" rel="noopener" className="mt-4 block">
-      <img
-        src={src}
-        alt={image.alt}
-        width={image.width}
-        height={image.height}
-        loading="lazy"
-        decoding="async"
-        className="block h-auto w-full rounded-lg border border-slate-300"
-      />
-      {/* 読み上げでは、リンクの名前が alt だけだと押すと何が起きるか分からない。 */}
-      <span className="sr-only">（原寸を新しいタブで開く）</span>
-    </a>
+    <ZoomableImage
+      src={src}
+      alt={image.alt}
+      width={image.width}
+      height={image.height}
+      title={`v${version} の告知画像`}
+      className="mt-4 block w-full"
+    />
   );
 }
 

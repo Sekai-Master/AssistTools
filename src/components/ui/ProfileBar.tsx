@@ -34,14 +34,21 @@ export function ProfileBar({ apply }: { apply: (p: Profile) => void }) {
   const active = useActiveProfile();
   const [notice] = useState<string | null>(null);
 
+  /**
+   * ★ 編成が無いときは、状態の短い 1 行だけ見せて説明は畳む（UX 監査 2026-11-12、共通の型 3）。
+   *   前は 26 字の断りを 5 ページの先頭に毎回出していた。説明と設定へのリンクは消さずに中へ残す。
+   */
   if (profiles.length === 0) {
     return (
-      <p className="text-xs text-slate-500">
-        <Link to="/settings" className="font-bold underline">
-          設定
-        </Link>
-        で編成を登録しておくと、ここの初期値になります。
-      </p>
+      <details className="text-xs text-slate-500">
+        <summary className="cursor-pointer">編成: 未登録</summary>
+        <p className="mt-1">
+          <Link to="/settings" className="font-bold underline">
+            設定
+          </Link>
+          で編成を登録しておくと、ここの初期値になります。
+        </p>
+      </details>
     );
   }
 
