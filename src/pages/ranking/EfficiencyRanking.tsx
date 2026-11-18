@@ -1664,7 +1664,7 @@ export default function EfficiencyRanking() {
                   <span className="font-bold text-slate-600">262</span>。
                 </p>
                 <p className="mt-2">
-                  ソロ（オート・チャレライ）は別勘定で、編成5枚が1回ずつ発動するので
+                  ソロ（ひとりで周回・オート・チャレライ）は別勘定で、編成5枚が1回ずつ発動するので
                   内部値 ÷ 5
                   が平均、最後の6回目だけリーダーがもう1回発動します。 そのため
                   <span className="font-bold text-slate-600">

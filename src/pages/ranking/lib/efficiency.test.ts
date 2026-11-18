@@ -438,6 +438,8 @@ describe("rankSongsInWindow — 残り時間で区切る", () => {
  * ★ 値は「ひとりで周回」を足す前の実装（origin/main e873a12）で rankSongs を走らせて写したもの。
  *   新しいモードを足しても、既存のタブの数字が1桁も動いていないことの証拠にする。
  *   ここが落ちたら、既存のタブの計算に手が入っている。
+ * ★ 「既定値」の行は src/lib/overhead.ts の値（54・42.6・33）に依存する。実測で
+ *   overhead.ts を正しく更新したときもここは落ちるので、その場合は値を写し直してよい。
  */
 describe("rankSongs — 既存の3モードの出力は変わらない（ゴールデン）", () => {
   const entries = [ENVY, TENCHI];
