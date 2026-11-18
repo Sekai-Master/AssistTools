@@ -1,6 +1,8 @@
 import { ToolPage } from "../../components/ui/ToolPage";
 import { ZoomableImage } from "../../components/ui/ImageLightbox";
 import { DocIntro, DocLink } from "./LegalDoc";
+import { ChangelogFoldToc, ChangelogSideToc } from "./ChangelogToc";
+import { releaseAnchor } from "./changelogAnchors";
 import { parseChangelog } from "./changelogParser";
 import { changelogImageOf } from "./changelogImages";
 import { REPO_URL } from "../../lib/site";
@@ -57,11 +59,20 @@ export default function ChangelogPage() {
         でも同じものを読めます。
       </DocIntro>
 
-      <div className="space-y-8">
+      {/* 狭い画面だけ。広い画面では下の横の目次を使う */}
+      <ChangelogFoldToc releases={RELEASES} />
+
+      {/* relative は横の目次（ChangelogSideToc）の基準。目次はこの高さいっぱいに付いてくる */}
+      <div className="relative space-y-8">
+        <ChangelogSideToc releases={RELEASES} />
         {RELEASES.map((release, i) => (
-          <article key={release.version} className="neu-panel p-4 sm:p-6">
+          // id は目次の飛び先。scroll-mt-20 は sticky のヘッダーに見出しが隠れないための余白（ほかのページと同じ）
+          <article key={release.version} id={releaseAnchor(release.version)} className="neu-panel scroll-mt-20 p-4 sm:p-6">
             <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h2 className="text-lg font-bold text-slate-700">v{release.version}</h2>
+              {/* tabIndex=-1: 目次から飛んだときにフォーカスを受ける（Tab では止まらない） */}
+              <h2 tabIndex={-1} className="text-lg font-bold text-slate-700 outline-none">
+                v{release.version}
+              </h2>
               <time className="text-xs text-slate-500" dateTime={release.date}>
                 {release.date}
               </time>
