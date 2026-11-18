@@ -1,7 +1,15 @@
 import { useMemo, useState } from "react";
 import { ENVY_ID } from "../analyzer/lib/calculator";
 import { getRefreshConstant } from "./lib/refreshConstant";
-import { overheadFromRate } from "./lib/sessionPlanner";
+import {
+  DEFAULT_RATE,
+  type LiveAssumption,
+  SOLO_DEFAULT_RATE,
+  defaultLiveAssumption,
+  defaultRateFor,
+  overheadForPace,
+  paceFor,
+} from "./lib/liveAssumption";
 import {
   DECAY_INTERVAL_MIN,
   decayProgressFromNextDecay,
@@ -10,14 +18,24 @@ import {
 } from "./lib/gaugeModel";
 import type { AnalyzerMusic } from "../analyzer/useAnalyzerMusics";
 
-export const ENVY_LEN = 74.8; // エビの長さ（周回ペース較正の基準曲）
-export const DEFAULT_RATE = 28; // エビ基準の既定周回ペース(回/時)
+// エビの長さ（周回ペース較正の基準曲）と、みんなでライブの既定の周回ペース。正本は lib/liveAssumption.ts
+export { DEFAULT_RATE, ENVY_LEN } from "./lib/liveAssumption";
+
+export interface GaugeInputsOptions {
+  /**
+   * ライブの想定（ひとりでライブ／みんなでライブ）を選べるようにする。**リフレッシュゲージだけが渡す。**
+   * ★ 渡さないページ（周回プラン・必要稼働時間）は、足す前と同じくみんなでライブのペース 28 回/時で固定。
+   *   周回プランは inputs.rate を名前付きで保存しているので、意味を変えると保存したプランの読み込みが狂う。
+   */
+  liveChoice?: boolean;
+}
 
 /**
- * リフレッシュゲージ系ツール（ゲージ確認・周回プラン）で共有する入力状態。
+ * リフレッシュゲージ系ツール（ゲージ確認・周回プラン・必要稼働時間）で共有する入力状態。
  * 曲・現在ゲージ・周回ペース＋実測較正をまとめて持つ。
  */
-export function useGaugeInputs(musics: AnalyzerMusic[]) {
+export function useGaugeInputs(musics: AnalyzerMusic[], options: GaugeInputsOptions = {}) {
+  const liveChoice = options.liveChoice ?? false;
   const [songId, setSongId] = useState(ENVY_ID);
   const [songModalOpen, setSongModalOpen] = useState(false);
   const [gauge, setGauge] = useState("0");
@@ -27,7 +45,22 @@ export function useGaugeInputs(musics: AnalyzerMusic[]) {
    *   イベントの途中でツールを開くのが普通なので、ここが空だと最大30分ずれる。
    */
   const [nextDecay, setNextDecay] = useState("");
-  const [rate, setRate] = useState(String(DEFAULT_RATE));
+  /**
+   * どちらのライブで回す想定か。選べないページはみんなでライブ固定。
+   * ★ 保存しない（このページの入力はもともと開くたびに既定から）。止まっている間はひとりでライブで開く。
+   */
+  const [chosenLive, setLive] = useState<LiveAssumption>(() =>
+    liveChoice ? defaultLiveAssumption() : "multi",
+  );
+  const live: LiveAssumption = liveChoice ? chosenLive : "multi";
+  /**
+   * 周回ペース（エビ基準・回/時）は想定ごとに別々に持つ。1 つにすると、切り替えのたびに入れた値が消えるか、
+   * みんなでライブの 28 のままひとりでライブを計算してしまう。
+   */
+  const [multiRate, setMultiRate] = useState(String(DEFAULT_RATE));
+  const [soloRate, setSoloRate] = useState(String(SOLO_DEFAULT_RATE));
+  const rate = live === "solo" ? soloRate : multiRate;
+  const setRate = live === "solo" ? setSoloRate : setMultiRate;
   const [calibPlays, setCalibPlays] = useState("");
   const [calibMin, setCalibMin] = useState("");
 
@@ -39,14 +72,12 @@ export function useGaugeInputs(musics: AnalyzerMusic[]) {
     return p > 0 && m > 0 ? Math.round((p * 60) / m) : null;
   }, [calibPlays, calibMin]);
 
-  const overhead = useMemo(() => {
-    const r = Number(rate);
-    return overheadFromRate(r > 0 ? r : DEFAULT_RATE, ENVY_LEN);
-  }, [rate]);
+  // みんなでライブは足す前と同じ式（28 回/時か入れた値から逆算）。ひとりでライブの既定は OVERHEAD_SEC.solo。
+  const overhead = useMemo(() => overheadForPace(live, rate), [live, rate]);
 
   const rc = selectedSong ? getRefreshConstant(selectedSong.basePoint, selectedSong.id) : 0;
   const gaugePct = Math.max(0, Math.min(100, Number(gauge) || 0));
-  const ratePerHour = Number(rate) > 0 ? Number(rate) : DEFAULT_RATE;
+  const ratePerHour = paceFor(live, rate);
 
   /** 「次の回復まで」の分。未入力・不正値は null（＝従来どおり30分フルとして扱う）。 */
   const nextDecayMin = useMemo(() => {
@@ -76,6 +107,13 @@ export function useGaugeInputs(musics: AnalyzerMusic[]) {
     setGauge,
     rate,
     setRate,
+    /** 想定を選べるページか（リフレッシュゲージだけ true）。 */
+    liveChoice,
+    /** いまの想定。選べないページはいつも "multi"。 */
+    live,
+    setLive,
+    /** いまの想定の既定の周回ペース（補足文に出す）。 */
+    defaultRate: defaultRateFor(live),
     calibPlays,
     setCalibPlays,
     calibMin,

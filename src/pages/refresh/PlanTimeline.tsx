@@ -27,6 +27,7 @@ import {
 } from "./lib/planCanvas";
 import { getRefreshConstant } from "./lib/refreshConstant";
 import { fmtClock, fmtDuration, parseClock } from "./lib/format";
+import { type LiveAssumption, paceMetaLine } from "./lib/liveAssumption";
 import type { AnalyzerMusic } from "../analyzer/useAnalyzerMusics";
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
@@ -78,6 +79,11 @@ interface Props {
   startDecayProgress?: number;
   /** エビ基準の周回ペース(回/時)。画像のメタ表示に使う。 */
   ratePerHour: number;
+  /**
+   * どちらのライブの想定か（リフレッシュゲージだけが渡す）。渡すと画像の「ペース」の行に書き足す。
+   * 渡さない周回プランの画像は足す前と同じ文。
+   */
+  live?: LiveAssumption;
   /** 指定すると各プレイに焚き数を持たせ、累積到達ポイントも計算・表示する（全部入り） */
   points?: PointsConfig;
   /** 指定すると休憩ブロックに「オートを回す」を出せる（周回プランのみ） */
@@ -101,6 +107,7 @@ export function PlanTimeline({
   startPercent,
   startDecayProgress = 0,
   ratePerHour,
+  live,
   points,
   auto,
   segments,
@@ -268,7 +275,7 @@ export function PlanTimeline({
             `現在 ${points.startPoints.toLocaleString()} pt ・ 開始 ${startTime || "—"} ・ ゲージ ${startPercent}%`,
           ]
         : [
-            `ペース: ${ratePerHour}回/時（エビ基準）`,
+            paceMetaLine(ratePerHour, live),
             `開始 ${startTime || "—"}・ゲージ ${startPercent}%`,
           ],
       rows: result.points.map((pt, i) => {

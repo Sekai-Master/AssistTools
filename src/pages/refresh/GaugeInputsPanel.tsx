@@ -2,15 +2,24 @@ import { Panel } from "../../components/ui/Panel";
 import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { NeuButton } from "../../components/ui/NeuButton";
+import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { SongSearchModal } from "../../components/SongSearchModal";
 import { onJacketError } from "../../lib/img";
+import { OVERHEAD_SEC } from "../../lib/overhead";
 import { isMeasured } from "./lib/refreshConstant";
 import { fmtDuration } from "./lib/format";
+import { LIVE_ASSUMPTION_LABEL, type LiveAssumption } from "./lib/liveAssumption";
 import type { GaugeInputs } from "./useGaugeInputs";
 import type { AnalyzerMusic } from "../analyzer/useAnalyzerMusics";
 import type { AliasEntry } from "../bingo/useBingoMusics";
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
+
+/** みんなでライブが止まっている間（2026-11-18〜）に使う方を先に置く。 */
+const LIVE_OPTIONS: { value: LiveAssumption; label: string }[] = [
+  { value: "solo", label: LIVE_ASSUMPTION_LABEL.solo },
+  { value: "multi", label: LIVE_ASSUMPTION_LABEL.multi },
+];
 
 /** ゲージ系ツール共通の入力パネル（曲・現在ゲージ・周回ペース＋較正）＋曲検索モーダル。 */
 export function GaugeInputsPanel({
@@ -39,6 +48,10 @@ export function GaugeInputsPanel({
     emptyInMinutes,
     rate,
     setRate,
+    liveChoice,
+    live,
+    setLive,
+    defaultRate,
     calibPlays,
     setCalibPlays,
     calibMin,
@@ -161,12 +174,27 @@ export function GaugeInputsPanel({
             </div>
           )}
 
+          {/* ★ 想定を選べるのはリフレッシュゲージだけ（liveChoice）。周回ペースの既定がここで決まるので、すぐ上に置く。
+              どちらで計算しているかは、結果の枠と固定バーにも札で出す。 */}
+          {liveChoice && (
+            <Field label="ライブの種類">
+              <SegmentedControl
+                options={LIVE_OPTIONS}
+                value={live}
+                onChange={setLive}
+                ariaLabel="ライブの種類"
+              />
+            </Field>
+          )}
+
           <Field
             label="周回ペース"
-            hint="既定28。長い曲は自動で少なくなります"
+            htmlFor="rg-rate"
+            hint={`既定${defaultRate}。長い曲は自動で少なくなります`}
           >
             <div className="flex items-center gap-2">
               <NeuInput
+                id="rg-rate"
                 inputMode="decimal"
                 value={rate}
                 onChange={(e) => setRate(e.target.value)}
@@ -223,10 +251,25 @@ export function GaugeInputsPanel({
                   </li>
                 </>
               )}
-              <li>
-                <b>周回ペース</b>:
-                エビ基準の周回 回/時（マッチング・支援者交代・ロード込み）。長い曲は自動で少なくなります。既定28、自分の環境に合わせて調整を。
-              </li>
+              {liveChoice && (
+                <li>
+                  <b>ライブの種類</b>:
+                  周回ペースの既定を、どちらのライブの1周で出すか。周回ペースは種類ごとに別々に持ちます。
+                </li>
+              )}
+              {/* ★ ひとりでライブのロスが仮の値だという断りは、ここに 1 回だけ（入力欄の下には書かない。design-system 7 節）。
+                  数字は OVERHEAD_SEC.solo から出す（Nori が実測で直したら文も一緒に変わる）。 */}
+              {live === "solo" ? (
+                <li>
+                  <b>周回ペース</b>
+                  {`: エビ基準の周回 回/時（ひとりでライブ: ロード・リザルトなど込み）。長い曲は自動で少なくなります。既定${defaultRate}は1回あたりのロス${OVERHEAD_SEC.solo}秒から出した値で、このロスはまだ実測していない仮の値です。自分の環境に合わせて調整を。`}
+                </li>
+              ) : (
+                <li>
+                  <b>周回ペース</b>:
+                  エビ基準の周回 回/時（マッチング・支援者交代・ロード込み）。長い曲は自動で少なくなります。既定28、自分の環境に合わせて調整を。
+                </li>
+              )}
             </ul>
           </details>
         </div>

@@ -4,6 +4,7 @@ import { Panel } from "../../components/ui/Panel";
 import { useAnalyzerMusics } from "../analyzer/useAnalyzerMusics";
 import { liveGaugePercent } from "./lib/gaugeModel";
 import { planSession, playsPerHour } from "./lib/sessionPlanner";
+import { LIVE_ASSUMPTION_LABEL, assumptionTag } from "./lib/liveAssumption";
 import type { Segment } from "./lib/timeline";
 import { fmtDuration, nearestRoundTime } from "./lib/format";
 import { Stat } from "./Stat";
@@ -19,7 +20,8 @@ import { ResultBar } from "../../components/ui/ResultBar";
  */
 export default function RefreshGaugeCalculator() {
   const { musics, aliases, loading, error: dataError } = useAnalyzerMusics();
-  const inputs = useGaugeInputs(musics);
+  // ★ ライブの想定を選べるのはこのページだけ（周回プラン・必要稼働時間は渡さない＝みんなでライブ固定のまま）
+  const inputs = useGaugeInputs(musics, { liveChoice: true });
   const {
     selectedSong,
     rc,
@@ -28,6 +30,7 @@ export default function RefreshGaugeCalculator() {
     ratePerHour,
     nextDecayMin,
     startDecayProgress,
+    live,
   } = inputs;
 
   const [segments, setSegments] = useState<Segment[]>([]);
@@ -94,7 +97,16 @@ export default function RefreshGaugeCalculator() {
             </p>
           </Panel>
 
-          <Panel title="この曲で走ると">
+          {/* ★ どちらのライブの想定で出した数字かを、見出しの横に札で出す（Nori「タグかなんかで明示」2026-11-18）。
+              札は見出し（h2）の外に置き、見出しの名前は「この曲で走ると」のまま。Panel の title は文字しか受けないので、
+              見出しは Panel と同じ形で手で書く。 */}
+          <Panel>
+            <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1">
+              <h2 className="text-base font-bold text-slate-700">この曲で走ると</h2>
+              <span className="rounded border border-slate-300 px-1.5 py-0.5 text-xs font-bold text-slate-600">
+                {assumptionTag(live)}
+              </span>
+            </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <Stat
                 label="100%まで"
@@ -118,11 +130,12 @@ export default function RefreshGaugeCalculator() {
             </p>
           </Panel>
 
-          {/* ★ 主な数字は画面下に固定して 1 画面目に出す（UX 監査 2026-11-12、PR-7）。値は上の「この曲で走ると」と同じ */}
+          {/* ★ 主な数字は画面下に固定して 1 画面目に出す（UX 監査 2026-11-12、PR-7）。値は上の「この曲で走ると」と同じ。
+              想定は「この曲のペース」の空いていた補足の段に出す（「想定」まで足すと 320px で切れるので、公式の名前だけ）。 */}
           <ResultBar
             items={[
               { label: "100%まで", value: `${plan.runwayPlays}回`, sub: `約 ${fmtDuration(plan.runwayMinutes)}` },
-              { label: "この曲のペース", value: `${songRate.toFixed(0)}回/時` },
+              { label: "この曲のペース", value: `${songRate.toFixed(0)}回/時`, sub: LIVE_ASSUMPTION_LABEL[live] },
               {
                 label: "持続ペース",
                 value: `${plan.sustainablePerHour.toFixed(0)}回/時`,
@@ -138,6 +151,7 @@ export default function RefreshGaugeCalculator() {
             startPercent={gaugePct}
             startDecayProgress={startDecayProgress}
             ratePerHour={ratePerHour}
+            live={live}
             segments={segments}
             setSegments={setSegments}
             startTime={startTime}
