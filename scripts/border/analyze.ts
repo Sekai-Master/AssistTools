@@ -17,8 +17,7 @@ import { fitModel, type ModelSummary } from '../../workers/border/src/fit.ts'
 import { RANKS, buildShape, durationHours, eventEndMs, type EventMeta, type Sample, type Shape } from '../../workers/border/src/model.ts'
 import { pacePoints } from '../../workers/border/src/pace.ts'
 import { resultText } from '../../workers/border/src/posts.ts'
-import type { PostPayload } from '../../workers/border/src/snapshot.ts'
-import { buildReport, resultRanks, type PredictionLog, type Report } from './report.ts'
+import { buildReport, resultPayload, resultRanks, type PredictionLog, type Report } from './report.ts'
 import { checkModel, scoreboard, scoreboardLines } from './guard.ts'
 import { SOLO_ONLY_EVENTS, isSpecialReport } from '../../workers/border/src/special.ts'
 import { FINAL_RANKS, announceAt, confirmedFinal, historyMeta, historyPostText, isTestEvent, mergeSeed, parseHistory, unknownMemories, type HistoryEvent, type MasterEvent } from './history.ts'
@@ -401,11 +400,7 @@ async function main() {
     let posted = false
     if (ranks.length > 0 && e.aggregateAt > NOW - POST_WINDOW_MS) {
       const text = resultText(e.name, ranks)
-      const payload: PostPayload = {
-        kind: 'result',
-        event: { id: e.id, name: e.name, type: e.eventType, unit: e.unit, startAt: e.startAt, aggregateAt: e.aggregateAt, durationHours: durationHours(e) },
-        ranks: ranks.map(({ rank, final, predicted, progress, error, inBand, low, high }) => ({ rank, final, predicted, progress, error, inBand, low, high })),
-      }
+      const payload = resultPayload(e, report, ranks)
       if (text) {
         await write('PUT', '/admin/posts', { id: `${e.id}:result`, eventId: e.id, kind: 'result', text, payload })
         posted = true
