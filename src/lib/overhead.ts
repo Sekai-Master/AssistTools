@@ -43,6 +43,13 @@ export const OVERHEAD_SEC = {
 } as const;
 
 /**
+ * OVERHEAD_SEC.solo がまだ実測前の仮の値か。画面に「仮」と出すかどうかはこれだけで決める
+ * （値が 33 かどうかで判定しない。実測がたまたま 33 でも、別の仮の値に替えても、判定が狂わないように）。
+ * Nori が測って solo を直したら、ここを false にする。
+ */
+export const SOLO_OVERHEAD_PROVISIONAL = true;
+
+/**
  * 協力ライブの「詰めて回した場合」。
  * 実測平均（multi）との差が、そのまま部屋待ち・支援者交代のコストになる。
  */
