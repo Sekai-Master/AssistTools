@@ -193,6 +193,14 @@ export default function LapTimer() {
   const condPanel = (
     <details className="neu-panel px-5 py-4 sm:px-6" open={!running}>
       <summary className="flex cursor-pointer items-center gap-2 text-sm font-bold text-slate-600">
+        {/**
+         * ★ 種類を曲名より先に、切り詰めない札で出す（検分 #264 L-4）。計測中はこの段が畳まれ、種類が見えるのは
+         *   この 1 行だけになる。曲名と同じ切り詰める行に入れると、長い曲名で種類が切れて見えなくなった。
+         *   札の形は #265 の「ひとりでライブ想定」と同じ線の囲み（影の段に数えない）。
+         */}
+        <span className="shrink-0 rounded border border-slate-300 px-1.5 py-0.5 text-xs font-bold text-slate-600">
+          {LIVE_KIND_LABEL[kind]}
+        </span>
         {song && (
           <img
             src={`${JACKET_BASE}${song.jacketLink}`}
@@ -204,10 +212,8 @@ export default function LapTimer() {
         <span className="min-w-0 flex-1 truncate">
           {song?.title ?? state.songTitle ?? "曲が未選択"}
           <span className="ml-2 font-normal text-slate-500">
-            {/* ★ 種類も出す。計測中はこの段が畳まれ、見えるのはこの 1 行だけになる */}
             {[
               state.songSec > 0 && `${state.songSec}秒`,
-              LIVE_KIND_LABEL[kind],
               state.taki > 0 && `焚き${state.taki}`,
               state.ptPerRun > 0 && `1周 ${state.ptPerRun.toLocaleString()}Pt`,
             ]
@@ -273,7 +279,8 @@ export default function LapTimer() {
                 options={LIVE_KIND_OPTIONS}
                 value={kind}
                 // ★ 終了・全消去でこの段が開き直した直後の二度押しで、種類が変わらないようにする（#241 の縛りと同じ）
-                onChange={(k) => !blocked() && update((s) => setLiveKind(s, k))}
+                // ★ 選ばれている側を押しても保存しない（部品は同じ値でも呼ぶ。保存すると既定に従わなくなる、検分 #264 L-2）
+                onChange={(k) => k !== kind && !blocked() && update((s) => setLiveKind(s, k))}
               />
             </fieldset>
           </Field>
@@ -497,10 +504,12 @@ export default function LapTimer() {
               {kind === "multi"
                 ? "サイト全体の見積りはみんなでライブで"
                 : "ひとりでライブの見積りは"}{" "}
-              <b>{modelOverhead} 秒</b>
-              {provisional && "（仮の値で、まだ実測していません）"}{" "}
+              <b>{modelOverhead} 秒</b>{" "}
               を置いています。あなたの実測は <b>{fmtSec(st.overhead)} 秒</b>で、
-              {/* ★ 仮の値と比べて「速い・遅い」とは言わない（物差しのほうがまだ当てにならない）。差だけ出す */}
+              {/**
+               * ★ 仮の値と比べて「速い・遅い」とは言わない（物差しのほうがまだ当てにならない）。差だけ出す。
+               *   「仮」の断りは数字の横（オーバーヘッドの補足の「・仮」）の 1 か所だけ（検分 #264 L-3）
+               */}
               {provisional
                 ? `差は ${st.overhead >= modelOverhead ? "+" : "−"}${fmtSec(Math.abs(st.overhead - modelOverhead))} 秒です。`
                 : Math.abs(st.overhead - modelOverhead) < 3

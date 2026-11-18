@@ -10,7 +10,7 @@
  *   （値が 33 でなくても、印が立っていれば「仮」と出すことを縛る。印が false の側は LapTimer.measured.test.tsx）。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import LapTimer from "./LapTimer";
@@ -92,6 +92,29 @@ describe("開いたときの種類", () => {
     draw();
     expect(checked("みんなでライブ")).toBe(true);
   });
+
+  /**
+   * ★ 検分 #264 L-2: 部品は同じ値でも onChange を呼ぶ。選ばれている側を押しただけで liveKind:"solo" が保存されると、
+   *   止まっている期間の印を false に戻しても、その人はみんなでライブに戻らない。
+   */
+  it("選ばれている側をもう一度押しても保存しない（既定に従ったままにする）", async () => {
+    draw();
+    await userEvent.click(radio("ひとりでライブ"));
+    expect(checked("ひとりでライブ")).toBe(true);
+    const raw = localStorage.getItem(LAP_STORAGE_KEY);
+    expect(raw == null ? null : JSON.parse(raw).liveKind).toBeNull();
+  });
+
+  /**
+   * ★ 検分 #264 L-4: 曲名と種類を 1 つの切り詰める行に入れると、長い曲名で種類が切れて見えなくなる
+   *   （計測中に段を畳むと、種類が見えるのはこの 1 行だけ）。種類を先に、切り詰めない札で出し、曲名の側を省略する。
+   */
+  it("見出しの 1 行では、種類を曲名より先に、切り詰めない札で出す", () => {
+    draw();
+    const tag = within(condSummary() as HTMLElement).getByText("ひとりでライブ");
+    expect(tag.closest(".truncate")).toBeNull();
+    expect(condSummary().textContent!.startsWith("ひとりでライブ")).toBe(true);
+  });
 });
 
 describe("計測中は種類を変えない", () => {
@@ -131,12 +154,14 @@ describe("ひとりでライブの目安", () => {
     expect(document.body.textContent).toContain(`曲以外の秒数の既定 ${OVERHEAD_SEC.solo} 秒（仮・未実測）`);
   });
 
-  it("比べる既定のロスは overhead.ts の solo。仮の印が立っている間は「仮」と書き、良し悪しを言わない", async () => {
+  /** ★ 検分 #264 L-3: 計測中の「仮」は数字の横の 1 か所だけ（同じ断りを繰り返さない、design-system 7 節）。 */
+  it("比べる既定のロスは overhead.ts の solo。仮の印が立っている間は数字の横に 1 か所だけ「仮」と書き、良し悪しを言わない", async () => {
     draw();
     await oneLap(SONG_SEC + OVERHEAD_SEC.solo + 20);
     const text = document.body.textContent ?? "";
     expect(text).toContain(`曲以外の秒数（既定 ${OVERHEAD_SEC.solo} 秒・仮）`);
-    expect(text).toContain("まだ実測していません");
+    expect(text.match(/仮/g)).toHaveLength(1);
+    expect(text).toContain(`ひとりでライブの見積りは ${OVERHEAD_SEC.solo} 秒 を置いています。`);
     expect(text).toContain("+20.0 秒");
     expect(text).not.toContain("余計にかかっています");
     expect(text).not.toContain("速く回せています");
