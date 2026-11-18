@@ -108,7 +108,7 @@ export function EncoreAdvice({
 
       <div className="space-y-4 border-t border-slate-300 px-4 pt-4 pb-6 sm:px-6">
         <p className="text-sm leading-relaxed text-slate-600">
-          協力ライブのスキルの発動は 6 回で、参加 5 人が 1 回ずつと、最後のアンコールの 1 回です。各回に乗るのは、その回を取った人の実効値です
+          みんなでライブのスキルの発動は 6 回で、参加 5 人が 1 回ずつと、最後のアンコールの 1 回です。各回に乗るのは、その回を取った人の実効値です
           <Mark>このサイトの計算</Mark>。アンコールを取るのは、その直前にスコアがいちばん高かった人です
           <Mark>走っている人の実感</Mark>
           <Mark>プレイヤーの間で</Mark>。
@@ -183,7 +183,7 @@ export function EncoreAdvice({
           {judged && entry && verdict !== "split" && (
             <p role="status" className="text-sm text-slate-600">
               {gap === null
-                ? "この曲は協力ライブの重みのデータが無いので、差を出せません。"
+                ? "この曲はみんなでライブの重みのデータが無いので、差を出せません。"
                 : gap.ratio === 0
                   ? "誰が取っても 1 人あたりのスコアは同じで、差はありません。"
                   : `${verdict === "yield" ? "いちばん高い人が取ると" : "自分が取ると"}、${
