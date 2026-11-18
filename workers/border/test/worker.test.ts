@@ -352,6 +352,21 @@ describe('runCron: みんなでライブ停止中の回（特別モデル）', (
     expect(new Set((await predictionsFor(env.DB, 226)).map((x) => x.model_version))).toEqual(new Set([base.version]))
   })
 
+  it('終了後の確定の点（経過が 1 を少し超え、どちらのモデルも出さない）では、特別モデルの印を付けたまま・ふだんの表に戻さない', async () => {
+    await putModel(env.DB, withSpecial(), { version: 'v' }, 0)
+    const t = E226.aggregateAt + 16 * 60_000
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const r = await runCron(env, t + 4 * 60_000, fetchFor(E226, () => liveBody(226, t, 1)))
+      expect(r).toMatchObject({ status: 'collected', eventId: 226, predictions: 0 })
+      expect(errors).not.toHaveBeenCalled()
+    } finally {
+      errors.mockRestore()
+    }
+    const snap = await current()
+    expect(snap).toMatchObject({ special: 'solo', predicted: false, modelVersion: 'solo-special-v1@abc12345' })
+  })
+
   it('一覧に無い回の出力は、special の有無で1文字も変わらない（予測ログも同じ）', async () => {
     const out = async (model: Model) => {
       env = { DB: createD1(), ADMIN_TOKEN: 'secret-token', SITE_ORIGIN: 'https://sekaimaster.pages.dev' }

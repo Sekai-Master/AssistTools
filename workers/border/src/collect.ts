@@ -217,19 +217,26 @@ export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): 
     }
     return out
   }
+  const predictNormal = (m: NonNullable<typeof model>) => predictAll((s) => predict(m.model, event, s.rank, s.score, s.ts), m.version)
   if (model && special) {
     const sel = special
     const nearby = await windowSamples(env, event, sel, sampleAt)
     preds = predictAll((s) => predictSpecial(model.model, sel, event, s.rank, s.score, s.ts, nearby?.get(s.rank) ?? []), sel.version)
-    // 特別モデルが1順位も出せなかった（曲線の中身がおかしい等）ときは、この回だけふだんの表に戻す（予測が丸ごと消えないように）
+    // 特別モデルが1順位も出せず（曲線の中身がおかしい等）、ふだんの表なら出せるときだけ、この回をふだんの表に戻す（予測が丸ごと消えないように）。
+    // ★ 終了後の確定の点（経過が 1 を少し超える）はどちらも出さないので、特別モデルの印を付けたままにする（終わった回の表示を「8割の幅」に戻さない）
     if (preds.size === 0) {
-      console.error('special: 特別モデルで1順位も出せなかったので、ふだんの表で出す', event.id, sel.version)
-      special = null
+      const normal = predictNormal(model)
+      if (normal.size > 0) {
+        console.error('special: 特別モデルで1順位も出せなかったので、ふだんの表で出す', event.id, sel.version)
+        special = null
+        preds = normal
+      }
     }
+  } else if (model) {
+    preds = predictNormal(model)
   }
   const version = special?.version ?? model?.version ?? null
   if (model) {
-    if (!special) preds = predictAll((s) => predict(model.model, event, s.rank, s.score, s.ts), model.version)
     if (!stale) {
       await insertPredictions(
         env.DB,

@@ -70,6 +70,18 @@ async function settle() {
 }
 
 describe("トップの開催中のイベント", () => {
+  it("凡例の帯は「8割の幅」。みんなでライブ停止中の特別モデルの回だけ「目安の幅」", async () => {
+    serve(snapshot());
+    show();
+    expect(await screen.findByText("8割の幅")).toBeTruthy();
+    cleanup();
+    forgetCurrentBorder();
+    serve({ ...snapshot(), special: "solo", extrapolatedFrom: 150 });
+    show();
+    expect(await screen.findByText("目安の幅")).toBeTruthy();
+    expect(screen.queryByText("8割の幅")).toBeNull();
+  });
+
   it("ロゴ・残り時間・予測を出す", async () => {
     serve(snapshot());
     show();
