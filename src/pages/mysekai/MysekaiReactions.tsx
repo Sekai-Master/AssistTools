@@ -3,6 +3,7 @@ import { NeuButton } from "../../components/ui/NeuButton";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { Panel } from "../../components/ui/Panel";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
+import { MoreSettings } from "../../components/ui/MoreSettings";
 import { Switch } from "../../components/ui/Switch";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { cn } from "../../lib/utils";
@@ -10,6 +11,7 @@ import {
   applyFilter,
   NARROWING,
   DEFAULT_FILTER,
+  countFilterDetailChanged,
   partiesOf,
   summary,
   talksOf,
@@ -792,92 +794,103 @@ export default function MysekaiReactions() {
       ) : (
       <Panel title="条件">
         <div className="space-y-4">
-          <div>
-            <div className="mb-2 flex flex-wrap gap-2">
-              {(Object.keys(KIND_LABEL) as ReactionKind[]).map((k) => (
-                <NeuButton
-                  key={k}
-                  active={filter.kinds.includes(k)}
-                  onClick={() => toggleKind(k)}
-                  className="min-h-11 px-3 py-1.5"
-                >
-                  {KIND_LABEL[k]}
-                </NeuButton>
-              ))}
+          {/* よく使うもの（キャラは上の枠・検索・並び順）は見せたまま */}
+          <NeuInput
+            value={filter.query}
+            onChange={(e) => setFilter((f) => ({ ...f, query: e.target.value }))}
+            placeholder="家具の名前で検索"
+            className="max-w-xs"
+            aria-label="家具の名前で検索"
+          />
+
+          {/**
+           * ★ ほかの絞り込みは「絞り込み」に畳む（UX 監査 2026-11-12、指示書の共通の型 1、PR-6）。前は入力 21 個と
+           *   143 字の説明が一覧の前に開いたまま並び、一覧は 2 画面目の途中からだった。畳んでも絞り込みは効くので、
+           *   既定から変えた数を見出しに出す（既定の「反応がある家具だけ」は数えない）。
+           */}
+          <MoreSettings
+            title="絞り込み"
+            contents="反応の種類・所持・人数・スイッチ・ジャンル"
+            changed={countFilterDetailChanged(filter)}
+          >
+            <div>
+              <div className="mb-2 flex flex-wrap gap-2">
+                {(Object.keys(KIND_LABEL) as ReactionKind[]).map((k) => (
+                  <NeuButton
+                    key={k}
+                    active={filter.kinds.includes(k)}
+                    onClick={() => toggleKind(k)}
+                    className="min-h-11 px-3 py-1.5"
+                  >
+                    {KIND_LABEL[k]}
+                  </NeuButton>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500">
+                {filter.kinds.length === 0
+                  ? "そのキャラとの関わり方で絞りません"
+                  : "選んだ種類の いずれか に当てはまる家具を出します（OR）"}
+                。スイッチ・ジャンル・検索は<b>すべて満たすもの</b>だけに絞ります（AND）。
+                <br />
+                <b>固有会話</b>＝その家具を置くと専用の会話が起きる。<b>気に入っている</b>＝置くと
+                「わあ……！これいいなー！」のような反応をする（<b>会話数には含まれません</b>）。
+                どちらも<b>キャラごと</b>に決まっています。
+              </p>
             </div>
-            <p className="text-xs text-slate-500">
-              {filter.kinds.length === 0
-                ? "そのキャラとの関わり方で絞りません"
-                : "選んだ種類の いずれか に当てはまる家具を出します（OR）"}
-              。下のスイッチ・ジャンル・検索は<b>すべて満たすもの</b>だけに絞ります（AND）。
-              <br />
-              <b>固有会話</b>＝その家具を置くと専用の会話が起きる。<b>気に入っている</b>＝置くと
-              「わあ……！これいいなー！」のような反応をする（<b>会話数には含まれません</b>）。
-              どちらも<b>キャラごと</b>に決まっています。
-            </p>
-          </div>
 
-          <div>
-            <SegmentedControl
-              compact
-              options={OWNED_OPTIONS}
-              value={filter.owned}
-              onChange={(v) => setFilter((f) => ({ ...f, owned: v }))}
-            />
-            <p className="mt-2 text-xs text-slate-500">
-              {OWNED_NOTE[filter.owned]}
-            </p>
-          </div>
+            <div>
+              <SegmentedControl
+                compact
+                options={OWNED_OPTIONS}
+                value={filter.owned}
+                onChange={(v) => setFilter((f) => ({ ...f, owned: v }))}
+              />
+              <p className="mt-2 text-xs text-slate-500">
+                {OWNED_NOTE[filter.owned]}
+              </p>
+            </div>
 
-          <div>
-            <SegmentedControl
-              compact
-              options={PARTY_OPTIONS}
-              value={filter.party}
-              onChange={(v) => setFilter((f) => ({ ...f, party: v }))}
-            />
-            <p className="mt-2 text-xs text-slate-500">
-              {filter.party === "solo"
-                ? "ひとりでいるときに喋る家具だけ。訪ねればすぐ聞けます"
-                : filter.party === "group"
-                  ? "複数人が揃わないと喋らない家具だけ。居合わせを作る必要があります"
-                  : "会話の人数で絞りません"}
-              {effectiveFilter.charId != null && "（選んだキャラについて判定します）"}
-            </p>
-          </div>
+            <div>
+              <SegmentedControl
+                compact
+                options={PARTY_OPTIONS}
+                value={filter.party}
+                onChange={(v) => setFilter((f) => ({ ...f, party: v }))}
+              />
+              <p className="mt-2 text-xs text-slate-500">
+                {filter.party === "solo"
+                  ? "ひとりでいるときに喋る家具だけ。訪ねればすぐ聞けます"
+                  : filter.party === "group"
+                    ? "複数人が揃わないと喋らない家具だけ。居合わせを作る必要があります"
+                    : "会話の人数で絞りません"}
+                {effectiveFilter.charId != null && "（選んだキャラについて判定します）"}
+              </p>
+            </div>
 
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-            <Switch
-              checked={filter.reactiveOnly}
-              onChange={(v) => setFilter((f) => ({ ...f, reactiveOnly: v }))}
-              label="反応がある家具だけ"
-            />
-            <Switch
-              checked={filter.actionOnly}
-              onChange={(v) => setFilter((f) => ({ ...f, actionOnly: v }))}
-              label="キャラが使う家具だけ"
-            />
-            <Switch
-              checked={filter.unseenOnly}
-              onChange={(v) => setFilter((f) => ({ ...f, unseenOnly: v }))}
-              label="持っていて未回収の会話がある"
-            />
-            <Switch
-              checked={filter.sketchableOnly}
-              onChange={(v) => setFilter((f) => ({ ...f, sketchableOnly: v }))}
-              label="模写できるものだけ"
-            />
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+              <Switch
+                checked={filter.reactiveOnly}
+                onChange={(v) => setFilter((f) => ({ ...f, reactiveOnly: v }))}
+                label="反応がある家具だけ"
+              />
+              <Switch
+                checked={filter.actionOnly}
+                onChange={(v) => setFilter((f) => ({ ...f, actionOnly: v }))}
+                label="キャラが使う家具だけ"
+              />
+              <Switch
+                checked={filter.unseenOnly}
+                onChange={(v) => setFilter((f) => ({ ...f, unseenOnly: v }))}
+                label="持っていて未回収の会話がある"
+              />
+              <Switch
+                checked={filter.sketchableOnly}
+                onChange={(v) => setFilter((f) => ({ ...f, sketchableOnly: v }))}
+                label="模写できるものだけ"
+              />
 
-          </div>
+            </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <NeuInput
-              value={filter.query}
-              onChange={(e) => setFilter((f) => ({ ...f, query: e.target.value }))}
-              placeholder="家具の名前で検索"
-              className="max-w-xs"
-              aria-label="家具の名前で検索"
-            />
             <select
               value={effectiveFilter.mainGenreId ?? ""}
               onChange={(e) =>
@@ -898,7 +911,7 @@ export default function MysekaiReactions() {
                   </option>
                 ))}
             </select>
-          </div>
+          </MoreSettings>
 
           <div className="flex flex-wrap items-center gap-3">
             <SegmentedControl

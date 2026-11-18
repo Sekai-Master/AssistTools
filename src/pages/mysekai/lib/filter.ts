@@ -119,6 +119,20 @@ export const DEFAULT_FILTER: FilterState = {
   desc: false,
 };
 
+/**
+ * 「絞り込み」（畳んだ段）の中で、既定から変えている項目の数（見出しに出す。UX 監査 2026-11-12、PR-6）。
+ * 畳まずに見せているキャラ・検索と、絞り込みでない並び順は数えない。
+ * ★ 数える項目は NARROWING から作る。絞り込みを足せば型で NARROWING に入るので、数え漏れが起きない
+ *   （足した絞り込みは「絞り込み」の段に置くこと）。
+ */
+export function countFilterDetailChanged(f: FilterState): number {
+  const shown: ReadonlySet<string> = new Set(["charId", "query"]);
+  const keys = (Object.keys(NARROWING) as NarrowingKey[]).filter((k) => !shown.has(k));
+  const same = (a: unknown, b: unknown) =>
+    Array.isArray(a) && Array.isArray(b) ? a.length === b.length && a.every((v, i) => v === b[i]) : a === b;
+  return keys.filter((k) => !same(f[k], DEFAULT_FILTER[k])).length;
+}
+
 /** 検索の正規化。全角英数と大文字の揺れを吸収する。 */
 export function normalizeQuery(s: string): string {
   return s
