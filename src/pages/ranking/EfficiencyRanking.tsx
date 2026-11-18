@@ -35,6 +35,7 @@ import {
 } from "./lib/lbRun";
 import { numOrUndef } from "../../lib/num";
 import { MULTI_LIVE_SUSPENDED } from "../../lib/liveSuspension";
+import { SOLO_OVERHEAD_PROVISIONAL } from "../../lib/overhead";
 import { cn } from "../../lib/utils";
 import { cappedPower, usePowerLimit } from "../../lib/powerLimit";
 import { Delta } from "../../components/ui/Delta";
@@ -525,6 +526,11 @@ export default function EfficiencyRanking() {
   );
   /** いまのタブで使う・欄に出す値。 */
   const overheadValue = mode === "solo" ? overheadSolo : overhead;
+  /**
+   * ひとりで周回の既定のロスに「仮」と添えるか。**印（SOLO_OVERHEAD_PROVISIONAL）だけで決める**
+   * （値が 33 かどうかでは決めない。Nori が測って印を下ろしたら消える）。
+   */
+  const soloLossProvisional = mode === "solo" && SOLO_OVERHEAD_PROVISIONAL;
   const [plays, setPlays] = useState(stored.plays ?? "100");
   // 未保存なら「全部」= データの両端。読み込み前は 0/99 にして誰も弾かない。
   const [lvMin, setLvMin] = useState(stored.lvMin ?? 0);
@@ -1079,7 +1085,7 @@ export default function EfficiencyRanking() {
                   {mode !== "challenge" &&
                     `／ボーナス ${DEFAULT_PARAMS.bonus}%／${taki}焚き`}
                   {mode !== "challenge" &&
-                    `／ロス ${DEFAULT_OVERHEAD_SEC[mode]}秒`}
+                    `／ロス ${DEFAULT_OVERHEAD_SEC[mode]}秒${soloLossProvisional ? "（仮）" : ""}`}
                   {" を前提にした一般的な順位です。"}
                   自分の条件に差し替えるには下の「自分の条件で計算する」を入れてください。
                 </>
@@ -1654,7 +1660,9 @@ export default function EfficiencyRanking() {
                       ? "ロード・リザルト・部屋待ちの合計"
                       : // ★ ひとりで周回はロスが順位を動かすので「表示にだけ使う」とは書かない。
                         mode === "solo"
-                        ? "ロード・リザルトの合計"
+                        ? soloLossProvisional
+                          ? `ロード・リザルトの合計。既定の${DEFAULT_OVERHEAD_SEC.solo}秒はまだ測っていない仮の値`
+                          : "ロード・リザルトの合計"
                         : "ロード・リザルトの合計。所要時間の表示にだけ使う"
                   }
                 >

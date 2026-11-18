@@ -45,9 +45,22 @@ vi.mock("../../lib/liveSuspension", () => ({
   },
 }));
 
+// ひとりでライブのロスが仮の値かの印。既定は本物と同じ true。値（OVERHEAD_SEC）は本物のまま使う。
+const provisional = vi.hoisted(() => ({ value: true }));
+vi.mock("../../lib/overhead", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/overhead")>();
+  return {
+    ...actual,
+    get SOLO_OVERHEAD_PROVISIONAL() {
+      return provisional.value;
+    },
+  };
+});
+
 afterEach(() => {
   cleanup();
   suspension.value = true;
+  provisional.value = true;
 });
 
 const draw = () =>
@@ -152,7 +165,48 @@ describe("ひとりで周回", () => {
     expect(labels).toContain("1曲あたりのロス（秒）");
     // このタブではロスが順位を動かす。オート用の「所要時間の表示にだけ使う」は嘘になる
     expect(screen.queryByText(/所要時間の表示にだけ使う/)).toBeNull();
-    expect(screen.getByText("ロード・リザルトの合計")).toBeTruthy();
+    expect(screen.getByText(/^ロード・リザルトの合計/)).toBeTruthy();
+  });
+
+  /**
+   * ★ ひとりでライブのロス（OVERHEAD_SEC.solo）は実測前の仮の値。「仮」と出すかは
+   *   SOLO_OVERHEAD_PROVISIONAL だけで決める（値が 33 かどうかでは決めない。2026-11-19 指揮）。
+   */
+  describe("ひとりで周回のロスの既定は、印が立っている間「仮」と出す", () => {
+    // 表の下の「…／ロス ◯秒 を前提にした一般的な順位です。」
+    const premise = () => screen.getByText(/を前提にした一般的な順位です/).textContent ?? "";
+    const lossHint = () =>
+      [...document.querySelectorAll("label")]
+        .find((l) => l.textContent === "1曲あたりのロス（秒）")!
+        .parentElement!.textContent ?? "";
+
+    it("入力なしの順位の前提に「ロス 33秒（仮）」と出す。ほかのタブには出さない", () => {
+      draw();
+      expect(premise()).toContain(`／ロス ${DEFAULT_OVERHEAD_SEC.solo}秒（仮）`);
+      fireEvent.click(tab("みんなで周回"));
+      expect(premise()).toContain(`／ロス ${DEFAULT_OVERHEAD_SEC.manual}秒`);
+      expect(premise()).not.toContain("仮");
+    });
+
+    it("自分の条件の「1曲あたりのロス」の補足に、既定が仮の値だと書く", () => {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true }));
+      draw();
+      expect(lossHint()).toContain("仮");
+      fireEvent.click(tab("みんなで周回"));
+      expect(lossHint()).not.toContain("仮");
+    });
+
+    it("印が下りたら（Nori が測ったら）、どちらからも「仮」が消える", () => {
+      provisional.value = false;
+      draw();
+      expect(premise()).toContain(`／ロス ${DEFAULT_OVERHEAD_SEC.solo}秒`);
+      expect(premise()).not.toContain("仮");
+      cleanup();
+      localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true }));
+      draw();
+      expect(lossHint()).not.toContain("仮");
+      expect(screen.getByText("ロード・リザルトの合計")).toBeTruthy();
+    });
   });
 
   describe("1曲あたりのロスは、ひとりで周回だけ別に持つ", () => {
