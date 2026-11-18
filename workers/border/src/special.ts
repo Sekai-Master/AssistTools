@@ -10,7 +10,7 @@
  *   S_spurt(p) … 率モデル（経過・残り・時刻）のシェア表＝ふだんの回と同じ追い込み
  *   S_flat(p)  … 率モデルから「残り時間」の折れ線を外したシェア表＝追い込みなし
  *   水準       … 直近の窓 [p0, p]（開始から窓の長さまでは開始から）で F_x = B(p) + (B(p) − B(p0)) / (S_x(p) − S_x(p0)) × (1 − S_x(p))
- *   点         … F_spurt と F_flat の幾何平均
+ *   点         … F_spurt^w × F_flat^(1−w)（w = spurtWeight。既定 0.5＝幾何平均）
  *   帯         … 下 = max(B(p), min(F) × (1 − m))、上 = max(F) × (1 + m)。m は残りの割合とともに縮める
  *   確度       … 常に「目安」。帯が 80 ポイントを超えても出す（わざと広げた予測が丸ごと消えないように）
  *
@@ -40,6 +40,11 @@ export interface SpecialParams {
   /** 帯の余白 m = marginBase + marginSlope × (1 − 経過率) */
   marginBase: number
   marginSlope: number
+  /**
+   * 点の取り方の重み w。点 = F_spurt^w × F_flat^(1−w)。0.5 で幾何平均、1 で追い込みありの水準そのもの。
+   * 帯（min(F)・max(F) から作る）には効かない（2026-11-19 指揮。決めるのは指揮で、当て直しの表は PR #267）
+   */
+  spurtWeight: number
 }
 
 /**
@@ -48,7 +53,7 @@ export interface SpecialParams {
  *   m = 0.06 + 0.20 × (1 − p)（経過 4% で約 0.25、50% で 0.16、90% で 0.08）
  * 解析ジョブが model.special.params に書き、Worker はそれを読む（Worker を反映し直さなくても、マージと解析ジョブで値を変えられる）
  */
-export const SPECIAL_DEFAULT_PARAMS: Readonly<SpecialParams> = { windowHours: 24, marginBase: 0.06, marginSlope: 0.2 }
+export const SPECIAL_DEFAULT_PARAMS: Readonly<SpecialParams> = { windowHours: 24, marginBase: 0.06, marginSlope: 0.2, spurtWeight: 0.5 }
 
 /** 表に出し始める経過率（ふだんの MIN_VISIBLE_PROGRESS と同じ。102h で開始約4時間） */
 export const SPECIAL_MIN_PROGRESS = 0.04
@@ -107,14 +112,19 @@ export function isCurve(x: unknown): x is number[] {
 /** 焼いたときの日程と events の日程のずれをここまで許す（同じマスタから来るので、ふつうは一致する。秒の丸めの違いで外れないように） */
 const SCHEDULE_TOLERANCE_MS = 5 * 60_000
 
-/** JSON から来た値を確かめる。おかしければ既定の値（SPECIAL_DEFAULT_PARAMS） */
+/**
+ * JSON から来た値を確かめる。おかしければ既定の値（SPECIAL_DEFAULT_PARAMS）。
+ * spurtWeight は後から足した欄なので、無ければそこだけ既定の 0.5（それより前に焼いた版でも、ほかの値は使う）
+ */
 export function paramsOf(x: unknown): SpecialParams {
   if (!isRecord(x)) return { ...SPECIAL_DEFAULT_PARAMS }
   const { windowHours, marginBase, marginSlope } = x
+  const spurtWeight = x.spurtWeight === undefined ? SPECIAL_DEFAULT_PARAMS.spurtWeight : x.spurtWeight
   if (!finite(windowHours) || windowHours < 1 || windowHours > 240) return { ...SPECIAL_DEFAULT_PARAMS }
   if (!finite(marginBase) || marginBase < 0 || marginBase > 1) return { ...SPECIAL_DEFAULT_PARAMS }
   if (!finite(marginSlope) || marginSlope < 0 || marginSlope > 2) return { ...SPECIAL_DEFAULT_PARAMS }
-  return { windowHours, marginBase, marginSlope }
+  if (!finite(spurtWeight) || spurtWeight < 0 || spurtWeight > 1) return { ...SPECIAL_DEFAULT_PARAMS }
+  return { windowHours, marginBase, marginSlope, spurtWeight }
 }
 
 /**
@@ -250,7 +260,9 @@ export function predictSpecial(
   const f = (anchor && p0 > 0 && p0 < pc ? forecast(anchor.value, p0) : null) ?? forecast(0, 0)
   if (!f) return null
 
-  const predicted = Math.sqrt(f.fs * f.ff)
+  // 点 = F_spurt^w × F_flat^(1−w)（対数で重み付き平均。w = 0.5 で幾何平均）
+  const w = sel.params.spurtWeight
+  const predicted = Math.exp(w * Math.log(f.fs) + (1 - w) * Math.log(f.ff))
   const m = specialMargin(sel.params, pc)
   // 仕様は 下 = F_flat × (1 − m)・上 = F_spurt × (1 + m)。ふつうは F_flat ≤ F_spurt だが、並びは決めつけない
   const low = Math.max(current, Math.min(f.fs, f.ff) * (1 - m))

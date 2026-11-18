@@ -7,7 +7,8 @@
  * - 30分刻みの実測（--series の {回}_{順位}.json = [[時刻ms, 値], ...]。解析ジョブの --series-cache と同じ形）を1点ずつ当てる。
  *   特別モデルの窓の始まり（24時間前）も同じ実測から引く（Worker が D1 の samples から引くのと同じ）
  * - 形（51点）は pace-seed.json（〜221回）を使い、無い回は --series から作る。日程は events-meta.json、無い回は --master（マスタの events.json）
- * - 比べるもの: ふだんのモデル（prod）・特別モデル（special: 点＝幾何平均）・追い込みありの水準だけ（spurt: F_spurt を点にしたもの）
+ * - 比べるもの: ふだんのモデル（prod）と、特別モデルの点の重み w（点 = F_spurt^w × F_flat^(1−w)）が 0.5（既定・幾何平均）・0.75・1.0（追い込みありの水準そのもの）の3通り。
+ *   帯は w で変わらないので、当たり率は特別モデルで1つ。
  *   区間（序盤 4〜28%・中盤 30〜58%・終盤 60〜96%）ごとに、表に出した点の |誤差| の中央値・誤差の平均（符号つき）・帯の当たり率。順位で平均してから回で並べる
  * ★ 過去の回はどれもみんなでライブのある回。ここで分かるのは「壊れていない」「帯がふだんより狭くない」ことだけで、
  *   ひとりでライブだけの回の当たり外れは確かめようがない。数字に合わせて窓や m を調整しない（指示書 2026-11-19）
@@ -58,7 +59,10 @@ for (const id of [...masterMeta.keys()].filter((x) => x > 124 && !have.has(x)).s
 }
 all.sort((a, b) => a.meta.startAt - b.meta.startAt)
 
-type Method = 'prod' | 'special' | 'spurt'
+/** 特別モデルの点の重み w の候補（2026-11-19 指揮。決めるのは指揮） */
+const WEIGHTS = [0.5, 0.75, 1] as const
+const METHODS = ['prod', 'w0.5', 'w0.75', 'w1'] as const
+type Method = (typeof METHODS)[number]
 const REGIONS = [
   { name: '序盤', from: 0.04, to: 0.28 },
   { name: '中盤', from: 0.3, to: 0.58 },
@@ -87,14 +91,13 @@ for (const id of targets) {
   const withSpecial: Model = { ...prod, special: fitModel([...events, meta], shapes, meta.startAt - 1, { specialEvents: [meta.id] }).model.special }
   const sel = specialSelection(withSpecial, meta)
   if (!sel) throw new Error(`${id}: 特別モデルの曲線が焼けない`)
-  // 追い込みありの水準だけ（追い込みなしの曲線を追い込みありで置き換えると、点＝F_spurt）
-  const spurtOnly = { ...sel, curves: { ...sel.curves, ranks: Object.fromEntries(Object.entries(sel.curves.ranks).map(([r, c]) => [r, { spurt: c.spurt, flat: c.spurt }])) } }
-  const perMethod: Record<Method, Map<string, number[][]>> = { prod: new Map(), special: new Map(), spurt: new Map() }
+  const byWeight = WEIGHTS.map((w) => ({ ...sel, params: { ...sel.params, spurtWeight: w } }))
+  const perMethod = Object.fromEntries(METHODS.map((m) => [m, new Map<string, number[][]>()])) as Record<Method, Map<string, number[][]>>
   for (const rank of RANKS) {
     const series = seriesOf(id, rank)
     const final = target.shapes.get(rank)?.final
     if (!series || !final) continue
-    const pts: Record<Method, Pt[]> = { prod: [], special: [], spurt: [] }
+    const pts = Object.fromEntries(METHODS.map((m) => [m, [] as Pt[]])) as Record<Method, Pt[]>
     for (const [ts, v] of series) {
       if (ts > meta.aggregateAt) continue
       const p = progressAt(meta, ts)
@@ -103,16 +106,17 @@ for (const id of targets) {
       const nearby = range ? series.filter(([t]) => t >= range[0] && t <= range[1] && t < ts) : []
       const preds: Record<Method, Prediction | null> = {
         prod: predict(prod, meta, rank, v, ts),
-        special: predictSpecial(withSpecial, sel, meta, rank, v, ts, nearby),
-        spurt: predictSpecial(withSpecial, spurtOnly, meta, rank, v, ts, nearby),
+        'w0.5': predictSpecial(withSpecial, byWeight[0], meta, rank, v, ts, nearby),
+        'w0.75': predictSpecial(withSpecial, byWeight[1], meta, rank, v, ts, nearby),
+        w1: predictSpecial(withSpecial, byWeight[2], meta, rank, v, ts, nearby),
       }
-      for (const m of ['prod', 'special', 'spurt'] as const) {
+      for (const m of METHODS) {
         const pr = preds[m]
         if (!pr || !pr.visible) continue
         pts[m].push({ p, err: pr.predicted / final - 1, inBand: pr.low == null || pr.high == null ? null : final >= pr.low && final <= pr.high })
       }
     }
-    for (const m of ['prod', 'special', 'spurt'] as const) {
+    for (const m of METHODS) {
       for (const r of REGIONS) {
         const xs = pts[m].filter((x) => x.p >= r.from - 1e-9 && x.p <= r.to + 1e-9)
         if (xs.length === 0) continue
@@ -128,7 +132,7 @@ for (const id of targets) {
     }
   }
   const hours = Math.round((eventEndMs(meta) - meta.startAt) / H)
-  for (const m of ['prod', 'special', 'spurt'] as const) {
+  for (const m of METHODS) {
     for (const r of REGIONS) {
       const st = perMethod[m].get(r.name) ?? []
       const mean = (k: number) => {
@@ -142,16 +146,17 @@ for (const id of targets) {
 
 const pct = (v: number | null) => (v == null ? '-' : `${(v * 100).toFixed(1)}`)
 const sgn = (v: number | null) => (v == null ? '-' : `${v > 0 ? '+' : ''}${(v * 100).toFixed(1)}`)
-console.log('| 回 | 長さ | 区間 | |誤差| 中央 prod / special / spurt（%） | 誤差の平均 prod / special / spurt（%） | 当たり率 prod / special（%） |')
+const cells = (f: (m: Method) => string, ms: readonly Method[] = METHODS) => ms.map(f).join(' / ')
+console.log('| 回 | 長さ | 区間 | |誤差| 中央 ふだん / w0.5 / w0.75 / w1（%） | 誤差の平均 ふだん / w0.5 / w0.75 / w1（%） | 当たり率 ふだん / 特別（%） |')
 console.log('|---|---:|---|---|---|---|')
 for (const id of targets) {
   for (const r of REGIONS) {
     const get = (m: Method) => rows.find((x) => x.id === id && x.method === m && x.region === r.name)
-    const a = get('prod')
-    const b = get('special')
-    const c = get('spurt')
-    if (!a || !b || !c) continue
-    console.log(`| ${id} | ${a.hours}h | ${r.name} | ${pct(a.mae)} / ${pct(b.mae)} / ${pct(c.mae)} | ${sgn(a.bias)} / ${sgn(b.bias)} / ${sgn(c.bias)} | ${pct(a.cov)} / ${pct(b.cov)} |`)
+    if (METHODS.some((m) => !get(m))) continue
+    const hours = get('prod')?.hours
+    console.log(
+      `| ${id} | ${hours}h | ${r.name} | ${cells((m) => pct(get(m)?.mae ?? null))} | ${cells((m) => sgn(get(m)?.bias ?? null))} | ${cells((m) => pct(get(m)?.cov ?? null), ['prod', 'w0.5'])} |`,
+    )
   }
 }
 // 全体（回の平均）
@@ -160,7 +165,5 @@ for (const r of REGIONS) {
     const xs = rows.filter((x) => x.method === m && x.region === r.name && x[k] != null).map((x) => x[k] as number)
     return xs.length > 0 ? xs.reduce((a, b) => a + b, 0) / xs.length : null
   }
-  console.log(
-    `| 平均 | | ${r.name} | ${pct(avg('prod', 'mae'))} / ${pct(avg('special', 'mae'))} / ${pct(avg('spurt', 'mae'))} | ${sgn(avg('prod', 'bias'))} / ${sgn(avg('special', 'bias'))} / ${sgn(avg('spurt', 'bias'))} | ${pct(avg('prod', 'cov'))} / ${pct(avg('special', 'cov'))} |`,
-  )
+  console.log(`| 平均 | | ${r.name} | ${cells((m) => pct(avg(m, 'mae')))} | ${cells((m) => sgn(avg(m, 'bias')))} | ${cells((m) => pct(avg(m, 'cov')), ['prod', 'w0.5'])} |`)
 }

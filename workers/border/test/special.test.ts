@@ -111,11 +111,15 @@ describe('specialSelection: 特別モデルで当てるか', () => {
     expect(specialSelection(modelWith(ok), { ...EVENT, aggregateAt: AGG + 6 * 60_000 })).toBeNull()
   })
 
-  it('値（窓・m）はモデルの JSON から読み、おかしければ既定の値', () => {
-    const custom = { windowHours: 12, marginBase: 0.1, marginSlope: 0.3 }
+  it('値（窓・m・点の重み）はモデルの JSON から読み、おかしければ既定の値', () => {
+    const custom = { windowHours: 12, marginBase: 0.1, marginSlope: 0.3, spurtWeight: 0.75 }
     expect(specialSelection(modelWith({ ...ok, params: custom }), EVENT)?.params).toEqual(custom)
     expect(paramsOf({ windowHours: -1, marginBase: 0.1, marginSlope: 0.3 })).toEqual(SPECIAL_DEFAULT_PARAMS)
+    expect(paramsOf({ windowHours: 12, marginBase: 0.1, marginSlope: 0.3, spurtWeight: 1.5 })).toEqual(SPECIAL_DEFAULT_PARAMS)
     expect(paramsOf(null)).toEqual(SPECIAL_DEFAULT_PARAMS)
+    // 点の重みを足す前に焼いた版（spurtWeight が無い）は、そこだけ既定の 0.5 にして、ほかの値は使う
+    expect(paramsOf({ windowHours: 12, marginBase: 0.1, marginSlope: 0.3 })).toEqual({ windowHours: 12, marginBase: 0.1, marginSlope: 0.3, spurtWeight: 0.5 })
+    expect(SPECIAL_DEFAULT_PARAMS.spurtWeight).toBe(0.5)
   })
 })
 
@@ -196,6 +200,27 @@ describe('predictSpecial', () => {
     expect(p.predicted).toBeCloseTo(Math.sqrt(fS * fF), 0)
     expect(p.low).toBeCloseTo(Math.max(b, Math.min(fS, fF) * (1 - m)), 0)
     expect(p.high).toBeCloseTo(Math.max(fS, fF) * (1 + m), 0)
+  })
+
+  it('点の重み w: 点 = F_spurt^w × F_flat^(1−w)。w = 1 で追い込みありの水準、0 でなし。帯は w で変わらない', () => {
+    const sp = specialOf(() => ({ spurt: GRID.map((p) => p * p), flat: linear() }))
+    const t = at(0.7)
+    const nearby: Sample[] = [[t - 24 * H, 5_000_000]]
+    const run = (w: number) => {
+      const model = modelWith({ ...sp, params: { ...SPECIAL_DEFAULT_PARAMS, spurtWeight: w } })
+      return predictSpecial(model, specialSelection(model, EVENT)!, EVENT, 1000, 7_000_000, t, nearby)!
+    }
+    const [p0, p50, p75, p100] = [0, 0.5, 0.75, 1].map(run)
+    const fS = Math.max(p0.predicted, p100.predicted)
+    const fF = Math.min(p0.predicted, p100.predicted)
+    expect(p50.predicted).toBeCloseTo(Math.sqrt(fS * fF), 0)
+    expect(p75.predicted).toBeCloseTo(fS ** 0.75 * fF ** 0.25, 0)
+    expect(p100.predicted).toBeGreaterThan(p75.predicted)
+    expect(p75.predicted).toBeGreaterThan(p50.predicted)
+    for (const p of [p0, p75, p100]) {
+      expect(p.low).toBeCloseTo(p50.low!, 6)
+      expect(p.high).toBeCloseTo(p50.high!, 6)
+    }
   })
 
   it('開始から24時間までは窓を開始から取る（F = B ÷ S）', () => {

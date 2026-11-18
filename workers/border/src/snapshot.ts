@@ -128,6 +128,8 @@ export type PostPayload =
       prev: { id: number; name: string; finals: Record<string, number> } | null
       firstPredictionAt: number | null
       dailyAt: number | null
+      /** みんなでライブ停止中の回（special.ts の一覧）。prev は null（前回の終値は比べ物にならないので載せない） */
+      special?: SpecialKind
     }
   /**
    * 機能紹介（1回のイベントに1本。ガチャの日か翌日の 12:00。intro.ts）。画像はサイトの /intro/<slug>/ に置いた PNG（images の url）。Bot は取ってきて付けるだけで描かない。

@@ -58,16 +58,36 @@ export interface StartPrev {
   finals: Record<string, number>
 }
 
+/**
+ * みんなでライブ停止中の回（special.ts の一覧）の告知で、「同じ長さの前回の終値」の行の代わりに出す一文（2026-11-19 指揮）。
+ * みんなでライブのある回の終値は比べ物にならないので出さない。
+ * 指揮の案「みんなでライブが止まった中での開催です。ボーダー予測はこの回だけ別の作りで、目安として広めに出します。」のままだと、
+ * 226 の告知が重み 266 になり予定の行（予測・日報の時刻）が落ちるので、意味を保って縮めた（226 で 240）
+ */
+export const START_SOLO_NOTE = 'みんなでライブ停止中の開催です。予測はこの回だけ別の作りで、広めの目安です。'
+
 /** 本文（Worker の文が正。Bot は X にだけハッシュタグを足して出す）。START_TEXT_MAX_WEIGHT に収める */
 export function startText(
-  o: { name: string; startAt: number; aggregateAt: number; hours: number; typeLabel: string; prev: StartPrev | null; firstPredictionAt: number | null; dailyAt: number | null },
+  o: {
+    name: string
+    startAt: number
+    aggregateAt: number
+    hours: number
+    typeLabel: string
+    prev: StartPrev | null
+    firstPredictionAt: number | null
+    dailyAt: number | null
+    /** みんなでライブ停止中の回。前回の終値の行を START_SOLO_NOTE に替える */
+    special?: boolean
+  },
   site: string,
 ): string {
   const build = (name: string, prevName: string | null, withSchedule: boolean) => {
     const head = `まもなく${hm(o.startAt)}から「${name}」開始🎶（${md(o.aggregateAt)} ${hm(o.aggregateAt)}まで・${o.hours}時間）`
-    const p = o.prev
-    const ref =
-      p && prevName != null
+    const p = o.special ? null : o.prev
+    const ref = o.special
+      ? START_SOLO_NOTE
+      : p && prevName != null
         ? `同じ長さの前回「${prevName}」の最終ボーダーは${['100', '1000']
             .filter((r) => typeof p.finals[r] === 'number')
             .map((r) => `${r}位 ${formatMan(p.finals[r])}`)
@@ -113,6 +133,8 @@ export async function runStart(env: Env, now: number): Promise<StartResult> {
   // みんなでライブ停止中の回（ひとりでライブなどだけで開いた回）は、前例にしない（227 の告知で 226 の終値を「同じ長さの前回」と出さない）。
   // 一覧はこのファイルに入れた一覧と、有効な版のモデルの一覧（解析ジョブが書く。Worker を反映し直さなくても足せる）を合わせる
   const special = new Set([...SOLO_ONLY_EVENTS, ...(await activeSpecialEvents(env.DB))])
+  // この回そのものが一覧の回なら、前回の終値は本文にも画像のデータにも載せない（比べ物にならない。2026-11-19 指揮）
+  const solo = special.has(ev.id)
   const prevRow = table
     // 本文に出す 100位・1000位の終値がそろっている回だけ（欠けた回を「前回」にすると本文が崩れる。#173 レビュー L2）
     .filter(
@@ -126,7 +148,7 @@ export async function runStart(env: Env, now: number): Promise<StartResult> {
         typeof e.finals['1000'] === 'number',
     )
     .sort((a, b) => b.id - a.id)[0]
-  const prev: StartPrev | null = prevRow ? { id: prevRow.id, name: prevRow.name, finals: prevRow.finals } : null
+  const prev: StartPrev | null = prevRow && !solo ? { id: prevRow.id, name: prevRow.name, finals: prevRow.finals } : null
   const first = ev.eventType === 'marathon' ? firstPredictionAt(ev) : null
   const dailyAt = dailyTimes(ev)[0] ?? null
   const postAt = ev.startAt - START_NOTICE_BEFORE_MS
@@ -137,8 +159,13 @@ export async function runStart(env: Env, now: number): Promise<StartResult> {
     prev,
     firstPredictionAt: first,
     dailyAt,
+    // 新しい Bot が「前例なし」と描かないための印（古い Bot は知らない欄を捨てる）
+    ...(solo ? { special: 'solo' as const } : {}),
   }
-  const text = startText({ name: ev.name, startAt: ev.startAt, aggregateAt: ev.aggregateAt, hours: meta.hours, typeLabel: meta.typeLabel, prev, firstPredictionAt: first, dailyAt }, env.SITE_ORIGIN)
+  const text = startText(
+    { name: ev.name, startAt: ev.startAt, aggregateAt: ev.aggregateAt, hours: meta.hours, typeLabel: meta.typeLabel, prev, firstPredictionAt: first, dailyAt, special: solo },
+    env.SITE_ORIGIN,
+  )
   const queued = await queuePost(env.DB, id, ev.id, 'start', text, now, payload)
   return { status: queued ? 'queued' : 'exists', id }
 }
