@@ -63,9 +63,10 @@ import { playsUntilEmpty } from "./lbRun";
 /**
  * ランキングの種類。
  *
+ * manual は画面では「みんなで周回」（2026-11-18 に「手動周回」から改名。値の名前 manual はそのまま）。
  * solo は「ひとりでライブを手で周回する」。みんなでライブが止まったイベント
- * （2026-11-18 23:00〜）で手動周回の代わりに使う。スコアはチャレライと同じソロ式、
- * イベントPtは calcLivePt（ひとりでライブの式）、並べ替えは手動周回と同じ時間あたり。
+ * （2026-11-18 23:00〜）でみんなで周回の代わりに使う。スコアはチャレライと同じソロ式、
+ * イベントPtは calcLivePt（ひとりでライブの式）、並べ替えはみんなで周回と同じ時間あたり。
  */
 export type RankingMode = "manual" | "solo" | "auto" | "challenge";
 
@@ -167,12 +168,12 @@ export const DEFAULT_PARAMS: EfficiencyParams = {
 export const DEFAULT_OVERHEAD_SEC: Record<RankingMode, number> = {
   manual: OVERHEAD_SEC.multi,
   /**
-   * ★ ひとりでライブの手動周回を実測した値はまだ無い。編成ビルダーと楽曲比較が
-   *   ソロの Pt/時 に使っている値（下の OVERHEAD_BY_LIVE.solo）にそろえ、
+   * ★ ひとりでライブの手動周回は OVERHEAD_SEC.solo（実測前の仮の値。2026-11-18 Nori 決定）。
+   *   編成ビルダーと楽曲比較のソロ（下の OVERHEAD_BY_LIVE.solo）も同じ値を読み、
    *   画面ごとに違うソロのロスを持たない。ユーザーは「1曲あたりのロス」で上書きできる。
-   *   測れたら src/lib/overhead.ts を直す（ここに数字を書かない）。
+   *   測れたら src/lib/overhead.ts の solo を直す（ここに数字を書かない）。
    */
-  solo: OVERHEAD_SEC.challenge,
+  solo: OVERHEAD_SEC.solo,
   auto: OVERHEAD_SEC.auto,
   challenge: OVERHEAD_SEC.challenge,
 };
@@ -187,7 +188,8 @@ export const DEFAULT_OVERHEAD_SEC: Record<RankingMode, number> = {
 export const OVERHEAD_BY_LIVE: Record<LiveType, number> = {
   multi: OVERHEAD_SEC.multi,
   auto: OVERHEAD_SEC.auto,
-  solo: OVERHEAD_SEC.challenge,
+  // ★ ひとりでライブのロスはサイト全体で OVERHEAD_SEC.solo の 1 つ（効率曲ランキングの「ひとりで周回」と同じ）。
+  solo: OVERHEAD_SEC.solo,
 };
 
 /** 計算で足すフィールド。入力側の型は呼び出し元のものを保つ（ジャケット等を落とさない）。 */

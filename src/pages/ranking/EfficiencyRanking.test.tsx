@@ -37,7 +37,18 @@ vi.mock("./useRankingMusics", async (importOriginal) => ({
   useRankingMusics: () => ({ entries: [ENVY], loading: false, error: null }),
 }));
 
-afterEach(cleanup);
+// みんなでライブが止まっている期間の印。既定は本物と同じ true。再開したとき（false）の振る舞いも見るため差し替えられるようにする。
+const suspension = vi.hoisted(() => ({ value: true }));
+vi.mock("../../lib/liveSuspension", () => ({
+  get MULTI_LIVE_SUSPENDED() {
+    return suspension.value;
+  },
+}));
+
+afterEach(() => {
+  cleanup();
+  suspension.value = true;
+});
 
 const draw = () =>
   render(
@@ -86,7 +97,7 @@ describe("この数字について", () => {
     draw();
     const text = about()!.textContent ?? "";
     expect(text).toContain("全ノーツPERFECT（AP）を前提にした理論値です");
-    expect(text).toContain("協力ライブの活躍ボーナス");
+    expect(text).toContain("みんなでライブの活躍ボーナス");
     expect(text).toContain("効率難易度");
     expect(text).toContain("1枠を取って巻き込みまで決める場合は低い難易度がもっと強くなることがあり");
   });
@@ -95,7 +106,8 @@ describe("この数字について", () => {
 /**
  * ひとりで周回（2026-11-18〜 みんなでライブが止まったイベント向け）。
  *
- * ★ 既存の3つのタブのラベルは変えない。新しい説明には公式名「ひとりでライブ」を使い、「協力」と書かない。
+ * ★ 新しい説明には公式名「ひとりでライブ」を使い、「協力」と書かない。
+ * ★ 2026-11-18 Nori 決定: 「手動周回」は「みんなで周回」に改名。みんなでライブが止まっている間は「ひとりで周回」で開く。
  */
 describe("ひとりで周回", () => {
   // EfficiencyRanking.tsx の STORE_KEY。保存の鍵は変えない（変えると既存の利用者の入力が消える）。
@@ -104,14 +116,14 @@ describe("ひとりで周回", () => {
 
   const tab = (name: string) => screen.getByRole("radio", { name });
   // タブの直後の段落が見出し、その次が説明
-  const headline = () => tab("手動周回").closest('[role="radiogroup"]')!.nextElementSibling!;
+  const headline = () => tab("みんなで周回").closest('[role="radiogroup"]')!.nextElementSibling!;
   const body = () => headline().nextElementSibling!.textContent ?? "";
 
-  it("タブは4つ。既存の3つのラベルは変えず、手動周回の隣に足す", () => {
+  it("タブは4つ。みんなで周回・ひとりで周回・オート周回・チャレライの順", () => {
     draw();
-    const group = tab("手動周回").closest('[role="radiogroup"]') as HTMLElement;
+    const group = tab("みんなで周回").closest('[role="radiogroup"]') as HTMLElement;
     expect(within(group).getAllByRole("radio").map((b) => b.textContent)).toEqual([
-      "手動周回",
+      "みんなで周回",
       "ひとりで周回",
       "オート周回",
       "チャレライ",
@@ -120,7 +132,7 @@ describe("ひとりで周回", () => {
 
   it("選ぶと「ひとりでライブ」の時間あたりPtの説明になり、「協力」と書かない。長さは他のタブ並み", () => {
     draw();
-    const others = ["手動周回", "オート周回", "チャレライ"].map((name) => {
+    const others = ["みんなで周回", "オート周回", "チャレライ"].map((name) => {
       fireEvent.click(tab(name));
       return body().length;
     });
@@ -143,35 +155,115 @@ describe("ひとりで周回", () => {
     expect(screen.getByText("ロード・リザルトの合計")).toBeTruthy();
   });
 
-  it("触っていないロス（手動周回の既定 54）はタブの既定へ差し替え、手で入れた値は残す", () => {
-    localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true, overhead: "54" }));
-    draw();
-    fireEvent.click(tab("ひとりで周回"));
+  describe("1曲あたりのロスは、ひとりで周回だけ別に持つ", () => {
     const input = () =>
       [...document.querySelectorAll("label")]
         .find((l) => l.textContent === "1曲あたりのロス（秒）")!
         .parentElement!.querySelector("input")!;
-    expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.solo));
-    expect(input().value).not.toBe("54");
-    cleanup();
+    const stored = () => JSON.parse(localStorage.getItem(STORE_KEY) ?? "{}") as Record<string, unknown>;
 
-    localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true, overhead: "40" }));
-    draw();
-    fireEvent.click(tab("ひとりで周回"));
-    expect(input().value).toBe("40");
+    it("何も入れていなければ、ひとりで周回で開いたときの欄は ひとりでライブの既定（みんなでライブの 54 ではない）", () => {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true }));
+      draw();
+      expect(tab("ひとりで周回").getAttribute("aria-checked")).toBe("true");
+      expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.solo));
+    });
+
+    it("みんなで周回のために入れた値（保存済みの 40）は、ひとりで周回には持ち込まない", () => {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true, overhead: "40" }));
+      draw();
+      expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.solo));
+      fireEvent.click(tab("みんなで周回"));
+      expect(input().value).toBe("40");
+      fireEvent.click(tab("ひとりで周回"));
+      expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.solo));
+    });
+
+    it("ひとりで周回で入れた値は、ひとりで周回にだけ効き、開き直しても残る（保存の鍵は同じ、欄だけ別）", () => {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true }));
+      draw();
+      fireEvent.change(input(), { target: { value: "45" } });
+      expect(input().value).toBe("45");
+      expect(stored().overheadSolo).toBe("45");
+      expect(stored().overhead).toBeUndefined();
+      fireEvent.click(tab("みんなで周回"));
+      expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.manual));
+      fireEvent.click(tab("ひとりで周回"));
+      expect(input().value).toBe("45");
+      cleanup();
+
+      draw();
+      expect(input().value).toBe("45");
+    });
+
+    it("ほかの3つのタブの間の差し替えは今までどおり（触っていなければ既定へ、手で入れた値は残す）", () => {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true }));
+      draw();
+      fireEvent.click(tab("みんなで周回"));
+      expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.manual));
+      fireEvent.click(tab("ひとりで周回"));
+      fireEvent.click(tab("オート周回"));
+      expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.auto));
+      fireEvent.click(tab("みんなで周回"));
+      expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.manual));
+      cleanup();
+
+      localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true, overhead: "40" }));
+      draw();
+      fireEvent.click(tab("みんなで周回"));
+      fireEvent.click(tab("ひとりで周回"));
+      fireEvent.click(tab("オート周回"));
+      expect(input().value).toBe("40");
+    });
   });
 
-  it("保存値に知らない mode・古い版・壊れた JSON が入っていても落ちずに手動周回で開く", () => {
+  it("みんなでライブが止まっている間は、ひとりで周回で開く（保存値に知らない mode・古い版・壊れた JSON があっても落ちない）", () => {
     const blobs = [
-      JSON.stringify({ v: 2, mode: "solo-legacy", overhead: "54" }),
+      null,
+      JSON.stringify({ v: 2, mode: "manual", overhead: "54" }),
       JSON.stringify({ v: 1, mode: "solo" }),
       "{broken",
     ];
     for (const raw of blobs) {
-      localStorage.setItem(STORE_KEY, raw);
+      if (raw != null) localStorage.setItem(STORE_KEY, raw);
       draw();
-      expect(tab("手動周回").getAttribute("aria-checked")).toBe("true");
+      expect(tab("ひとりで周回").getAttribute("aria-checked")).toBe("true");
+      expect(headline().textContent).toBe("ひとりでライブ・時間あたりのイベントポイント");
       cleanup();
     }
+  });
+
+  it("再開したら（印が false）、みんなで周回で開く", () => {
+    suspension.value = false;
+    draw();
+    expect(tab("みんなで周回").getAttribute("aria-checked")).toBe("true");
+    expect(headline().textContent).toBe("みんなでライブ・時間あたりのイベントポイント");
+  });
+});
+
+/**
+ * 画面の文に「協力」を書かない（2026-11-18 Nori: 協力ライブはガルパの名前。公式名は「みんなでライブ」）。
+ * ★ 閉じた段（<details>）の中も textContent に入るので、「この数字について」や補足も含めて見る。
+ */
+describe("画面の文に「協力」が無い", () => {
+  afterEach(() => localStorage.clear());
+  const tab = (name: string) => screen.getByRole("radio", { name });
+
+  it("どのタブでも、自分の条件で計算する欄を開いていても「協力」と書かない", () => {
+    localStorage.setItem("sekai-master:ranking-inputs", JSON.stringify({ v: 2, custom: true }));
+    draw();
+    for (const name of ["みんなで周回", "ひとりで周回", "オート周回", "チャレライ"]) {
+      fireEvent.click(tab(name));
+      expect(document.body.textContent ?? "").not.toContain("協力");
+    }
+  });
+
+  it("実効値の補足は「みんなでライブ」と書く", () => {
+    localStorage.setItem("sekai-master:ranking-inputs", JSON.stringify({ v: 2, custom: true }));
+    draw();
+    fireEvent.click(tab("ひとりで周回"));
+    expect(screen.getByText(/（みんなでライブ用。このタブでは使いません）/)).toBeTruthy();
+    fireEvent.click(tab("みんなで周回"));
+    expect(screen.getByText(/（みんなでライブで発動する値）/)).toBeTruthy();
   });
 });

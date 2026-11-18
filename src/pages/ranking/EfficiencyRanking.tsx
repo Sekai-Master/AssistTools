@@ -34,6 +34,7 @@ import {
   type PassCourse,
 } from "./lib/lbRun";
 import { numOrUndef } from "../../lib/num";
+import { MULTI_LIVE_SUSPENDED } from "../../lib/liveSuspension";
 import { cn } from "../../lib/utils";
 import { cappedPower, usePowerLimit } from "../../lib/powerLimit";
 import { Delta } from "../../components/ui/Delta";
@@ -48,8 +49,9 @@ const STORE_VERSION = 2;
 const ROW_LIMIT = 50;
 
 const MODE_OPTIONS: { value: RankingMode; label: string }[] = [
-  { value: "manual", label: "手動周回" },
-  // みんなでライブが止まったイベント（2026-11-18〜）向け。ゲームの公式名に合わせる。
+  // ゲームの公式名「みんなでライブ」「ひとりでライブ」に合わせる（2026-11-18 に「手動周回」から改名）。
+  { value: "manual", label: "みんなで周回" },
+  // みんなでライブが止まったイベント（2026-11-18〜）向け。
   { value: "solo", label: "ひとりで周回" },
   { value: "auto", label: "オート周回" },
   { value: "challenge", label: "チャレライ" },
@@ -65,11 +67,11 @@ const MODE_NOTE: Record<
   { headline: string; body: string; metricLabel: string; skillHint: string }
 > = {
   manual: {
-    headline: "協力ライブ・時間あたりのイベントポイント",
-    body: "手で叩くので律速は時間。短い曲ほど有利になります。フィーバー込みの協力ライブの式で計算しています。",
+    headline: "みんなでライブ・時間あたりのイベントポイント",
+    body: "手で叩くので律速は時間。短い曲ほど有利になります。フィーバー込みのみんなでライブの式で計算しています。",
     metricLabel: "Pt/時",
     skillHint:
-      "協力ライブは1曲のなかで6回スキルが発動します（参加5人が1回ずつ＋アンコール1回）。各発動で乗るのが実効値です。強い人を呼ぶと単価が上がるのは、イベントポイントの式に他4人の合計スコアが入るからで、曲の順位そのものは部屋の顔ぶれでは変わりません。",
+      "みんなでライブは1曲のなかで6回スキルが発動します（参加5人が1回ずつ＋アンコール1回）。各発動で乗るのが実効値です。強い人を呼ぶと単価が上がるのは、イベントポイントの式に他4人の合計スコアが入るからで、曲の順位そのものは部屋の顔ぶれでは変わりません。",
   },
   solo: {
     headline: "ひとりでライブ・時間あたりのイベントポイント",
@@ -136,7 +138,14 @@ interface Stored {
   taki?: number;
   skillLeader?: string;
   skillTotal?: string;
+  /** みんなで周回・オート周回・チャレライの「1曲あたりのロス」（3つで共有。2026-08 からの値）。 */
   overhead?: string;
+  /**
+   * ひとりで周回の「1曲あたりのロス」。**ほかのタブとは別に持つ**（2026-11-18）。
+   * ★ 共有にすると、みんなで周回のために入れた値（部屋待ち込み）が、
+   *   ひとりで周回に黙って持ち込まれる。未入力なら OVERHEAD_SEC.solo の既定を使う。
+   */
+  overheadSolo?: string;
   plays?: string;
   lvMin?: number;
   lvMax?: number;
@@ -196,6 +205,7 @@ function loadStored(): Stored {
       skillLeader: str(s.skillLeader),
       skillTotal: str(s.skillTotal),
       overhead: str(s.overhead),
+      overheadSolo: str(s.overheadSolo),
       plays: str(s.plays),
       lvMin: lv(s.lvMin),
       lvMax: lv(s.lvMax),
@@ -423,7 +433,13 @@ export default function EfficiencyRanking() {
   const { entries, loading, error } = useRankingMusics();
   const stored = useMemo(() => loadStored(), []);
 
-  const [mode, setMode] = useState<RankingMode>("manual");
+  /**
+   * ★ タブは保存しない（毎回ここから開く）。みんなでライブが止まっている間は、
+   *   使えないタブを最初に見せないよう「ひとりで周回」で開く（2026-11-18 Nori 決定。再開したら印を戻すだけで元に戻る）。
+   */
+  const [mode, setMode] = useState<RankingMode>(
+    MULTI_LIVE_SUSPENDED ? "solo" : "manual",
+  );
   const [diffs, setDiffs] = useState<Set<Difficulty>>(() => new Set(ALL_DIFFS));
 
   // 既定は「入力なしで一般的な順位を見る」。自分の条件で計算したい人だけスイッチを入れる。
@@ -492,9 +508,23 @@ export default function EfficiencyRanking() {
     stored.skillTotal ?? String(DEFAULT_PARAMS.skillTotal),
   );
   // 既定はモードで違う（オートはリザルト送りを詰められないぶん長い）。
+  // ★ この欄はみんなで周回・オート周回・チャレライの3つで共有する。ひとりで周回は下の overheadSolo。
   const [overhead, setOverhead] = useState(
     stored.overhead ?? String(DEFAULT_OVERHEAD_SEC.manual),
   );
+  /**
+   * 共有の欄（overhead）がいまどのタブの既定に合わせているか。ひとりで周回を挟んでも、
+   * 3つのタブの間の「触っていなければ既定へ差し替える」は今までどおりに動かすために持つ。
+   */
+  const [overheadMode, setOverheadMode] = useState<
+    Exclude<RankingMode, "solo">
+  >("manual");
+  /** ひとりで周回のロス。未入力ならそのタブの既定（OVERHEAD_SEC.solo）。 */
+  const [overheadSolo, setOverheadSolo] = useState(
+    stored.overheadSolo ?? String(DEFAULT_OVERHEAD_SEC.solo),
+  );
+  /** いまのタブで使う・欄に出す値。 */
+  const overheadValue = mode === "solo" ? overheadSolo : overhead;
   const [plays, setPlays] = useState(stored.plays ?? "100");
   // 未保存なら「全部」= データの両端。読み込み前は 0/99 にして誰も弾かない。
   const [lvMin, setLvMin] = useState(stored.lvMin ?? 0);
@@ -538,7 +568,7 @@ export default function EfficiencyRanking() {
       taki,
       skillLeader: Number(skillLeader) || 0,
       skillTotal: Number(skillTotal) || 0,
-      overheadSec: Number(overhead) || 0,
+      overheadSec: Number(overheadValue) || 0,
     };
   }, [
     custom,
@@ -548,7 +578,7 @@ export default function EfficiencyRanking() {
     taki,
     skillLeader,
     skillTotal,
-    overhead,
+    overheadValue,
     limitOn,
     limitEvent,
   ]);
@@ -560,13 +590,18 @@ export default function EfficiencyRanking() {
    *   手で入れた値を黙って書き換えると、戻したつもりの数字が変わっていて気付けない。
    *   「触っていない」の判定は「いまのモードの既定値と同じか」で十分（実測値が
    *   たまたま既定と一致していた場合は差し替わるが、そのときも表示は正しい）。
+   * ★ ひとりで周回は別の欄（overheadSolo）なので、行き来しても共有の欄には触らない。
+   *   比べる相手は「共有の欄がいま合わせているタブ」（overheadMode）の既定。
    */
   const changeMode = (next: RankingMode) => {
-    setOverhead((cur) =>
-      Number(cur) === DEFAULT_OVERHEAD_SEC[mode]
-        ? String(DEFAULT_OVERHEAD_SEC[next])
-        : cur,
-    );
+    if (next !== "solo") {
+      setOverhead((cur) =>
+        Number(cur) === DEFAULT_OVERHEAD_SEC[overheadMode]
+          ? String(DEFAULT_OVERHEAD_SEC[next])
+          : cur,
+      );
+      setOverheadMode(next);
+    }
     setMode(next);
   };
 
@@ -797,12 +832,14 @@ export default function EfficiencyRanking() {
         }}
       />
       <Panel>
-        {/* ★ 4択で「ひとりで周回」が6文字あるので詰めて描く（既定だと 390px で折れる）。 */}
+        {/* ★ 4択で「みんなで周回」「ひとりで周回」が6文字あるので詰めて描く（既定だと 390px で折れる）。
+              360px 以下では収まらないので、折れるときは文節で折る（「みんなで周／回」と1字だけ落ちていた）。 */}
         <SegmentedControl
           options={MODE_OPTIONS}
           value={mode}
           onChange={changeMode}
           compact
+          buttonClassName="[word-break:auto-phrase]"
         />
         <p className="mt-4 text-sm font-bold text-slate-600">{note.headline}</p>
         <p className="mt-1 text-xs leading-relaxed text-slate-500">
@@ -1408,7 +1445,7 @@ export default function EfficiencyRanking() {
               <p className="mt-4 text-xs leading-relaxed text-slate-500">
                 所要時間は曲長＋ロス
                 {custom
-                  ? `（${overhead || 0}秒）`
+                  ? `（${overheadValue || 0}秒）`
                   : `（${DEFAULT_OVERHEAD_SEC[mode]}秒）`}
                 の単純な積み上げです。オートは放置できるので、この時間は拘束時間ではありません。
                 {autoFrom === "lb" ? (
@@ -1623,11 +1660,17 @@ export default function EfficiencyRanking() {
                 >
                   <NeuInput
                     inputMode="numeric"
-                    value={overhead}
+                    value={overheadValue}
                     onChange={(e) => {
                       const v = onlyDigits(e.target.value);
-                      setOverhead(v);
-                      persist({ overhead: v });
+                      // ひとりで周回だけ別の欄に書く（みんなで周回の値を持ち込まない・持ち出さない）
+                      if (mode === "solo") {
+                        setOverheadSolo(v);
+                        persist({ overheadSolo: v });
+                      } else {
+                        setOverhead(v);
+                        persist({ overhead: v });
+                      }
                     }}
                   />
                 </Field>
@@ -1644,8 +1687,8 @@ export default function EfficiencyRanking() {
                   ).toFixed(1)}
                 </span>
                 {mode === "manual"
-                  ? "（協力ライブで発動する値）"
-                  : "（協力ライブ用。このタブでは使いません）"}
+                  ? "（みんなでライブで発動する値）"
+                  : "（みんなでライブ用。このタブでは使いません）"}
               </span>
               <InfoNote label="内部値と実効値について">
                 <p>
@@ -1657,7 +1700,7 @@ export default function EfficiencyRanking() {
                 </p>
                 <p className="mt-2">
                   <span className="font-bold text-slate-600">実効値</span>
-                  は協力ライブで実際に発動する値で、
+                  はみんなでライブで実際に発動する値で、
                   <code>リーダー + (内部値 − リーダー) × 0.2</code> で出ます。
                   リーダーは100%、サブ4枚は各20%しか効かないためです。
                   この例なら 150 + 560 × 0.2 ={" "}
@@ -1668,7 +1711,7 @@ export default function EfficiencyRanking() {
                   内部値 ÷ 5
                   が平均、最後の6回目だけリーダーがもう1回発動します。 そのため
                   <span className="font-bold text-slate-600">
-                    ソロでは内部値が、協力ではリーダーが効きます
+                    ソロでは内部値が、みんなでライブではリーダーが効きます
                   </span>
                   。
                 </p>
@@ -1711,12 +1754,12 @@ export default function EfficiencyRanking() {
             <code>(base + Σ 実効スキル% × 枠重み ÷ 100) × 総合力 × 4</code>{" "}
             で計算しています。base と枠重みは楽曲ごとの実データで、
             譜面上のスキル発動位置が反映されています。タブごとに使うデータを変えていて、
-            手動周回は協力ライブ用（フィーバー加点込み）、オートはオート用、ひとりで周回とチャレライはソロ用です。
+            みんなで周回はみんなでライブ用（フィーバー加点込み）、オートはオート用、ひとりで周回とチャレライはソロ用です。
           </li>
           <li>
             イベントポイントの式は
-            <span className="font-bold text-slate-600">ソロと協力で別物</span>
-            です。ソロ・オートは <code>100 + floor(スコア/20000)</code>、協力は{" "}
+            <span className="font-bold text-slate-600">ソロとみんなでライブで別物</span>
+            です。ソロ・オートは <code>100 + floor(スコア/20000)</code>、みんなでライブは{" "}
             <code>
               110 + floor(自スコア/17000) + min(16, floor(他4人合計/340000))
             </code>
@@ -1728,7 +1771,7 @@ export default function EfficiencyRanking() {
             スキルは1曲のなかで
             <span className="font-bold text-slate-600">6回</span>発動します。
             カードは5枚・部屋も5人ですが、最後にもう1回あるので6回です
-            （ソロならリーダーがもう1回、協力ならアンコール）。 skill_score_*
+            （ソロならリーダーがもう1回、みんなでライブならアンコール）。 skill_score_*
             のデータが長さ6の配列なのもそのためです。
           </li>
           <li>
@@ -1749,7 +1792,7 @@ export default function EfficiencyRanking() {
             発動順を厳選しても曲どうしの順位は変わりません（全曲に同じ係数が掛かるだけ）。
           </li>
           <li>
-            協力ライブの活躍ボーナス（スコアに少し足される加点）は入れていません。
+            みんなでライブの活躍ボーナス（スコアに少し足される加点）は入れていません。
             どの曲にもほぼ一律に乗るぶんなので順位はほとんど動きませんが、表示Ptは実際よりわずかに低めです。
           </li>
         </ul>
