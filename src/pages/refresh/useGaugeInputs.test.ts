@@ -66,15 +66,17 @@ describe("リフレッシュゲージ（liveChoice）", () => {
   });
 
   it("ペースは想定ごとに別々に持つ（切り替えても入れた値が消えない）", () => {
+    // ★ ひとりでライブ側は既定と違う値を使う（OVERHEAD_SEC.solo を直すと既定のペースも動くので、数字を決め打ちしない）
+    const custom = SOLO_DEFAULT_RATE - 3;
     const { result } = draw();
     act(() => result.current.setLive("solo"));
-    act(() => result.current.setRate("30"));
+    act(() => result.current.setRate(String(custom)));
     act(() => result.current.setLive("multi"));
     expect(result.current.rate).toBe("28");
     act(() => result.current.setRate("25"));
     act(() => result.current.setLive("solo"));
-    expect(result.current.rate).toBe("30");
-    expect(result.current.overhead).toBe(overheadFromRate(30, ENVY_LEN));
+    expect(result.current.rate).toBe(String(custom));
+    expect(result.current.overhead).toBe(overheadFromRate(custom, ENVY_LEN));
     act(() => result.current.setLive("multi"));
     expect(result.current.rate).toBe("25");
   });

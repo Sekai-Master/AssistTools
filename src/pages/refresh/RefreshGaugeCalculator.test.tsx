@@ -122,13 +122,14 @@ describe("みんなでライブに切り替えたとき（足す前と同じ数�
 
 describe("切り替え", () => {
   it("ペースは想定ごとに別々に持つ（行き来しても入れた値が残る）", () => {
+    const custom = String(SOLO_DEFAULT_RATE - 3); // 既定と違う値（OVERHEAD_SEC.solo を直しても既定と重ならない）
     draw();
     choose("ひとりでライブ");
-    type(paceInput(), "30");
+    type(paceInput(), custom);
     choose("みんなでライブ");
     expect(paceInput().value).toBe("28");
     choose("ひとりでライブ");
-    expect(paceInput().value).toBe("30");
+    expect(paceInput().value).toBe(custom);
   });
 
   it("どちらの想定でも、画面の文に「協力」と書かない", () => {
