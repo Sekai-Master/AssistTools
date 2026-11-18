@@ -131,7 +131,13 @@ export function useRankingMusics(enabled = true): {
   error: string | null;
 } {
   const [entries, setEntries] = useState<RankingMusic[]>([]);
-  const [loading, setLoading] = useState(enabled);
+  /**
+   * 一度でも読み終えたか（成功でも失敗でも）。
+   * ★ 読み込み中は enabled && !done で出す。前は useState(enabled) の初期値で決めていて、最初 enabled が false の画面
+   *   （周回プランのオート・編成ビルダーの「比べる」）では、あとで読み込みが始まっても true に戻らなかった（#246 の検分）。
+   *   effect の中で setState(true) すると cascading render になり lint も鳴るので、値から出す。
+   */
+  const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -158,11 +164,11 @@ export function useRankingMusics(enabled = true): {
         if (controller.signal.aborted) return;
         setError(e instanceof Error ? e.message : "楽曲データの読み込みに失敗しました。");
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted) setDone(true);
       }
     })();
     return () => controller.abort();
   }, [enabled]);
 
-  return { entries, loading, error };
+  return { entries, loading: enabled && !done, error };
 }
