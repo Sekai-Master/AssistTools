@@ -10,7 +10,7 @@
  *   S_spurt(p) … 率モデル（経過・残り・時刻）のシェア表＝ふだんの回と同じ追い込み
  *   S_flat(p)  … 率モデルから「残り時間」の折れ線を外したシェア表＝追い込みなし
  *   水準       … 直近の窓 [p0, p]（開始から窓の長さまでは開始から）で F_x = B(p) + (B(p) − B(p0)) / (S_x(p) − S_x(p0)) × (1 − S_x(p))
- *   点         … F_spurt^w × F_flat^(1−w)（w = spurtWeight。既定 0.5＝幾何平均）
+ *   点         … F_spurt^w × F_flat^(1−w)（w = spurtWeight。既定 0.75。0.5 なら幾何平均）
  *   帯         … 下 = max(B(p), min(F) × (1 − m))、上 = max(F) × (1 + m)。m は残りの割合とともに縮める
  *   確度       … 常に「目安」。帯が 80 ポイントを超えても出す（わざと広げた予測が丸ごと消えないように）
  *
@@ -51,9 +51,10 @@ export interface SpecialParams {
  * 仮の値（2026-11-19 2時台に指揮が置いた。11/19 の公式の追記と当て直しを見て直す。直すのはここ1か所）。
  *   窓: 直近24時間（開始から24時間までは開始から）
  *   m = 0.06 + 0.20 × (1 − p)（経過 4% で約 0.25、50% で 0.16、90% で 0.08）
+ *   点の重み w = 0.75（2026-11-19 指揮が決定。ひとりでライブだけの回は上位ほど部屋の強さで稼げないので、最終日の伸びはふだんより小さめと見る）
  * 解析ジョブが model.special.params に書き、Worker はそれを読む（Worker を反映し直さなくても、マージと解析ジョブで値を変えられる）
  */
-export const SPECIAL_DEFAULT_PARAMS: Readonly<SpecialParams> = { windowHours: 24, marginBase: 0.06, marginSlope: 0.2, spurtWeight: 0.5 }
+export const SPECIAL_DEFAULT_PARAMS: Readonly<SpecialParams> = { windowHours: 24, marginBase: 0.06, marginSlope: 0.2, spurtWeight: 0.75 }
 
 /** 表に出し始める経過率（ふだんの MIN_VISIBLE_PROGRESS と同じ。102h で開始約4時間） */
 export const SPECIAL_MIN_PROGRESS = 0.04
@@ -114,7 +115,7 @@ const SCHEDULE_TOLERANCE_MS = 5 * 60_000
 
 /**
  * JSON から来た値を確かめる。おかしければ既定の値（SPECIAL_DEFAULT_PARAMS）。
- * spurtWeight は後から足した欄なので、無ければそこだけ既定の 0.5（それより前に焼いた版でも、ほかの値は使う）
+ * spurtWeight は後から足した欄なので、無ければそこだけ既定の値（それより前に焼いた版でも、ほかの値は使う）
  */
 export function paramsOf(x: unknown): SpecialParams {
   if (!isRecord(x)) return { ...SPECIAL_DEFAULT_PARAMS }

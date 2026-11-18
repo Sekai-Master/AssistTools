@@ -117,15 +117,15 @@ describe('specialSelection: 特別モデルで当てるか', () => {
     expect(paramsOf({ windowHours: -1, marginBase: 0.1, marginSlope: 0.3 })).toEqual(SPECIAL_DEFAULT_PARAMS)
     expect(paramsOf({ windowHours: 12, marginBase: 0.1, marginSlope: 0.3, spurtWeight: 1.5 })).toEqual(SPECIAL_DEFAULT_PARAMS)
     expect(paramsOf(null)).toEqual(SPECIAL_DEFAULT_PARAMS)
-    // 点の重みを足す前に焼いた版（spurtWeight が無い）は、そこだけ既定の 0.5 にして、ほかの値は使う
-    expect(paramsOf({ windowHours: 12, marginBase: 0.1, marginSlope: 0.3 })).toEqual({ windowHours: 12, marginBase: 0.1, marginSlope: 0.3, spurtWeight: 0.5 })
-    expect(SPECIAL_DEFAULT_PARAMS.spurtWeight).toBe(0.5)
+    // 点の重みを足す前に焼いた版（spurtWeight が無い）は、そこだけ既定の値にして、ほかの値は使う
+    expect(paramsOf({ windowHours: 12, marginBase: 0.1, marginSlope: 0.3 })).toEqual({ windowHours: 12, marginBase: 0.1, marginSlope: 0.3, spurtWeight: 0.75 })
   })
 })
 
 describe('仮の値', () => {
-  it('窓 24 時間・m = 0.06 + 0.20 × (1 − p)（経過 4% で約 0.25、50% で 0.16、90% で 0.08）', () => {
+  it('窓 24 時間・m = 0.06 + 0.20 × (1 − p)（経過 4% で約 0.25、50% で 0.16、90% で 0.08）・点の重み 0.75（指揮 2026-11-19）', () => {
     expect(SPECIAL_DEFAULT_PARAMS.windowHours).toBe(24)
+    expect(SPECIAL_DEFAULT_PARAMS.spurtWeight).toBe(0.75)
     expect(specialMargin(SPECIAL_DEFAULT_PARAMS, 0.04)).toBeCloseTo(0.252, 6)
     expect(specialMargin(SPECIAL_DEFAULT_PARAMS, 0.5)).toBeCloseTo(0.16, 6)
     expect(specialMargin(SPECIAL_DEFAULT_PARAMS, 0.9)).toBeCloseTo(0.08, 6)
@@ -182,7 +182,7 @@ describe('predictSpecial', () => {
     expect(p.high).toBeCloseTo(FINAL * (1 + 0.14), -1)
   })
 
-  it('点は F_spurt と F_flat の幾何平均。帯の下は小さいほう × (1 − m)、上は大きいほう × (1 + m)', () => {
+  it('点は F_spurt^0.75 × F_flat^0.25（既定の重み）。帯の下は小さいほう × (1 − m)、上は大きいほう × (1 + m)', () => {
     // 追い込みありは後ろに積む形（p²）、なしは線形
     const sp = specialOf(() => ({ spurt: GRID.map((p) => p * p), flat: linear() }))
     const model = modelWith(sp)
@@ -197,7 +197,7 @@ describe('predictSpecial', () => {
     const fS = b + ((b - b0) / (sS - sS0)) * (1 - sS)
     const fF = b + ((b - b0) / (0.7 - p0)) * (1 - 0.7)
     const m = 0.06 + 0.2 * 0.3
-    expect(p.predicted).toBeCloseTo(Math.sqrt(fS * fF), 0)
+    expect(p.predicted).toBeCloseTo(fS ** 0.75 * fF ** 0.25, 0)
     expect(p.low).toBeCloseTo(Math.max(b, Math.min(fS, fF) * (1 - m)), 0)
     expect(p.high).toBeCloseTo(Math.max(fS, fF) * (1 + m), 0)
   })
