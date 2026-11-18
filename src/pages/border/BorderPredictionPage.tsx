@@ -76,7 +76,8 @@ export default function BorderPredictionPage() {
       )}
       {record && record.reports.length > 0 && <RecordPanel reports={record.reports} />}
       {record?.model && <ModelPanel model={record.model} />}
-      <HowPanel />
+      {/* 予測が出ている回は、数字の近く（または参考値の枠）で「非公式・外れる」を言っているので、しくみの段では重ねない */}
+      <HowPanel unofficialShownAbove={!loading && current?.predicted === true} />
     </ToolPage>
   );
 }
@@ -162,6 +163,9 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
       )}
       {snap.predicted && (
         <p className="mt-3 max-w-lg text-xs leading-5 text-slate-500">
+          {/* ★ 予測の数字の近くでも「非公式で外れる」を言う（前はページ下の「しくみ」だけ。指揮 2026-11-12）。
+              外挿の回は上の参考値の枠が「大きく外れることがあります」と言っているので重ねない */}
+          {snap.extrapolatedFrom == null && "非公式の予測で、外れることがあります。"}
           確度は8割の幅の広さです。高＝±5%くらい、中＝±15%くらい、目安＝それより広い（序盤）。
           序盤の目安は、全体の熱さを読むためのものとして見てください。
         </p>
@@ -316,7 +320,7 @@ function ModelPanel({ model }: { model: ModelSummary }) {
  * ★★ 「非公式で外れる」「序盤は目安」「50位・100位は幅が広め」は予測の確かさの話なので畳まない
  *   （参考値・確度の札と同じ扱い。2026-10-25 の大外しの後の方針）。
  */
-function HowPanel() {
+function HowPanel({ unofficialShownAbove }: { unofficialShownAbove: boolean }) {
   return (
     <Panel>
       <details>
@@ -338,7 +342,7 @@ function HowPanel() {
         </div>
       </details>
       <p className="mt-3 max-w-xl text-sm leading-7 text-slate-600">
-        非公式の予測で、外れることがあります。予測は経過4%から出し始め（150時間のイベントなら開始から約6時間、246時間なら約10時間）、序盤は幅が広い「目安」として出します。50位・100位は終盤まで個人の事情で大きく動くので、ほかの順位より幅が広めです。
+        {!unofficialShownAbove && "非公式の予測で、外れることがあります。"}予測は経過4%から出し始め（150時間のイベントなら開始から約6時間、246時間なら約10時間）、序盤は幅が広い「目安」として出します。50位・100位は終盤まで個人の事情で大きく動くので、ほかの順位より幅が広めです。
         ランキングのデータは <DocLink href="https://sekai.best/">Sekai Viewer</DocLink> のものを使っています。
       </p>
     </Panel>

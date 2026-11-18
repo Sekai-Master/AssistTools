@@ -114,6 +114,29 @@ function expectNoLead(ids: string[]) {
   expect(within(shelf()).queryByText(tool("analyzer").description)).toBeNull();
 }
 
+/**
+ * ★ 通常の回でも、予測の数字の近く（確度の説明の頭）に「非公式の予測で、外れることがあります」を出す
+ *   （指揮 2026-11-12。前はページ下の「しくみ」にしか無かった）。
+ * ★ 外挿の回は「この回の予測は参考値です。…大きく外れることがあります」の枠がすでに言っているので、重ねて出さない。
+ */
+describe("予測の数字の近くの「非公式で外れる」の 1 文", () => {
+  const currentPanel = () => screen.getByRole("heading", { name: "開催中のイベント" }).closest("section")!;
+  const note = () => within(currentPanel()).getByText(/確度は8割の幅の広さです/);
+
+  it("通常の回は、確度の説明の頭に出す", async () => {
+    serve(snapshot(-72, 72));
+    await show();
+    expect(note().textContent).toMatch(/^非公式の予測で、外れることがあります。/);
+  });
+
+  it("外挿の回（参考値の枠がある）は、確度の説明に重ねて出さない", async () => {
+    serve({ ...snapshot(-72, 72), extrapolatedFrom: 150 });
+    await show();
+    expect(within(currentPanel()).getByText("この回の予測は参考値です。")).toBeTruthy();
+    expect(note().textContent).not.toContain("非公式の予測で、外れることがあります");
+  });
+});
+
 describe("いま使えるツール", () => {
   it("序盤（開始の直後）: 編成ビルダー・編成かんたん比較・周回プラン", async () => {
     serve(snapshot(-1, 100));
@@ -215,14 +238,30 @@ describe("しくみを畳む・予測の確かさの表示は畳まない", () =
     expect(details.textContent).toContain("人の勘で数字を足すことはしていません");
   });
 
-  it("「非公式の予測で、外れることがあります」「序盤は目安」とデータの出典は畳まずに見せる", async () => {
+  it("「序盤は目安」とデータの出典は畳まずに見せる", async () => {
     serve(snapshot(-72, 72));
     await show();
-    const note = screen.getByText(/非公式の予測で、外れることがあります/);
+    const note = screen.getByText(/序盤は幅が広い「目安」/);
     expect(folded(note)).toBe(false);
-    expect(note.textContent).toContain("序盤は幅が広い「目安」");
     expect(note.textContent).toContain("50位・100位は");
     expect(folded(screen.getByRole("link", { name: "Sekai Viewer" }))).toBe(false);
+  });
+
+  it("予測が出ている回は「非公式の予測で、外れることがあります」を数字の近くで 1 回だけ言う（しくみの段で重ねない）", async () => {
+    serve(snapshot(-72, 72));
+    await show();
+    const all = screen.getAllByText(/非公式の予測で、外れることがあります/);
+    expect(all).toHaveLength(1);
+    expect(all[0].textContent).toContain("確度は8割の幅の広さです");
+  });
+
+  it("予測がまだ出ていない回は、しくみの段で「非公式の予測で、外れることがあります」を言う", async () => {
+    serve({ ...snapshot(-72, 72), predicted: false });
+    await show();
+    const all = screen.getAllByText(/非公式の予測で、外れることがあります/);
+    expect(all).toHaveLength(1);
+    expect(all[0].textContent).toContain("序盤は幅が広い「目安」");
+    expect(folded(all[0])).toBe(false);
   });
 
   it("確度の札と説明は畳まない", async () => {
