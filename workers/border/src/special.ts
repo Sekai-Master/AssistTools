@@ -93,10 +93,19 @@ export interface SpecialSelection {
 const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null
 const finite = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x)
 
-/** 格子の51点で、値が null か 0〜1.05 の数 */
-export function isCurve(x: unknown): x is (number | null)[] {
-  return Array.isArray(x) && x.length === GRID.length && x.every((v) => v === null || (finite(v) && v >= 0 && v <= 1.05))
+/**
+ * 特別モデルの曲線として使えるか。率モデルのシェア表（rate.ts の rateShareTable）は欠けの無い 0 → 1 の単調増加なので、
+ * 格子の51点がすべて数で、最初が 0・最後が 1・途中で下がらないものだけ通す（形だけ合って中身の壊れた曲線で、全順位の予測が消えないように）
+ */
+export function isCurve(x: unknown): x is number[] {
+  if (!Array.isArray(x) || x.length !== GRID.length || !x.every((v) => finite(v) && v >= 0 && v <= 1)) return false
+  if (x[0] !== 0 || Math.abs((x[x.length - 1] as number) - 1) > 1e-6) return false
+  for (let i = 1; i < x.length; i++) if ((x[i] as number) < (x[i - 1] as number)) return false
+  return true
 }
+
+/** 焼いたときの日程と events の日程のずれをここまで許す（同じマスタから来るので、ふつうは一致する。秒の丸めの違いで外れないように） */
+const SCHEDULE_TOLERANCE_MS = 5 * 60_000
 
 /** JSON から来た値を確かめる。おかしければ既定の値（SPECIAL_DEFAULT_PARAMS） */
 export function paramsOf(x: unknown): SpecialParams {
@@ -110,7 +119,7 @@ export function paramsOf(x: unknown): SpecialParams {
 
 /**
  * この回を特別モデルで当てるか。model.special の一覧に入っていて、この回の曲線が6順位ぶん壊れずにあり、
- * 焼いたときの日程が events の日程と一致するときだけ。どれかが欠けたら null（ふだんの predict() で今と同じに出す）。
+ * 焼いたときの日程が events の日程と一致する（5分以内）ときだけ。どれかが欠けたら null（ふだんの predict() で今と同じに出す）。
  * ★ モデルの JSON は D1 から読んで as Model しているだけなので、ここで1つずつ確かめる
  */
 export function specialSelection(model: Model, meta: Pick<EventMeta, 'id' | 'startAt' | 'aggregateAt'>): SpecialSelection | null {
@@ -118,7 +127,8 @@ export function specialSelection(model: Model, meta: Pick<EventMeta, 'id' | 'sta
   if (!isRecord(sp) || sp.algorithm !== SPECIAL_ALGORITHM || typeof sp.version !== 'string' || !sp.version.startsWith(`${SPECIAL_ALGORITHM}@`)) return null
   if (!Array.isArray(sp.events) || !sp.events.includes(meta.id) || !Array.isArray(sp.curves)) return null
   const curves: unknown = sp.curves.find((c: unknown) => isRecord(c) && c.eventId === meta.id)
-  if (!isRecord(curves) || curves.startAt !== meta.startAt || curves.aggregateAt !== meta.aggregateAt || !isRecord(curves.ranks)) return null
+  if (!isRecord(curves) || !finite(curves.startAt) || !finite(curves.aggregateAt) || !isRecord(curves.ranks)) return null
+  if (Math.abs(curves.startAt - meta.startAt) > SCHEDULE_TOLERANCE_MS || Math.abs(curves.aggregateAt - meta.aggregateAt) > SCHEDULE_TOLERANCE_MS) return null
   const ranks = curves.ranks
   const ok = RANKS.every((r) => {
     const c = ranks[String(r)]

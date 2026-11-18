@@ -96,6 +96,21 @@ describe('specialSelection: 特別モデルで当てるか', () => {
     expect(specialSelection({ ...modelWith(), special: { events: 226 } as never }, EVENT)).toBeNull()
   })
 
+  it('形が合っていても中身の壊れた曲線（欠け・途中で下がる・最後が 1 でない・最初が 0 でない）なら null', () => {
+    const bad: (number | null)[][] = [
+      GRID.map((p, i) => (i % 2 ? null : p)),
+      GRID.map((p) => (p > 0.5 && p < 0.6 ? 0.1 : p)),
+      GRID.map((p) => p * 0.9),
+      GRID.map((p) => 0.01 + p * 0.99),
+    ]
+    for (const c of bad) expect(specialSelection(modelWith(specialOf(() => ({ spurt: linear(), flat: c }))), EVENT)).toBeNull()
+  })
+
+  it('焼いたときの日程との秒の丸めの違い（5分以内）では外さない', () => {
+    expect(specialSelection(modelWith(ok), { ...EVENT, aggregateAt: AGG + 60_000 })).not.toBeNull()
+    expect(specialSelection(modelWith(ok), { ...EVENT, aggregateAt: AGG + 6 * 60_000 })).toBeNull()
+  })
+
   it('値（窓・m）はモデルの JSON から読み、おかしければ既定の値', () => {
     const custom = { windowHours: 12, marginBase: 0.1, marginSlope: 0.3 }
     expect(specialSelection(modelWith({ ...ok, params: custom }), EVENT)?.params).toEqual(custom)

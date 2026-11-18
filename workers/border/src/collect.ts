@@ -200,24 +200,36 @@ export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): 
 
   await insertSamples(env.DB, event.id, live.samples)
 
-  const preds = new Map<number, Prediction>()
+  let preds = new Map<number, Prediction>()
   const model = event.eventType === 'marathon' ? await activeModel(env.DB) : null
   // みんなでライブ停止中の回（model.special の一覧にあり、この回の日程で焼いた曲線がある）は特別モデルで当てる（special.ts）
-  const special = model ? specialSelection(model.model, event) : null
-  const version = special?.version ?? model?.version ?? null
-  if (model) {
-    const nearby = special ? await windowSamples(env, event, special, sampleAt) : null
+  let special = model ? specialSelection(model.model, event) : null
+  const predictAll = (one: (s: LiveSample) => Prediction | null, label: string | null) => {
+    const out = new Map<number, Prediction>()
     for (const s of live.samples) {
       // 1順位の表が壊れていても、残りの順位と実測の保存は止めない
       try {
-        const p = special
-          ? predictSpecial(model.model, special, event, s.rank, s.score, s.ts, nearby?.get(s.rank) ?? [])
-          : predict(model.model, event, s.rank, s.score, s.ts)
-        if (p) preds.set(s.rank, p)
+        const p = one(s)
+        if (p) out.set(s.rank, p)
       } catch (err) {
-        console.error('predict failed', version, s.rank, err)
+        console.error('predict failed', label, s.rank, err)
       }
     }
+    return out
+  }
+  if (model && special) {
+    const sel = special
+    const nearby = await windowSamples(env, event, sel, sampleAt)
+    preds = predictAll((s) => predictSpecial(model.model, sel, event, s.rank, s.score, s.ts, nearby?.get(s.rank) ?? []), sel.version)
+    // 特別モデルが1順位も出せなかった（曲線の中身がおかしい等）ときは、この回だけふだんの表に戻す（予測が丸ごと消えないように）
+    if (preds.size === 0) {
+      console.error('special: 特別モデルで1順位も出せなかったので、ふだんの表で出す', event.id, sel.version)
+      special = null
+    }
+  }
+  const version = special?.version ?? model?.version ?? null
+  if (model) {
+    if (!special) preds = predictAll((s) => predict(model.model, event, s.rank, s.score, s.ts), model.version)
     if (!stale) {
       await insertPredictions(
         env.DB,

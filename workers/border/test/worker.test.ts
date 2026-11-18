@@ -335,6 +335,23 @@ describe('runCron: みんなでライブ停止中の回（特別モデル）', (
     }
   })
 
+  it('特別モデルが1順位も出せない曲線（前半ずっと 0）のときは、その回をふだんの表で出す（予測が丸ごと消えない）', async () => {
+    const zero = GRID.map((p) => (p < 0.98 ? 0 : 1))
+    const curves = special().curves[0]
+    const sp = special({ curves: [{ ...curves, ranks: Object.fromEntries(RANKS.map((r) => [String(r), { spurt: zero, flat: zero }])) }] })
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const r = await run(withSpecial(sp), E226, 30, (p) => p)
+      expect(r).toMatchObject({ status: 'collected', predictions: 6 })
+    } finally {
+      errors.mockRestore()
+    }
+    const snap = await current()
+    expect('special' in snap).toBe(false)
+    expect(snap.modelVersion).toBe(base.version)
+    expect(new Set((await predictionsFor(env.DB, 226)).map((x) => x.model_version))).toEqual(new Set([base.version]))
+  })
+
   it('一覧に無い回の出力は、special の有無で1文字も変わらない（予測ログも同じ）', async () => {
     const out = async (model: Model) => {
       env = { DB: createD1(), ADMIN_TOKEN: 'secret-token', SITE_ORIGIN: 'https://sekaimaster.pages.dev' }
