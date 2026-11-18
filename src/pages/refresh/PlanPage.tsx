@@ -7,6 +7,8 @@ import { NeuButton } from "../../components/ui/NeuButton";
 import { TakiInput } from "../../components/ui/TakiInput";
 import { Switch } from "../../components/ui/Switch";
 import { ProfileBar, SaveToProfile } from "../../components/ui/ProfileBar";
+import { MoreSettings } from "../../components/ui/MoreSettings";
+import { countChanged } from "../../lib/countChanged";
 import { calculateUnitBasePt } from "../analyzer/lib/mySekai";
 import { parseAmount } from "../analyzer/lib/inputParsing";
 import { RateCalibrator } from "./RateCalibrator";
@@ -66,6 +68,24 @@ export default function PlanPage() {
     power: parseAmount(talent),
     bonus: parseAmount(bonus, true),
   });
+
+  /**
+   * 「詳しく計算する」の中で、既定値から変えている項目の数（見出しに出す）。
+   * 既定値は各 useState の初期値（useAutoConfig を含む）。オートの曲は「未選択なら効率 1 位」なので数えない。
+   */
+  const advancedChanged = countChanged([
+    [refTaki, 5],
+    [talent, ""],
+    [bonus, ""],
+    [hasWorldPass, false],
+    [autoConfig.course, "none"],
+    [autoConfig.usedToday, "0"],
+    [autoConfig.taki, 10],
+    [autoConfig.ptOverride, ""],
+    [autoConfig.cycleOverride, ""],
+    [autoConfig.skillLeader, ""],
+    [autoConfig.skillTotal, ""],
+  ]);
 
   /** マイセカイ 1メモリあたりのPt。総合力かボーナスが未入力なら0＝計上しない。 */
   const mySekaiUnitPt = useMemo(() => {
@@ -201,7 +221,7 @@ export default function PlanPage() {
             })}
           />
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2">
           <Field
             label="現在ポイント"
             htmlFor="pl-cur"
@@ -232,19 +252,7 @@ export default function PlanPage() {
               <span className="text-sm text-slate-500">pt/時</span>
             </div>
           </Field>
-          <Field label="基準焚き数" hint="上の時速を出した焚き数">
-            <TakiInput value={refTaki} onChange={setRefTaki} />
-          </Field>
         </div>
-
-        <RateCalibrator
-          hourlyRate={hourlyRate}
-          setHourlyRate={setHourlyRate}
-          refTaki={refTaki}
-          setRefTaki={setRefTaki}
-          pace={inputs.rate}
-          setPace={inputs.setRate}
-        />
 
         <p className="mt-3 text-xs text-slate-500">
           「上の曲」を選んで下の「＋稼働」で枠を積むと、各枠の焚き数・獲得ptと累積到達ptが出ます。
@@ -252,117 +260,145 @@ export default function PlanPage() {
         </p>
       </Panel>
 
-      <Panel title="編成（マイセカイ・オートの計算に使う）">
-        {/* 点数時速は実測値だが、マイセカイの単価とオートのスコアは総合力とボーナスから
-            計算で出る。入れておくと採取ブロックとオートが点数として積み上がる。 */}
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="総合力" htmlFor="pl-talent">
-            <NeuInput
-              id="pl-talent"
-              inputMode="numeric"
-              value={talent}
-              onChange={(e) => setTalent(e.target.value)}
-              placeholder="例: 336,000"
-            />
+      {/**
+       * ★ 任意の入力は「詳しく計算する」に畳む（UX 監査 2026-11-12、指示書の共通の型 1、PR-6）。
+       *   前は入力 16 個が開いたまま並び、結果（タイムライン）は 3 画面目の下だった。主な入力は
+       *   曲・現在のゲージ（・次の回復まで・周回ペース）・現在ポイント・点数時速。ここに入れるのは、既定値のままでも
+       *   計算が出るもの（基準焚き数と較正・編成・オート・プランの保存）。畳んだ中の値も計算に使うので、
+       *   既定値から変えた数と、オートを使っているかを見出しに出す。
+       */}
+      <MoreSettings
+        variant="section"
+        contents="基準焚き数・編成・オート・プランの保存"
+        changed={advancedChanged}
+        note={usesAuto ? "オートを使用中" : undefined}
+      >
+        <Panel title="時速の前提">
+          <Field label="基準焚き数" hint="上の時速を出した焚き数">
+            <TakiInput value={refTaki} onChange={setRefTaki} />
           </Field>
-          <Field label="イベントボーナス (%)" htmlFor="pl-bonus">
-            <NeuInput
-              id="pl-bonus"
-              inputMode="decimal"
-              value={bonus}
-              onChange={(e) => setBonus(e.target.value)}
-              placeholder="例: 821"
-            />
-          </Field>
-          <Field label="ワールドパス">
-            <Switch
-              checked={hasWorldPass}
-              onChange={setHasWorldPass}
-              label="ワールドパス 有効"
-            />
-          </Field>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <SaveToProfile
-            collect={() => ({
-              power: parseAmount(talent) || undefined,
-              bonus: parseAmount(bonus, true) || undefined,
-            })}
+          <RateCalibrator
+            hourlyRate={hourlyRate}
+            setHourlyRate={setHourlyRate}
+            refTaki={refTaki}
+            setRefTaki={setRefTaki}
+            pace={inputs.rate}
+            setPace={inputs.setRate}
           />
-        </div>
-        <p className="mt-3 text-xs text-slate-500">
-          {mySekaiUnitPt > 0 ? (
-            <>
-              1メモリあたり{" "}
-              <span className="font-bold" style={{ color: "var(--unit-color)" }}>
-                {mySekaiUnitPt.toLocaleString()} pt
-              </span>
-              。全回収1回（約89.5メモリ）で約{" "}
-              {Math.floor(mySekaiUnitPt * 89.5).toLocaleString()} pt です。
-            </>
-          ) : (
-            "総合力とイベントボーナスを入れると、マイセカイ採取のポイントも積み上がります（未入力のあいだは0のまま）。"
-          )}
-        </p>
-      </Panel>
+        </Panel>
 
-      <AutoPanel config={autoConfig} />
-
-      <Panel title="プランの保存・呼び出し">
-        <div className="flex flex-wrap items-center gap-2">
-          <NeuInput
-            value={planName}
-            onChange={(e) => setPlanName(e.target.value)}
-            placeholder="プラン名（例: 後半戦フル稼働）"
-            className="max-w-64"
-            aria-label="プラン名"
-          />
-          <NeuButton
-            onClick={doSave}
-            className="!py-1.5"
-            disabled={segments.length === 0}
-          >
-            この内容を保存
-          </NeuButton>
-          {notice && <span className="text-xs text-slate-500">{notice}</span>}
-        </div>
-
-        {saved.length === 0 ? (
-          <p className="mt-3 text-xs text-slate-400">
-            保存したプランはこの端末（ブラウザ）に残ります。まずタイムラインを組んで名前を付けて保存。
-          </p>
-        ) : (
-          <ul className="mt-3 space-y-2">
-            {saved.map((p) => (
-              <li
-                key={p.name}
-                className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-300 p-3 text-sm"
-              >
-                <span className="font-bold text-slate-700">{p.name}</span>
-                <span className="text-xs text-slate-400">
-                  {p.segments.length}ブロック
+        <Panel title="編成（マイセカイ・オートの計算に使う）">
+          {/* 点数時速は実測値だが、マイセカイの単価とオートのスコアは総合力とボーナスから
+              計算で出る。入れておくと採取ブロックとオートが点数として積み上がる。 */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="総合力" htmlFor="pl-talent">
+              <NeuInput
+                id="pl-talent"
+                inputMode="numeric"
+                value={talent}
+                onChange={(e) => setTalent(e.target.value)}
+                placeholder="例: 336,000"
+              />
+            </Field>
+            <Field label="イベントボーナス (%)" htmlFor="pl-bonus">
+              <NeuInput
+                id="pl-bonus"
+                inputMode="decimal"
+                value={bonus}
+                onChange={(e) => setBonus(e.target.value)}
+                placeholder="例: 821"
+              />
+            </Field>
+            <Field label="ワールドパス">
+              <Switch
+                checked={hasWorldPass}
+                onChange={setHasWorldPass}
+                label="ワールドパス 有効"
+              />
+            </Field>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <SaveToProfile
+              collect={() => ({
+                power: parseAmount(talent) || undefined,
+                bonus: parseAmount(bonus, true) || undefined,
+              })}
+            />
+          </div>
+          <p className="mt-3 text-xs text-slate-500">
+            {mySekaiUnitPt > 0 ? (
+              <>
+                1メモリあたり{" "}
+                <span className="font-bold" style={{ color: "var(--unit-color)" }}>
+                  {mySekaiUnitPt.toLocaleString()} pt
                 </span>
-                <div className="ml-auto flex items-center gap-2">
-                  <NeuButton
-                    onClick={() => loadPlan(p)}
-                    className="!py-1 !text-xs"
-                  >
-                    呼び出し
-                  </NeuButton>
-                  <button
-                    type="button"
-                    aria-label="削除"
-                    onClick={() => removePlan(p.name)}
-                    className="text-slate-400 hover:text-rose-500"
-                  >
-                    ×
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
+                。全回収1回（約89.5メモリ）で約{" "}
+                {Math.floor(mySekaiUnitPt * 89.5).toLocaleString()} pt です。
+              </>
+            ) : (
+              "総合力とイベントボーナスを入れると、マイセカイ採取のポイントも積み上がります（未入力のあいだは0のまま）。"
+            )}
+          </p>
+        </Panel>
+
+        <AutoPanel config={autoConfig} />
+
+        <Panel title="プランの保存・呼び出し">
+          <div className="flex flex-wrap items-center gap-2">
+            <NeuInput
+              value={planName}
+              onChange={(e) => setPlanName(e.target.value)}
+              placeholder="プラン名（例: 後半戦フル稼働）"
+              className="max-w-64"
+              aria-label="プラン名"
+            />
+            <NeuButton
+              onClick={doSave}
+              className="!py-1.5"
+              disabled={segments.length === 0}
+            >
+              この内容を保存
+            </NeuButton>
+            {notice && <span className="text-xs text-slate-500">{notice}</span>}
+          </div>
+
+          {saved.length === 0 ? (
+            <p className="mt-3 text-xs text-slate-400">
+              保存したプランはこの端末（ブラウザ）に残ります。まずタイムラインを組んで名前を付けて保存。
+            </p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {saved.map((p) => (
+                <li
+                  key={p.name}
+                  className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-300 p-3 text-sm"
+                >
+                  <span className="font-bold text-slate-700">{p.name}</span>
+                  <span className="text-xs text-slate-400">
+                    {p.segments.length}ブロック
+                  </span>
+                  <div className="ml-auto flex items-center gap-2">
+                    <NeuButton
+                      onClick={() => loadPlan(p)}
+                      className="!py-1 !text-xs"
+                    >
+                      呼び出し
+                    </NeuButton>
+                    <button
+                      type="button"
+                      aria-label="削除"
+                      onClick={() => removePlan(p.name)}
+                      className="text-slate-400 hover:text-rose-500"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </MoreSettings>
 
       <PlanTimeline
         toolId="plan"
