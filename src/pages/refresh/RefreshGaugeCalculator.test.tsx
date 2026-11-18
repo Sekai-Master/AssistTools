@@ -9,16 +9,30 @@
  *   - ひとりでライブの数字はロス OVERHEAD_SEC.solo（実測前の仮の値）で出る。期待値も定数から出す（33 を直書きしない）
  *   - みんなでライブに切り替えた数字は、足す前（885580a）の画面と 1 つも変わらない（ゴールデン。値は土台のビルドの
  *     /refresh に同じ入力を入れて画面から写した）
+ *   - 書き出す画像の「ペース」の行に、ページの想定が届く（PlanTimeline への配線。検分 L-8）
+ * ★ 印は vi.mock で「止まっている」「仮の値」に固定する（検分 L-7。前は describe.runIf で、印を戻すと黙って飛んでいた）。
+ *   再開した側は RefreshGaugeCalculator.resumed.test.tsx、実測済みの側は GaugeInputsPanel.measured.test.tsx が縛る。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import RefreshGaugeCalculator from "./RefreshGaugeCalculator";
 import { OVERHEAD_SEC } from "../../lib/overhead";
-import { MULTI_LIVE_SUSPENDED } from "../../lib/liveSuspension";
 import { planSession, playsPerHour } from "./lib/sessionPlanner";
 import { fmtDuration } from "./lib/format";
-import { SOLO_DEFAULT_RATE } from "./lib/liveAssumption";
+import { SOLO_DEFAULT_RATE, paceMetaLine } from "./lib/liveAssumption";
+import { drawPlanCanvas } from "./lib/planCanvas";
+
+vi.mock("../../lib/liveSuspension", () => ({ MULTI_LIVE_SUSPENDED: true }));
+vi.mock("../../lib/overhead", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/overhead")>()),
+  SOLO_OVERHEAD_PROVISIONAL: true,
+}));
+// 画像の描画は jsdom で動かないので、描画に渡すデータだけを受け取る
+vi.mock("./lib/planCanvas", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./lib/planCanvas")>()),
+  drawPlanCanvas: vi.fn(async () => {}),
+}));
 
 // 独りんぼエンヴィー（既定の曲。public/MusicDatas の値。定数は実測の 84）
 vi.mock("../analyzer/useAnalyzerMusics", () => ({
@@ -62,12 +76,21 @@ const choose = (name: string) =>
 const type = (el: HTMLElement, v: string) => fireEvent.change(el, { target: { value: v } });
 const paceInput = () => screen.getByLabelText("周回ペース") as HTMLInputElement;
 
-describe.runIf(MULTI_LIVE_SUSPENDED)("止まっている間に開いたとき（ひとりでライブ想定）", () => {
+describe("止まっている間に開いたとき（ひとりでライブ想定）", () => {
   it("想定の札が結果の枠の見出しの横と固定バーに出る（見出しの名前は変えない）", () => {
     draw();
     expect(screen.getByRole("heading", { name: "この曲で走ると" })).toBeTruthy();
     expect(within(resultPanel()).getByText("ひとりでライブ想定")).toBeTruthy();
     expect(barItem("この曲のペース")).toContain("ひとりでライブ");
+  });
+
+  // 検分 M-1: 「仮」は周回ペースの補足と「入力について」だけ。札・固定バーには足さない
+  it("札と固定バーには「仮」を足さない（補足には出す）", () => {
+    draw();
+    expect(within(resultPanel()).getByText("ひとりでライブ想定").textContent).toBe("ひとりでライブ想定");
+    expect(resultPanel().textContent).not.toContain("仮");
+    expect(bar().textContent).not.toContain("仮");
+    expect(screen.getByText(`既定${SOLO_DEFAULT_RATE}（仮）。長い曲は自動で少なくなります`)).toBeTruthy();
   });
 
   it("周回ペースの欄は既定のひとりでライブのペース（OVERHEAD_SEC.solo から）", () => {
@@ -138,5 +161,42 @@ describe("切り替え", () => {
       choose(name);
       expect(document.body.textContent).not.toContain("協力");
     }
+  });
+});
+
+/**
+ * 検分 L-8: ページの想定が、PlanTimeline を通って画像の「ペース」の行に届くこと。
+ * ★ paceMetaLine 単体のテストだけでは、PlanTimeline で live を渡し忘れても通っていた（変異が生き残った）。
+ */
+describe("書き出す画像の「ペース」の行", () => {
+  const exportMeta = async () => {
+    vi.mocked(drawPlanCanvas).mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "画像を保存" }));
+    await waitFor(() => expect(drawPlanCanvas).toHaveBeenCalledTimes(1));
+    return vi.mocked(drawPlanCanvas).mock.calls[0][1].meta;
+  };
+
+  // 描画のあとの書き出し（PNG にしてリンクを押す）は jsdom に無いので、何もしないものに替える
+  let spies: { mockRestore: () => void }[] = [];
+  beforeEach(() => {
+    spies = [
+      vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:,"),
+      vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {}),
+    ];
+  });
+  afterEach(() => spies.forEach((s) => s.mockRestore()));
+
+  it("ひとりでライブ想定・みんなでライブ想定がそれぞれ書かれる（「仮」は足さない）", async () => {
+    draw();
+    fireEvent.click(screen.getByRole("button", { name: "＋稼働" }));
+
+    const solo = await exportMeta();
+    expect(solo[0]).toBe(paceMetaLine(SOLO_DEFAULT_RATE, "solo"));
+    expect(solo[0]).toContain("ひとりでライブ想定");
+    expect(solo.join("")).not.toContain("仮");
+
+    choose("みんなでライブ");
+    const multi = await exportMeta();
+    expect(multi[0]).toBe("ペース: 28回/時（エビ基準・みんなでライブ想定）");
   });
 });

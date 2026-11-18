@@ -6,13 +6,16 @@
  * ★ この hook はリフレッシュゲージ・周回プラン・必要稼働時間の 3 ページで共有している。
  *   想定を選べるのは**リフレッシュゲージだけ**（liveChoice を渡したときだけ）。渡さないページ
  *   （周回プランは inputs.rate を保存する・必要稼働時間は担当外）は、足す前と 1 つも変わらないこと。
+ * ★ 印は vi.mock で「止まっている」に固定する（検分 L-7。前は途中で return して、印を戻すと黙って飛んでいた）。
+ *   再開した側は RefreshGaugeCalculator.resumed.test.tsx が縛る。
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { useGaugeInputs } from "./useGaugeInputs";
 import { OVERHEAD_SEC } from "../../lib/overhead";
-import { MULTI_LIVE_SUSPENDED } from "../../lib/liveSuspension";
 import { overheadFromRate } from "./lib/sessionPlanner";
+
+vi.mock("../../lib/liveSuspension", () => ({ MULTI_LIVE_SUSPENDED: true }));
 import { SOLO_DEFAULT_RATE } from "./lib/liveAssumption";
 
 const ENVY_LEN = 74.8;
@@ -48,8 +51,7 @@ describe("リフレッシュゲージ（liveChoice）", () => {
 
   it("止まっている間はひとりでライブで開き、ロスは OVERHEAD_SEC.solo", () => {
     const { result } = draw();
-    expect(result.current.live).toBe(MULTI_LIVE_SUSPENDED ? "solo" : "multi");
-    if (!MULTI_LIVE_SUSPENDED) return;
+    expect(result.current.live).toBe("solo");
     expect(result.current.rate).toBe(String(SOLO_DEFAULT_RATE));
     expect(result.current.defaultRate).toBe(SOLO_DEFAULT_RATE);
     expect(result.current.overhead).toBe(OVERHEAD_SEC.solo);

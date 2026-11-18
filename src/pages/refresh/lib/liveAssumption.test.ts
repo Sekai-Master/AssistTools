@@ -12,6 +12,7 @@ import {
   defaultRateFor,
   overheadForPace,
   paceFor,
+  paceHint,
   paceMetaLine,
   soloPaceNote,
 } from "./liveAssumption";
@@ -136,6 +137,36 @@ describe("画像の前提の行", () => {
  * ★ 「仮」と出すかは src/lib/overhead.ts の SOLO_OVERHEAD_PROVISIONAL だけで決める（指揮 2026-11-19）。
  *   値が 33 かどうかでは判定しない。印を false にしたら「仮」が消えること。
  */
+// 検分 M-1: 数字の近くでも仮と分かるように、周回ペースの補足に「（仮）」を付ける（#263・#264 とそろえる）
+describe("周回ペースの補足（入力欄の下の 1 行）", () => {
+  it("ひとりでライブ: 仮の値の間は「既定N（仮）。…」、印が false なら「（仮）」が消える", () => {
+    expect(paceHint("solo", SOLO_DEFAULT_RATE, true)).toBe(
+      `既定${SOLO_DEFAULT_RATE}（仮）。長い曲は自動で少なくなります`,
+    );
+    expect(paceHint("solo", SOLO_DEFAULT_RATE, false)).toBe(
+      `既定${SOLO_DEFAULT_RATE}。長い曲は自動で少なくなります`,
+    );
+  });
+
+  it("みんなでライブは印に関係なく足す前と同じ文", () => {
+    for (const p of [true, false]) {
+      expect(paceHint("multi", 28, p)).toBe("既定28。長い曲は自動で少なくなります");
+    }
+  });
+
+  it("引数なしは土台の SOLO_OVERHEAD_PROVISIONAL に従う", () => {
+    expect(paceHint("solo", SOLO_DEFAULT_RATE)).toBe(
+      paceHint("solo", SOLO_DEFAULT_RATE, SOLO_OVERHEAD_PROVISIONAL),
+    );
+  });
+
+  it("どちらでも 30 字以内（design-system 7 節）", () => {
+    for (const p of [true, false]) {
+      expect(paceHint("solo", SOLO_DEFAULT_RATE, p).length).toBeLessThanOrEqual(30);
+    }
+  });
+});
+
 describe("ひとりでライブの周回ペースの説明（「入力について」）", () => {
   it("引数なしは土台の SOLO_OVERHEAD_PROVISIONAL に従う", () => {
     expect(soloPaceNote(SOLO_DEFAULT_RATE)).toBe(soloPaceNote(SOLO_DEFAULT_RATE, SOLO_OVERHEAD_PROVISIONAL));

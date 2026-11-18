@@ -87,9 +87,27 @@ export function overheadForPace(live: LiveAssumption, rateText: string): number 
 }
 
 /**
+ * 周回ペースの欄の下の補足（1 行・30 字以内。design-system 7 節）。
+ *
+ * ★ ひとりでライブで仮の値の間は「既定33（仮）。…」にして、数字の近くでも仮と分かるようにする
+ *   （検分 M-1。効率曲ランキング #263・周回ラップ計測 #264 も数字の横に「仮」を出している）。
+ *   「仮」を出すのは、この補足と「入力について」の説明（soloPaceNote）の 2 か所だけ。札・固定バー・画像には足さない。
+ * ★ 「仮」と出すかは SOLO_OVERHEAD_PROVISIONAL だけで決める（値が 33 かどうかでは判定しない）。
+ * ★ みんなでライブは足す前と同じ文。
+ */
+export function paceHint(
+  live: LiveAssumption,
+  defaultRate: number,
+  provisional: boolean = SOLO_OVERHEAD_PROVISIONAL,
+): string {
+  const mark = live === "solo" && provisional ? "（仮）" : "";
+  return `既定${defaultRate}${mark}。長い曲は自動で少なくなります`;
+}
+
+/**
  * 「入力について」に出す、ひとりでライブの周回ペースの説明（「周回ペース」の見出しのあとに続く文）。
  *
- * ★ ロスが仮の値だという断りは、ここ（閉じた段）に 1 回だけ書く。入力欄の下には書かない（design-system 7 節）。
+ * ★ ロスが仮の値だという詳しい断りは、ここ（閉じた段）に 1 回だけ書く。入力欄の下の補足は「（仮）」の印だけ（paceHint）。
  * ★ 「仮」と出すかは SOLO_OVERHEAD_PROVISIONAL だけで決める。Nori が実測して OVERHEAD_SEC.solo を直し、
  *   印を false にすると「仮」が消える（値が 33 のままでも、別の値でも、印に従う）。
  */

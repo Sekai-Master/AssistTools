@@ -7,13 +7,19 @@
  *   （UX 監査 2026-11-12、指示書の共通の型 2・3。docs/design-system.md 7 節）。
  *   前は 3 本で 27＋49＋74 字あり、同じ文が 3 ページに出ていた。
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { GaugeInputsPanel } from "./GaugeInputsPanel";
 import { useGaugeInputs } from "./useGaugeInputs";
-import { OVERHEAD_SEC, SOLO_OVERHEAD_PROVISIONAL } from "../../lib/overhead";
-import { MULTI_LIVE_SUSPENDED } from "../../lib/liveSuspension";
+import { OVERHEAD_SEC } from "../../lib/overhead";
 import { SOLO_DEFAULT_RATE } from "./lib/liveAssumption";
+
+// 印を固定する（土台の値を戻してもこのファイルの期待は変わらない。戻した側は別のファイルが縛る）
+vi.mock("../../lib/liveSuspension", () => ({ MULTI_LIVE_SUSPENDED: true }));
+vi.mock("../../lib/overhead", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/overhead")>()),
+  SOLO_OVERHEAD_PROVISIONAL: true,
+}));
 
 afterEach(cleanup);
 
@@ -71,8 +77,11 @@ describe("詳しい説明は閉じた「入力について」に残す（消さ�
 
 /**
  * ライブの想定（みんなでライブの停止期間、2026-11-18）。選べるのはリフレッシュゲージだけ（liveChoice）。
- * ★ ひとりでライブのロスは実測前の仮の値。その断りは入力欄の下ではなく、閉じた「入力について」に 1 回だけ書く
- *   （docs/design-system.md 7 節）。数字は OVERHEAD_SEC.solo から出す（直書きしない）。
+ * ★ ひとりでライブのロスは実測前の仮の値。数字の近く（周回ペースの補足「既定33（仮）」）と、閉じた「入力について」の
+ *   説明の 2 か所にだけ出す（検分 M-1、#263・#264 とそろえる）。札・固定バー・画像には出さない。
+ *   数字は OVERHEAD_SEC.solo から出す（直書きしない）。
+ * ★ このファイルは印を「止まっている」「仮の値」に固定する（vi.mock）。印を戻したときの側は
+ *   RefreshGaugeCalculator.resumed.test.tsx（再開）と GaugeInputsPanel.measured.test.tsx（実測済み）が縛る。
  */
 describe("ライブの想定（リフレッシュゲージだけ）", () => {
   function LiveHarness() {
@@ -85,28 +94,43 @@ describe("ライブの想定（リフレッシュゲージだけ）", () => {
   it("想定を選ばないページには切り替えも仮の値の断りも出ない", () => {
     render(<Harness />);
     expect(screen.queryByRole("radiogroup", { name: "ライブの種類" })).toBeNull();
-    expect(about().textContent).not.toContain("仮の値");
+    expect(hintOf("周回ペース")).toBe("既定28。長い曲は自動で少なくなります");
+    expect(about().textContent).not.toContain("仮");
   });
 
   it("止まっている間はひとりでライブが選ばれている", () => {
     render(<LiveHarness />);
-    expect(radio("ひとりでライブ").getAttribute("aria-checked")).toBe(String(MULTI_LIVE_SUSPENDED));
-    expect(radio("みんなでライブ").getAttribute("aria-checked")).toBe(String(!MULTI_LIVE_SUSPENDED));
+    expect(radio("ひとりでライブ").getAttribute("aria-checked")).toBe("true");
+    expect(radio("みんなでライブ").getAttribute("aria-checked")).toBe("false");
   });
 
-  it("ひとりでライブ: 補足は既定のペース（定数から）で 30 字以内、ロスが仮の値だと「入力について」に書く", () => {
+  // 検分 L-5: #263（みんなで周回が先）・#264（みんなで｜ひとりで）と並びをそろえる。既定は期間中ひとりでのまま
+  it("並びは「みんなでライブ｜ひとりでライブ」", () => {
+    render(<LiveHarness />);
+    expect(within(group()).getAllByRole("radio").map((r) => r.textContent)).toEqual([
+      "みんなでライブ",
+      "ひとりでライブ",
+    ]);
+  });
+
+  // 検分 L-9: 7 字のラベルなので compact。押せる高さは 44px（#264 と同じ min-h-11）
+  it("切り替えは詰めて描き、押せる高さを 44px 取る", () => {
+    render(<LiveHarness />);
+    for (const r of within(group()).getAllByRole("radio")) {
+      expect(r.className).toContain("text-xs");
+      expect(r.className).toContain("min-h-11");
+    }
+  });
+
+  it("ひとりでライブ: 補足は「既定N（仮）。…」で 30 字以内、「入力について」にも仮の値だと書く", () => {
     render(<LiveHarness />);
     fireEvent.click(radio("ひとりでライブ"));
     const hint = hintOf("周回ペース");
-    expect(hint).toContain(`既定${SOLO_DEFAULT_RATE}`);
+    expect(hint).toBe(`既定${SOLO_DEFAULT_RATE}（仮）。長い曲は自動で少なくなります`);
     expect(hint.length).toBeLessThanOrEqual(30);
-    // 入力欄の下の補足には「仮」を書かない（断りは閉じた段だけ）
-    expect(hint).not.toContain("仮");
     const text = about().textContent ?? "";
     expect(text).toContain(`${OVERHEAD_SEC.solo}秒`);
-    // ★ 「仮」と出すかは SOLO_OVERHEAD_PROVISIONAL だけで決める。false の場合は GaugeInputsPanel.measured.test.tsx が縛る
-    if (SOLO_OVERHEAD_PROVISIONAL) expect(text).toContain("まだ実測していない仮の値");
-    else expect(text).not.toContain("仮");
+    expect(text).toContain("まだ実測していない仮の値");
     expect(text).not.toContain("マッチング");
   });
 

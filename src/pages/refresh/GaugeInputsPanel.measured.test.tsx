@@ -59,6 +59,8 @@ describe("ひとりでライブのロスが実測済み（印が false）", () =
     // 説明そのものは残る（既定のペースとロスの秒数）
     expect(text).toContain(`既定${SOLO_DEFAULT_RATE}`);
     expect(text).toContain(`${OVERHEAD_SEC.solo}秒`);
+    // 周回ペースの補足からも「（仮）」が消える（検分 M-1）
+    expect(screen.getByText(`既定${SOLO_DEFAULT_RATE}。長い曲は自動で少なくなります`)).toBeTruthy();
     expect(document.body.textContent).not.toContain("仮");
     expect(document.body.textContent).not.toContain("実測していない");
   });
