@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OVERHEAD_SEC } from "../../../lib/overhead";
+import { OVERHEAD_SEC, SOLO_OVERHEAD_PROVISIONAL } from "../../../lib/overhead";
 import { MULTI_LIVE_SUSPENDED } from "../../../lib/liveSuspension";
 import { overheadFromRate, planSession, playsPerHour } from "./sessionPlanner";
 import {
@@ -13,6 +13,7 @@ import {
   overheadForPace,
   paceFor,
   paceMetaLine,
+  soloPaceNote,
 } from "./liveAssumption";
 
 /**
@@ -128,5 +129,37 @@ describe("画像の前提の行", () => {
       `ペース: ${SOLO_DEFAULT_RATE}回/時（エビ基準・ひとりでライブ想定）`,
     );
     expect(paceMetaLine(28, "multi")).toBe("ペース: 28回/時（エビ基準・みんなでライブ想定）");
+  });
+});
+
+/**
+ * ★ 「仮」と出すかは src/lib/overhead.ts の SOLO_OVERHEAD_PROVISIONAL だけで決める（指揮 2026-11-19）。
+ *   値が 33 かどうかでは判定しない。印を false にしたら「仮」が消えること。
+ */
+describe("ひとりでライブの周回ペースの説明（「入力について」）", () => {
+  it("引数なしは土台の SOLO_OVERHEAD_PROVISIONAL に従う", () => {
+    expect(soloPaceNote(SOLO_DEFAULT_RATE)).toBe(soloPaceNote(SOLO_DEFAULT_RATE, SOLO_OVERHEAD_PROVISIONAL));
+  });
+
+  it("仮の値の間は、既定のペースとロスの秒数に「まだ実測していない仮の値」を添える", () => {
+    const note = soloPaceNote(SOLO_DEFAULT_RATE, true);
+    expect(note).toContain(`既定${SOLO_DEFAULT_RATE}`);
+    expect(note).toContain(`${OVERHEAD_SEC.solo}秒`);
+    expect(note).toContain("まだ実測していない仮の値");
+  });
+
+  it("印が false（実測済み）なら「仮」の字が消える。秒数と既定のペースは残る", () => {
+    const note = soloPaceNote(SOLO_DEFAULT_RATE, false);
+    expect(note).not.toContain("仮");
+    expect(note).not.toContain("実測していない");
+    expect(note).toContain(`既定${SOLO_DEFAULT_RATE}`);
+    expect(note).toContain(`${OVERHEAD_SEC.solo}秒`);
+  });
+
+  it("みんなでライブのマッチングの話も「協力」も書かない", () => {
+    for (const p of [true, false]) {
+      expect(soloPaceNote(SOLO_DEFAULT_RATE, p)).not.toContain("マッチング");
+      expect(soloPaceNote(SOLO_DEFAULT_RATE, p)).not.toContain("協力");
+    }
   });
 });

@@ -10,12 +10,14 @@
  * ── 何が想定で変わるか ──────────────────────────────────────
  * 変わるのは「1 周の曲以外の秒数（ロス）」だけ。ゲージの増え方（定数×157）・休憩での減り方は同じ式を使う。
  * - みんなでライブ: 周回ペース 28 回/時からロスを逆算する（≒53.8 秒）。**足す前と 1 つも変えない。**
- * - ひとりでライブ: ロスは src/lib/overhead.ts の OVERHEAD_SEC.solo（**実測前の仮の値**）。ここでは数字を持たない。
+ * - ひとりでライブ: ロスは src/lib/overhead.ts の OVERHEAD_SEC.solo（2026-11-18 時点は実測前の仮の値）。
+ *   ここでは数字を持たない。画面に「仮」と出すかは同じファイルの SOLO_OVERHEAD_PROVISIONAL だけで決める
+ *   （値が 33 かどうかでは判定しない）。
  * 「詰めて回した場合（MULTI_OVERHEAD_THEORETICAL）」は部屋待ち・支援者交代が無い場合の値で、ひとりでライブには
  * 当たるものが無い。リフレッシュゲージの画面にはもともと出ていないので、こちらでも足さない。
  */
 import { MULTI_LIVE_SUSPENDED } from "../../../lib/liveSuspension";
-import { OVERHEAD_SEC } from "../../../lib/overhead";
+import { OVERHEAD_SEC, SOLO_OVERHEAD_PROVISIONAL } from "../../../lib/overhead";
 import { overheadFromRate, playsPerHour } from "./sessionPlanner";
 
 export type LiveAssumption = "solo" | "multi";
@@ -82,6 +84,23 @@ export function overheadForPace(live: LiveAssumption, rateText: string): number 
     return r == null || r === SOLO_DEFAULT_RATE ? OVERHEAD_SEC.solo : overheadFromRate(r, ENVY_LEN);
   }
   return overheadFromRate(r ?? DEFAULT_RATE, ENVY_LEN);
+}
+
+/**
+ * 「入力について」に出す、ひとりでライブの周回ペースの説明（「周回ペース」の見出しのあとに続く文）。
+ *
+ * ★ ロスが仮の値だという断りは、ここ（閉じた段）に 1 回だけ書く。入力欄の下には書かない（design-system 7 節）。
+ * ★ 「仮」と出すかは SOLO_OVERHEAD_PROVISIONAL だけで決める。Nori が実測して OVERHEAD_SEC.solo を直し、
+ *   印を false にすると「仮」が消える（値が 33 のままでも、別の値でも、印に従う）。
+ */
+export function soloPaceNote(
+  defaultRate: number,
+  provisional: boolean = SOLO_OVERHEAD_PROVISIONAL,
+): string {
+  const loss = `既定${defaultRate}は1回あたりのロス${OVERHEAD_SEC.solo}秒から出した値${
+    provisional ? "で、このロスはまだ実測していない仮の値です" : "です"
+  }。`;
+  return `: エビ基準の周回 回/時（ひとりでライブ: ロード・リザルトなど込み）。長い曲は自動で少なくなります。${loss}自分の環境に合わせて調整を。`;
 }
 
 /**

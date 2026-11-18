@@ -5,10 +5,9 @@ import { NeuButton } from "../../components/ui/NeuButton";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { SongSearchModal } from "../../components/SongSearchModal";
 import { onJacketError } from "../../lib/img";
-import { OVERHEAD_SEC } from "../../lib/overhead";
 import { isMeasured } from "./lib/refreshConstant";
 import { fmtDuration } from "./lib/format";
-import { LIVE_ASSUMPTION_LABEL, type LiveAssumption } from "./lib/liveAssumption";
+import { LIVE_ASSUMPTION_LABEL, type LiveAssumption, soloPaceNote } from "./lib/liveAssumption";
 import type { GaugeInputs } from "./useGaugeInputs";
 import type { AnalyzerMusic } from "../analyzer/useAnalyzerMusics";
 import type { AliasEntry } from "../bingo/useBingoMusics";
@@ -258,11 +257,11 @@ export function GaugeInputsPanel({
                 </li>
               )}
               {/* ★ ひとりでライブのロスが仮の値だという断りは、ここに 1 回だけ（入力欄の下には書かない。design-system 7 節）。
-                  数字は OVERHEAD_SEC.solo から出す（Nori が実測で直したら文も一緒に変わる）。 */}
+                  数字は OVERHEAD_SEC.solo から、「仮」と出すかは SOLO_OVERHEAD_PROVISIONAL から決める（soloPaceNote）。 */}
               {live === "solo" ? (
                 <li>
                   <b>周回ペース</b>
-                  {`: エビ基準の周回 回/時（ひとりでライブ: ロード・リザルトなど込み）。長い曲は自動で少なくなります。既定${defaultRate}は1回あたりのロス${OVERHEAD_SEC.solo}秒から出した値で、このロスはまだ実測していない仮の値です。自分の環境に合わせて調整を。`}
+                  {soloPaceNote(defaultRate)}
                 </li>
               ) : (
                 <li>

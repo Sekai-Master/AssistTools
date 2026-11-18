@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { GaugeInputsPanel } from "./GaugeInputsPanel";
 import { useGaugeInputs } from "./useGaugeInputs";
-import { OVERHEAD_SEC } from "../../lib/overhead";
+import { OVERHEAD_SEC, SOLO_OVERHEAD_PROVISIONAL } from "../../lib/overhead";
 import { MULTI_LIVE_SUSPENDED } from "../../lib/liveSuspension";
 import { SOLO_DEFAULT_RATE } from "./lib/liveAssumption";
 
@@ -100,9 +100,13 @@ describe("ライブの想定（リフレッシュゲージだけ）", () => {
     const hint = hintOf("周回ペース");
     expect(hint).toContain(`既定${SOLO_DEFAULT_RATE}`);
     expect(hint.length).toBeLessThanOrEqual(30);
+    // 入力欄の下の補足には「仮」を書かない（断りは閉じた段だけ）
+    expect(hint).not.toContain("仮");
     const text = about().textContent ?? "";
     expect(text).toContain(`${OVERHEAD_SEC.solo}秒`);
-    expect(text).toContain("まだ実測していない仮の値");
+    // ★ 「仮」と出すかは SOLO_OVERHEAD_PROVISIONAL だけで決める。false の場合は GaugeInputsPanel.measured.test.tsx が縛る
+    if (SOLO_OVERHEAD_PROVISIONAL) expect(text).toContain("まだ実測していない仮の値");
+    else expect(text).not.toContain("仮");
     expect(text).not.toContain("マッチング");
   });
 
