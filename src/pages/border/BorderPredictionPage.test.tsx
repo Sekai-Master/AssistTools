@@ -188,3 +188,56 @@ describe("いま使えるツール", () => {
     expect(follows(shelf(), trend)).toBe(true);
   });
 });
+
+/**
+ * ★ 「しくみ」（約 500 字）は閉じた段へ畳む（UX 監査 2026-11-12、PR-4）。見出しだけで中身が分かる言い方にする。
+ * ★★ 予測の確かさの表示（「参考値」の札と枠・「確度」の札と説明・非公式で外れること）は**消さない・畳まない**。
+ *   外挿の回の参考値の表示は 2026-10-25 の大外し（221 の 1000位）の後に入れたもので、予測の数字のすぐ近くに残す。
+ */
+describe("しくみを畳む・予測の確かさの表示は畳まない", () => {
+  /** el がどこかの閉じた <details> の中（summary を除く）にあるか。 */
+  const folded = (el: Element) => {
+    if (el.closest("summary")) return false;
+    const d = el.closest("details");
+    return d != null && !d.open;
+  };
+
+  it("「しくみ」は閉じた段で、見出しに中身（予測の作り方・候補の選び直し）が書いてある。中身は残っている", async () => {
+    serve(snapshot(-72, 72));
+    await show();
+    const summary = screen.getByText("しくみ").closest("summary");
+    expect(summary).not.toBeNull();
+    expect(summary!.textContent).toContain("予測の作り方");
+    expect(summary!.textContent).toContain("候補の選び直し");
+    const details = summary!.closest("details")!;
+    expect(details.open).toBe(false);
+    expect(details.textContent).toContain("過去から借りるのは伸び方の形だけです");
+    expect(details.textContent).toContain("人の勘で数字を足すことはしていません");
+  });
+
+  it("「非公式の予測で、外れることがあります」「序盤は目安」とデータの出典は畳まずに見せる", async () => {
+    serve(snapshot(-72, 72));
+    await show();
+    const note = screen.getByText(/非公式の予測で、外れることがあります/);
+    expect(folded(note)).toBe(false);
+    expect(note.textContent).toContain("序盤は幅が広い「目安」");
+    expect(note.textContent).toContain("50位・100位は");
+    expect(folded(screen.getByRole("link", { name: "Sekai Viewer" }))).toBe(false);
+  });
+
+  it("確度の札と説明は畳まない", async () => {
+    serve(snapshot(-72, 72));
+    await show();
+    for (const el of screen.getAllByText(/確度 /)) expect(folded(el)).toBe(false);
+    expect(folded(screen.getByText(/確度は8割の幅の広さです/))).toBe(false);
+  });
+
+  it("外挿の回の「参考値」の札と枠は畳まない", async () => {
+    // extrapolatedFrom は event の外（snapshot の直下）
+    const body = { ...snapshot(-72, 72), extrapolatedFrom: 150 };
+    serve(body);
+    await show();
+    for (const el of screen.getAllByText("参考値")) expect(folded(el)).toBe(false);
+    expect(folded(screen.getByText("この回の予測は参考値です。"))).toBe(false);
+  });
+});
