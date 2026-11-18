@@ -1,10 +1,11 @@
 /**
  * @vitest-environment jsdom
  *
- * Nori がひとりでライブのロスを実測して overhead.ts の `solo` を直した後の画面。
+ * Nori がひとりでライブのロスを実測して、overhead.ts の SOLO_OVERHEAD_PROVISIONAL を false にした後の画面。
  *
- * ★ LapTimer.kind.test.tsx の「仮」の縛りは、いまの仮の値の側しか通らない。直した後の側が初めて動くのは
- *   Nori が overhead.ts を直したときで、そこで赤くなると一番困る。ここで solo を仮の値からずらして先に通しておく。
+ * ★ 直した後の側が初めて動くのは Nori が overhead.ts を直したときで、そこで赤くなると一番困る。
+ *   ここで印を false にして先に通しておく（印が true の側は LapTimer.kind.test.tsx）。
+ * ★ solo の値はいまのまま（仮の値と同じ）にしておく。実測がたまたま同じ値でも、印が false なら「仮」を出さないことを縛る。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -16,7 +17,7 @@ import { OVERHEAD_SEC } from "../../lib/overhead";
 vi.mock("../../lib/liveSuspension", () => ({ MULTI_LIVE_SUSPENDED: true }));
 vi.mock("../../lib/overhead", async (importOriginal) => {
   const mod = await importOriginal<typeof import("../../lib/overhead")>();
-  return { ...mod, OVERHEAD_SEC: { ...mod.OVERHEAD_SEC, solo: mod.OVERHEAD_SEC.solo + 8 } };
+  return { ...mod, SOLO_OVERHEAD_PROVISIONAL: false };
 });
 vi.mock("../analyzer/useAnalyzerMusics", () => ({
   useAnalyzerMusics: () => ({ musics: [], aliases: [], loading: false, error: null }),
@@ -43,7 +44,7 @@ const draw = () =>
   );
 const mainButton = () => screen.getByTestId("lap-main-button");
 
-describe("ひとりでライブのロスを実測した後", () => {
+describe("ひとりでライブのロスを実測した後（仮の印が false）", () => {
   it("計測前の種類の補足から「仮」が消える", () => {
     draw();
     const text = document.body.textContent ?? "";

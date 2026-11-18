@@ -15,7 +15,6 @@ import {
   segments,
   setLapCount,
   setLiveKind,
-  SOLO_OVERHEAD_PLACEHOLDER,
   stats,
   suspects,
   tap,
@@ -381,10 +380,12 @@ describe("ライブの種類", () => {
     expect(modelOverheadSec("solo")).toBe(OVERHEAD_SEC.solo);
   });
 
-  it("ひとりでライブのロスは、仮の値のままの間だけ「仮」。みんなでライブは仮ではない", () => {
-    expect(isProvisionalOverhead("multi")).toBe(false);
-    expect(isProvisionalOverhead("solo", SOLO_OVERHEAD_PLACEHOLDER)).toBe(true);
-    expect(isProvisionalOverhead("solo", SOLO_OVERHEAD_PLACEHOLDER + 8)).toBe(false);
+  /** ★ 仮かどうかは overhead.ts の SOLO_OVERHEAD_PROVISIONAL だけで決める（値が 33 かどうかでは見ない）。 */
+  it("ひとりでライブのロスは、仮の印が立っている間だけ「仮」。みんなでライブは印によらず仮ではない", () => {
+    expect(isProvisionalOverhead("solo", true)).toBe(true);
+    expect(isProvisionalOverhead("solo", false)).toBe(false);
+    expect(isProvisionalOverhead("multi", true)).toBe(false);
+    expect(isProvisionalOverhead("multi", false)).toBe(false);
   });
 
   it("記録には計測の種類を残し、書き出しにも出す", () => {

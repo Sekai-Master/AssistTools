@@ -19,7 +19,7 @@
  */
 
 import { MULTI_LIVE_SUSPENDED } from "../../../lib/liveSuspension";
-import { OVERHEAD_SEC } from "../../../lib/overhead";
+import { OVERHEAD_SEC, SOLO_OVERHEAD_PROVISIONAL } from "../../../lib/overhead";
 
 /**
  * 測るライブの種類。比べる既定のロス（src/lib/overhead.ts）と、記録に残す種類だけが変わる。
@@ -58,18 +58,15 @@ export function modelOverheadSec(kind: LapLiveKind): number {
 }
 
 /**
- * overhead.ts の `solo` に 2026-11-18 に置いた、実測前の仮の値。
- * ★ `OVERHEAD_SEC.solo` がこの値のままの間だけ、画面に「仮」と出す。Nori が測って overhead.ts を
- *   直せば、ここを触らなくても「仮」は消える。測った値がたまたまこの値と同じだったら、この定数ごと消す。
+ * 比べる既定のロスが、まだ実測していない仮の値か。
+ * ★ overhead.ts の `SOLO_OVERHEAD_PROVISIONAL` だけで決める（値が 33 かどうかでは見ない。実測がたまたま
+ *   同じ値でも、別の仮の値に替えても狂わないように）。Nori が測ったら overhead.ts でその印を false にする。
  */
-export const SOLO_OVERHEAD_PLACEHOLDER = 33;
-
-/** 比べる既定のロスが、まだ実測していない仮の値か。 */
 export function isProvisionalOverhead(
   kind: LapLiveKind,
-  soloSec: number = OVERHEAD_SEC.solo,
+  provisional: boolean = SOLO_OVERHEAD_PROVISIONAL,
 ): boolean {
-  return kind === "solo" && soloSec === SOLO_OVERHEAD_PLACEHOLDER;
+  return kind === "solo" && provisional;
 }
 
 export interface LapState {

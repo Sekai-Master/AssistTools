@@ -5,8 +5,9 @@
  *
  * ★ 止まっている期間の印（MULTI_LIVE_SUSPENDED）はここでは true に固定する。再開して false に戻しても、
  *   このファイルは「止まっている間はこう振る舞う」を縛り続ける（false の側は LapTimer.multi.test.tsx）。
- * ★ ひとりでライブのロスは Nori が実測するまで仮の値。期待する秒数は OVERHEAD_SEC.solo から読み、
- *   「仮」の印の有無も isProvisionalOverhead から決める（overhead.ts を直してもこのファイルは書き換えない）。
+ * ★ ひとりでライブのロスは Nori が実測するまで仮の値。期待する秒数は OVERHEAD_SEC.solo から読む。
+ *   仮の印（SOLO_OVERHEAD_PROVISIONAL）はここでは true に固定し、solo の値は仮の値からずらしておく
+ *   （値が 33 でなくても、印が立っていれば「仮」と出すことを縛る。印が false の側は LapTimer.measured.test.tsx）。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -16,10 +17,18 @@ import LapTimer from "./LapTimer";
 import { TAP_GUARD_MS } from "./useTapGuard";
 import { LAP_STORAGE_KEY } from "./useLapTimer";
 import { LAP_RUNS_KEY } from "./lib/runs";
-import { initialState, isProvisionalOverhead, tap, toRun } from "./lib/lap";
+import { initialState, tap, toRun } from "./lib/lap";
 import { OVERHEAD_SEC } from "../../lib/overhead";
 
 vi.mock("../../lib/liveSuspension", () => ({ MULTI_LIVE_SUSPENDED: true }));
+vi.mock("../../lib/overhead", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("../../lib/overhead")>();
+  return {
+    ...mod,
+    SOLO_OVERHEAD_PROVISIONAL: true,
+    OVERHEAD_SEC: { ...mod.OVERHEAD_SEC, solo: mod.OVERHEAD_SEC.solo + 8 },
+  };
+});
 vi.mock("../analyzer/useAnalyzerMusics", () => ({
   useAnalyzerMusics: () => ({ musics: [], aliases: [], loading: false, error: null }),
 }));
@@ -117,20 +126,20 @@ describe("計測中は種類を変えない", () => {
 });
 
 describe("ひとりでライブの目安", () => {
-  it("比べる既定のロスは overhead.ts の solo。仮の値のうちは「仮」と書き、良し悪しを言わない", async () => {
+  it("仮の印が立っている間は、計測前の補足に「仮」と書く", () => {
+    draw();
+    expect(document.body.textContent).toContain(`曲以外の秒数の既定 ${OVERHEAD_SEC.solo} 秒（仮・未実測）`);
+  });
+
+  it("比べる既定のロスは overhead.ts の solo。仮の印が立っている間は「仮」と書き、良し悪しを言わない", async () => {
     draw();
     await oneLap(SONG_SEC + OVERHEAD_SEC.solo + 20);
     const text = document.body.textContent ?? "";
-    if (isProvisionalOverhead("solo")) {
-      expect(text).toContain(`曲以外の秒数（既定 ${OVERHEAD_SEC.solo} 秒・仮）`);
-      expect(text).toContain("まだ実測していません");
-      expect(text).toContain("+20.0 秒");
-      expect(text).not.toContain("余計にかかっています");
-      expect(text).not.toContain("速く回せています");
-    } else {
-      expect(text).toContain(`曲以外の秒数（既定 ${OVERHEAD_SEC.solo} 秒）`);
-      expect(text).toContain("20.0 秒ぶん余計にかかっています。");
-    }
+    expect(text).toContain(`曲以外の秒数（既定 ${OVERHEAD_SEC.solo} 秒・仮）`);
+    expect(text).toContain("まだ実測していません");
+    expect(text).toContain("+20.0 秒");
+    expect(text).not.toContain("余計にかかっています");
+    expect(text).not.toContain("速く回せています");
     expect(text).toContain(`ひとりでライブの見積りは ${OVERHEAD_SEC.solo} 秒`);
     // みんなでライブの既定（54 秒）とは比べない
     expect(text).not.toContain(`既定 ${OVERHEAD_SEC.multi} 秒`);
