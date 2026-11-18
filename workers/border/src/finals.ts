@@ -12,9 +12,10 @@
  *   足す回だけ /event/live（約100KB）と表（約90KB）を parse する（イベント1回につき1〜数回）。
  */
 import { LIVE_URL, USER_AGENT, parseLive } from './collect.ts'
-import { justEndedEvent, kvGetStamped, putFinalsIfUnchanged } from './db.ts'
+import { activeSpecialEvents, justEndedEvent, kvGetStamped, putFinalsIfUnchanged } from './db.ts'
 import type { Env } from './env.ts'
 import { FINAL_RANKS, announceAt, historyMeta, historyPostText, parseHistory, type HistoryEvent } from './history.ts'
+import { soloEventIds } from './special.ts'
 
 /** 終了（集計終了の1秒後）からこの時間で取りに行く */
 export const FINALS_FETCH_AFTER_MS = 15 * 60_000
@@ -96,7 +97,13 @@ export async function runFinals(env: Env, now: number, fetcher: Fetcher = fetch)
           eventId: ev.id,
           kind: 'history',
           text: historyPostText(ev.name, ev.id, env.SITE_ORIGIN),
-          payload: { kind: 'history', eventId: ev.id, postAt: endOf(ev.aggregateAt) + FINALS_POST_AFTER_MS },
+          payload: {
+            kind: 'history',
+            eventId: ev.id,
+            postAt: endOf(ev.aggregateAt) + FINALS_POST_AFTER_MS,
+            // みんなでライブ停止中の回は、Bot が画像と本文に「みんなでライブ停止中の開催」の印を付ける（ほかの回の payload は変えない）
+            ...(soloEventIds(await activeSpecialEvents(env.DB)).has(ev.id) ? { special: 'solo' as const } : {}),
+          },
         }
   // 表と投稿は1回の書き込みで。あいだに解析ジョブが表を書いていたら何もせず、次の5分でやり直す
   if (!(await putFinalsIfUnchanged(env.DB, { events, updatedAt: now }, stored.at, now, post))) {

@@ -19,7 +19,7 @@ import { historyMeta, parseHistory, type HistoryType } from './history.ts'
 import { dailyTimes } from './pace.ts'
 import { formatMan, xWeight } from './posts.ts'
 import type { PostPayload } from './snapshot.ts'
-import { SOLO_ONLY_EVENTS } from './special.ts'
+import { soloEventIds } from './special.ts'
 
 const M = 60_000
 const H = 60 * M
@@ -132,7 +132,7 @@ export async function runStart(env: Env, now: number): Promise<StartResult> {
   const table = stored ? parseHistory(JSON.parse(stored)) : []
   // みんなでライブ停止中の回（ひとりでライブなどだけで開いた回）は、前例にしない（227 の告知で 226 の終値を「同じ長さの前回」と出さない）。
   // 一覧はこのファイルに入れた一覧と、有効な版のモデルの一覧（解析ジョブが書く。Worker を反映し直さなくても足せる）を合わせる
-  const special = new Set([...SOLO_ONLY_EVENTS, ...(await activeSpecialEvents(env.DB))])
+  const special = soloEventIds(await activeSpecialEvents(env.DB))
   // この回そのものが一覧の回なら、前回の終値は本文にも画像のデータにも載せない（比べ物にならない。2026-11-19 指揮）
   const solo = special.has(ev.id)
   const prevRow = table

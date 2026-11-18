@@ -527,7 +527,13 @@ export interface Prediction {
   special?: SpecialKind
 }
 
-export function predict(model: Model, meta: EventMeta, rank: number, current: number, t: number): Prediction | null {
+/**
+ * soloFallback: みんなでライブ停止中の回（special.ts の一覧）なのに特別モデルの曲線が使えないとき（検分 G1、2026-11-19）。
+ * 数字はふだんどおり出すが、帯はいつも FAR_BAND_FACTOR 倍に広げ、確度は目安、帯が広すぎても隠さない。
+ * 古い Bot 向けの参考値の札（extrapolatedFrom）は、参考値でない長さでも長さそのものを入れて付ける（特別モデルと同じ）。
+ * 付けなければ（既定）これまでと1文字も変わらない
+ */
+export function predict(model: Model, meta: EventMeta, rank: number, current: number, t: number, opts: { soloFallback?: boolean } = {}): Prediction | null {
   const rm = model.ranks[String(rank)]
   if (!rm || !(current > 0)) return null
   const p = progressAt(meta, t)
@@ -537,7 +543,8 @@ export function predict(model: Model, meta: EventMeta, rank: number, current: nu
   const share = interpGrid(choice.table, Math.min(p, 1))
   if (share == null || share <= 0) return null
   const predicted = current / share
-  const widen = choice.extrapolatedFrom == null ? 1 : FAR_BAND_FACTOR
+  const solo = opts.soloFallback === true
+  const widen = choice.extrapolatedFrom == null && !solo ? 1 : FAR_BAND_FACTOR
   const loRaw = interpGrid(rm.band.lo, Math.min(p, 1))
   const hiRaw = interpGrid(rm.band.hi, Math.min(p, 1))
   const lo = loRaw == null ? null : loRaw * widen
@@ -551,6 +558,24 @@ export function predict(model: Model, meta: EventMeta, rank: number, current: nu
   //   表示の側は extrapolatedFrom を見て「参考値」と書く（サイト・Bot の画像と本文・Worker の本文）
   const measured = high == null ? null : confidenceOf(lo, hi)
   const confidence = measured != null && choice.extrapolatedFrom != null ? 'rough' : measured
+  if (solo) {
+    return {
+      rank,
+      progress: p,
+      current,
+      share,
+      predicted,
+      low: low == null ? null : Math.max(low, current),
+      high,
+      confidence: low == null && high == null ? null : 'rough',
+      extrapolatedFrom: choice.extrapolatedFrom ?? durationHours(meta),
+      thin: choice.thin,
+      referenceSource: choice.source ?? 'borrow',
+      // 帯の幅では隠さない（特別モデルと同じ）。出し始めはふだんと同じ
+      visible: p >= rm.minProgress,
+      special: 'solo',
+    }
+  }
   return {
     rank,
     progress: p,

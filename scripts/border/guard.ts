@@ -8,7 +8,7 @@
  * 閾値は実測（当たり率 80〜85%、|誤差|中央 0.5 で 3〜8%・0.9 で 1.4〜3.6%、新÷旧 0.85〜1.25）より十分ゆるく取り、
  * 正常な版を止めずに、壊れた版・明らかに悪化した版だけを止める。
  */
-import type { ModelSummary } from '../../workers/border/src/fit.ts'
+import type { ModelSummary, SpecialBakeSummary } from '../../workers/border/src/fit.ts'
 import { GRID, RANKS, median, type Model } from '../../workers/border/src/model.ts'
 import { SPECIAL_ALGORITHM, isSpecialReport } from '../../workers/border/src/special.ts'
 import type { ProspectiveScore, Report } from './report.ts'
@@ -202,6 +202,22 @@ export function checkModel(model: Model, summary: ModelSummary, active: ModelSum
   }
 
   return { ok: problems.length === 0, problems, notes }
+}
+
+/**
+ * 特別モデルの焼き具合を要約の行と、ジョブの画面に出すエラーに分ける（検分 G2、2026-11-19）。
+ * 日程がまだ無い回は知らせるだけ（載れば次の実行で焼ける）。日程があるのに焼けなかった回はエラー（Worker はその回をふだんの数字で出し続ける）
+ */
+export function specialBakeReport(s: SpecialBakeSummary | undefined): { lines: string[]; errors: string[] } {
+  if (!s) return { lines: [], errors: [] }
+  const waiting = s.missing.filter((m) => m.reason === 'no_schedule')
+  const failed = s.missing.filter((m) => m.reason !== 'no_schedule')
+  const lines = [
+    `- 特別モデル: ${s.version}（学習から外す回 ${s.events.join('・') || 'なし'}／曲線を焼いた回 ${s.baked.join('・') || 'なし'}${waiting.length > 0 ? `／日程がまだ無い回 ${waiting.map((m) => m.eventId).join('・')}` : ''}）`,
+    ...failed.map((m) => `  - 曲線を焼けなかった回 ${m.eventId}: ${m.detail}`),
+  ]
+  const errors = failed.map((m) => `${m.eventId} の特別モデルの曲線を焼けなかった（${m.detail}）。Worker はこの回をふだんの数字の広めの目安で出し続ける`)
+  return { lines, errors }
 }
 
 // ---------------------------------------------------------------------------

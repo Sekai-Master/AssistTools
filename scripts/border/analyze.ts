@@ -18,8 +18,8 @@ import { RANKS, buildShape, durationHours, eventEndMs, type EventMeta, type Samp
 import { pacePoints } from '../../workers/border/src/pace.ts'
 import { resultText } from '../../workers/border/src/posts.ts'
 import { buildReport, resultPayload, resultRanks, type PredictionLog, type Report } from './report.ts'
-import { checkModel, scoreboard, scoreboardLines } from './guard.ts'
-import { SOLO_ONLY_EVENTS, isSpecialReport } from '../../workers/border/src/special.ts'
+import { checkModel, scoreboard, scoreboardLines, specialBakeReport } from './guard.ts'
+import { SOLO_ONLY_EVENTS, isSpecialReport, soloEventIds } from '../../workers/border/src/special.ts'
 import { FINAL_RANKS, announceAt, confirmedFinal, historyMeta, historyPostText, isTestEvent, mergeSeed, parseHistory, unknownMemories, type HistoryEvent, type MasterEvent } from './history.ts'
 import { addInsights } from '../claude/border-insight-run.ts'
 
@@ -211,7 +211,7 @@ const FINALS_LOOKBACK_MS = 30 * 86_400_000
  * 表がまだ無ければ、2026-10-25 にまとめた種（data/finals-seed.json、1〜220）から始める。
  * 終値は sekai.best の確定後の点だけ（history.ts の confirmedFinal）。揃わない回は次の回にやり直す
  */
-async function updateFinals(retried = false): Promise<void> {
+async function updateFinals(solo: ReadonlySet<number>, retried = false): Promise<void> {
   const res = await fetch(MASTER_EVENTS, { headers: { 'User-Agent': UA } })
   if (!res.ok) throw new Error(`マスタ ${res.status}`)
   const master = (await res.json()) as MasterEvent[]
@@ -271,7 +271,7 @@ async function updateFinals(retried = false): Promise<void> {
     // あいだに Worker の見回りが書いた。1回だけ読み直してやり直す（#159 レビュー MEDIUM-2）
     if (!retried && /→ 409/.test(err instanceof Error ? err.message : String(err))) {
       say('- 歴代ボーダー: 読んだあとに表が書き換わったので読み直す')
-      return updateFinals(true)
+      return updateFinals(solo, true)
     }
     throw err
   }
@@ -283,7 +283,9 @@ async function updateFinals(retried = false): Promise<void> {
     // ワールドリンクは Bot の画像に載らない（historyCard.ts の parseHistory が除く）ので積まない。積むと画像が作れず、2時間の先送りのあと文字だけで出てしまう
     if (!ended || ended.aggregateAt < NOW - POST_WINDOW_MS || e.id < HISTORY_POSTS_FROM || e.type === 'world_bloom') continue
     const text = historyPostText(e.name, e.id, SITE)
-    await write('PUT', '/admin/posts', { id: `${e.id}:history`, eventId: e.id, kind: 'history', text, payload: { kind: 'history', eventId: e.id } })
+    // みんなでライブ停止中の回は、Bot が「みんなでライブ停止中の開催」の印を付ける（Worker の finals.ts と同じ）
+    const payload = { kind: 'history', eventId: e.id, ...(solo.has(e.id) ? { special: 'solo' } : {}) }
+    await write('PUT', '/admin/posts', { id: `${e.id}:history`, eventId: e.id, kind: 'history', text, payload })
     say(`- 歴代ボーダー: ${e.id} の投稿を積んだ`)
   }
 }
@@ -350,12 +352,10 @@ async function main() {
   say(`- モデル: ${summary.version}（学習 ${summary.poolSize} 件・期間 ${summary.durations.join('/')}h）`)
   const thin = summary.thinDurations ?? []
   if (thin.length > 0) say(`- 標本1〜2件の長さ（直近の回を混ぜた参考値の表）: ${thin.map((t) => `${t.duration}h（${t.samples}件・${t.latestEventId}）`).join('・')}`)
-  // みんなでライブ停止中の回（special.ts）。学習から外した回と、曲線を焼いた回（日程のわかっている回だけ）
-  if (model.special) {
-    const baked = model.special.curves.map((c) => c.eventId)
-    const waiting = model.special.events.filter((id) => !baked.includes(id))
-    say(`- 特別モデル: ${model.special.version}（学習から外す回 ${model.special.events.join('・')}／曲線を焼いた回 ${baked.join('・') || 'なし'}${waiting.length > 0 ? `／日程がまだ無い回 ${waiting.join('・')}` : ''}）`)
-  }
+  // みんなでライブ停止中の回（special.ts）。学習から外した回と、曲線を焼いた回。日程があるのに焼けなかった回はジョブの画面にエラーで出す（検分 G2）
+  const specialReport = specialBakeReport(summary.special)
+  for (const line of specialReport.lines) say(line)
+  for (const e of specialReport.errors) annotate('error', 'ボーダー予測の特別モデル', e)
   for (const r of summary.ranks) {
     const mae = r.medianAbsError.map((x) => `${x.p}:${x.value == null ? '-' : (x.value * 100).toFixed(1)}`).join(' ')
     const cov = r.coverage.map((x) => `${x.covered}/${x.total}`).join(' ')
@@ -433,7 +433,7 @@ async function main() {
   }
 
   // 4. 歴代ボーダー（終値の表）に、終わった回を書き足す。失敗しても解析ジョブは止めない
-  await updateFinals().catch((err) => say(`- 歴代ボーダー: 失敗（${err instanceof Error ? err.message : String(err)}）`))
+  await updateFinals(soloEventIds(model.special?.events)).catch((err) => say(`- 歴代ボーダー: 失敗（${err instanceof Error ? err.message : String(err)}）`))
 
   writeSummary()
   // 関所で版を止めた。ステップサマリーを書いたあとに失敗にする（途中で落とすと答え合わせなどが止まる）

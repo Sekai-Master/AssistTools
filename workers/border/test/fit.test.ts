@@ -9,6 +9,7 @@ import {
   EARLY_CHECKPOINTS,
   TARGET_COVERAGE,
   WIDE_TAILS,
+  bakeSpecial,
   bandSamples,
   blendErrors,
   blendTable,
@@ -748,5 +749,34 @@ describe('fitModel: みんなでライブ停止中の回（一覧）を学習か
   it('既定の一覧は SOLO_ONLY_EVENTS', () => {
     const { past, shapes, now } = fixture()
     expect(fitModel(past, shapes, now).model.special?.events).toEqual([...SOLO_ONLY_EVENTS])
+  })
+})
+
+describe('bakeSpecial: 曲線を焼けなかった回の理由（検分 G2）', () => {
+  const DAY = 24 * H
+  const marathon = (id: number, startAt: number, hours: number, type = 'marathon'): EventMeta => ({
+    id, name: `e${id}`, eventType: type, unit: 'none', startAt, aggregateAt: startAt + hours * H - 60_000,
+  })
+  const past = [150, 150, 150, 150, 198].map((h, i) => marathon(200 + i, Date.UTC(2026, 0, 1) + i * 10 * DAY, h))
+  const hist = (ranks: readonly number[]): HistoryEvent[] =>
+    past.map((meta, i) => ({ meta, shapes: new Map(ranks.map((rank) => [rank, { eventId: meta.id, rank, final: 1e7, share: GRID.map((p) => p ** (1 + i / 20)) }])) }))
+  const u = marathon(300, Date.UTC(2026, 3, 1), 102)
+
+  it('日程の無い回は no_schedule、マラソンでない回は not_marathon、率モデルが当てはまらない順位があれば rate_fit_failed（どれも曲線は焼かない）', () => {
+    const cc = marathon(301, Date.UTC(2026, 3, 10), 24, 'cheerful_carnival')
+    const ok = bakeSpecial([...past, u, cc], hist(RANKS), [300, 301, 302])
+    expect(ok.special?.curves.map((c) => c.eventId)).toEqual([300])
+    expect(ok.missing).toEqual([
+      { eventId: 301, reason: 'not_marathon', detail: 'マラソンでない（cheerful_carnival）' },
+      { eventId: 302, reason: 'no_schedule', detail: '日程（マスタ）にまだ無い' },
+    ])
+    // 2000位の形が1回も無い → 2000位の率モデルが当てはまらない
+    const bad = bakeSpecial([...past, u], hist([50, 100, 200, 500, 1000]), [300])
+    expect(bad.special?.curves).toEqual([])
+    expect(bad.missing).toEqual([{ eventId: 300, reason: 'rate_fit_failed', detail: '2000位の率モデルが当てはまらなかった（その順位の形がある学習の回 0 回）' }])
+  })
+
+  it('一覧が空なら special も理由も無い', () => {
+    expect(bakeSpecial([...past, u], hist(RANKS), [])).toEqual({ special: undefined, missing: [] })
   })
 })

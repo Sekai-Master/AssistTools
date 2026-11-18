@@ -22,7 +22,7 @@ import type { Env } from './env.ts'
 import { RANKS, durationHours, predict, type EventMeta, type Prediction, type Sample } from './model.ts'
 import { milestoneText, postReferenceOf } from './posts.ts'
 import type { PostPayload, Snapshot } from './snapshot.ts'
-import { predictSpecial, specialAnchorRange, specialSelection, type SpecialSelection } from './special.ts'
+import { SOLO_FALLBACK_SUFFIX, predictSpecial, soloEventIds, specialAnchorRange, specialSelection, type SpecialSelection } from './special.ts'
 
 export const LIVE_URL = 'https://api.sekai.best/event/live'
 export const USER_AGENT = 'sekaimaster-border/1.0 (+https://sekaimaster.pages.dev)'
@@ -113,12 +113,20 @@ async function refreshSchedule(env: Env, now: number, fetcher: Fetcher): Promise
   return changed
 }
 
-function snapshotOf(event: EventMeta, now: number, samples: LiveSample[], preds: Map<number, Prediction>, modelVersion: string | null, special: boolean): Snapshot {
+function snapshotOf(
+  event: EventMeta,
+  now: number,
+  samples: LiveSample[],
+  preds: Map<number, Prediction>,
+  modelVersion: string | null,
+  special: 'model' | 'fallback' | null,
+): Snapshot {
   const sampleAt = Math.max(...samples.map((s) => s.ts))
   const span = event.aggregateAt + 60_000 - event.startAt
   return {
-    // 特別モデルの回だけ印を付ける（ふだんの回の出力は1文字も変えない）
+    // 特別扱いの回だけ印を付ける（ふだんの回の出力は1文字も変えない）。曲線が使えずふだんの数字を出している回は specialFallback も
     ...(special ? { special: 'solo' as const } : {}),
+    ...(special === 'fallback' ? { specialFallback: true } : {}),
     event: {
       id: event.id,
       name: event.name,
@@ -202,8 +210,10 @@ export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): 
 
   let preds = new Map<number, Prediction>()
   const model = event.eventType === 'marathon' ? await activeModel(env.DB) : null
-  // みんなでライブ停止中の回（model.special の一覧にあり、この回の日程で焼いた曲線がある）は特別モデルで当てる（special.ts）
-  let special = model ? specialSelection(model.model, event) : null
+  // 特別扱いの回か（このファイルの一覧 ∪ 有効な版の一覧。開始の告知・歴代ボーダーの投稿と同じ判定。検分 G1）
+  const solo = model != null && soloEventIds(model.model.special?.events).has(event.id)
+  // 特別扱いの回で、この回の日程で焼いた曲線があれば特別モデルで当てる（special.ts）。無ければ下でふだんの数字を広めの目安として出す
+  let special = model && solo ? specialSelection(model.model, event) : null
   const predictAll = (one: (s: LiveSample) => Prediction | null, label: string | null) => {
     const out = new Map<number, Prediction>()
     for (const s of live.samples) {
@@ -217,7 +227,8 @@ export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): 
     }
     return out
   }
-  const predictNormal = (m: NonNullable<typeof model>) => predictAll((s) => predict(m.model, event, s.rank, s.score, s.ts), m.version)
+  const predictNormal = (m: NonNullable<typeof model>) =>
+    predictAll((s) => predict(m.model, event, s.rank, s.score, s.ts, { soloFallback: solo }), solo ? `${m.version}${SOLO_FALLBACK_SUFFIX}` : m.version)
   if (model && special) {
     const sel = special
     const nearby = await windowSamples(env, event, sel, sampleAt)
@@ -235,7 +246,8 @@ export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): 
   } else if (model) {
     preds = predictNormal(model)
   }
-  const version = special?.version ?? model?.version ?? null
+  // 特別扱いの回なのに曲線が使えずふだんの数字で出した予測は、ふだんの版の後ろに印を付けて記録する（ふだんの予測と混ぜない）
+  const version = special?.version ?? (model ? (solo ? `${model.version}${SOLO_FALLBACK_SUFFIX}` : model.version) : null)
   if (model) {
     if (!stale) {
       await insertPredictions(
@@ -248,7 +260,7 @@ export async function runCron(env: Env, now: number, fetcher: Fetcher = fetch): 
     }
   }
 
-  const snap = snapshotOf(event, now, live.samples, preds, version, special != null)
+  const snap = snapshotOf(event, now, live.samples, preds, version, special ? 'model' : solo ? 'fallback' : null)
   await kvSet(env.DB, 'current', snap, now)
   if (!stale) {
     const row = [snap.sampleAt, snap.progress, snap.ranks.map((r) => [r.rank, r.current, r.predicted, r.low, r.high, r.visible ? 1 : 0])]

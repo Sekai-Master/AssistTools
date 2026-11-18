@@ -58,6 +58,11 @@ export interface Snapshot {
    * 古い Bot はこの欄を読まないので、同じスナップショットに extrapolatedFrom（と表の出どころ）も付けて「参考値」と出させる
    */
   special?: SpecialKind | null
+  /**
+   * 特別扱いの回なのに特別モデルの曲線が使えず、ふだんのモデルの数字を広めの目安として出しているとき true（special も 'solo'）。
+   * 表示は special と同じ扱い（「8割」「確度」と書かない）。ふだんの回・特別モデルで出せている回には欄そのものが無い
+   */
+  specialFallback?: boolean
   predicted: boolean
   ranks: SnapshotRank[]
 }
@@ -108,7 +113,13 @@ export type PostPayload =
    * 歴代ボーダーの4枚。Bot が /api/border/finals の表から描く。
    * postAt があれば、Bot はその時刻ちょうどに出す（乱数の待ちも投稿の間隔も当てない。2026-10-25 Nori「完全に時間指定で」）
    */
-  | { kind: 'history'; eventId: number; postAt?: number }
+  | {
+      kind: 'history'
+      eventId: number
+      postAt?: number
+      /** みんなでライブ停止中の回（special.ts の一覧）。Bot は画像と本文に「みんなでライブ停止中の開催」の印を付ける */
+      special?: SpecialKind
+    }
   /**
    * 日報（毎日21時）。Bot が画像を描く（sekaimaster-bot の dailyCard.ts）。snapshot は21時台の最新の値と予測（kv `current` と同じ形）。
    * fresh は開始から24時間たっていない日（直近24時間の列を出さない）

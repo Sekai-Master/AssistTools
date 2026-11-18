@@ -144,6 +144,8 @@ export interface ModelSummary {
   durations: number[]
   /** 標本1〜2件の長さと、表に混ぜた回。この項目より前の版には無い */
   thinDurations?: ThinDuration[]
+  /** みんなでライブ停止中の回の特別モデル（special.ts）の焼き具合。一覧が空なら無い。この項目より前の版には無い */
+  special?: SpecialBakeSummary
   targetCoverage: number
   ranks: RankSummary[]
 }
@@ -545,23 +547,56 @@ export interface FitOptions {
 }
 
 /**
- * model.special を作る。一覧が空なら undefined（版のハッシュもこれまでと同じになる）。
- * 曲線は、一覧の回のうち日程のわかっている（events にある）マラソンだけ。率モデルが当てはまらない順位があれば、その回は曲線を焼かない
- * （Worker は曲線の無い回をふだんの表で出す）
+ * 一覧の回に曲線を焼けなかった理由（検分 G2、2026-11-19）。解析ジョブは no_schedule 以外をジョブの画面にエラーとして出す
+ *   no_schedule     … 日程（マスタ）にまだ無い。載れば次の実行で焼ける
+ *   not_marathon    … マラソンでない（予測の対象外）
+ *   rate_fit_failed … 率モデルが当てはまらない順位があった（学習の回が足りない等）
  */
-export function bakeSpecial(events: readonly EventMeta[], history: readonly HistoryEvent[], list: readonly number[]): SpecialModel | undefined {
-  if (list.length === 0) return undefined
+export interface SpecialMissing {
+  eventId: number
+  reason: 'no_schedule' | 'not_marathon' | 'rate_fit_failed'
+  detail: string
+}
+
+export interface SpecialBakeSummary {
+  version: string
+  events: number[]
+  /** 曲線を焼いた回 */
+  baked: number[]
+  missing: SpecialMissing[]
+}
+
+/**
+ * model.special を作る。一覧が空なら special は undefined（版のハッシュもこれまでと同じになる）。
+ * 曲線は、一覧の回のうち日程のわかっている（events にある）マラソンだけ。率モデルが当てはまらない順位があれば、その回は曲線を焼かない
+ * （Worker は曲線の無い一覧の回を、ふだんの数字を広めの目安として出す）。焼けなかった回は理由を missing に返す
+ */
+export function bakeSpecial(
+  events: readonly EventMeta[],
+  history: readonly HistoryEvent[],
+  list: readonly number[],
+): { special: SpecialModel | undefined; missing: SpecialMissing[] } {
+  if (list.length === 0) return { special: undefined, missing: [] }
   const params = { ...SPECIAL_DEFAULT_PARAMS }
   const curves: SpecialEventCurves[] = []
+  const missing: SpecialMissing[] = []
   for (const id of list) {
-    const meta = events.find((e) => e.id === id && e.eventType === 'marathon')
-    if (!meta) continue
+    const any = events.find((e) => e.id === id)
+    if (!any) {
+      missing.push({ eventId: id, reason: 'no_schedule', detail: '日程（マスタ）にまだ無い' })
+      continue
+    }
+    if (any.eventType !== 'marathon') {
+      missing.push({ eventId: id, reason: 'not_marathon', detail: `マラソンでない（${any.eventType}）` })
+      continue
+    }
+    const meta = any
     const ranks: SpecialEventCurves['ranks'] = {}
-    let ok = true
+    let failed: number | null = null
     for (const rank of RANKS) {
       const fit = fitRate(history, rank)
       if (!fit) {
-        ok = false
+        failed = rank
         break
       }
       ranks[String(rank)] = {
@@ -569,11 +604,16 @@ export function bakeSpecial(events: readonly EventMeta[], history: readonly Hist
         flat: rateShareTable(fit, meta, { remaining: false }).map(round5),
       }
     }
-    if (ok) curves.push({ eventId: id, startAt: meta.startAt, aggregateAt: meta.aggregateAt, ranks })
+    if (failed != null) {
+      const n = history.filter((h) => h.shapes.has(failed as number)).length
+      missing.push({ eventId: id, reason: 'rate_fit_failed', detail: `${failed}位の率モデルが当てはまらなかった（その順位の形がある学習の回 ${n} 回）` })
+      continue
+    }
+    curves.push({ eventId: id, startAt: meta.startAt, aggregateAt: meta.aggregateAt, ranks })
   }
   const ids = [...list]
   const version = `${SPECIAL_ALGORITHM}@${fnv1a(JSON.stringify({ events: ids, params, curves }))}`
-  return { algorithm: SPECIAL_ALGORITHM, version, events: ids, params, curves }
+  return { special: { algorithm: SPECIAL_ALGORITHM, version, events: ids, params, curves }, missing }
 }
 
 export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[], now: number, opts: FitOptions = {}): FitResult {
@@ -708,7 +748,7 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
     })
   }
 
-  const special = bakeSpecial(events, history, specialList)
+  const { special, missing: specialMissing } = bakeSpecial(events, history, specialList)
   // 版名には中身のハッシュを入れる。学習データが同じでもロジックを直せば別の版になり、切り替わる（レビュー 2026-09-30）
   // ★ special もハッシュに入れる。入れないと、表が同じまま一覧や曲線だけが変わったとき版名が同じになり、Worker の putModel が
   //   「同じ版」として書き込まない（227 を足しても Worker に届かない）。special が無ければ、ハッシュの入力はこれまでと同じ
@@ -723,6 +763,7 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
     poolSize: history.length,
     durations,
     thinDurations,
+    ...(special ? { special: { version: special.version, events: special.events, baked: special.curves.map((c) => c.eventId), missing: specialMissing } } : {}),
     targetCoverage: TARGET_COVERAGE,
     ranks: rankSummaries,
   }

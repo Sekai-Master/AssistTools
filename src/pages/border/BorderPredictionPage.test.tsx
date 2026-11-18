@@ -329,6 +329,19 @@ describe("みんなでライブ停止中の特別対応の回", () => {
     expect(all[0].textContent).toContain("序盤は幅が広い「目安」");
   });
 
+  // ★ 曲線がまだ使えず、ふだんのモデルの数字を広めの目安で出している間（specialFallback。検分 G1）も、「8割」「確度は8割の幅の広さです」を出さない
+  it("曲線が使えずふだんの数字で出している間（specialFallback）も特別対応の札で、「8割」を出さず、非公式の 1 文は 1 回", async () => {
+    serve(special({ specialFallback: true, modelVersion: "share-median-v1@e225-x+solo-fallback" }));
+    await show();
+    const panel = currentPanel();
+    expect(within(panel).getByText("みんなでライブ停止中の特別対応・目安")).toBeTruthy();
+    expect(panel.textContent).toContain("ふだんのモデルの数字を、幅を広げた目安として出しています");
+    expect(panel.textContent).not.toContain("8割");
+    expect(screen.queryByText(/確度は8割の幅の広さです/)).toBeNull();
+    expect(within(panel).queryByText("この回の予測は参考値です。")).toBeNull();
+    expect(screen.getAllByText(/非公式の予測で、外れることがあります/)).toHaveLength(1);
+  });
+
   it("推移の説明と凡例も「目安の幅」と書く", async () => {
     const now = Date.now();
     serve(special(), { eventId: 226, rows: [[now - H, 0.49, RANKS.map((r) => [r.rank, r.current, r.predicted, r.low, r.high, 1])]] });

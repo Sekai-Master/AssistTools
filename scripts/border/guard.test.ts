@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ModelSummary, RankSummary } from '../../workers/border/src/fit.ts'
 import { GRID, RANKS, type Model, type RankModel } from '../../workers/border/src/model.ts'
 import { SPECIAL_DEFAULT_PARAMS, type SpecialModel } from '../../workers/border/src/special.ts'
-import { checkModel, scoreboard, scoreboardLines } from './guard.ts'
+import { checkModel, scoreboard, scoreboardLines, specialBakeReport } from './guard.ts'
 import type { ProspectiveScore, Report } from './report.ts'
 
 // ---- 模型の部品（正常な値）-------------------------------------------------
@@ -338,5 +338,29 @@ describe('特別モデル（みんなでライブ停止中の回）', () => {
     // 特別モデルの帯が全部外れていても、警告にならない
     const allMiss: Report = { ...report(300, { hit: 0 }), modelVersions: ['solo-special-v1@abcd1234'] }
     expect(scoreboard([...events(8), allMiss, allMiss, allMiss]).alarms).toEqual([])
+  })
+})
+
+describe('特別モデルの焼き具合の要約（specialBakeReport、検分 G2）', () => {
+  it('日程がまだ無い回は要約に書くだけ。日程があるのに焼けなかった回は理由つきでエラーにする', () => {
+    const r = specialBakeReport({
+      version: 'solo-special-v1@abcd1234',
+      events: [226, 227, 228],
+      baked: [226],
+      missing: [
+        { eventId: 227, reason: 'no_schedule', detail: '日程（マスタ）にまだ無い' },
+        { eventId: 228, reason: 'rate_fit_failed', detail: '2000位の率モデルが当てはまらなかった（その順位の形がある学習の回 0 回）' },
+      ],
+    })
+    expect(r.lines[0]).toBe('- 特別モデル: solo-special-v1@abcd1234（学習から外す回 226・227・228／曲線を焼いた回 226／日程がまだ無い回 227）')
+    expect(r.lines[1]).toContain('曲線を焼けなかった回 228: 2000位の率モデルが当てはまらなかった')
+    expect(r.errors).toHaveLength(1)
+    expect(r.errors[0]).toContain('228 の特別モデルの曲線を焼けなかった（2000位の率モデルが当てはまらなかった')
+    expect(r.errors.join()).not.toContain('227')
+  })
+
+  it('一覧が空（special が無い）なら何も出さない。全部焼けていればエラーは無い', () => {
+    expect(specialBakeReport(undefined)).toEqual({ lines: [], errors: [] })
+    expect(specialBakeReport({ version: 'solo-special-v1@x', events: [226], baked: [226], missing: [] }).errors).toEqual([])
   })
 })

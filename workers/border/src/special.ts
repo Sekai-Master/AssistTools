@@ -30,6 +30,22 @@ import { GRID, RANKS, chooseTable, durationHours, interpGrid, progressAt, type E
  */
 export const SOLO_ONLY_EVENTS: readonly number[] = [226]
 
+/**
+ * 特別扱いの回か（Worker の判定は全部これ1つ。2026-11-19 検分 G1）: このファイルの一覧 ∪ 有効な版の model.special.events。
+ * extra は JSON から来た値（model.special.events や D1 の json_extract の結果）なので、整数だけ拾う
+ */
+export function soloEventIds(extra: unknown): Set<number> {
+  const out = new Set<number>(SOLO_ONLY_EVENTS)
+  if (Array.isArray(extra)) for (const x of extra) if (Number.isInteger(x)) out.add(x as number)
+  return out
+}
+
+/**
+ * 特別扱いの回なのに特別モデルの曲線が使えない（まだ焼いていない・壊れている・日程がずれた）ときの予測ログの版の印。
+ * ふだんの版の後ろに付ける（例 share-median-v1@e225-abcd1234+solo-fallback）。数字はふだんの predict() で出し、帯を広げ、確度は目安・隠さない
+ */
+export const SOLO_FALLBACK_SUFFIX = '+solo-fallback'
+
 export const SPECIAL_ALGORITHM = 'solo-special-v1' as const
 /** スナップショット・予測に付ける印（サイトが読む） */
 export type SpecialKind = 'solo'
@@ -292,5 +308,8 @@ export function predictSpecial(
  * 一覧の回か、予測ログに特別モデルの版が入っている回。答え合わせ（scripts/border/report.ts の Report）の形のうち、この2つだけを見る
  */
 export function isSpecialReport(rep: { eventId: number; modelVersions?: readonly unknown[] }, list: readonly number[] = SOLO_ONLY_EVENTS): boolean {
-  return list.includes(rep.eventId) || (rep.modelVersions ?? []).some((v) => typeof v === 'string' && v.startsWith(`${SPECIAL_ALGORITHM}@`))
+  return (
+    list.includes(rep.eventId) ||
+    (rep.modelVersions ?? []).some((v) => typeof v === 'string' && (v.startsWith(`${SPECIAL_ALGORITHM}@`) || v.endsWith(SOLO_FALLBACK_SUFFIX)))
+  )
 }

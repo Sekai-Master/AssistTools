@@ -310,16 +310,41 @@ describe('runCron: みんなでライブ停止中の回（特別モデル）', (
     expect(Math.round(expected?.predicted ?? NaN)).not.toBe(Math.round(fromStart?.predicted ?? NaN))
   })
 
-  it('入れる順に依らない: special の無いモデル（今の版）なら、新しい Worker でも 226 は今と同じ thin の参考値で出す', async () => {
-    await run(base, E226, 30, (p) => p)
+  /** 曲線が使えないときの 226 の出し方（検分 G1）: ふだんの数字だが、印は special のまま・specialFallback を足し、確度は目安、版に印 */
+  const expectFallback = async () => {
     const snap = await current()
-    expect('special' in snap).toBe(false)
-    expect(snap.modelVersion).toBe(base.version)
-    expect(snap).toMatchObject({ extrapolatedFrom: 150, referenceSource: 'thin' })
-    expect(new Set((await predictionsFor(env.DB, 226)).map((x) => x.model_version))).toEqual(new Set([base.version]))
+    expect(snap).toMatchObject({ special: 'solo', specialFallback: true, modelVersion: `${base.version}+solo-fallback`, extrapolatedFrom: 150, referenceSource: 'thin' })
+    expect(snap.ranks.filter((x) => x.predicted != null).every((x) => x.confidence === 'rough')).toBe(true)
+    expect(new Set((await predictionsFor(env.DB, 226)).map((x) => x.model_version))).toEqual(new Set([`${base.version}+solo-fallback`]))
+    return snap
+  }
+
+  it('special の無いモデル（今の版）でも、一覧の回（226）は特別扱い: ふだんの数字を広めの目安として出し、specialFallback を付ける', async () => {
+    await run(base, E226, 30, (p) => p)
+    await expectFallback()
   })
 
-  it('一覧にあっても、曲線の日程が違う・曲線が壊れている・曲線が無いときは今と同じ表で出す', async () => {
+  it('曲線が使えない一覧の回でも、帯が80ポイントを超えても隠さず、開始24時間の投稿に「8割」「確度」を書かない', async () => {
+    // 帯の広い版（誤差の分位点 ±0.6 → 広げると 80 ポイントを大きく超える）。ふだんの回なら隠れる
+    const wide: Model = { ...base, ranks: Object.fromEntries(Object.entries(base.ranks).map(([r, rm]) => [r, { ...rm, band: { lo: GRID.map(() => -0.6), hi: GRID.map(() => 0.6) } }])) }
+    const r = await run(wide, E226, 24.5, (p) => p)
+    expect(r.status === 'collected' && r.queued).toEqual(['226:h24'])
+    const snap = await current()
+    expect(snap).toMatchObject({ special: 'solo', specialFallback: true })
+    expect(snap.ranks.filter((x) => x.rank > 100).every((x) => x.visible && x.confidence === 'rough')).toBe(true)
+    const req = new Request('https://w/admin/posts?unsent=x', { headers: { Authorization: 'Bearer secret-token' } })
+    const body = (await (await handleRequest(req, env)).json()) as { posts: { text: string }[] }
+    expect(body.posts[0].text).toContain(SOLO_NOTE)
+    expect(body.posts[0].text).not.toMatch(/8割|確度/)
+    // 一覧に無い回は今と同じ: 同じ帯の広い版では隠れる（確度を名乗れない）
+    env = { DB: createD1(), ADMIN_TOKEN: 'secret-token', SITE_ORIGIN: 'https://sekaimaster.pages.dev' }
+    await run(wide, EVENT, 76, (p) => p)
+    const plain = await current()
+    expect('special' in plain).toBe(false)
+    expect(plain.ranks.every((x) => !x.visible)).toBe(true)
+  })
+
+  it('一覧にあっても、曲線の日程が違う・曲線が壊れている・曲線が無いときは、ふだんの数字を広めの目安として出す（specialFallback）', async () => {
     const curves = special().curves[0]
     const cases: SpecialModel[] = [
       special({ curves: [{ ...curves, aggregateAt: E226.aggregateAt + 2 * H }] }),
@@ -329,13 +354,11 @@ describe('runCron: みんなでライブ停止中の回（特別モデル）', (
     for (const sp of cases) {
       env = { DB: createD1(), ADMIN_TOKEN: 'secret-token', SITE_ORIGIN: 'https://sekaimaster.pages.dev' }
       await run(withSpecial(sp), E226, 30, (p) => p)
-      const snap = await current()
-      expect('special' in snap).toBe(false)
-      expect(snap.modelVersion).toBe(base.version)
+      await expectFallback()
     }
   })
 
-  it('特別モデルが1順位も出せない曲線（前半ずっと 0）のときは、その回をふだんの表で出す（予測が丸ごと消えない）', async () => {
+  it('特別モデルが1順位も出せない曲線（前半ずっと 0）のときは、ふだんの数字を広めの目安として出す（予測が丸ごと消えない）', async () => {
     const zero = GRID.map((p) => (p < 0.98 ? 0 : 1))
     const curves = special().curves[0]
     const sp = special({ curves: [{ ...curves, ranks: Object.fromEntries(RANKS.map((r) => [String(r), { spurt: zero, flat: zero }])) }] })
@@ -346,10 +369,7 @@ describe('runCron: みんなでライブ停止中の回（特別モデル）', (
     } finally {
       errors.mockRestore()
     }
-    const snap = await current()
-    expect('special' in snap).toBe(false)
-    expect(snap.modelVersion).toBe(base.version)
-    expect(new Set((await predictionsFor(env.DB, 226)).map((x) => x.model_version))).toEqual(new Set([base.version]))
+    await expectFallback()
   })
 
   it('終了後の確定の点（経過が 1 を少し超え、どちらのモデルも出さない）では、特別モデルの印を付けたまま・ふだんの表に戻さない', async () => {
