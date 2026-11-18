@@ -7,6 +7,8 @@ import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { TakiInput } from "../../components/ui/TakiInput";
 import { SongSearchModal } from "../../components/SongSearchModal";
 import { getActiveProfile, useProfiles, type Profile } from "../../lib/profiles";
+import { MULTI_LIVE_SUSPENDED } from "../../lib/liveSuspension";
+import { SOLO_OVERHEAD_PROVISIONAL } from "../../lib/overhead";
 import { cn } from "../../lib/utils";
 import { ENVY_ID } from "../analyzer/lib/constants";
 import { bestIndex, compareDecks, findUpset, type DeckCandidate } from "../deck/lib/compare";
@@ -18,9 +20,11 @@ import {
   MAX_ROWS,
   checkRow,
   emptyRow,
+  initialLive,
   loadState,
   lossFromBest,
   nextName,
+  overheadBasisNote,
   saveState,
   uniqueNames,
   type QuickRow,
@@ -56,12 +60,22 @@ export function QuickCompare({ entries, loading, error }: { entries: RankingMusi
   const [rows, setRows] = useState<QuickRow[]>(() => saved.rows ?? [emptyRow("A"), emptyRow("B")]);
   const [songId, setSongId] = useState(saved.songId ?? ENVY_ID);
   const [difficulty, setDifficulty] = useState<Difficulty>(saved.difficulty ?? "master");
-  const [live, setLive] = useState<LiveType>(saved.live ?? "multi");
+  // ★ みんなでライブが止まっている間は ひとりでライブ で開く（initialLive）。
+  const [live, setLive] = useState<LiveType>(() => initialLive(saved, MULTI_LIVE_SUSPENDED));
+  /**
+   * 保存するライブ種別。**利用者が選んだときだけ変える。**
+   * ★ 開いたときの既定（停止期間の ひとりで）をそのまま保存すると、前の保存値を勝手に書き換えてしまう。
+   */
+  const [livePick, setLivePick] = useState(() => ({ live: saved.live, liveInSuspension: saved.liveInSuspension }));
+  const pickLive = (next: LiveType) => {
+    setLive(next);
+    setLivePick({ live: next, liveInSuspension: MULTI_LIVE_SUSPENDED });
+  };
   const [taki, setTaki] = useState(() => saved.taki ?? getActiveProfile()?.taki ?? DEFAULT_PARAMS.taki);
   const [picking, setPicking] = useState(false);
   const profiles = useProfiles().filter(usableProfile);
 
-  useEffect(() => saveState({ rows, songId, difficulty, live, taki }), [rows, songId, difficulty, live, taki]);
+  useEffect(() => saveState({ rows, songId, difficulty, ...livePick, taki }), [rows, songId, difficulty, livePick, taki]);
 
   /** 曲選択用に「1曲1行」へ畳んだもの（entries は曲×難易度の粒度） */
   const songs = useMemo(() => {
@@ -120,7 +134,7 @@ export function QuickCompare({ entries, loading, error }: { entries: RankingMusi
     <>
       <Panel title="編成">
         <p className="mb-3 text-xs leading-relaxed text-slate-500">
-          内部値はリーダーを含む5枚のスコアアップの合計です。協力ライブのスコアは実効値（リーダー＋ほかの4枚の2割）で決まります。
+          内部値はリーダーを含む5枚のスコアアップの合計です。みんなでライブのスコアは実効値（リーダー＋ほかの4枚の2割）で決まります。
         </p>
         <ul className="grid gap-3 sm:grid-cols-2">
           {rows.map((r, i) => {
@@ -164,7 +178,7 @@ export function QuickCompare({ entries, loading, error }: { entries: RankingMusi
                     ))}
                   </div>
                   {c.ok ? (
-                    <p className="mt-2 text-xs text-slate-500">実効値（協力） {pct1(c.effective)}%</p>
+                    <p className="mt-2 text-xs text-slate-500">実効値（みんなでライブ） {pct1(c.effective)}%</p>
                   ) : (
                     c.reason && <p className="mt-2 text-xs text-amber-700">{c.reason}</p>
                   )}
@@ -215,15 +229,16 @@ export function QuickCompare({ entries, loading, error }: { entries: RankingMusi
           </Field>
           <Field label="ライブ種別・焚き数">
             <div className="flex flex-wrap items-center gap-3">
+              {/* 公式名に合わせて「みんなで／ひとりで」（2026-11-18）。4文字になったので幅を 224px → 288px に広げた */}
               <SegmentedControl
                 options={[
-                  { value: "multi", label: "協力" },
-                  { value: "solo", label: "ソロ" },
+                  { value: "multi", label: "みんなで" },
+                  { value: "solo", label: "ひとりで" },
                   { value: "auto", label: "オート" },
                 ]}
                 value={live}
-                onChange={setLive}
-                className="!max-w-56"
+                onChange={pickLive}
+                className="!max-w-72"
               />
               <TakiInput value={taki} onChange={setTaki} />
             </div>
@@ -280,7 +295,9 @@ export function QuickCompare({ entries, loading, error }: { entries: RankingMusi
             {upset && <UpsetNote upset={upset} />}
             <p className="mt-3 text-xs leading-relaxed text-slate-400">
               {taki}焚き・{entry?.title}（{DIFFICULTY_LABEL[difficulty]}）での概算です。計算は効率曲ランキング・編成ビルダーと同じ式で、
-              スコアは総合力とスキルから見積もっています。オーバーヘッドは {OVERHEAD_BY_LIVE[live]} 秒（ライブ種別ごとの実測値）。
+              スコアは総合力とスキルから見積もっています。オーバーヘッドは {OVERHEAD_BY_LIVE[live]} 秒
+              {/* ★ ひとりでライブのロスは仮の値の印が立っている間「仮」と書く（実測値と書かない） */}
+              {overheadBasisNote(live, SOLO_OVERHEAD_PROVISIONAL)}。
               ワールドリンクの総合力の上限は見ていません（編成ビルダーで比べてください）。
             </p>
           </>

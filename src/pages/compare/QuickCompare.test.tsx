@@ -3,7 +3,7 @@
  *
  * 編成かんたん比較。打ち込んだ数字が、編成ビルダーと同じ計算（compareDecks）で並ぶことを縛る。
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QuickCompare } from "./QuickCompare";
@@ -11,8 +11,32 @@ import { compareDecks } from "../deck/lib/compare";
 import { OVERHEAD_BY_LIVE } from "../ranking/lib/efficiency";
 import type { RankingMusic } from "../ranking/useRankingMusics";
 
+// みんなでライブが止まっている期間の印。既定は本物と同じ true。テストごとに差し替える。
+const suspension = vi.hoisted(() => ({ value: true }));
+vi.mock("../../lib/liveSuspension", () => ({
+  get MULTI_LIVE_SUSPENDED() {
+    return suspension.value;
+  },
+}));
+
+// ひとりでライブのロスが仮の値かの印。既定は本物と同じ true。値（OVERHEAD_SEC）は本物のまま使う。
+const provisional = vi.hoisted(() => ({ value: true }));
+vi.mock("../../lib/overhead", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/overhead")>();
+  return {
+    ...actual,
+    get SOLO_OVERHEAD_PROVISIONAL() {
+      return provisional.value;
+    },
+  };
+});
+
 // このリポジトリは vitest の globals を使っていないので、testing-library の自動クリーンアップが入らない
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  suspension.value = true;
+  provisional.value = true;
+});
 beforeEach(() => localStorage.clear());
 
 // 独りんぼエンヴィー MASTER（public/MusicDatas の値）
@@ -49,6 +73,11 @@ const A = ["351149", "425", "150", "450"] as const;
 const B = ["318699", "430", "150", "460"] as const;
 
 describe("編成かんたん比較", () => {
+  // ふだん（みんなでライブが動いている）の振る舞い。停止期間の既定は下の describe で見る。
+  beforeEach(() => {
+    suspension.value = false;
+  });
+
   it("4つ入れた編成を、編成ビルダーと同じ計算で並べ、最良と差を出す", async () => {
     draw();
     await fill("A", [...A]);
@@ -98,7 +127,7 @@ describe("編成かんたん比較", () => {
   it("協力の実効値（リーダー＋ほか4枚の2割）を、入れたその場で出す", async () => {
     draw();
     await fill("A", [...A]);
-    expect(within(screen.getByRole("group", { name: "編成 A" })).getByText("実効値（協力） 210%")).toBeTruthy();
+    expect(within(screen.getByRole("group", { name: "編成 A" })).getByText("実効値（みんなでライブ） 210%")).toBeTruthy();
   });
 
   it("打ちかけには理由を出し、計算には混ぜない", async () => {
@@ -124,5 +153,104 @@ describe("編成かんたん比較", () => {
     expect(screen.getByRole("group", { name: "編成 C" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "C を外す" }));
     expect(screen.queryByRole("group", { name: "編成 C" })).toBeNull();
+  });
+});
+
+/**
+ * ライブ種別の呼び方と、みんなでライブの停止期間（2026-11-18〜）の既定。
+ *
+ * ★ 公式名に合わせて「みんなで／ひとりで／オート」。画面の文に「協力」と書かない。
+ * ★ 止まっている間は ひとりでライブで開く。古い保存値（みんなでライブ）は書き換えない。
+ *   止まっている間に選び直した種類は、ふだんどおり保存して次も使う。
+ */
+describe("ライブ種別（みんなで／ひとりで／オート）", () => {
+  const KEY = "quickCompare:v1";
+  const radio = (name: string) => screen.getByRole("radio", { name });
+  const saved = () => JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, unknown>;
+  const ROW = { id: "r1", name: "A", power: "351149", bonus: "425", leader: "150", total: "450" };
+
+  it("選べるのは みんなで・ひとりで・オート。画面の文に「協力」が無い", async () => {
+    draw();
+    await fill("A", [...A]);
+    const group = radio("みんなで").closest('[role="radiogroup"]') as HTMLElement;
+    expect(within(group).getAllByRole("radio").map((b) => b.textContent)).toEqual(["みんなで", "ひとりで", "オート"]);
+    expect(document.body.textContent ?? "").not.toContain("協力");
+    expect(document.body.textContent ?? "").not.toContain("ソロ");
+  });
+
+  it("止まっている間は ひとりでライブで開き、計算も ひとりでライブ（ロスは OVERHEAD_BY_LIVE.solo）", async () => {
+    draw();
+    expect(radio("ひとりで").getAttribute("aria-checked")).toBe("true");
+    await fill("A", [...A]);
+    const [expected] = compareDecks(
+      [{ name: "A", power: 351_149, bonus: 425, skillLeader: 150, skillTotal: 450 }],
+      ENVY,
+      { live: "solo", taki: 5, overheadSec: OVERHEAD_BY_LIVE.solo }
+    );
+    const [row] = within(screen.getByRole("table")).getAllByRole("row").slice(1);
+    expect(row.textContent).toContain((expected.eventPt as number).toLocaleString());
+  });
+
+  it("古い保存値が みんなでライブ でも ひとりでライブで開き、保存値は書き換えない", async () => {
+    localStorage.setItem(KEY, JSON.stringify({ rows: [ROW], live: "multi", taki: 5 }));
+    draw();
+    expect(radio("ひとりで").getAttribute("aria-checked")).toBe("true");
+    expect(saved().live).toBe("multi");
+    // ほかの入力を触って保存し直しても、ライブ種別は前の保存値のまま
+    const user = userEvent.setup();
+    await user.type(within(screen.getByRole("group", { name: "編成 A" })).getByLabelText("総合力"), "0");
+    expect(saved().live).toBe("multi");
+  });
+
+  it("保存値が無いときは、既定の ひとりで を保存しない（再開したら みんなでライブ で開くように）", () => {
+    draw();
+    expect(saved().live).toBeUndefined();
+  });
+
+  it("止まっている間に みんなで を選び直したら保存し、次に開いたときも みんなで", async () => {
+    localStorage.setItem(KEY, JSON.stringify({ rows: [ROW], live: "multi", taki: 5 }));
+    const first = draw();
+    const user = userEvent.setup();
+    await user.click(radio("みんなで"));
+    expect(saved()).toMatchObject({ live: "multi", liveInSuspension: true });
+    first.unmount();
+    draw();
+    expect(radio("みんなで").getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("保存値がオートなら、止まっている間もオートで開く", () => {
+    localStorage.setItem(KEY, JSON.stringify({ rows: [ROW], live: "auto", taki: 5 }));
+    draw();
+    expect(radio("オート").getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("再開したら（印が false）、保存値の みんなでライブ で開く", () => {
+    suspension.value = false;
+    localStorage.setItem(KEY, JSON.stringify({ rows: [ROW], live: "multi", taki: 5 }));
+    draw();
+    expect(radio("みんなで").getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("ひとりでライブのロスは「実測値」と言わず、仮の値と書く。みんなで・オートは実測値のまま", async () => {
+    draw();
+    await fill("A", [...A]);
+    const note = () => screen.getByText(/オーバーヘッドは/).textContent ?? "";
+    expect(note()).toContain(`${OVERHEAD_BY_LIVE.solo} 秒`);
+    expect(note()).toContain("仮");
+    expect(note()).not.toContain("実測値");
+    const user = userEvent.setup();
+    await user.click(radio("みんなで"));
+    expect(note()).toContain(`${OVERHEAD_BY_LIVE.multi} 秒（ライブ種別ごとの実測値）`);
+    await user.click(radio("オート"));
+    expect(note()).toContain(`${OVERHEAD_BY_LIVE.auto} 秒（ライブ種別ごとの実測値）`);
+  });
+
+  it("仮の値の印が下りたら（Nori が測ったら）、ひとりでライブも「仮」が消えて実測値と書く", async () => {
+    provisional.value = false;
+    draw();
+    await fill("A", [...A]);
+    const note = screen.getByText(/オーバーヘッドは/).textContent ?? "";
+    expect(note).toContain(`${OVERHEAD_BY_LIVE.solo} 秒（ライブ種別ごとの実測値）`);
+    expect(note).not.toContain("仮");
   });
 });

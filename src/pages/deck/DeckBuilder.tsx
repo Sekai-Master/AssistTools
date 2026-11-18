@@ -283,7 +283,7 @@ export default function DeckBuilder() {
         rows.map((r) => [r.cardId, { deltaPower: r.deltaPower, deltaBonus: r.deltaBonus, deltaPt: r.deltaPt }])
       ),
       order: rows.map((r) => r.cardId),
-      ...(swapEntry ? { basis: `協力・${swapEntry.title}・焚き${swapTaki}` } : {}),
+      ...(swapEntry ? { basis: `みんなで・${swapEntry.title}・焚き${swapTaki}` } : {}),
     };
   }, [pickIndex, ctx, slots, states, catalog, cardIds, leaderIndex, supportBonus, mode, swapEntry, swapTaki]);
 

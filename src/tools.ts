@@ -232,7 +232,7 @@ export const TOOLS: ToolDef[] = [
     path: "/tweet",
     name: "ついぼジェネレーター",
     shortName: "ついぼ",
-    description: "協力ライブ募集ツイートを簡単に作成できます。",
+    description: "みんなでライブ募集ツイートを簡単に作成できます。",
     icon: "campaign",
     category: "other",
     status: "ready",

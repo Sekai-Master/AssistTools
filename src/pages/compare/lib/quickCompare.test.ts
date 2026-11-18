@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { checkRow, emptyRow, lossFromBest, nextName, parseNum, parseState, uniqueNames, type QuickRow } from "./quickCompare";
+import {
+  checkRow,
+  emptyRow,
+  initialLive,
+  lossFromBest,
+  nextName,
+  overheadBasisNote,
+  parseNum,
+  parseState,
+  uniqueNames,
+  type QuickRow,
+} from "./quickCompare";
 
 const row = (power: string, bonus: string, leader: string, total: string, name = "A"): QuickRow => ({
   ...emptyRow(name),
@@ -95,6 +106,69 @@ describe("parseState（保存してあった値の読み直し）", () => {
   it("id が重なった行は1つにする（1回の操作が2行に効かないように）", () => {
     const r = { id: "r1", name: "A", power: "1", bonus: "1", leader: "1", total: "1" };
     expect(parseState({ rows: [r, { ...r, name: "B" }] }).rows).toEqual([r]);
+  });
+
+  it("「みんなでライブが止まっている間に選び直した」印は真偽値だけ通す", () => {
+    expect(parseState({ live: "multi", liveInSuspension: true })).toEqual({ live: "multi", liveInSuspension: true });
+    expect(parseState({ live: "multi", liveInSuspension: false })).toEqual({ live: "multi", liveInSuspension: false });
+    expect(parseState({ live: "multi", liveInSuspension: "yes" })).toEqual({ live: "multi" });
+  });
+});
+
+/**
+ * 開いたときのライブ種別（2026-11-18〜 みんなでライブの停止期間）。
+ *
+ * ★ 止まっている間は ひとりでライブで開く。古い保存値が みんなでライブでも同じ（保存値は書き換えない）。
+ * ★ 止まっている間に利用者が選び直した種類は、ふだんどおり保存して次も使う（印 liveInSuspension で古い保存値と見分ける）。
+ */
+describe("initialLive（開いたときのライブ種別）", () => {
+  it("止まっている間は、保存値が無い・古い みんなでライブ なら ひとりでライブ", () => {
+    expect(initialLive({}, true)).toBe("solo");
+    expect(initialLive({ live: "multi" }, true)).toBe("solo");
+    expect(initialLive({ live: "multi", liveInSuspension: false }, true)).toBe("solo");
+  });
+
+  it("止まっている間でも、保存値がオート・ひとりでライブならそのまま", () => {
+    expect(initialLive({ live: "auto" }, true)).toBe("auto");
+    expect(initialLive({ live: "solo" }, true)).toBe("solo");
+  });
+
+  it("止まっている間に選び直した みんなでライブ は、次に開いたときもそのまま", () => {
+    expect(initialLive({ live: "multi", liveInSuspension: true }, true)).toBe("multi");
+  });
+
+  it("再開したら保存値どおり。無ければ今までどおり みんなでライブ", () => {
+    expect(initialLive({}, false)).toBe("multi");
+    expect(initialLive({ live: "multi" }, false)).toBe("multi");
+    expect(initialLive({ live: "solo", liveInSuspension: true }, false)).toBe("solo");
+    expect(initialLive({ live: "auto" }, false)).toBe("auto");
+  });
+});
+
+/**
+ * オーバーヘッドの出どころの断り書き（楽曲比較と編成ビルダーの比較で共通）。
+ *
+ * ★ ひとりでライブのロス（OVERHEAD_SEC.solo）は実測前の仮の値。「仮」と書くかは
+ *   src/lib/overhead.ts の SOLO_OVERHEAD_PROVISIONAL だけで決める（値が 33 かどうかでは決めない）。
+ */
+describe("overheadBasisNote", () => {
+  it("印が立っている間、ひとりでライブは「仮の値」と書き、「実測値」と書かない", () => {
+    const note = overheadBasisNote("solo", true);
+    expect(note).toContain("仮");
+    expect(note).not.toContain("実測値");
+  });
+
+  it("印が下りたら（Nori が測ったら）、ひとりでライブも「実測値」になり「仮」が消える", () => {
+    const note = overheadBasisNote("solo", false);
+    expect(note).toBe("（ライブ種別ごとの実測値）");
+    expect(note).not.toContain("仮");
+  });
+
+  it("みんなでライブ・オートは印によらず「実測値」", () => {
+    for (const p of [true, false]) {
+      expect(overheadBasisNote("multi", p)).toBe("（ライブ種別ごとの実測値）");
+      expect(overheadBasisNote("auto", p)).toBe("（ライブ種別ごとの実測値）");
+    }
   });
 });
 
