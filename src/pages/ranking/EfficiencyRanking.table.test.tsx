@@ -74,11 +74,25 @@ vi.mock("./useRankingMusics", async (importOriginal) => ({
 // 止まっている期間（ひとりで周回で開く）。印は本物と同じ true
 vi.mock("../../lib/liveSuspension", () => ({ MULTI_LIVE_SUSPENDED: true }));
 
+// ひとりでライブのロスが仮の値かの印。★ Nori が測って本物の印を下ろしても、このテストが赤くならないよう差し替える
+//（値 OVERHEAD_SEC は本物のまま。EfficiencyRanking.test.tsx と同じ形）
+const provisional = vi.hoisted(() => ({ value: true }));
+vi.mock("../../lib/overhead", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/overhead")>();
+  return {
+    ...actual,
+    get SOLO_OVERHEAD_PROVISIONAL() {
+      return provisional.value;
+    },
+  };
+});
+
 const STORE_KEY = "sekai-master:ranking-inputs";
 
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  provisional.value = true;
 });
 
 const draw = () =>
@@ -155,12 +169,19 @@ describe("既定（自分の条件を入れていない）でも絶対値を出�
 });
 
 describe("表のすぐ上の前提の 1 行", () => {
+  const soloPremise = (mark: string) =>
+    `総合力${(DEFAULT_PARAMS.power / 10000).toFixed(1)}万・ボーナス${DEFAULT_PARAMS.bonus}%・${DEFAULT_PARAMS.taki}焚き・` +
+    `スキル${DEFAULT_PARAMS.skillLeader}/${DEFAULT_PARAMS.skillTotal}・ロス${DEFAULT_OVERHEAD_SEC.solo}秒${mark}の場合`;
+
   it("数字は DEFAULT_PARAMS と DEFAULT_OVERHEAD_SEC から（ひとりでは仮のロスに「（仮）」）", () => {
     draw();
-    expect(premise().textContent).toBe(
-      `総合力${(DEFAULT_PARAMS.power / 10000).toFixed(1)}万・ボーナス${DEFAULT_PARAMS.bonus}%・${DEFAULT_PARAMS.taki}焚き・` +
-        `スキル${DEFAULT_PARAMS.skillLeader}/${DEFAULT_PARAMS.skillTotal}・ロス${DEFAULT_OVERHEAD_SEC.solo}秒（仮）の場合`,
-    );
+    expect(premise().textContent).toBe(soloPremise("（仮）"));
+  });
+
+  it("仮の値の印が下りたら（Nori が測ったら）「（仮）」を付けない", () => {
+    provisional.value = false;
+    draw();
+    expect(premise().textContent).toBe(soloPremise(""));
   });
 
   it("表より前にある（前提を読んでから数字を見る）", () => {

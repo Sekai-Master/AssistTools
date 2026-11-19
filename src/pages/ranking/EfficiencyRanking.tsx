@@ -1053,7 +1053,8 @@ export default function EfficiencyRanking() {
                * ★ 前提は表のすぐ上に 1 行で（既定でも絶対値を出すので、数字より先に読ませる）。
                *   以前は表の下の注にしか無く、スクショした表だけが前提なしで出回る形だった。
                */}
-              <p className="mb-2 text-xs leading-5 text-slate-500">
+              {/* ★ 行の高さは text-xs の既定（16px）・下の余白 4px。390px で最初の画面に 2 行入る高さに詰めた */}
+              <p className="mb-1 text-xs text-slate-500">
                 {/* 間は前提の側の右の余白で取る（ボタンが次の行へ折り返したとき、行頭が字下げにならないように） */}
                 <span className="mr-2">{custom ? `自分の条件で計算：${premise}` : `${premise}の場合`}</span>
                 <button
@@ -1095,7 +1096,8 @@ export default function EfficiencyRanking() {
                         // 条件を変えると順位が総入れ替えになる。行が実際に動いて見えないと
                         // 「さっき見ていた曲がどこへ行ったか」が追えない。
                         ref={rowRef(key)}
-                        className="flex items-start gap-2 border-t border-slate-300 py-2 first:border-t-0"
+                        // py-1.5 は表のセルの例外（docs/design-system.md 3 節）。一覧の長さを詰める
+                        className="flex items-start gap-2 border-t border-slate-300 py-1.5 first:border-t-0"
                       >
                         <span className="w-6 shrink-0 text-right text-sm leading-8 tabular-nums text-slate-400">
                           {i + 1}
