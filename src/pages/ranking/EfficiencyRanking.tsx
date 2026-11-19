@@ -19,12 +19,14 @@ import {
 import {
   rankSongs,
   rankSongsInWindow,
+  bestRowPerSong,
   multiEffectiveSkill,
   DEFAULT_OVERHEAD_SEC,
   DEFAULT_PARAMS,
   type RankingMode,
   type EfficiencyParams,
 } from "./lib/efficiency";
+import { premiseParts } from "./lib/premise";
 import { ProfileBar, SaveToProfile } from "../../components/ui/ProfileBar";
 import {
   lbNeededForPlays,
@@ -48,6 +50,8 @@ const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 const STORE_KEY = "sekai-master:ranking-inputs";
 const STORE_VERSION = 2;
 const ROW_LIMIT = 50;
+/** 「自分の条件で計算する」の枠。表の上の前提の行から飛ぶ先。 */
+const CUSTOM_ID = "ranking-custom";
 
 const MODE_OPTIONS: { value: RankingMode; label: string }[] = [
   // ゲームの公式名「みんなでライブ」「ひとりでライブ」に合わせる（2026-11-18 に「手動周回」から改名）。
@@ -102,6 +106,13 @@ const decimalInput = (v: string) =>
   v.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
 const fmt = (n: number) => Math.round(n).toLocaleString("ja-JP");
 const ALL_DIFFS = new Set<Difficulty>(DIFFICULTY_ORDER);
+
+/** 曲長を m:ss に（表の行の小さな字）。 */
+function mss(sec: number | null): string {
+  if (sec == null) return "—";
+  const s = Math.round(sec);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
 
 /** 秒を「◯時間◯分」に。周回計画は分単位で足りる。 */
 function hhmm(totalSec: number): string {
@@ -170,6 +181,8 @@ interface Stored {
   autoLeft?: string;
   /** 開催中のイベントの総合力上限を効かせるか（既定 ON）。 */
   applyLimit?: boolean;
+  /** 表を難易度ごとに全部並べるか。既定（false）は1曲1行（2026-11-19）。 */
+  allDiffs?: boolean;
 }
 
 const str = (v: unknown): string | undefined =>
@@ -215,6 +228,7 @@ function loadStored(): Stored {
       pick: str(s.pick),
       regen: typeof s.regen === "boolean" ? s.regen : undefined,
       applyLimit: typeof s.applyLimit === "boolean" ? s.applyLimit : undefined,
+      allDiffs: typeof s.allDiffs === "boolean" ? s.allDiffs : undefined,
       autoFrom:
         s.autoFrom === "lb" || s.autoFrom === "plays" || s.autoFrom === "window"
           ? s.autoFrom
@@ -444,6 +458,11 @@ export default function EfficiencyRanking() {
     MULTI_LIVE_SUSPENDED ? "solo" : "manual",
   );
   const [diffs, setDiffs] = useState<Set<Difficulty>>(() => new Set(ALL_DIFFS));
+  /**
+   * 表を難易度ごとに全部並べるか。**既定は1曲1行**（選んだ難易度・レベルの中で、その曲の一番上の行だけ）。
+   * ★ 同じ曲が難易度違いで並ぶと上位が1曲で埋まる（ひとりで周回の上位7行のうち5行が独りんぼエンヴィー。2026-11-19）。
+   */
+  const [allDiffs, setAllDiffs] = useState(stored.allDiffs ?? false);
 
   // 既定は「入力なしで一般的な順位を見る」。自分の条件で計算したい人だけスイッチを入れる。
   const [custom, setCustom] = useState(stored.custom ?? false);
@@ -665,24 +684,33 @@ export default function EfficiencyRanking() {
           ? !levelFiltered
           : e.playLevel >= loLv && e.playLevel <= hiLv),
     );
+    /**
+     * ★ 1曲1行への間引きは**上位◯件に切る前**に掛ける。先に切ると、同じ曲の難易度違いで枠が埋まって曲数が減る。
+     *   rankSongs・rankSongsInWindow の出力そのものは変えない（間引きは後から掛ける純粋関数）。
+     */
+    const top = <R extends { musicId: string }>(rows: R[]) =>
+      (allDiffs ? rows : bestRowPerSong(rows)).slice(0, ROW_LIMIT);
     // 「残り時間で区切る」ときだけ、合計Ptで並べ替える（別の指標になる）。
     if (mode === "auto" && autoFrom === "window") {
       const win = Math.max(0, Number(windowMin) || 0) * 60;
-      return rankSongsInWindow(filtered, params, {
-        windowSec: win,
-        startLB: Number(startLB) || 0,
-        lbCap: PASS_LIMITS[pass].lbCap,
-        maxPlays: Number(autoLeft) || 0,
-        regen,
-        refill,
-      }).slice(0, ROW_LIMIT);
+      return top(
+        rankSongsInWindow(filtered, params, {
+          windowSec: win,
+          startLB: Number(startLB) || 0,
+          lbCap: PASS_LIMITS[pass].lbCap,
+          maxPlays: Number(autoLeft) || 0,
+          regen,
+          refill,
+        }),
+      );
     }
-    return rankSongs(filtered, params, mode).slice(0, ROW_LIMIT);
+    return top(rankSongs(filtered, params, mode));
   }, [
     entries,
     params,
     mode,
     diffs,
+    allDiffs,
     loLv,
     hiLv,
     levelFiltered,
@@ -821,6 +849,34 @@ export default function EfficiencyRanking() {
     { enabled: motionLevel !== "off" && !osReduce },
   );
 
+  /**
+   * 表のすぐ上の前提の 1 行。**既定でも絶対値を出すので、何を前提にした数字かを表の上で言う**（2026-11-19）。
+   * 数字は計算に使っている params から作る（既定なら DEFAULT_PARAMS と DEFAULT_OVERHEAD_SEC の値）。
+   * ★ ロスは表の数字を動かすタブ（みんなで・ひとりで・オートの区間モード）でだけ書く。
+   * ★ 「（仮）」は既定のロスを使っている間だけ。自分で入れたロスは仮の値ではない。
+   */
+  const premise = premiseParts(params, mode, {
+    showLoss: mode === "manual" || mode === "solo" || isWindow,
+    provisionalLoss: !custom && soloLossProvisional,
+  }).join("・");
+  /** 表の主役の数字の単位。★ 窓モードの metric は「窓内の合計Pt」。Pt/回 のままだと嘘になる。 */
+  const unitLabel = isWindow ? "合計Pt" : note.metricLabel;
+
+  /** 前提の行から「自分の条件で計算する」の枠を開いて、そこまで動かす。 */
+  const openCustom = () => {
+    if (!custom) {
+      setCustom(true);
+      persist({ custom: true });
+    }
+    const smooth = motionLevel !== "off" && !osReduce;
+    // 開いて描き直してから動かす（畳んだままの高さで止まらないように）。jsdom には scrollIntoView が無い
+    requestAnimationFrame(() =>
+      document
+        .getElementById(CUSTOM_ID)
+        ?.scrollIntoView?.({ behavior: smooth ? "smooth" : "auto", block: "start" }),
+    );
+  };
+
   return (
     <ToolPage
       morphKey="tool:ranking"
@@ -907,6 +963,15 @@ export default function EfficiencyRanking() {
           >
             選択を外す
           </NeuButton>
+          {/* ★ 表の上ではなく難易度の行に置く。表の上に足すと、スマホの最初の画面に入る行が減る */}
+          <Switch
+            checked={allDiffs}
+            onChange={(v) => {
+              setAllDiffs(v);
+              persist({ allDiffs: v });
+            }}
+            label="難易度ごとに全部並べる"
+          />
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
@@ -983,121 +1048,120 @@ export default function EfficiencyRanking() {
           )}
 
           {ranked.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[600px] text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-slate-500">
-                    <th className="px-2 py-2 font-bold">#</th>
-                    <th className="px-2 py-2 font-bold">楽曲</th>
-                    <th className="px-2 py-2 font-bold">難易度</th>
-                    <th className="px-2 py-2 text-right font-bold">指数</th>
-                    {custom && (
-                      <th className="px-2 py-2 text-right font-bold">
-                        {/* ★ 窓モードの metric は「窓内の合計Pt」。Pt/回 のままだと嘘になる。 */}
-                        {isWindow ? "合計Pt" : note.metricLabel}
-                      </th>
-                    )}
-                    <th className="px-2 py-2 text-right font-bold">曲長</th>
-                    <th className="px-2 py-2 text-right font-bold">ノーツ</th>
-                    <th className="px-2 py-2 text-right font-bold">
-                      {mode === "challenge" ? "スコア率" : "基礎点"}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ranked.map((r, i) => (
-                    <tr
-                      key={`${r.musicId}-${r.difficulty}`}
-                      // 条件を変えると順位が総入れ替えになる。行が実際に動いて見えないと
-                      // 「さっき見ていた曲がどこへ行ったか」が追えない。
-                      ref={rowRef(`${r.musicId}-${r.difficulty}`)}
-                      className="border-t border-slate-200/60"
-                    >
-                      <td className="px-2 py-2 tabular-nums text-slate-400">
-                        {i + 1}
-                      </td>
-                      <td className="px-2 py-2">
-                        <div className="flex items-center gap-2">
-                          <img
-                            src={`${JACKET_BASE}${r.jacketLink}`}
-                            alt=""
-                            loading="lazy"
-                            className="h-8 w-8 shrink-0 rounded"
-                          />
-                          <span className="min-w-0 truncate font-bold text-slate-700">
-                            {r.title}
-                          </span>
-                        </div>
-                        {/*
-                         * ★ 何で止まるかは曲ごとに変わる（短い曲は時間、長い曲はライボ）。
-                         *   これを出さないと「なぜこの曲が上なのか」が読めない。
-                         */}
-                        {(() => {
-                          const w = isWindow ? windowInfo(r) : null;
-                          if (!w) return null;
-                          return (
-                            <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-slate-500">
-                              <span className="tabular-nums">{w.plays} 回</span>
-                              <span className="rounded bg-neu px-1 py-0.5 shadow-neu-inset">
-                                {LIMIT_LABEL[w.limitedBy]}
+            <>
+              {/*
+               * ★ 前提は表のすぐ上に 1 行で（既定でも絶対値を出すので、数字より先に読ませる）。
+               *   以前は表の下の注にしか無く、スクショした表だけが前提なしで出回る形だった。
+               */}
+              <p className="mb-2 text-xs leading-5 text-slate-500">
+                {/* 間は前提の側の右の余白で取る（ボタンが次の行へ折り返したとき、行頭が字下げにならないように） */}
+                <span className="mr-2">{custom ? `自分の条件で計算：${premise}` : `${premise}の場合`}</span>
+                <button
+                  type="button"
+                  className="whitespace-nowrap font-bold text-slate-600 underline underline-offset-4"
+                  onClick={openCustom}
+                >
+                  {custom ? "条件を変える" : "自分の編成で計算する"}
+                </button>
+              </p>
+              {/*
+               * ★ 電話の幅が先（2026-11-19 表の直し）。1 行に「順位・ジャケット＋曲名（札・曲長）・主役の数字」だけを置き、
+               *   横スクロールを出さない（以前は min-w-[600px] の表で、326px の枠を横にずらさないと数字が出なかった）。
+               *   指数・ノーツ・基礎点の列は削った。主役の数字はそのタブが並べている量の絶対値。
+               * ★ 2 段目は曲の札・曲長（左）と、数字の内訳（右）。狭いと内訳だけ次の行へ折り返す。
+               */}
+              <div data-ranking-table>
+                <div
+                  aria-hidden
+                  className="flex items-end gap-2 border-b border-slate-300 pb-1 text-xs font-bold text-slate-500"
+                >
+                  <span className="w-6 shrink-0 text-right">#</span>
+                  <span className="flex-1">楽曲</span>
+                  <span data-ranking-unit>{unitLabel}</span>
+                </div>
+                <ol>
+                  {ranked.map((r, i) => {
+                    const key = `${r.musicId}-${r.difficulty}`;
+                    // ★ 何で止まるかは曲ごとに変わる（短い曲は時間、長い曲はライボ）。これを出さないと「なぜこの曲が上なのか」が読めない。
+                    const w = isWindow ? windowInfo(r) : null;
+                    const perHour =
+                      (mode === "manual" || mode === "solo") && r.cycleSec > 0
+                        ? 3600 / r.cycleSec
+                        : null;
+                    return (
+                      <li
+                        key={key}
+                        data-ranking-row={key}
+                        // 条件を変えると順位が総入れ替えになる。行が実際に動いて見えないと
+                        // 「さっき見ていた曲がどこへ行ったか」が追えない。
+                        ref={rowRef(key)}
+                        className="flex items-start gap-2 border-t border-slate-300 py-2 first:border-t-0"
+                      >
+                        <span className="w-6 shrink-0 text-right text-sm leading-8 tabular-nums text-slate-400">
+                          {i + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <img
+                              src={`${JACKET_BASE}${r.jacketLink}`}
+                              alt=""
+                              loading="lazy"
+                              className="h-8 w-8 shrink-0 rounded"
+                            />
+                            <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-700">
+                              {r.title}
+                            </span>
+                            <span
+                              data-main-number
+                              className="shrink-0 font-num text-lg font-bold leading-8 tabular-nums text-slate-800 min-[360px]:text-2xl"
+                            >
+                              {fmt(r.metric)}
+                            </span>
+                            <span className="sr-only">{unitLabel}</span>
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                            <DifficultyBadge
+                              difficulty={r.difficulty}
+                              level={r.playLevel}
+                            />
+                            <span className="font-num tabular-nums">
+                              {mss(r.musicTime)}
+                            </span>
+                            {perHour != null && (
+                              <span
+                                data-sub
+                                className="ml-auto text-right font-num tabular-nums"
+                              >
+                                <span className="whitespace-nowrap">
+                                  {perHour.toFixed(1)}回/時
+                                </span>
+                                ・
+                                <span className="whitespace-nowrap">
+                                  1回 {fmt(r.eventPt)}Pt
+                                </span>
                               </span>
-                            </div>
-                          );
-                        })()}
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-2">
-                        <DifficultyBadge
-                          difficulty={r.difficulty}
-                          level={r.playLevel}
-                        />
-                      </td>
-                      <td className="px-2 py-2 text-right font-bold tabular-nums text-slate-700">
-                        {r.index.toFixed(1)}
-                      </td>
-                      {custom && (
-                        <td className="px-2 py-2 text-right tabular-nums text-slate-500">
-                          {fmt(r.metric)}
-                        </td>
-                      )}
-                      <td className="px-2 py-2 text-right tabular-nums text-slate-500">
-                        {r.musicTime != null
-                          ? `${r.musicTime.toFixed(1)}s`
-                          : "—"}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums text-slate-500">
-                        {r.noteCount ?? "—"}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums text-slate-500">
-                        {mode === "challenge"
-                          ? (r.baseScore?.toFixed(3) ?? "—")
-                          : (r.eventRate ?? "—")}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {ranked.length > 0 && (
-            <p className="mt-4 text-xs leading-relaxed text-slate-500">
-              <span className="font-bold text-slate-600">指数</span>
-              は1位を100とした相対値です。
-              {custom ? (
-                <>下の条件で計算しています。</>
-              ) : (
-                <>
-                  {DEFAULT_PARAMS.skillLeader}/{DEFAULT_PARAMS.skillTotal}/
-                  {(DEFAULT_PARAMS.power / 10000).toFixed(1)}
-                  {mode !== "challenge" &&
-                    `／ボーナス ${DEFAULT_PARAMS.bonus}%／${taki}焚き`}
-                  {mode !== "challenge" &&
-                    `／ロス ${DEFAULT_OVERHEAD_SEC[mode]}秒${soloLossProvisional ? "（仮）" : ""}`}
-                  {" を前提にした一般的な順位です。"}
-                  自分の条件に差し替えるには下の「自分の条件で計算する」を入れてください。
-                </>
-              )}
-            </p>
+                            )}
+                            {w && (
+                              <span
+                                data-sub
+                                className="ml-auto flex items-center gap-1"
+                              >
+                                <span className="font-num tabular-nums">
+                                  {w.plays}回
+                                </span>
+                                <span className="rounded bg-neu px-1 py-0.5 shadow-neu-inset">
+                                  {LIMIT_LABEL[w.limitedBy]}
+                                </span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            </>
           )}
         </div>
       </Panel>
@@ -1494,14 +1558,17 @@ export default function EfficiencyRanking() {
       )}
 
       <Panel>
-        <Switch
-          checked={custom}
-          onChange={(v) => {
-            setCustom(v);
-            persist({ custom: v });
-          }}
-          label="自分の条件で計算する"
-        />
+        {/* 表の上の前提の行（「自分の編成で計算する」）から飛ぶ先 */}
+        <div id={CUSTOM_ID} className="scroll-mt-20">
+          <Switch
+            checked={custom}
+            onChange={(v) => {
+              setCustom(v);
+              persist({ custom: v });
+            }}
+            label="自分の条件で計算する"
+          />
+        </div>
         {custom && (
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
             {/* 呼び出しは上部にもあるが、値をいじっている場所からも届くようにする。

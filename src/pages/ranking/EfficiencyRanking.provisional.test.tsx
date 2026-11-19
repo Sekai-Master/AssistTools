@@ -70,7 +70,7 @@ describe("ひとりで周回のロスが 33 以外の仮の値でも、印が立
   it("入力なしの順位の前提に「ロス 40秒（仮）」と出す", () => {
     draw();
     expect(screen.getByRole("radio", { name: "ひとりで" }).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByText(/を前提にした一般的な順位です/).textContent).toContain("／ロス 40秒（仮）");
+    expect(screen.getByText(/の場合$/).textContent).toContain("ロス40秒（仮）");
   });
 
   it("自分の条件の「1曲あたりのロス」の補足に、既定の 40 秒が仮の値だと書く", () => {

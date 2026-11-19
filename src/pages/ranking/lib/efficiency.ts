@@ -404,3 +404,23 @@ export function rankSongsInWindow<T extends EfficiencyEntry>(
   const top = scored.length > 0 ? scored[0].totalPt : 0;
   return scored.map((r) => ({ ...r, index: top > 0 ? (r.totalPt / top) * 100 : 0 }));
 }
+
+/**
+ * 1曲1行に間引く。並べ替え済みの行（rankSongs・rankSongsInWindow の返り値）から、
+ * 曲（musicId）ごとに**最初の行だけ**を残す。並びは変えず、行の中身もそのまま返す。
+ *
+ * ★ 同じ曲が難易度ごとに並ぶと上位が1曲で埋まる（ひとりで周回の上位7行のうち5行が
+ *   独りんぼエンヴィーだった。2026-11-19）。表の既定はこれで間引き、
+ *   「難易度ごとに全部並べる」を入れたときだけ間引かない。
+ * ★ 同じ曲の難易度どうしが同点でも並べ替えない。rankSongs が先に置いた方（同点なら入力の順）を残す。
+ * ★ 難易度・レベルの絞り込みは rows を作る前に済ませておく（絞り込みの中での一番上が残る）。
+ * ★ 上位◯件に切るのはこの後。先に切ると、同じ曲の難易度違いで枠が埋まって曲数が減る。
+ */
+export function bestRowPerSong<T extends { musicId: string }>(rows: readonly T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter((r) => {
+    if (seen.has(r.musicId)) return false;
+    seen.add(r.musicId);
+    return true;
+  });
+}

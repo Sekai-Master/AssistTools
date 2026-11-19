@@ -189,8 +189,8 @@ describe("ひとりで周回", () => {
    *   SOLO_OVERHEAD_PROVISIONAL だけで決める（値が 33 かどうかでは決めない。2026-11-19 指揮）。
    */
   describe("ひとりで周回のロスの既定は、印が立っている間「仮」と出す", () => {
-    // 表の下の「…／ロス ◯秒 を前提にした一般的な順位です。」
-    const premise = () => screen.getByText(/を前提にした一般的な順位です/).textContent ?? "";
+    // 表のすぐ上の「総合力…・ロス◯秒の場合」（2026-11-19 表の直しで表の下の注から移した）
+    const premise = () => screen.getByText(/の場合$/).textContent ?? "";
     const lossHint = () =>
       [...document.querySelectorAll("label")]
         .find((l) => l.textContent === "1曲あたりのロス（秒）")!
@@ -198,9 +198,9 @@ describe("ひとりで周回", () => {
 
     it("入力なしの順位の前提に「ロス 33秒（仮）」と出す。ほかのタブには出さない", () => {
       draw();
-      expect(premise()).toContain(`／ロス ${DEFAULT_OVERHEAD_SEC.solo}秒（仮）`);
+      expect(premise()).toContain(`ロス${DEFAULT_OVERHEAD_SEC.solo}秒（仮）`);
       fireEvent.click(tab("みんなで"));
-      expect(premise()).toContain(`／ロス ${DEFAULT_OVERHEAD_SEC.manual}秒`);
+      expect(premise()).toContain(`ロス${DEFAULT_OVERHEAD_SEC.manual}秒`);
       expect(premise()).not.toContain("仮");
     });
 
@@ -215,7 +215,7 @@ describe("ひとりで周回", () => {
     it("印が下りたら（Nori が測ったら）、どちらからも「仮」が消える", () => {
       provisional.value = false;
       draw();
-      expect(premise()).toContain(`／ロス ${DEFAULT_OVERHEAD_SEC.solo}秒`);
+      expect(premise()).toContain(`ロス${DEFAULT_OVERHEAD_SEC.solo}秒`);
       expect(premise()).not.toContain("仮");
       cleanup();
       localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true }));
