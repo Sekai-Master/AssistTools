@@ -72,3 +72,24 @@ describe("壊れた保存で落ちない", () => {
     expect(loadRuns()[0].marks).toEqual([1, 4]);
   });
 });
+
+/** ★ 種類を記録するのは 2026-11-18 から。それより前の記録は、みんなでライブ決め打ちの頃に測ったもの。 */
+describe("記録のライブの種類", () => {
+  it("種類を持つ記録はそのまま読む", () => {
+    addRun({ ...makeRun("s", T0), liveKind: "solo" });
+    addRun({ ...makeRun("m", T0 + 1), liveKind: "multi" });
+    const byId = Object.fromEntries(loadRuns().map((r) => [r.id, r.liveKind]));
+    expect(byId).toEqual({ s: "solo", m: "multi" });
+  });
+
+  it("種類を持たない古い記録・読めない種類は、みんなでライブとして読む", () => {
+    const { liveKind: _drop, ...old } = makeRun("old", T0);
+    void _drop;
+    localStorage.setItem(
+      LAP_RUNS_KEY,
+      JSON.stringify([old, { ...makeRun("junk", T0 + 1), liveKind: "auto" }]),
+    );
+    const byId = Object.fromEntries(loadRuns().map((r) => [r.id, r.liveKind]));
+    expect(byId).toEqual({ old: "multi", junk: "multi" });
+  });
+});

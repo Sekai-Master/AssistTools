@@ -18,12 +18,56 @@
  * ここでは **中断／再開** を明示のボタンにして、再開時に区間を自動で除外する。
  */
 
+import { MULTI_LIVE_SUSPENDED } from "../../../lib/liveSuspension";
+import { OVERHEAD_SEC, SOLO_OVERHEAD_PROVISIONAL } from "../../../lib/overhead";
+
 /**
- * ★ **協力ライブ決め打ち。** イベランの周回はまず協力ライブで、
- *   種類を選ばせても選択肢がひとつ増えるだけで誰も切り替えなかった（Nori 判断 2026-08-21）。
- *   比べる既定値は src/lib/overhead.ts の `multi`。
+ * 測るライブの種類。比べる既定のロス（src/lib/overhead.ts）と、記録に残す種類だけが変わる。
+ * 集計（平均・オーバーヘッド・時速・長すぎる区間）は種類によらない。
+ *
+ * ★ 前はみんなでライブ決め打ちだった（種類を選ばせても誰も切り替えなかった、Nori 判断 2026-08-21）。
+ *   2026-11-18 23:00 から公式がみんなでライブを止め、イベントはひとりでライブで回すことになったので、
+ *   選べるようにした（Nori 2026-11-18「ラップ計測もひとりでライブモードを実装して期間中デフォルトをひとりに」）。
  */
-export const LAP_LIVE_KIND = "multi" as const;
+export type LapLiveKind = "multi" | "solo";
+
+export const LIVE_KIND_LABEL: Record<LapLiveKind, string> = {
+  multi: "みんなでライブ",
+  solo: "ひとりでライブ",
+};
+
+const isLiveKind = (v: unknown): v is LapLiveKind => v === "multi" || v === "solo";
+
+/** 利用者が選んでいないときの種類。みんなでライブが止まっている間はひとりでライブ。 */
+export function defaultLiveKind(suspended: boolean = MULTI_LIVE_SUSPENDED): LapLiveKind {
+  return suspended ? "solo" : "multi";
+}
+
+/**
+ * いまの種類。**測っている間は計測を始めたときの種類**、それ以外は選んだ種類、選んでいなければ既定。
+ * ★ 既定を保存値に書き込まない。選んでいない人は、MULTI_LIVE_SUSPENDED を false に戻した時点で
+ *   みんなでライブに戻る（その 1 か所で各画面の既定が戻る、という土台の約束）。
+ */
+export function liveKindOf(s: LapState, suspended: boolean = MULTI_LIVE_SUSPENDED): LapLiveKind {
+  return s.runKind ?? s.liveKind ?? defaultLiveKind(suspended);
+}
+
+/** 比べる既定のロス（曲以外の秒数）。数字は overhead.ts にだけ置く。 */
+export function modelOverheadSec(kind: LapLiveKind): number {
+  return OVERHEAD_SEC[kind];
+}
+
+/**
+ * 比べる既定のロスが、まだ実測していない仮の値か。
+ * ★ overhead.ts の `SOLO_OVERHEAD_PROVISIONAL` だけで決める（値が 33 かどうかでは見ない。実測がたまたま
+ *   同じ値でも、別の仮の値に替えても狂わないように）。Nori が測ったら overhead.ts でその印を false にする。
+ */
+export function isProvisionalOverhead(
+  kind: LapLiveKind,
+  provisional: boolean = SOLO_OVERHEAD_PROVISIONAL,
+): boolean {
+  return kind === "solo" && provisional;
+}
 
 export interface LapState {
   /** タップした時刻(ms)。marks[0] が計測開始。 */
@@ -45,6 +89,14 @@ export interface LapState {
   taki: number;
   /** 中断した時刻(ms)。null なら計測中。 */
   pausedAt: number | null;
+  /** 利用者が選んだライブの種類。**null は「まだ選んでいない」**（既定に従う）。 */
+  liveKind: LapLiveKind | null;
+  /**
+   * いま測っている計測の種類。計測開始（最初のタップ）で固め、記録が空になったら外す。
+   * ★ 選んだ種類と分けるのは、選んでいない人の計測が、測っている途中で既定の切り替わり
+   *   （MULTI_LIVE_SUSPENDED を戻すデプロイ）に引きずられないようにするため。
+   */
+  runKind: LapLiveKind | null;
 }
 
 export interface LapSegment {
@@ -104,6 +156,8 @@ export function initialState(): LapState {
     ptPerRun: 0,
     taki: 0,
     pausedAt: null,
+    liveKind: null,
+    runKind: null,
   };
 }
 
@@ -183,7 +237,15 @@ export function tap(s: LapState, now: number): LapState {
     ...s,
     marks: [...s.marks, now],
     laps: s.marks.length ? [...s.laps, 1] : s.laps,
+    // 計測開始の 1 押しで、この計測の種類を固める
+    runKind: s.marks.length ? s.runKind : liveKindOf(s),
   };
+}
+
+/** 種類を選ぶ。**計測中・中断中は変えない**（測っている途中で比べる既定と記録の種類が変わるため）。 */
+export function setLiveKind(s: LapState, kind: LapLiveKind): LapState {
+  if (isRunning(s)) return s;
+  return { ...s, liveKind: kind };
 }
 
 export function pause(s: LapState, now: number): LapState {
@@ -221,6 +283,7 @@ export function undo(s: LapState): LapState {
     excluded: s.excluded.filter(keep),
     breaks: s.breaks.filter(keep),
     pausedAt: null,
+    runKind: marks.length ? s.runKind : null,
   };
 }
 
@@ -244,7 +307,7 @@ export function setLapCount(s: LapState, i: number, n: number): LapState {
   return { ...s, laps };
 }
 
-/** 記録だけ消す。曲・単価などの設定は残す（次の計測でも同じ設定を使うため）。 */
+/** 記録だけ消す。曲・単価・選んだ種類などの設定は残す（次の計測でも同じ設定を使うため）。 */
 export function clearRecords(s: LapState): LapState {
   return {
     ...s,
@@ -253,6 +316,7 @@ export function clearRecords(s: LapState): LapState {
     excluded: [],
     breaks: [],
     pausedAt: null,
+    runKind: null,
   };
 }
 
@@ -328,6 +392,10 @@ export function normalize(raw: unknown): LapState {
       pausedAt >= marks[marks.length - 1]
         ? pausedAt
         : null,
+    // ★ 種類を持たない古い保存は「未選択」。既定（期間中はひとりでライブ）をここで埋めない。
+    liveKind: isLiveKind(v.liveKind) ? v.liveKind : null,
+    // ★ 種類を持たないのに測っている保存は、この機能より前（みんなでライブ決め打ち）に始めた計測。
+    runKind: marks.length ? (isLiveKind(v.runKind) ? v.runKind : "multi") : null,
   };
 }
 
@@ -338,6 +406,7 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 export function exportObj(s: LapState): Record<string, unknown> {
   const st = stats(s);
   return {
+    liveKind: liveKindOf(s),
     song: s.songTitle || null,
     songId: s.songId,
     songSec: s.songSec,
@@ -380,6 +449,11 @@ export interface LapRun {
    *   測っていないので、それを含めると記録の長さが実際より延びる。
    */
   endedAt: number;
+  /**
+   * 測ったライブの種類。2026-11-18 から記録する。
+   * ★ それより前の記録は持たない。読むときにみんなでライブとして埋める（runs.ts の loadRuns）。
+   */
+  liveKind: LapLiveKind;
   songId: string | null;
   songTitle: string;
   songSec: number;
@@ -411,6 +485,7 @@ export function toRun(s: LapState, id: string, savedAt: number): LapRun | null {
     savedAt,
     startedAt: s.marks[0],
     endedAt: s.marks[s.marks.length - 1],
+    liveKind: liveKindOf(s),
     songId: s.songId,
     songTitle: s.songTitle,
     songSec: s.songSec,
@@ -436,6 +511,7 @@ export function runToExport(r: LapRun): Record<string, unknown> {
     startedAt: iso(r.startedAt),
     endedAt: iso(r.endedAt),
     savedAt: iso(r.savedAt),
+    liveKind: r.liveKind,
     song: r.songTitle || null,
     songId: r.songId,
     songSec: r.songSec,

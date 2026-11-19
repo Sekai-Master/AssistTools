@@ -1,0 +1,204 @@
+/**
+ * @vitest-environment jsdom
+ *
+ * 周回ラップ計測の「ひとりでライブ」（みんなでライブが止まっている期間、2026-11-18〜）。
+ *
+ * ★ 止まっている期間の印（MULTI_LIVE_SUSPENDED）はここでは true に固定する。再開して false に戻しても、
+ *   このファイルは「止まっている間はこう振る舞う」を縛り続ける（false の側は LapTimer.multi.test.tsx）。
+ * ★ ひとりでライブのロスは Nori が実測するまで仮の値。期待する秒数は OVERHEAD_SEC.solo から読む。
+ *   仮の印（SOLO_OVERHEAD_PROVISIONAL）はここでは true に固定し、solo の値は仮の値からずらしておく
+ *   （値が 33 でなくても、印が立っていれば「仮」と出すことを縛る。印が false の側は LapTimer.measured.test.tsx）。
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
+import LapTimer from "./LapTimer";
+import { TAP_GUARD_MS } from "./useTapGuard";
+import { LAP_STORAGE_KEY } from "./useLapTimer";
+import { LAP_RUNS_KEY } from "./lib/runs";
+import { initialState, tap, toRun } from "./lib/lap";
+import { OVERHEAD_SEC } from "../../lib/overhead";
+
+vi.mock("../../lib/liveSuspension", () => ({ MULTI_LIVE_SUSPENDED: true }));
+vi.mock("../../lib/overhead", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("../../lib/overhead")>();
+  return {
+    ...mod,
+    SOLO_OVERHEAD_PROVISIONAL: true,
+    OVERHEAD_SEC: { ...mod.OVERHEAD_SEC, solo: mod.OVERHEAD_SEC.solo + 8 },
+  };
+});
+vi.mock("../analyzer/useAnalyzerMusics", () => ({
+  useAnalyzerMusics: () => ({ musics: [], aliases: [], loading: false, error: null }),
+}));
+
+const SONG_SEC = 74.8;
+
+let clock = 1_000_000;
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+beforeEach(() => {
+  localStorage.clear();
+  clock = 1_000_000;
+  vi.spyOn(Date, "now").mockImplementation(() => clock);
+});
+
+const draw = () =>
+  render(
+    <MemoryRouter>
+      <LapTimer />
+    </MemoryRouter>,
+  );
+const mainButton = () => screen.getByTestId("lap-main-button");
+const radio = (name: "みんなでライブ" | "ひとりでライブ") => screen.getByRole("radio", { name });
+const checked = (name: "みんなでライブ" | "ひとりでライブ") => radio(name).getAttribute("aria-checked") === "true";
+/** 曲と条件の段の見出し（計測中に畳んでも見える 1 行）。 */
+const condSummary = () => document.querySelector("details > summary")!;
+const later = () => {
+  clock += TAP_GUARD_MS + 100;
+};
+
+async function oneLap(sec: number) {
+  await userEvent.click(mainButton());
+  clock += sec * 1000;
+  await userEvent.click(mainButton());
+}
+
+describe("開いたときの種類", () => {
+  it("止まっている間は、ひとりでライブで開く。曲の段の見出しにも出す", () => {
+    draw();
+    expect(checked("ひとりでライブ")).toBe(true);
+    expect(checked("みんなでライブ")).toBe(false);
+    expect(condSummary().textContent).toContain("ひとりでライブ");
+  });
+
+  it("種類を持たない古い保存でも、ひとりでライブで開き、保存値は書き換えない", () => {
+    const old = JSON.stringify({ marks: [], laps: [], excluded: [], breaks: [], songId: "074", songTitle: "独りんぼエンヴィー", songSec: 74.8, ptPerRun: 0, taki: 8, pausedAt: null });
+    localStorage.setItem(LAP_STORAGE_KEY, old);
+    draw();
+    expect(checked("ひとりでライブ")).toBe(true);
+    expect(localStorage.getItem(LAP_STORAGE_KEY)).toBe(old);
+  });
+
+  it("選び直した種類はふだん通り保存され、開き直しても残る", async () => {
+    draw();
+    await userEvent.click(radio("みんなでライブ"));
+    expect(checked("みんなでライブ")).toBe(true);
+    expect(JSON.parse(localStorage.getItem(LAP_STORAGE_KEY)!).liveKind).toBe("multi");
+    cleanup();
+    draw();
+    expect(checked("みんなでライブ")).toBe(true);
+  });
+
+  /**
+   * ★ 検分 #264 L-2: 部品は同じ値でも onChange を呼ぶ。選ばれている側を押しただけで liveKind:"solo" が保存されると、
+   *   止まっている期間の印を false に戻しても、その人はみんなでライブに戻らない。
+   */
+  it("選ばれている側をもう一度押しても保存しない（既定に従ったままにする）", async () => {
+    draw();
+    await userEvent.click(radio("ひとりでライブ"));
+    expect(checked("ひとりでライブ")).toBe(true);
+    const raw = localStorage.getItem(LAP_STORAGE_KEY);
+    expect(raw == null ? null : JSON.parse(raw).liveKind).toBeNull();
+  });
+
+  /**
+   * ★ 検分 #264 L-4: 曲名と種類を 1 つの切り詰める行に入れると、長い曲名で種類が切れて見えなくなる
+   *   （計測中に段を畳むと、種類が見えるのはこの 1 行だけ）。種類を先に、切り詰めない札で出し、曲名の側を省略する。
+   */
+  it("見出しの 1 行では、種類を曲名より先に、切り詰めない札で出す", () => {
+    draw();
+    const tag = within(condSummary() as HTMLElement).getByText("ひとりでライブ");
+    expect(tag.closest(".truncate")).toBeNull();
+    expect(condSummary().textContent!.startsWith("ひとりでライブ")).toBe(true);
+  });
+});
+
+describe("計測中は種類を変えない", () => {
+  it("計測中・中断中は押しても変わらず、変えられないことを書く", async () => {
+    draw();
+    await userEvent.click(mainButton());
+    later();
+    await userEvent.click(radio("みんなでライブ")).catch(() => {});
+    expect(checked("ひとりでライブ")).toBe(true);
+    expect(radio("みんなでライブ").closest("fieldset")!.disabled).toBe(true);
+    expect(document.body.textContent).toContain("計測中は変えられません");
+
+    await userEvent.click(screen.getByRole("button", { name: "中断する" }));
+    later();
+    await userEvent.click(radio("みんなでライブ")).catch(() => {});
+    expect(checked("ひとりでライブ")).toBe(true);
+  });
+
+  it("終了したら選び直せる（直後の押下は捨てる）", async () => {
+    draw();
+    await oneLap(100);
+    later();
+    await userEvent.click(screen.getByRole("button", { name: "終了して保存" }));
+    expect(radio("みんなでライブ").closest("fieldset")!.disabled).toBe(false);
+    clock += 200;
+    await userEvent.click(radio("みんなでライブ"));
+    expect(checked("ひとりでライブ")).toBe(true);
+    later();
+    await userEvent.click(radio("みんなでライブ"));
+    expect(checked("みんなでライブ")).toBe(true);
+  });
+});
+
+describe("ひとりでライブの目安", () => {
+  it("仮の印が立っている間は、計測前の補足に「仮」と書く", () => {
+    draw();
+    expect(document.body.textContent).toContain(`曲以外の秒数の既定 ${OVERHEAD_SEC.solo} 秒（仮・未実測）`);
+  });
+
+  /** ★ 検分 #264 L-3: 計測中の「仮」は数字の横の 1 か所だけ（同じ断りを繰り返さない、design-system 7 節）。 */
+  it("比べる既定のロスは overhead.ts の solo。仮の印が立っている間は数字の横に 1 か所だけ「仮」と書き、良し悪しを言わない", async () => {
+    draw();
+    await oneLap(SONG_SEC + OVERHEAD_SEC.solo + 20);
+    const text = document.body.textContent ?? "";
+    expect(text).toContain(`曲以外の秒数（既定 ${OVERHEAD_SEC.solo} 秒・仮）`);
+    expect(text.match(/仮/g)).toHaveLength(1);
+    expect(text).toContain(`ひとりでライブの見積りは ${OVERHEAD_SEC.solo} 秒 を置いています。`);
+    expect(text).toContain("+20.0 秒");
+    expect(text).not.toContain("余計にかかっています");
+    expect(text).not.toContain("速く回せています");
+    expect(text).toContain(`ひとりでライブの見積りは ${OVERHEAD_SEC.solo} 秒`);
+    // みんなでライブの既定（54 秒）とは比べない
+    expect(text).not.toContain(`既定 ${OVERHEAD_SEC.multi} 秒`);
+  });
+
+  it("画面の文に「協力」「部屋落ち」を出さない", async () => {
+    draw();
+    await userEvent.click(screen.getByText("使い方", { selector: "summary" }));
+    expect(screen.getByText("使い方", { selector: "summary" }).closest("details")!.textContent).not.toContain("部屋落ち");
+    // 長すぎる区間の知らせ（曲長の 3 倍超）も出す
+    await oneLap(SONG_SEC * 4);
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("このままだと平均が壊れます");
+    expect(text).not.toContain("協力");
+    expect(text).not.toContain("部屋落ち");
+  });
+});
+
+describe("保存した記録の種類", () => {
+  it("新しい記録はひとりでライブとして残し、種類を持たない古い記録はみんなでライブと書く", async () => {
+    const s0 = tap(tap(initialState(), 1), 100_001);
+    const { liveKind: _drop, ...old } = toRun(s0, "old", 2)!;
+    void _drop;
+    localStorage.setItem(LAP_RUNS_KEY, JSON.stringify([old]));
+    draw();
+    await oneLap(SONG_SEC + OVERHEAD_SEC.solo);
+    later();
+    await userEvent.click(screen.getByRole("button", { name: "終了して保存" }));
+
+    const saved = JSON.parse(localStorage.getItem(LAP_RUNS_KEY)!) as { id: string; liveKind?: string }[];
+    expect(saved[0].liveKind).toBe("solo");
+    const rows = screen.getByRole("heading", { name: "保存した記録" }).closest("section")!.querySelectorAll("li");
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain("ひとりでライブ");
+    expect(rows[1].textContent).toContain("みんなでライブ");
+  });
+});

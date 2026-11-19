@@ -11,7 +11,7 @@ import { useActiveProfile } from "../../lib/profiles";
 import { SongSearchModal } from "../../components/SongSearchModal";
 import { useAnalyzerMusics } from "../analyzer/useAnalyzerMusics";
 import { onJacketError } from "../../lib/img";
-import { OVERHEAD_SEC } from "../../lib/overhead";
+import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { Stat } from "../refresh/Stat";
 import {
   useLapTimer,
@@ -20,15 +20,19 @@ import {
   useWakeLock,
 } from "./useLapTimer";
 import {
-  LAP_LIVE_KIND,
+  LIVE_KIND_LABEL,
   RECENT_LAPS,
   clearRecords,
   exportObj,
+  isProvisionalOverhead,
   isRunning,
+  liveKindOf,
+  modelOverheadSec,
   pause,
   resume,
   segments,
   setLapCount,
+  setLiveKind,
   stats,
   suspects,
   tap,
@@ -36,6 +40,7 @@ import {
   undo,
   toRun,
   runToExport,
+  type LapLiveKind,
   type LapRun,
   type LapState,
 } from "./lib/lap";
@@ -54,6 +59,11 @@ const clock = (ms: number) => {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 };
 const fmtMin = (sec: number) => `${(sec / 60).toFixed(1)} 分`;
+
+const LIVE_KIND_OPTIONS: { value: LapLiveKind; label: string }[] = [
+  { value: "multi", label: LIVE_KIND_LABEL.multi },
+  { value: "solo", label: LIVE_KIND_LABEL.solo },
+];
 
 export default function LapTimer() {
   const { musics, aliases, loading } = useAnalyzerMusics();
@@ -113,7 +123,11 @@ export default function LapTimer() {
       )
     : 0;
 
-  const modelOverhead = OVERHEAD_SEC[LAP_LIVE_KIND];
+  /** 測るライブの種類。計測中は始めたときの種類で固まっている（lib の liveKindOf）。 */
+  const kind = liveKindOf(state);
+  const modelOverhead = modelOverheadSec(kind);
+  /** ★ ひとりでライブのロスは Nori が測るまで仮の値。仮のうちは「仮」と書き、良し悪しを言わない。 */
+  const provisional = isProvisionalOverhead(kind);
   // ★ now は1秒ごとの時計から取る（描画中に時刻を読むと、描き直すたびに値が変わる）。
   const staleMin =
     running && !paused
@@ -179,6 +193,14 @@ export default function LapTimer() {
   const condPanel = (
     <details className="neu-panel px-5 py-4 sm:px-6" open={!running}>
       <summary className="flex cursor-pointer items-center gap-2 text-sm font-bold text-slate-600">
+        {/**
+         * ★ 種類を曲名より先に、切り詰めない札で出す（検分 #264 L-4）。計測中はこの段が畳まれ、種類が見えるのは
+         *   この 1 行だけになる。曲名と同じ切り詰める行に入れると、長い曲名で種類が切れて見えなくなった。
+         *   札の形は #265 の「ひとりでライブ想定」と同じ線の囲み（影の段に数えない）。
+         */}
+        <span className="shrink-0 rounded border border-slate-300 px-1.5 py-0.5 text-xs font-bold text-slate-600">
+          {LIVE_KIND_LABEL[kind]}
+        </span>
         {song && (
           <img
             src={`${JACKET_BASE}${song.jacketLink}`}
@@ -190,10 +212,13 @@ export default function LapTimer() {
         <span className="min-w-0 flex-1 truncate">
           {song?.title ?? state.songTitle ?? "曲が未選択"}
           <span className="ml-2 font-normal text-slate-500">
-            {state.songSec > 0 && `${state.songSec}秒`}
-            {state.taki > 0 && ` / 焚き${state.taki}`}
-            {state.ptPerRun > 0 &&
-              ` / 1周 ${state.ptPerRun.toLocaleString()}Pt`}
+            {[
+              state.songSec > 0 && `${state.songSec}秒`,
+              state.taki > 0 && `焚き${state.taki}`,
+              state.ptPerRun > 0 && `1周 ${state.ptPerRun.toLocaleString()}Pt`,
+            ]
+              .filter(Boolean)
+              .join(" / ")}
           </span>
         </span>
       </summary>
@@ -235,7 +260,30 @@ export default function LapTimer() {
           </button>
         </Field>
 
+        {/* ★ 種類は焚き数の横の空いていた枠に置く（幅 640px 以上は高さが増えない。計測開始は下の固定バーなので動かない） */}
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Field
+            label="ライブの種類"
+            hint={
+              running
+                ? "計測中は変えられません（終了すると選べます）"
+                : `曲以外の秒数の既定 ${modelOverhead} 秒${provisional ? "（仮・未実測）" : ""}`
+            }
+          >
+            {/* ★ 計測中は変えない（比べる既定と記録の種類が途中で変わる）。lib の setLiveKind も同じく弾く */}
+            <fieldset disabled={running} className="min-w-0 disabled:opacity-60">
+              <SegmentedControl
+                compact
+                ariaLabel="ライブの種類"
+                buttonClassName="min-h-11"
+                options={LIVE_KIND_OPTIONS}
+                value={kind}
+                // ★ 終了・全消去でこの段が開き直した直後の二度押しで、種類が変わらないようにする（#241 の縛りと同じ）
+                // ★ 選ばれている側を押しても保存しない（部品は同じ値でも呼ぶ。保存すると既定に従わなくなる、検分 #264 L-2）
+                onChange={(k) => k !== kind && !blocked() && update((s) => setLiveKind(s, k))}
+              />
+            </fieldset>
+          </Field>
           <Field
             label="焚き数"
             hint="時速ポイントは焚き数とセットでないと意味がありません。"
@@ -416,7 +464,7 @@ export default function LapTimer() {
             <Stat
               label="オーバーヘッド"
               value={st.overhead != null ? fmtSec(st.overhead) : "—"}
-              sub={`曲以外の秒数（既定 ${modelOverhead} 秒）`}
+              sub={`曲以外の秒数（既定 ${modelOverhead} 秒${provisional ? "・仮" : ""}）`}
             />
           </div>
 
@@ -453,13 +501,22 @@ export default function LapTimer() {
           )}
           {st.overhead != null && st.overhead >= 0 && (
             <p className="mt-3 text-xs leading-relaxed text-slate-500">
-              サイト全体の見積りは協力ライブで <b>{modelOverhead} 秒</b>{" "}
+              {kind === "multi"
+                ? "サイト全体の見積りはみんなでライブで"
+                : "ひとりでライブの見積りは"}{" "}
+              <b>{modelOverhead} 秒</b>{" "}
               を置いています。あなたの実測は <b>{fmtSec(st.overhead)} 秒</b>で、
-              {Math.abs(st.overhead - modelOverhead) < 3
-                ? "ほぼ同じです。"
-                : st.overhead < modelOverhead
-                  ? `${fmtSec(modelOverhead - st.overhead)} 秒ぶん速く回せています。`
-                  : `${fmtSec(st.overhead - modelOverhead)} 秒ぶん余計にかかっています。`}
+              {/**
+               * ★ 仮の値と比べて「速い・遅い」とは言わない（物差しのほうがまだ当てにならない）。差だけ出す。
+               *   「仮」の断りは数字の横（オーバーヘッドの補足の「・仮」）の 1 か所だけ（検分 #264 L-3）
+               */}
+              {provisional
+                ? `差は ${st.overhead >= modelOverhead ? "+" : "−"}${fmtSec(Math.abs(st.overhead - modelOverhead))} 秒です。`
+                : Math.abs(st.overhead - modelOverhead) < 3
+                  ? "ほぼ同じです。"
+                  : st.overhead < modelOverhead
+                    ? `${fmtSec(modelOverhead - st.overhead)} 秒ぶん速く回せています。`
+                    : `${fmtSec(st.overhead - modelOverhead)} 秒ぶん余計にかかっています。`}
             </p>
           )}
 
@@ -475,7 +532,7 @@ export default function LapTimer() {
               <b>
                 #{bad.worst.i + 1} が {fmtSec(bad.worst.per)} 秒
               </b>
-              です。休憩や部屋落ちなら除外、押し忘れなら一覧の ＋
+              です。{kind === "multi" ? "休憩や部屋落ち" : "休憩や離席"}なら除外、押し忘れなら一覧の ＋
               で周回数を増やしてください。
               {bad.n > 1 && ` ほかに ${bad.n - 1} 件。`}
               このままだと平均が壊れます。
@@ -493,7 +550,7 @@ export default function LapTimer() {
       {/* ── 使い方（初回も閉じる。計測のパネルの下） ─────────────── */}
       {/* ★ 計測の開始・終了で key を変えて閉じ直す。開いたまま測り始めると、操作のボタンと
           ラップ一覧の間に約 300px 挟まり続ける（前の open={!running} と同じく、計測中は閉じる）。 */}
-      <LapHowTo key={running ? "running" : "idle"} />
+      <LapHowTo key={running ? "running" : "idle"} kind={kind} />
 
       {/* ── 曲と条件 ─────────────────────────────────── */}
       {/* ── ラップ一覧 ───────────────────────────────── */}
@@ -631,6 +688,7 @@ export default function LapTimer() {
                     </span>
                   )}
                   <b className="text-slate-600">{r.laps} 周</b>
+                  {` / ${LIVE_KIND_LABEL[r.liveKind]}`}
                   {r.avgSec != null && ` / 平均 ${r.avgSec} 秒`}
                   {r.overheadSec != null && ` / OH ${r.overheadSec} 秒`}
                   {r.ptPerHour != null &&
