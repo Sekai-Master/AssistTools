@@ -13,9 +13,12 @@ import { MULTI_OVERHEAD_THEORETICAL, OVERHEAD_SEC } from "../../../lib/overhead"
 
 /**
  * 1周回の所要時間 = 曲の長さ + オーバーヘッド。
- * オーバーヘッドは協力ライブのマッチング・結果画面・支援者交代・ロード等。
+ * オーバーヘッドはみんなでライブのマッチング・結果画面・支援者交代・ロード等。
  * 実測(@Nori, エビ74.8s)基準: 理論32回/h→OH約38s、実測平均28回/h→OH約54s。
  * 環境で大きく変わるので、UIで実測レートから overheadFromRate() で較正する前提。
+ * ★ ここのプリセットはみんなでライブの値。ひとりでライブ（2026-11-18〜）の既定のロスは
+ *   lib/liveAssumption.ts が OVERHEAD_SEC.solo から出す。theoretical（詰めて回した場合）に当たるものは
+ *   ひとりでライブには無い（部屋待ち・支援者交代が無いため）。
  */
 export const OVERHEAD_PRESETS = {
   theoretical: MULTI_OVERHEAD_THEORETICAL, // エビ 約32回/h 相当
