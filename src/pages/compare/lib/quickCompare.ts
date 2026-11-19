@@ -96,8 +96,42 @@ export interface QuickState {
   rows: QuickRow[];
   songId: string;
   difficulty: Difficulty;
-  live: LiveType;
+  /**
+   * 利用者が選んだライブ種別。**まだ選んでいなければ書かない**（2026-11-18〜）。
+   * ★ みんなでライブの停止期間は、開いたときの既定を ひとりでライブ にする。その既定をここへ
+   *   書き戻すと、前の保存値（みんなでライブ）を勝手に書き換えてしまう。
+   */
+  live?: LiveType;
+  /**
+   * live をみんなでライブの停止期間に選び直したか。古い保存値の「みんなでライブ」と、
+   * 止まっている間にわざわざ選び直した「みんなでライブ」を見分ける（後者は次に開いたときもそのまま使う）。
+   */
+  liveInSuspension?: boolean;
   taki: number;
+}
+
+/**
+ * オーバーヘッド（1曲あたりのロス）の出どころの断り書き。楽曲比較と編成ビルダーの比較で共通。
+ *
+ * ★ ひとりでライブのロス（OVERHEAD_SEC.solo）は実測前の仮の値なので「実測値」と書かない。
+ *   「仮」と書くかは SOLO_OVERHEAD_PROVISIONAL（src/lib/overhead.ts）だけで決める。値が 33 かどうかでは決めない
+ *   （実測がたまたま 33 でも、別の仮の値に替えても、判定が狂わないように）。
+ */
+export function overheadBasisNote(live: LiveType, soloProvisional: boolean): string {
+  return live === "solo" && soloProvisional ? "（ひとりでライブはまだ測っていない仮の値）" : "（ライブ種別ごとの実測値）";
+}
+
+/**
+ * 開いたときのライブ種別。
+ *
+ * ★ みんなでライブが止まっている間（MULTI_LIVE_SUSPENDED）は ひとりでライブ で開く。
+ *   古い保存値が みんなでライブ でも同じ（保存値は書き換えない）。オート・ひとりでライブの保存値はそのまま。
+ *   止まっている間に選び直した みんなでライブ（印つき）は、利用者の選択としてそのまま使う。
+ */
+export function initialLive(saved: Pick<Partial<QuickState>, "live" | "liveInSuspension">, suspended: boolean): LiveType {
+  if (!suspended) return saved.live ?? "multi";
+  if (saved.live === "multi") return saved.liveInSuspension === true ? "multi" : "solo";
+  return saved.live ?? "solo";
 }
 
 const LIVES: readonly LiveType[] = ["multi", "solo", "auto"];
@@ -127,6 +161,7 @@ export function parseState(raw: unknown): Partial<QuickState> {
     out.difficulty = raw.difficulty as Difficulty;
   }
   if (typeof raw.live === "string" && (LIVES as readonly string[]).includes(raw.live)) out.live = raw.live as LiveType;
+  if (typeof raw.liveInSuspension === "boolean") out.liveInSuspension = raw.liveInSuspension;
   if (typeof raw.taki === "number" && Number.isInteger(raw.taki) && raw.taki >= 0 && raw.taki <= 10) out.taki = raw.taki;
   return out;
 }

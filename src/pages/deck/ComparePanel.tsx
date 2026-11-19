@@ -8,6 +8,8 @@ import { SongSearchModal } from "../../components/SongSearchModal";
 import { DIFFICULTY_LABEL, type Difficulty, type RankingMusic } from "../ranking/useRankingMusics";
 import { ENVY_ID } from "../analyzer/lib/constants";
 import { DEFAULT_PARAMS, OVERHEAD_BY_LIVE, type LiveType } from "../ranking/lib/efficiency";
+import { overheadBasisNote } from "../compare/lib/quickCompare";
+import { SOLO_OVERHEAD_PROVISIONAL } from "../../lib/overhead";
 import { ProfileBar } from "../../components/ui/ProfileBar";
 import { getActiveProfile } from "../../lib/profiles";
 import { cn } from "../../lib/utils";
@@ -51,6 +53,7 @@ export function ComparePanel({
   const { entries, loading, error } = music;
   const [songId, setSongId] = useState(ENVY_ID);
   const [difficulty, setDifficulty] = useState<Difficulty>("master");
+  // ★ 編成ビルダーは機能の保留中（2026-11-18 Nori）。停止期間でも既定は変えない（文の言い換えだけ。検分 R3）。
   const [live, setLive] = useState<LiveType>("multi");
   // ★ スキル値は**編成ごとに計算する**ので、ここでは持たない（カードのSLから出る）。
   //   共通なのは叩き方の前提（曲・ライブ種別・焚き数）だけ。
@@ -139,15 +142,16 @@ export function ComparePanel({
 
         <Field label="ライブ種別・焚き数">
           <div className="flex flex-wrap items-center gap-3">
+            {/* 公式名に合わせて「みんなで／ひとりで」（2026-11-18）。4文字になったので幅を 224px → 288px に広げた */}
             <SegmentedControl
               options={[
-                { value: "multi", label: "協力" },
-                { value: "solo", label: "ソロ" },
+                { value: "multi", label: "みんなで" },
+                { value: "solo", label: "ひとりで" },
                 { value: "auto", label: "オート" },
               ]}
               value={live}
               onChange={setLive}
-              className="!max-w-56"
+              className="!max-w-72"
             />
             <TakiInput value={taki} onChange={setTaki} />
           </div>
@@ -281,7 +285,9 @@ export function ComparePanel({
 
           <p className="mt-3 text-xs text-slate-400">
             スキルは編成ごとにカードのスキルレベルから計算しています（先頭/内部値）。
-            条件付きのスキルは上限の値です。オーバーヘッドは {OVERHEAD_BY_LIVE[live]} 秒（ライブ種別ごとの実測値）。
+            条件付きのスキルは上限の値です。オーバーヘッドは {OVERHEAD_BY_LIVE[live]} 秒
+            {/* ★ ひとりでライブのロスは仮の値の印が立っている間「仮」と書く（文は楽曲比較と共通の overheadBasisNote） */}
+            {overheadBasisNote(live, SOLO_OVERHEAD_PROVISIONAL)}。
           </p>
         </>
       )}

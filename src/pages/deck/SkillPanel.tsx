@@ -28,7 +28,7 @@ export function SkillPanel({ cards, result }: { cards: CatalogCard[]; result: De
       <div className="grid grid-cols-3 gap-3">
         <Stat label="先頭スキル" value={`${round(result.leader)}%`} sub="リーダーの値" />
         <Stat label="内部値" value={`${round(result.total)}%`} sub="5枚の合計" />
-        <Stat label="実効値（協力）" value={`${round(result.effective)}%`} sub="先頭＋残り×0.2" />
+        <Stat label="実効値（みんなで）" value={`${round(result.effective)}%`} sub="先頭＋残り×0.2" />
       </div>
 
       <details className="mt-3 border-t border-slate-300">

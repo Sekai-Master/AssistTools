@@ -59,7 +59,7 @@ export function CardSearchModal({
     rows: Map<number, { deltaPower: number; deltaBonus: number; deltaPt: number | null }>;
     /** 候補の並び（Pt差・無ければ総合力差の降順）。 */
     order: number[];
-    /** Pt を出せているときの前提（「協力・独りんぼエンヴィー・焚き5」）。 */
+    /** Pt を出せているときの前提（「みんなで・独りんぼエンヴィー・焚き5」）。 */
     basis?: string;
   };
   /**
