@@ -10,8 +10,13 @@ import {
   multiEffectiveSkill,
   FEVER_RATE,
   DECK_SIZE,
+  DEFAULT_PARAMS,
+  DEFAULT_OVERHEAD_SEC,
+  OVERHEAD_BY_LIVE,
+  LIVE_BY_MODE,
   type EfficiencyEntry,
   type EfficiencyParams,
+  type EfficiencyResult,
 } from "./efficiency";
 
 /**
@@ -424,5 +429,154 @@ describe("rankSongsInWindow — 残り時間で区切る", () => {
     const t = r.find((x) => x.title === "初音天地開闢神話")!;
     expect(t.plays).toBe(5);
     expect(t.limitedBy).toBe("lb");
+  });
+});
+
+/**
+ * 既存の3モードの出力を固定する。
+ *
+ * ★ 値は「ひとりで周回」を足す前の実装（origin/main e873a12）で rankSongs を走らせて写したもの。
+ *   新しいモードを足しても、既存のタブの数字が1桁も動いていないことの証拠にする。
+ *   ここが落ちたら、既存のタブの計算に手が入っている。
+ * ★ 「既定値」の行は src/lib/overhead.ts の値（54・42.6・33）に依存する。実測で
+ *   overhead.ts を正しく更新したときもここは落ちるので、その場合は値を写し直してよい。
+ */
+describe("rankSongs — 既存の3モードの出力は変わらない（ゴールデン）", () => {
+  const entries = [ENVY, TENCHI];
+  const row = (r: EfficiencyResult) => [
+    r.musicId,
+    r.score,
+    r.eventPt,
+    r.cycleSec,
+    r.metric,
+    r.ptPerHour,
+    r.index,
+  ];
+
+  it("ロスの既定値は manual 54・auto 42.6・challenge 33 のまま", () => {
+    expect(DEFAULT_OVERHEAD_SEC.manual).toBe(54);
+    expect(DEFAULT_OVERHEAD_SEC.auto).toBe(42.6);
+    expect(DEFAULT_OVERHEAD_SEC.challenge).toBe(33);
+  });
+
+  it.each([
+    [
+      "manual",
+      [
+        ["074", 2992991, 60400, 94.8, 2293670.8860759498, 2293670.8860759498, 100],
+        ["186", 2317744, 68100, 202.4, 1211264.8221343874, 1211264.8221343874, 52.80900714603565],
+      ],
+    ],
+    [
+      "auto",
+      [
+        ["186", 1199512, 41325, 202.4, 41325, 735029.6442687747, 100],
+        ["074", 1460074, 34600, 94.8, 34600, 1313924.0506329115, 83.7265577737447],
+      ],
+    ],
+    [
+      "challenge",
+      [
+        ["074", 2128106, 0, 94.8, 2128106, 0, 100],
+        ["186", 1844332, 0, 202.4, 1844332, 0, 86.66541986160465],
+      ],
+    ],
+  ] as const)("%s（テスト用の条件）", (mode, expected) => {
+    expect(rankSongs(entries, PARAMS, mode).map(row)).toEqual(expected);
+  });
+
+  it.each([
+    [
+      "manual",
+      [
+        ["074", 2433485, 33625, 128.8, 939829.1925465838, 939829.1925465838, 100],
+        ["186", 1902761, 38500, 236.4, 586294.4162436548, 586294.4162436548, 62.38308204228231],
+      ],
+    ],
+    [
+      "auto",
+      [
+        ["186", 986587, 24200, 225, 24200, 387200, 100],
+        ["074", 1186982, 19875, 117.4, 19875, 609454.8551959114, 82.12809917355372],
+      ],
+    ],
+    [
+      "challenge",
+      [
+        ["074", 1730553, 0, 107.8, 1730553, 0, 100],
+        ["186", 1517068, 0, 215.4, 1517068, 0, 87.66376990476455],
+      ],
+    ],
+  ] as const)("%s（入力なしで開いたときの既定値）", (mode, expected) => {
+    const params = { ...DEFAULT_PARAMS, overheadSec: DEFAULT_OVERHEAD_SEC[mode] };
+    expect(rankSongs(entries, params, mode).map(row)).toEqual(expected);
+  });
+});
+
+/**
+ * ひとりで周回 ── ひとりでライブを手で回すときの時間あたりイベントPt。
+ *
+ * ★ みんなでライブが止まったイベント（2026-11-20〜）向け。スコアはソロの式
+ *   （チャレライと同じ）、イベントPtは calcLivePt（ひとりでライブの式）、
+ *   並べ替えは手動周回と同じ「時間あたり」。式は新しく書かず、既存の部品を組み合わせるだけ。
+ */
+describe("rankSongs — ひとりで周回", () => {
+  const entries = [ENVY, TENCHI];
+
+  it("ライブ種別はソロ", () => {
+    expect(LIVE_BY_MODE.solo).toBe("solo");
+  });
+
+  it("時間あたりのイベントPtで並ぶ（短い曲が勝つ）", () => {
+    const r = rankSongs(entries, PARAMS, "solo");
+    expect(r).toHaveLength(2);
+    for (const x of r) expect(x.metric).toBe(x.ptPerHour);
+    expect(r[0].metric).toBeGreaterThan(r[1].metric);
+    expect(r[0].title).toBe("独りんぼエンヴィー");
+    expect(r[0].index).toBe(100);
+  });
+
+  it("1プレイのPtは calcLivePt（ひとりでライブの式）と完全一致する", () => {
+    for (const e of entries) {
+      const r = rankSongs([e], PARAMS, "solo")[0];
+      const score = calcScore(e, PARAMS, "solo")!;
+      expect(r.score).toBe(score);
+      expect(r.eventPt).toBe(calcLivePt(e.eventRate!, PARAMS.bonus, score, PARAMS.taki));
+    }
+  });
+
+  it("手計算と一致する（エンヴィー: 係数 100+floor(2128106/20000)=206 → 206×800%=1648 → 5焚き×25）", () => {
+    const r = rankSongs([ENVY], PARAMS, "solo")[0];
+    expect(r.score).toBe(2128106);
+    expect(r.eventPt).toBe(41200);
+  });
+
+  it("みんなでライブの式（手動周回）とは別の値で、スコアはチャレライと同じソロ式", () => {
+    const solo = rankSongs([ENVY], PARAMS, "solo")[0];
+    const manual = rankSongs([ENVY], PARAMS, "manual")[0];
+    expect(solo.score).not.toBe(manual.score);
+    expect(solo.eventPt).not.toBe(manual.eventPt);
+    expect(solo.score).toBe(rankSongs([ENVY], PARAMS, "challenge")[0].score);
+  });
+
+  it("1周は曲長＋ロスで、Pt/時 はそこから出す", () => {
+    const r = rankSongs([ENVY], PARAMS, "solo")[0];
+    expect(r.cycleSec).toBe(74.8 + PARAMS.overheadSec);
+    expect(r.ptPerHour).toBeCloseTo((r.eventPt / r.cycleSec) * 3600, 6);
+  });
+
+  it("焚き数の倍率が乗る（0焚き×25 = 5焚き）", () => {
+    const r0 = rankSongs([ENVY], { ...PARAMS, taki: 0 }, "solo")[0];
+    const r5 = rankSongs([ENVY], PARAMS, "solo")[0];
+    expect(r5.eventPt).toBe(r0.eventPt * 25);
+  });
+
+  it("曲長か基礎点が無い曲は落とす（時間で割れない・Ptが出ない）", () => {
+    expect(rankSongs([{ ...ENVY, musicTime: null }], PARAMS, "solo")).toHaveLength(0);
+    expect(rankSongs([{ ...ENVY, eventRate: null }], PARAMS, "solo")).toHaveLength(0);
+  });
+
+  it("ロスの既定はサイト全体のソロの値と同じ（同じ数字を2か所に持たない）", () => {
+    expect(DEFAULT_OVERHEAD_SEC.solo).toBe(OVERHEAD_BY_LIVE.solo);
   });
 });

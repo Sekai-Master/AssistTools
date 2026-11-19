@@ -19,12 +19,16 @@ import {
 import {
   rankSongs,
   rankSongsInWindow,
+  bestRowPerSong,
   multiEffectiveSkill,
   DEFAULT_OVERHEAD_SEC,
   DEFAULT_PARAMS,
   type RankingMode,
   type EfficiencyParams,
 } from "./lib/efficiency";
+import { premiseParts } from "./lib/premise";
+import { filterSummary } from "./lib/filterSummary";
+import { MoreSettings } from "../../components/ui/MoreSettings";
 import { ProfileBar, SaveToProfile } from "../../components/ui/ProfileBar";
 import {
   lbNeededForPlays,
@@ -34,6 +38,8 @@ import {
   type PassCourse,
 } from "./lib/lbRun";
 import { numOrUndef } from "../../lib/num";
+import { MULTI_LIVE_SUSPENDED } from "../../lib/liveSuspension";
+import { SOLO_OVERHEAD_PROVISIONAL } from "../../lib/overhead";
 import { cn } from "../../lib/utils";
 import { cappedPower, usePowerLimit } from "../../lib/powerLimit";
 import { Delta } from "../../components/ui/Delta";
@@ -46,38 +52,66 @@ const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
 const STORE_KEY = "sekai-master:ranking-inputs";
 const STORE_VERSION = 2;
 const ROW_LIMIT = 50;
+/** 「自分の条件で計算する」の枠。表の上の前提の行から飛ぶ先。 */
+const CUSTOM_ID = "ranking-custom";
 
 const MODE_OPTIONS: { value: RankingMode; label: string }[] = [
-  { value: "manual", label: "手動周回" },
-  { value: "auto", label: "オート周回" },
+  // ゲームの公式名「みんなでライブ」「ひとりでライブ」に合わせる（2026-11-18 に「手動周回」から改名）。
+  // ★ ラベルは /compare の切り替えと同じ短い形（2026-11-19 検分 R1）。「みんなで周回」の 6 文字は、
+  //   本番の字体（M PLUS Rounded 1c）だと 390px でも折れた。何のライブかは見出しの文で言う。
+  { value: "manual", label: "みんなで" },
+  // みんなでライブが止まったイベント（2026-11-18〜）向け。
+  { value: "solo", label: "ひとりで" },
+  { value: "auto", label: "オート" },
   { value: "challenge", label: "チャレライ" },
 ];
 
-/** タブごとに「どのライブの・何を最大化しているか」を明示する。混同すると最適解が真逆になる。 */
+/** ソロ（ひとりでライブ・オート・チャレライ）のスキルの効き方。3つのタブで同じ文。 */
+const SOLO_SKILL_HINT =
+  "ソロは1曲のなかで6回スキルが発動します（編成5枚が1回ずつ＋最後にリーダーがもう1回）。1〜5回目の発動順は選べないので、5枚は内部値÷5の平均で計算し、6回目だけリーダーの値を当てています。";
+
+/**
+ * タブごとに「どのライブの・何を最大化しているか」を明示する。混同すると最適解が真逆になる。
+ *
+ * ★ body はタブの下に出す 1 行（26 字以内。390px の text-xs で 1 行）。何で並べているかは headline が言う。
+ *   縮める前の説明（detail）はページ下の「この数字について」に 4 タブぶん並べる（2026-11-19 指揮の追加依頼）。
+ */
 const MODE_NOTE: Record<
   RankingMode,
-  { headline: string; body: string; metricLabel: string; skillHint: string }
+  { headline: string; body: string; detail: string; metricLabel: string; skillHint: string }
 > = {
   manual: {
-    headline: "協力ライブ・時間あたりのイベントポイント",
-    body: "手で叩くので律速は時間。短い曲ほど有利になります。フィーバー込みの協力ライブの式で計算しています。",
+    headline: "みんなでライブ・時間あたりのイベントポイント",
+    body: "律速は時間。短い曲ほど有利（フィーバー込みの式）",
+    detail:
+      "手で叩くので律速は時間。短い曲ほど有利になります。フィーバー込みのみんなでライブの式で計算しています。",
     metricLabel: "Pt/時",
     skillHint:
-      "協力ライブは1曲のなかで6回スキルが発動します（参加5人が1回ずつ＋アンコール1回）。各発動で乗るのが実効値です。強い人を呼ぶと単価が上がるのは、イベントポイントの式に他4人の合計スコアが入るからで、曲の順位そのものは部屋の顔ぶれでは変わりません。",
+      "みんなでライブは1曲のなかで6回スキルが発動します（参加5人が1回ずつ＋アンコール1回）。各発動で乗るのが実効値です。強い人を呼ぶと単価が上がるのは、イベントポイントの式に他4人の合計スコアが入るからで、曲の順位そのものは部屋の顔ぶれでは変わりません。",
+  },
+  solo: {
+    headline: "ひとりでライブ・時間あたりのイベントポイント",
+    body: "律速は時間。短い曲ほど有利（ひとりでライブの式）",
+    detail:
+      "手で叩くので律速は時間。短い曲ほど有利になります。ひとりでライブのスコアとイベントポイントの式で計算しています。",
+    metricLabel: "Pt/時",
+    skillHint: SOLO_SKILL_HINT,
   },
   auto: {
     headline: "オート・1プレイあたりのイベントポイント",
-    body: "放置するので時間はコストになりません。律速はライブボーナスなので、1回で多く稼げる長尺・高基礎点の曲が有利です。手動とは最適解が逆になります。",
+    body: "律速はライボ。1回で稼げる長尺・高基礎点の曲が有利",
+    detail:
+      "放置するので時間はコストになりません。律速はライブボーナスなので、1回で多く稼げる長尺・高基礎点の曲が有利です。手動とは最適解が逆になります。",
     metricLabel: "Pt/回",
-    skillHint:
-      "ソロは1曲のなかで6回スキルが発動します（編成5枚が1回ずつ＋最後にリーダーがもう1回）。1〜5回目の発動順は選べないので、5枚は内部値÷5の平均で計算し、6回目だけリーダーの値を当てています。",
+    skillHint: SOLO_SKILL_HINT,
   },
   challenge: {
     headline: "チャレンジライブ・1プレイあたりのスコア",
-    body: "1日1回なので時間もライボも関係ありません。イベント基礎点も無関係で、純粋にスコアだけを見ます。",
+    body: "1日1回。ライボも時間も関係なく、スコアだけを見る",
+    detail:
+      "1日1回なので時間もライボも関係ありません。イベント基礎点も無関係で、純粋にスコアだけを見ます。",
     metricLabel: "スコア",
-    skillHint:
-      "ソロは1曲のなかで6回スキルが発動します（編成5枚が1回ずつ＋最後にリーダーがもう1回）。1〜5回目の発動順は選べないので、5枚は内部値÷5の平均で計算し、6回目だけリーダーの値を当てています。",
+    skillHint: SOLO_SKILL_HINT,
   },
 };
 
@@ -87,6 +121,13 @@ const decimalInput = (v: string) =>
   v.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
 const fmt = (n: number) => Math.round(n).toLocaleString("ja-JP");
 const ALL_DIFFS = new Set<Difficulty>(DIFFICULTY_ORDER);
+
+/** 曲長を m:ss に（表の行の小さな字）。 */
+function mss(sec: number | null): string {
+  if (sec == null) return "—";
+  const s = Math.round(sec);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
 
 /** 秒を「◯時間◯分」に。周回計画は分単位で足りる。 */
 function hhmm(totalSec: number): string {
@@ -126,7 +167,14 @@ interface Stored {
   taki?: number;
   skillLeader?: string;
   skillTotal?: string;
+  /** みんなで周回・オート周回・チャレライの「1曲あたりのロス」（3つで共有。2026-08 からの値）。 */
   overhead?: string;
+  /**
+   * ひとりで周回の「1曲あたりのロス」。**ほかのタブとは別に持つ**（2026-11-18）。
+   * ★ 共有にすると、みんなで周回のために入れた値（部屋待ち込み）が、
+   *   ひとりで周回に黙って持ち込まれる。未入力なら OVERHEAD_SEC.solo の既定を使う。
+   */
+  overheadSolo?: string;
   plays?: string;
   lvMin?: number;
   lvMax?: number;
@@ -148,6 +196,8 @@ interface Stored {
   autoLeft?: string;
   /** 開催中のイベントの総合力上限を効かせるか（既定 ON）。 */
   applyLimit?: boolean;
+  /** 表を難易度ごとに全部並べるか。既定（false）は1曲1行（2026-11-19）。 */
+  allDiffs?: boolean;
 }
 
 const str = (v: unknown): string | undefined =>
@@ -186,12 +236,14 @@ function loadStored(): Stored {
       skillLeader: str(s.skillLeader),
       skillTotal: str(s.skillTotal),
       overhead: str(s.overhead),
+      overheadSolo: str(s.overheadSolo),
       plays: str(s.plays),
       lvMin: lv(s.lvMin),
       lvMax: lv(s.lvMax),
       pick: str(s.pick),
       regen: typeof s.regen === "boolean" ? s.regen : undefined,
       applyLimit: typeof s.applyLimit === "boolean" ? s.applyLimit : undefined,
+      allDiffs: typeof s.allDiffs === "boolean" ? s.allDiffs : undefined,
       autoFrom:
         s.autoFrom === "lb" || s.autoFrom === "plays" || s.autoFrom === "window"
           ? s.autoFrom
@@ -413,8 +465,19 @@ export default function EfficiencyRanking() {
   const { entries, loading, error } = useRankingMusics();
   const stored = useMemo(() => loadStored(), []);
 
-  const [mode, setMode] = useState<RankingMode>("manual");
+  /**
+   * ★ タブは保存しない（毎回ここから開く）。みんなでライブが止まっている間は、
+   *   使えないタブを最初に見せないよう「ひとりで周回」で開く（2026-11-18 Nori 決定。再開したら印を戻すだけで元に戻る）。
+   */
+  const [mode, setMode] = useState<RankingMode>(
+    MULTI_LIVE_SUSPENDED ? "solo" : "manual",
+  );
   const [diffs, setDiffs] = useState<Set<Difficulty>>(() => new Set(ALL_DIFFS));
+  /**
+   * 表を難易度ごとに全部並べるか。**既定は1曲1行**（選んだ難易度・レベルの中で、その曲の一番上の行だけ）。
+   * ★ 同じ曲が難易度違いで並ぶと上位が1曲で埋まる（ひとりで周回の上位7行のうち5行が独りんぼエンヴィー。2026-11-19）。
+   */
+  const [allDiffs, setAllDiffs] = useState(stored.allDiffs ?? false);
 
   // 既定は「入力なしで一般的な順位を見る」。自分の条件で計算したい人だけスイッチを入れる。
   const [custom, setCustom] = useState(stored.custom ?? false);
@@ -482,9 +545,28 @@ export default function EfficiencyRanking() {
     stored.skillTotal ?? String(DEFAULT_PARAMS.skillTotal),
   );
   // 既定はモードで違う（オートはリザルト送りを詰められないぶん長い）。
+  // ★ この欄はみんなで周回・オート周回・チャレライの3つで共有する。ひとりで周回は下の overheadSolo。
   const [overhead, setOverhead] = useState(
     stored.overhead ?? String(DEFAULT_OVERHEAD_SEC.manual),
   );
+  /**
+   * 共有の欄（overhead）がいまどのタブの既定に合わせているか。ひとりで周回を挟んでも、
+   * 3つのタブの間の「触っていなければ既定へ差し替える」は今までどおりに動かすために持つ。
+   */
+  const [overheadMode, setOverheadMode] = useState<
+    Exclude<RankingMode, "solo">
+  >("manual");
+  /** ひとりで周回のロス。未入力ならそのタブの既定（OVERHEAD_SEC.solo）。 */
+  const [overheadSolo, setOverheadSolo] = useState(
+    stored.overheadSolo ?? String(DEFAULT_OVERHEAD_SEC.solo),
+  );
+  /** いまのタブで使う・欄に出す値。 */
+  const overheadValue = mode === "solo" ? overheadSolo : overhead;
+  /**
+   * ひとりで周回の既定のロスに「仮」と添えるか。**印（SOLO_OVERHEAD_PROVISIONAL）だけで決める**
+   * （値が 33 かどうかでは決めない。Nori が測って印を下ろしたら消える）。
+   */
+  const soloLossProvisional = mode === "solo" && SOLO_OVERHEAD_PROVISIONAL;
   const [plays, setPlays] = useState(stored.plays ?? "100");
   // 未保存なら「全部」= データの両端。読み込み前は 0/99 にして誰も弾かない。
   const [lvMin, setLvMin] = useState(stored.lvMin ?? 0);
@@ -528,7 +610,7 @@ export default function EfficiencyRanking() {
       taki,
       skillLeader: Number(skillLeader) || 0,
       skillTotal: Number(skillTotal) || 0,
-      overheadSec: Number(overhead) || 0,
+      overheadSec: Number(overheadValue) || 0,
     };
   }, [
     custom,
@@ -538,7 +620,7 @@ export default function EfficiencyRanking() {
     taki,
     skillLeader,
     skillTotal,
-    overhead,
+    overheadValue,
     limitOn,
     limitEvent,
   ]);
@@ -550,13 +632,18 @@ export default function EfficiencyRanking() {
    *   手で入れた値を黙って書き換えると、戻したつもりの数字が変わっていて気付けない。
    *   「触っていない」の判定は「いまのモードの既定値と同じか」で十分（実測値が
    *   たまたま既定と一致していた場合は差し替わるが、そのときも表示は正しい）。
+   * ★ ひとりで周回は別の欄（overheadSolo）なので、行き来しても共有の欄には触らない。
+   *   比べる相手は「共有の欄がいま合わせているタブ」（overheadMode）の既定。
    */
   const changeMode = (next: RankingMode) => {
-    setOverhead((cur) =>
-      Number(cur) === DEFAULT_OVERHEAD_SEC[mode]
-        ? String(DEFAULT_OVERHEAD_SEC[next])
-        : cur,
-    );
+    if (next !== "solo") {
+      setOverhead((cur) =>
+        Number(cur) === DEFAULT_OVERHEAD_SEC[overheadMode]
+          ? String(DEFAULT_OVERHEAD_SEC[next])
+          : cur,
+      );
+      setOverheadMode(next);
+    }
     setMode(next);
   };
 
@@ -612,24 +699,33 @@ export default function EfficiencyRanking() {
           ? !levelFiltered
           : e.playLevel >= loLv && e.playLevel <= hiLv),
     );
+    /**
+     * ★ 1曲1行への間引きは**上位◯件に切る前**に掛ける。先に切ると、同じ曲の難易度違いで枠が埋まって曲数が減る。
+     *   rankSongs・rankSongsInWindow の出力そのものは変えない（間引きは後から掛ける純粋関数）。
+     */
+    const top = <R extends { musicId: string }>(rows: R[]) =>
+      (allDiffs ? rows : bestRowPerSong(rows)).slice(0, ROW_LIMIT);
     // 「残り時間で区切る」ときだけ、合計Ptで並べ替える（別の指標になる）。
     if (mode === "auto" && autoFrom === "window") {
       const win = Math.max(0, Number(windowMin) || 0) * 60;
-      return rankSongsInWindow(filtered, params, {
-        windowSec: win,
-        startLB: Number(startLB) || 0,
-        lbCap: PASS_LIMITS[pass].lbCap,
-        maxPlays: Number(autoLeft) || 0,
-        regen,
-        refill,
-      }).slice(0, ROW_LIMIT);
+      return top(
+        rankSongsInWindow(filtered, params, {
+          windowSec: win,
+          startLB: Number(startLB) || 0,
+          lbCap: PASS_LIMITS[pass].lbCap,
+          maxPlays: Number(autoLeft) || 0,
+          regen,
+          refill,
+        }),
+      );
     }
-    return rankSongs(filtered, params, mode).slice(0, ROW_LIMIT);
+    return top(rankSongs(filtered, params, mode));
   }, [
     entries,
     params,
     mode,
     diffs,
+    allDiffs,
     loLv,
     hiLv,
     levelFiltered,
@@ -667,7 +763,15 @@ export default function EfficiencyRanking() {
   const [pickKey, setPickKey] = useState(stored.pick ?? "");
   const keyOf = (r: { musicId: string; difficulty: string }) =>
     `${r.musicId}-${r.difficulty}`;
-  const best = ranked.find((r) => keyOf(r) === pickKey) ?? ranked[0];
+  /**
+   * ★ 探す順は「同じキー → 同じ曲の表の行 → 1位」（検分 T1、2026-11-19）。1曲1行で選んだ難易度が隠れたときに
+   *   黙って別の曲の1位へ替えない（曲は表に残っているので、その曲の表の行を使う）。保存値は書き換えない。
+   */
+  const pickMusic = pickKey.slice(0, pickKey.lastIndexOf("-"));
+  const best =
+    ranked.find((r) => keyOf(r) === pickKey) ??
+    ranked.find((r) => r.musicId === pickMusic) ??
+    ranked[0];
 
   /**
    * 今日まだ残っているオートの回数。
@@ -768,6 +872,63 @@ export default function EfficiencyRanking() {
     { enabled: motionLevel !== "off" && !osReduce },
   );
 
+  /**
+   * 表のすぐ上の前提の 1 行。**既定でも絶対値を出すので、何を前提にした数字かを表の上で言う**（2026-11-19）。
+   * 数字は計算に使っている params から作る（既定なら DEFAULT_PARAMS と DEFAULT_OVERHEAD_SEC の値）。
+   * ★ ロスは表の数字を動かすタブ（みんなで・ひとりで・オートの区間モード）でだけ書く。
+   * ★ 「（仮）」は、印が立っていて、ひとりでのロスを利用者が書き換えていない間（既定と同じ値の間）は付ける
+   *   （検分 T2。自分の総合力だけ入れた人のスクショにも残す）。比べる相手は DEFAULT_OVERHEAD_SEC.solo で、数字を直書きしない。
+   * ★ 表の数字を大きく動かす前提だけを短く足す（検分 T5・T6。「余分な情報は削る」ので最小限）:
+   *   みんなでは他4人を自分と同格と置いた数字、区間モードは注ぎ足すか・オートの残り回数で合計が何倍も変わる。
+   */
+  const premise = [
+    ...premiseParts(params, mode, {
+      showLoss: mode === "manual" || mode === "solo" || isWindow,
+      provisionalLoss:
+        soloLossProvisional &&
+        (!custom || Number(overheadSolo) === DEFAULT_OVERHEAD_SEC.solo),
+    }),
+    ...(mode === "manual" ? ["他4人は同格"] : []),
+    ...(isWindow
+      ? [
+          refill ? "注ぎ足す前提" : "注ぎ足さない",
+          `残り${Math.max(0, Number(autoLeft) || 0)}回`,
+        ]
+      : []),
+  ].join("・");
+  /**
+   * 閉じた段「絞り込み」の見出しに出す今の条件の要約と、既定から変えた数。
+   * ★ 読み込み中は譜面レベルの範囲がまだ仮（1〜40）なので、保存したレベルを「絞っている」と数えない
+   *  （数えると見出しが一瞬「レベル5〜38（1 項目を変更中）」に跳ねてから戻る）。
+   */
+  const filterNote = filterSummary({
+    all: DIFFICULTY_ORDER.map((d) => DIFFICULTY_LABEL[d]),
+    selected: DIFFICULTY_ORDER.filter((d) => diffs.has(d)).map((d) => DIFFICULTY_LABEL[d]),
+    levelFiltered: !loading && levelFiltered,
+    // ★ 入力の初期値（0／99）はデータの外なので、見出しにはデータの範囲に収めて出す（検分 T3）
+    lo: Math.max(levels.min, loLv),
+    hi: Math.min(levels.max, hiLv),
+    allDiffs,
+  });
+  /** 表の主役の数字の単位。★ 窓モードの metric は「窓内の合計Pt」。Pt/回 のままだと嘘になる。 */
+  const unitLabel = isWindow ? "合計Pt" : note.metricLabel;
+
+  /** 前提の行から「自分の条件で計算する」の枠を開いて、そこまで動かす。 */
+  const openCustom = () => {
+    if (!custom) {
+      setCustom(true);
+      persist({ custom: true });
+    }
+    const smooth = motionLevel !== "off" && !osReduce;
+    // 開いて描き直してから動かす（畳んだままの高さで止まらないように）。jsdom には scrollIntoView が無い
+    requestAnimationFrame(() => {
+      const target = document.getElementById(CUSTOM_ID);
+      target?.scrollIntoView?.({ behavior: smooth ? "smooth" : "auto", block: "start" });
+      // ★ フォーカスもスイッチへ移す（検分 T8）。ボタンに残ると、読み上げの利用者に欄が開いたことが伝わらない
+      target?.querySelector("input")?.focus({ preventScroll: true });
+    });
+  };
+
   return (
     <ToolPage
       morphKey="tool:ranking"
@@ -787,15 +948,20 @@ export default function EfficiencyRanking() {
         }}
       />
       <Panel>
+        {/* ★ 4択で「チャレライ」が5文字あるので詰めて描く（既定の大きさだと 390px で折れる）。
+              320px では詰めても「チャレラ／イ」と1字だけ落ちたので、折らない（ボタンの左右の余白に収まる）。
+              min-w-0 は等幅を保つため（無いと折らない字の幅でボタンが広がり、つまみの位置とずれる）。 */}
         <SegmentedControl
           options={MODE_OPTIONS}
           value={mode}
           onChange={changeMode}
+          compact
+          buttonClassName="min-w-0 whitespace-nowrap"
         />
-        <p className="mt-4 text-sm font-bold text-slate-600">{note.headline}</p>
-        <p className="mt-1 text-xs leading-relaxed text-slate-500">
-          {note.body}
-        </p>
+        {/* ★ 見出し（何で並べているか）＋説明 1 行。余白は 12px・行の高さは text-xs の既定に詰め、
+              390px のひとりでで最初の画面に表が 5 行入るようにした（2026-11-19） */}
+        <p className="mt-3 text-sm font-bold text-slate-600">{note.headline}</p>
+        <p className="mt-1 text-xs text-slate-500">{note.body}</p>
         {/**
          * ★★ **この順位が何を含んでいないかを先に言う。** ★★
          * スコアの式はスキルの発動位置を**平均（期待値）**で置いている。したがって
@@ -810,82 +976,108 @@ export default function EfficiencyRanking() {
          *
          * ★ 枠は 1 行に縮め、要る事実（含まないもの・2〜5枠の実感に近い）だけ表の前に残す。
          *   「効率難易度」との違いの詳しい話は、ページ下の「この数字について」へ移した（UX 監査 2026-11-12、PR-4）。
+         * ★ 「2〜5枠」はみんなでライブの部屋の枠のこと。ひとりで・オート・チャレライには枠が無いので、
+         *   みんなでのタブにだけ出す（2026-11-19 検分 R5）。
          */}
-        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
-          <b>1枠補正・巻き込みは含まず</b>、2〜5枠の実感に近い値
-        </p>
+        {mode === "manual" && (
+          <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
+            <b>1枠補正・巻き込みは含まず</b>、2〜5枠の実感に近い値
+          </p>
+        )}
 
-        <div className="mt-5 flex flex-wrap items-center gap-2">
-          <span className="mr-1 text-xs font-bold text-slate-500">難易度</span>
-          {DIFFICULTY_ORDER.map((d) => (
+        {/**
+         * ★ 難易度・譜面レベル・並べ方は 4 タブ共通で閉じた段「絞り込み」に畳む（2026-11-19 指揮の追加依頼）。
+         *   開いたままだと表の上で約 200px を使い、390px の最初の画面に表が 2 行しか入らなかった。
+         *   畳んでも表に効くので、見出しに今の条件の要約と既定から変えた数を出す（MoreSettings・countChanged の作法）。
+         *   開閉は保存しない（ほかの閉じた段と同じ）。
+         */}
+        <MoreSettings
+          title="絞り込み"
+          contents={filterNote.text}
+          changed={filterNote.changed}
+          className="mt-3"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-xs font-bold text-slate-500">難易度</span>
+            {DIFFICULTY_ORDER.map((d) => (
+              <NeuButton
+                key={d}
+                active={diffs.has(d)}
+                onClick={() => toggleDiff(d)}
+                className="px-3 py-1.5 text-xs"
+                style={
+                  diffs.has(d)
+                    ? ({ "--unit-color": DIFFICULTY_COLOR[d] } as CSSProperties)
+                    : undefined
+                }
+              >
+                {DIFFICULTY_LABEL[d]}
+              </NeuButton>
+            ))}
+            <span className="mx-1 h-5 w-px bg-slate-300/70" aria-hidden />
             <NeuButton
-              key={d}
-              active={diffs.has(d)}
-              onClick={() => toggleDiff(d)}
               className="px-3 py-1.5 text-xs"
-              style={
-                diffs.has(d)
-                  ? ({ "--unit-color": DIFFICULTY_COLOR[d] } as CSSProperties)
-                  : undefined
-              }
+              onClick={() => setDiffs(new Set(ALL_DIFFS))}
             >
-              {DIFFICULTY_LABEL[d]}
+              すべて
             </NeuButton>
-          ))}
-          <span className="mx-1 h-5 w-px bg-slate-300/70" aria-hidden />
-          <NeuButton
-            className="px-3 py-1.5 text-xs"
-            onClick={() => setDiffs(new Set(ALL_DIFFS))}
-          >
-            すべて
-          </NeuButton>
-          <NeuButton
-            className="px-3 py-1.5 text-xs"
-            onClick={() => setDiffs(new Set())}
-          >
-            選択を外す
-          </NeuButton>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-          <span className="mr-1 font-bold text-slate-500">譜面レベル</span>
-          <LevelInput
-            value={lvMin}
-            onChange={(v) => {
-              setLvMin(v);
-              persist({ lvMin: v });
-            }}
-            label="下限"
-            min={levels.min}
-            max={levels.max}
-          />
-          <span className="text-slate-400">〜</span>
-          <LevelInput
-            value={lvMax}
-            onChange={(v) => {
-              setLvMax(v);
-              persist({ lvMax: v });
-            }}
-            label="上限"
-            min={levels.min}
-            max={levels.max}
-          />
-          {levelFiltered && (
             <NeuButton
               className="px-3 py-1.5 text-xs"
-              onClick={() => {
-                setLvMin(levels.min);
-                setLvMax(levels.max);
-                persist({ lvMin: levels.min, lvMax: levels.max });
+              onClick={() => setDiffs(new Set())}
+            >
+              選択を外す
+            </NeuButton>
+            {/* ★ 表の上には置かない（スマホの最初の画面に入る行が減る）。難易度の絞り込みと一緒に畳む */}
+            <Switch
+              checked={allDiffs}
+              onChange={(v) => {
+                setAllDiffs(v);
+                persist({ allDiffs: v });
               }}
-            >
-              解除
-            </NeuButton>
-          )}
-          <span className="text-slate-400">
-            叩けるレベルに絞ると、AP前提の理論値が実際の選曲に近づきます
-          </span>
-        </div>
+              label="難易度ごとに全部並べる"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="mr-1 font-bold text-slate-500">譜面レベル</span>
+            <LevelInput
+              value={lvMin}
+              onChange={(v) => {
+                setLvMin(v);
+                persist({ lvMin: v });
+              }}
+              label="下限"
+              min={levels.min}
+              max={levels.max}
+            />
+            <span className="text-slate-400">〜</span>
+            <LevelInput
+              value={lvMax}
+              onChange={(v) => {
+                setLvMax(v);
+                persist({ lvMax: v });
+              }}
+              label="上限"
+              min={levels.min}
+              max={levels.max}
+            />
+            {levelFiltered && (
+              <NeuButton
+                className="px-3 py-1.5 text-xs"
+                onClick={() => {
+                  setLvMin(levels.min);
+                  setLvMax(levels.max);
+                  persist({ lvMin: levels.min, lvMax: levels.max });
+                }}
+              >
+                解除
+              </NeuButton>
+            )}
+            <span className="text-slate-400">
+              叩けるレベルに絞ると、AP前提の理論値が実際の選曲に近づきます
+            </span>
+          </div>
+        </MoreSettings>
       </Panel>
 
       {/*
@@ -921,121 +1113,122 @@ export default function EfficiencyRanking() {
           )}
 
           {ranked.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[600px] text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-slate-500">
-                    <th className="px-2 py-2 font-bold">#</th>
-                    <th className="px-2 py-2 font-bold">楽曲</th>
-                    <th className="px-2 py-2 font-bold">難易度</th>
-                    <th className="px-2 py-2 text-right font-bold">指数</th>
-                    {custom && (
-                      <th className="px-2 py-2 text-right font-bold">
-                        {/* ★ 窓モードの metric は「窓内の合計Pt」。Pt/回 のままだと嘘になる。 */}
-                        {isWindow ? "合計Pt" : note.metricLabel}
-                      </th>
-                    )}
-                    <th className="px-2 py-2 text-right font-bold">曲長</th>
-                    <th className="px-2 py-2 text-right font-bold">ノーツ</th>
-                    <th className="px-2 py-2 text-right font-bold">
-                      {mode === "challenge" ? "スコア率" : "基礎点"}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ranked.map((r, i) => (
-                    <tr
-                      key={`${r.musicId}-${r.difficulty}`}
-                      // 条件を変えると順位が総入れ替えになる。行が実際に動いて見えないと
-                      // 「さっき見ていた曲がどこへ行ったか」が追えない。
-                      ref={rowRef(`${r.musicId}-${r.difficulty}`)}
-                      className="border-t border-slate-200/60"
-                    >
-                      <td className="px-2 py-2 tabular-nums text-slate-400">
-                        {i + 1}
-                      </td>
-                      <td className="px-2 py-2">
-                        <div className="flex items-center gap-2">
-                          <img
-                            src={`${JACKET_BASE}${r.jacketLink}`}
-                            alt=""
-                            loading="lazy"
-                            className="h-8 w-8 shrink-0 rounded"
-                          />
-                          <span className="min-w-0 truncate font-bold text-slate-700">
-                            {r.title}
-                          </span>
-                        </div>
-                        {/*
-                         * ★ 何で止まるかは曲ごとに変わる（短い曲は時間、長い曲はライボ）。
-                         *   これを出さないと「なぜこの曲が上なのか」が読めない。
-                         */}
-                        {(() => {
-                          const w = isWindow ? windowInfo(r) : null;
-                          if (!w) return null;
-                          return (
-                            <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-slate-500">
-                              <span className="tabular-nums">{w.plays} 回</span>
-                              <span className="rounded bg-neu px-1 py-0.5 shadow-neu-inset">
-                                {LIMIT_LABEL[w.limitedBy]}
+            <>
+              {/*
+               * ★ 前提は表のすぐ上に 1 行で（既定でも絶対値を出すので、数字より先に読ませる）。
+               *   以前は表の下の注にしか無く、スクショした表だけが前提なしで出回る形だった。
+               */}
+              {/* ★ 行の高さは text-xs の既定（16px）・下の余白 4px。390px で最初の画面に 2 行入る高さに詰めた */}
+              <p className="mb-1 text-xs text-slate-500">
+                {/* 間は前提の側の右の余白で取る（ボタンが次の行へ折り返したとき、行頭が字下げにならないように） */}
+                <span className="mr-2">{custom ? `自分の条件で計算：${premise}` : `${premise}の場合`}</span>
+                <button
+                  type="button"
+                  className="whitespace-nowrap font-bold text-slate-600 underline underline-offset-4"
+                  onClick={openCustom}
+                >
+                  {custom ? "条件を変える" : "自分の編成で計算する"}
+                </button>
+              </p>
+              {/*
+               * ★ 電話の幅が先（2026-11-19 表の直し）。1 行に「順位・ジャケット＋曲名（札・曲長）・主役の数字」だけを置き、
+               *   横スクロールを出さない（以前は min-w-[600px] の表で、326px の枠を横にずらさないと数字が出なかった）。
+               *   指数・ノーツ・基礎点の列は削った。主役の数字はそのタブが並べている量の絶対値。
+               * ★ 2 段目は曲の札・曲長（左）と、数字の内訳（右）。狭いと内訳だけ次の行へ折り返す。
+               */}
+              <div data-ranking-table>
+                <div
+                  aria-hidden
+                  className="flex items-end gap-2 border-b border-slate-300 pb-1 text-xs font-bold text-slate-500"
+                >
+                  <span className="w-6 shrink-0 text-right">#</span>
+                  <span className="flex-1">楽曲</span>
+                  <span data-ranking-unit>{unitLabel}</span>
+                </div>
+                <ol>
+                  {ranked.map((r, i) => {
+                    const key = `${r.musicId}-${r.difficulty}`;
+                    // ★ 何で止まるかは曲ごとに変わる（短い曲は時間、長い曲はライボ）。これを出さないと「なぜこの曲が上なのか」が読めない。
+                    const w = isWindow ? windowInfo(r) : null;
+                    const perHour =
+                      (mode === "manual" || mode === "solo") && r.cycleSec > 0
+                        ? 3600 / r.cycleSec
+                        : null;
+                    return (
+                      <li
+                        key={key}
+                        data-ranking-row={key}
+                        // 条件を変えると順位が総入れ替えになる。行が実際に動いて見えないと
+                        // 「さっき見ていた曲がどこへ行ったか」が追えない。
+                        ref={rowRef(key)}
+                        // py-1.5 は表のセルの例外（docs/design-system.md 3 節）。一覧の長さを詰める
+                        className="flex items-start gap-2 border-t border-slate-300 py-1.5 first:border-t-0"
+                      >
+                        <span className="w-6 shrink-0 text-right text-sm leading-8 tabular-nums text-slate-400">
+                          {i + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <img
+                              src={`${JACKET_BASE}${r.jacketLink}`}
+                              alt=""
+                              loading="lazy"
+                              className="h-8 w-8 shrink-0 rounded"
+                            />
+                            <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-700">
+                              {r.title}
+                            </span>
+                            <span
+                              data-main-number
+                              className="shrink-0 font-num text-lg font-bold leading-8 tabular-nums text-slate-800 min-[360px]:text-2xl"
+                            >
+                              {fmt(r.metric)}
+                            </span>
+                            <span className="sr-only">{unitLabel}</span>
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                            <DifficultyBadge
+                              difficulty={r.difficulty}
+                              level={r.playLevel}
+                            />
+                            <span className="font-num tabular-nums">
+                              {mss(r.musicTime)}
+                            </span>
+                            {perHour != null && (
+                              <span
+                                data-sub
+                                className="ml-auto text-right font-num tabular-nums"
+                              >
+                                <span className="whitespace-nowrap">
+                                  {perHour.toFixed(1)}回/時
+                                </span>
+                                ・
+                                <span className="whitespace-nowrap">
+                                  1回 {fmt(r.eventPt)}Pt
+                                </span>
                               </span>
-                            </div>
-                          );
-                        })()}
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-2">
-                        <DifficultyBadge
-                          difficulty={r.difficulty}
-                          level={r.playLevel}
-                        />
-                      </td>
-                      <td className="px-2 py-2 text-right font-bold tabular-nums text-slate-700">
-                        {r.index.toFixed(1)}
-                      </td>
-                      {custom && (
-                        <td className="px-2 py-2 text-right tabular-nums text-slate-500">
-                          {fmt(r.metric)}
-                        </td>
-                      )}
-                      <td className="px-2 py-2 text-right tabular-nums text-slate-500">
-                        {r.musicTime != null
-                          ? `${r.musicTime.toFixed(1)}s`
-                          : "—"}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums text-slate-500">
-                        {r.noteCount ?? "—"}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums text-slate-500">
-                        {mode === "challenge"
-                          ? (r.baseScore?.toFixed(3) ?? "—")
-                          : (r.eventRate ?? "—")}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {ranked.length > 0 && (
-            <p className="mt-4 text-xs leading-relaxed text-slate-500">
-              <span className="font-bold text-slate-600">指数</span>
-              は1位を100とした相対値です。
-              {custom ? (
-                <>下の条件で計算しています。</>
-              ) : (
-                <>
-                  {DEFAULT_PARAMS.skillLeader}/{DEFAULT_PARAMS.skillTotal}/
-                  {(DEFAULT_PARAMS.power / 10000).toFixed(1)}
-                  {mode !== "challenge" &&
-                    `／ボーナス ${DEFAULT_PARAMS.bonus}%／${taki}焚き`}
-                  {mode !== "challenge" &&
-                    `／ロス ${DEFAULT_OVERHEAD_SEC[mode]}秒`}
-                  {" を前提にした一般的な順位です。"}
-                  自分の条件に差し替えるには下の「自分の条件で計算する」を入れてください。
-                </>
-              )}
-            </p>
+                            )}
+                            {w && (
+                              <span
+                                data-sub
+                                className="ml-auto flex items-center gap-1"
+                              >
+                                <span className="font-num tabular-nums">
+                                  {w.plays}回
+                                </span>
+                                <span className="rounded bg-neu px-1 py-0.5 shadow-neu-inset">
+                                  {LIMIT_LABEL[w.limitedBy]}
+                                </span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            </>
           )}
         </div>
       </Panel>
@@ -1082,7 +1275,7 @@ export default function EfficiencyRanking() {
                 </Field>
                 <Field
                   label="ライボが足りなくなったら"
-                  hint="手持ちを使い切れる長さの時間だと、「そこで止める」は通常のオート周回と同じ順位になります"
+                  hint="手持ちを使い切れる長さの時間だと、「そこで止める」は「1回あたりのPt」順と同じ順位になります"
                 >
                   <SegmentedControl
                     options={[
@@ -1396,7 +1589,7 @@ export default function EfficiencyRanking() {
               <p className="mt-4 text-xs leading-relaxed text-slate-500">
                 所要時間は曲長＋ロス
                 {custom
-                  ? `（${overhead || 0}秒）`
+                  ? `（${overheadValue || 0}秒）`
                   : `（${DEFAULT_OVERHEAD_SEC[mode]}秒）`}
                 の単純な積み上げです。オートは放置できるので、この時間は拘束時間ではありません。
                 {autoFrom === "lb" ? (
@@ -1432,14 +1625,17 @@ export default function EfficiencyRanking() {
       )}
 
       <Panel>
-        <Switch
-          checked={custom}
-          onChange={(v) => {
-            setCustom(v);
-            persist({ custom: v });
-          }}
-          label="自分の条件で計算する"
-        />
+        {/* 表の上の前提の行（「自分の編成で計算する」）から飛ぶ先 */}
+        <div id={CUSTOM_ID} className="scroll-mt-20">
+          <Switch
+            checked={custom}
+            onChange={(v) => {
+              setCustom(v);
+              persist({ custom: v });
+            }}
+            label="自分の条件で計算する"
+          />
+        </div>
         {custom && (
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
             {/* 呼び出しは上部にもあるが、値をいじっている場所からも届くようにする。
@@ -1586,7 +1782,7 @@ export default function EfficiencyRanking() {
                   }}
                 />
               </Field>
-              {mode === "manual" && (
+              {(mode === "manual" || mode === "solo") && (
                 <Field label="焚き数">
                   <TakiInput
                     value={taki}
@@ -1603,16 +1799,30 @@ export default function EfficiencyRanking() {
                   hint={
                     mode === "manual"
                       ? "ロード・リザルト・部屋待ちの合計"
-                      : "ロード・リザルトの合計。所要時間の表示にだけ使う"
+                      : // ★ ひとりで周回はロスが順位を動かすので「表示にだけ使う」とは書かない。
+                        mode === "solo"
+                        ? soloLossProvisional
+                          ? `ロード・リザルトの合計。既定の${DEFAULT_OVERHEAD_SEC.solo}秒はまだ測っていない仮の値`
+                          : "ロード・リザルトの合計"
+                        : // ★ 区間モードではロスで回せる回数が変わり、順位も変わる（検分 T5）
+                          isWindow
+                          ? "ロード・リザルトの合計。区間で回せる回数が変わる"
+                          : "ロード・リザルトの合計。所要時間の表示にだけ使う"
                   }
                 >
                   <NeuInput
                     inputMode="numeric"
-                    value={overhead}
+                    value={overheadValue}
                     onChange={(e) => {
                       const v = onlyDigits(e.target.value);
-                      setOverhead(v);
-                      persist({ overhead: v });
+                      // ひとりで周回だけ別の欄に書く（みんなで周回の値を持ち込まない・持ち出さない）
+                      if (mode === "solo") {
+                        setOverheadSolo(v);
+                        persist({ overheadSolo: v });
+                      } else {
+                        setOverhead(v);
+                        persist({ overhead: v });
+                      }
                     }}
                   />
                 </Field>
@@ -1629,8 +1839,8 @@ export default function EfficiencyRanking() {
                   ).toFixed(1)}
                 </span>
                 {mode === "manual"
-                  ? "（協力ライブで発動する値）"
-                  : "（協力ライブ用。このタブでは使いません）"}
+                  ? "（みんなでライブで発動する値）"
+                  : "（みんなでライブ用。このタブでは使いません）"}
               </span>
               <InfoNote label="内部値と実効値について">
                 <p>
@@ -1642,18 +1852,18 @@ export default function EfficiencyRanking() {
                 </p>
                 <p className="mt-2">
                   <span className="font-bold text-slate-600">実効値</span>
-                  は協力ライブで実際に発動する値で、
+                  はみんなでライブで実際に発動する値で、
                   <code>リーダー + (内部値 − リーダー) × 0.2</code> で出ます。
                   リーダーは100%、サブ4枚は各20%しか効かないためです。
                   この例なら 150 + 560 × 0.2 ={" "}
                   <span className="font-bold text-slate-600">262</span>。
                 </p>
                 <p className="mt-2">
-                  ソロ（オート・チャレライ）は別勘定で、編成5枚が1回ずつ発動するので
+                  ソロ（ひとりで・オート・チャレライのタブ）は別勘定で、編成5枚が1回ずつ発動するので
                   内部値 ÷ 5
                   が平均、最後の6回目だけリーダーがもう1回発動します。 そのため
                   <span className="font-bold text-slate-600">
-                    ソロでは内部値が、協力ではリーダーが効きます
+                    ソロでは内部値が、みんなでライブではリーダーが効きます
                   </span>
                   。
                 </p>
@@ -1681,10 +1891,24 @@ export default function EfficiencyRanking() {
         <summary className="cursor-pointer text-base font-bold text-slate-700">
           <span>この数字について</span>
           <span className="ml-2 text-xs font-normal text-slate-500">
-            スコアとPtの式・AP 前提・入れていないもの・効率難易度との違い
+            タブの考え方・スコアとPtの式・AP 前提・入れていないもの・効率難易度との違い
           </span>
         </summary>
         <ul className="mt-4 space-y-2 text-xs leading-relaxed text-slate-500">
+          {/* ★ タブの下の説明は 1 行に縮めたので、元の説明はここに 4 タブぶん並べる（2026-11-19。消さない） */}
+          <li>
+            <span className="font-bold text-slate-600">タブの考え方</span>
+            <ul className="mt-1 space-y-1">
+              {MODE_OPTIONS.map((o) => (
+                <li key={o.value}>
+                  <span className="font-bold text-slate-600">
+                    {MODE_NOTE[o.value].headline}
+                  </span>
+                  ：{MODE_NOTE[o.value].detail}
+                </li>
+              ))}
+            </ul>
+          </li>
           <li>
             この順位は<span className="font-bold text-slate-600">1枠補正と巻き込みを含みません</span>
             。スキルの発動位置を平均で置いた計算なので、2〜5枠での実感に近い数字です。
@@ -1696,24 +1920,24 @@ export default function EfficiencyRanking() {
             <code>(base + Σ 実効スキル% × 枠重み ÷ 100) × 総合力 × 4</code>{" "}
             で計算しています。base と枠重みは楽曲ごとの実データで、
             譜面上のスキル発動位置が反映されています。タブごとに使うデータを変えていて、
-            手動周回は協力ライブ用（フィーバー加点込み）、オートはオート用、チャレライはソロ用です。
+            「みんなで」のタブはみんなでライブ用（フィーバー加点込み）、「オート」はオート用、「ひとりで」と「チャレライ」はソロ用です。
           </li>
           <li>
             イベントポイントの式は
-            <span className="font-bold text-slate-600">ソロと協力で別物</span>
-            です。ソロ・オートは <code>100 + floor(スコア/20000)</code>、協力は{" "}
+            <span className="font-bold text-slate-600">ソロとみんなでライブで別物</span>
+            です。ソロ・オートは <code>100 + floor(スコア/20000)</code>、みんなでライブは{" "}
             <code>
               110 + floor(自スコア/17000) + min(16, floor(他4人合計/340000))
             </code>
             。
             他4人のスコアは分からないので、ここでは自分と同格の4人（自分のスコア×4）と置いています。
-            実際の部屋の顔ぶれで単価は動くので、並び順の比較に使ってください。
+            表の Pt/時 はその前提の値で、実際の部屋の顔ぶれで上下します（他4人が強ければ上がり、弱ければ下がります）。
           </li>
           <li>
             スキルは1曲のなかで
             <span className="font-bold text-slate-600">6回</span>発動します。
             カードは5枚・部屋も5人ですが、最後にもう1回あるので6回です
-            （ソロならリーダーがもう1回、協力ならアンコール）。 skill_score_*
+            （ソロならリーダーがもう1回、みんなでライブならアンコール）。 skill_score_*
             のデータが長さ6の配列なのもそのためです。
           </li>
           <li>
@@ -1723,7 +1947,7 @@ export default function EfficiencyRanking() {
               叩けない譜面は表より不利になります
             </span>
             。
-            上の譜面レベルで自分が安定してAPできる範囲に絞ると、実際の選曲に近づきます。
+            上の「絞り込み」の譜面レベルで自分が安定してAPできる範囲に絞ると、実際の選曲に近づきます。
           </li>
           <li>
             スキルの発動位置は楽曲ごとに決まっていますが、
@@ -1734,7 +1958,7 @@ export default function EfficiencyRanking() {
             発動順を厳選しても曲どうしの順位は変わりません（全曲に同じ係数が掛かるだけ）。
           </li>
           <li>
-            協力ライブの活躍ボーナス（スコアに少し足される加点）は入れていません。
+            みんなでライブの活躍ボーナス（スコアに少し足される加点）は入れていません。
             どの曲にもほぼ一律に乗るぶんなので順位はほとんど動きませんが、表示Ptは実際よりわずかに低めです。
           </li>
         </ul>

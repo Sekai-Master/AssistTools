@@ -8,10 +8,11 @@
  * ★ 「この数字について」（約 730 字）は開いたままだったので、閉じた段にする。見出しだけで中身が分かる言い方にする。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import EfficiencyRanking from "./EfficiencyRanking";
 import type { RankingMusic } from "./useRankingMusics";
+import { DEFAULT_OVERHEAD_SEC } from "./lib/efficiency";
 
 // 独りんぼエンヴィー MASTER（public/MusicDatas の値。QuickCompare.test.tsx と同じ）
 const ENVY: RankingMusic = {
@@ -36,7 +37,31 @@ vi.mock("./useRankingMusics", async (importOriginal) => ({
   useRankingMusics: () => ({ entries: [ENVY], loading: false, error: null }),
 }));
 
-afterEach(cleanup);
+// みんなでライブが止まっている期間の印。既定は本物と同じ true。再開したとき（false）の振る舞いも見るため差し替えられるようにする。
+const suspension = vi.hoisted(() => ({ value: true }));
+vi.mock("../../lib/liveSuspension", () => ({
+  get MULTI_LIVE_SUSPENDED() {
+    return suspension.value;
+  },
+}));
+
+// ひとりでライブのロスが仮の値かの印。既定は本物と同じ true。値（OVERHEAD_SEC）は本物のまま使う。
+const provisional = vi.hoisted(() => ({ value: true }));
+vi.mock("../../lib/overhead", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/overhead")>();
+  return {
+    ...actual,
+    get SOLO_OVERHEAD_PROVISIONAL() {
+      return provisional.value;
+    },
+  };
+});
+
+afterEach(() => {
+  cleanup();
+  suspension.value = true;
+  provisional.value = true;
+});
 
 const draw = () =>
   render(
@@ -55,6 +80,8 @@ const folded = (el: Element) => {
 describe("表の前の注意枠", () => {
   it("1 行（26 字以内）に縮め、「1枠補正と巻き込みを含まない」「2〜5枠」は畳まずに残す", () => {
     draw();
+    // 注はみんなでライブの部屋の枠の話なので、みんなでのタブにだけ出る（下のテスト）
+    fireEvent.click(screen.getByRole("radio", { name: "みんなで" }));
     const box = [...document.querySelectorAll("p.bg-amber-50")].find((p) => p.textContent?.includes("1枠補正"))!;
     expect(box).toBeTruthy();
     const text = box.textContent ?? "";
@@ -63,6 +90,18 @@ describe("表の前の注意枠", () => {
     expect(text).toContain("巻き込み");
     expect(text).toContain("2〜5枠");
     expect(folded(box)).toBe(false);
+  });
+
+  // ★ 2026-11-19 検分 R5: 「2〜5枠」はみんなでライブの部屋の枠のこと。ひとりで・オート・チャレライには枠が無いので出さない。
+  it("「1枠補正・2〜5枠」の注は、みんなでのタブにだけ出す", () => {
+    draw();
+    const box = () => [...document.querySelectorAll("p.bg-amber-50")].find((p) => p.textContent?.includes("1枠補正"));
+    for (const name of ["ひとりで", "オート", "チャレライ"]) {
+      fireEvent.click(screen.getByRole("radio", { name }));
+      expect(box()).toBeUndefined();
+    }
+    fireEvent.click(screen.getByRole("radio", { name: "みんなで" }));
+    expect(box()).toBeTruthy();
   });
 });
 
@@ -85,8 +124,216 @@ describe("この数字について", () => {
     draw();
     const text = about()!.textContent ?? "";
     expect(text).toContain("全ノーツPERFECT（AP）を前提にした理論値です");
-    expect(text).toContain("協力ライブの活躍ボーナス");
+    expect(text).toContain("みんなでライブの活躍ボーナス");
     expect(text).toContain("効率難易度");
     expect(text).toContain("1枠を取って巻き込みまで決める場合は低い難易度がもっと強くなることがあり");
+  });
+});
+
+/**
+ * ひとりで周回（2026-11-18〜 みんなでライブが止まったイベント向け）。
+ *
+ * ★ 新しい説明には公式名「ひとりでライブ」を使い、「協力」と書かない。
+ * ★ 2026-11-18 Nori 決定: 「手動周回」は「みんなで周回」に改名。みんなでライブが止まっている間は「ひとりで周回」で開く。
+ */
+describe("ひとりで周回", () => {
+  // EfficiencyRanking.tsx の STORE_KEY。保存の鍵は変えない（変えると既存の利用者の入力が消える）。
+  const STORE_KEY = "sekai-master:ranking-inputs";
+  afterEach(() => localStorage.clear());
+
+  const tab = (name: string) => screen.getByRole("radio", { name });
+  // タブの直後の段落が見出し、その次が説明
+  const headline = () => tab("みんなで").closest('[role="radiogroup"]')!.nextElementSibling!;
+  const body = () => headline().nextElementSibling!.textContent ?? "";
+
+  // ★ 2026-11-19 検分 R1: 本番の字体（M PLUS Rounded 1c）だと「みんなで周回」の 6 文字は 390px でも折れる。
+  //   /compare と同じ短い形にそろえる（見出しと説明の文はそのまま）。
+  it("タブは4つ。みんなで・ひとりで・オート・チャレライの順（/compare の切り替えと同じ短い形）", () => {
+    draw();
+    const group = tab("みんなで").closest('[role="radiogroup"]') as HTMLElement;
+    expect(within(group).getAllByRole("radio").map((b) => b.textContent)).toEqual([
+      "みんなで",
+      "ひとりで",
+      "オート",
+      "チャレライ",
+    ]);
+  });
+
+  it("選ぶと「ひとりでライブ」の時間あたりPtの説明になり、「協力」と書かない。長さは他のタブ並み", () => {
+    draw();
+    const others = ["みんなで", "オート", "チャレライ"].map((name) => {
+      fireEvent.click(tab(name));
+      return body().length;
+    });
+    fireEvent.click(tab("ひとりで"));
+    expect(tab("ひとりで").getAttribute("aria-checked")).toBe("true");
+    expect(headline().textContent).toBe("ひとりでライブ・時間あたりのイベントポイント");
+    expect(headline().textContent + body()).not.toContain("協力");
+    expect(body().length).toBeLessThanOrEqual(Math.max(...others));
+  });
+
+  it("自分の条件で計算するとき、焚き数を入れられ、ロスの補足は「表示にだけ使う」と言わない", () => {
+    localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true }));
+    draw();
+    fireEvent.click(tab("ひとりで"));
+    const labels = [...document.querySelectorAll("label")].map((l) => l.textContent);
+    expect(labels).toContain("焚き数");
+    expect(labels).toContain("1曲あたりのロス（秒）");
+    // このタブではロスが順位を動かす。オート用の「所要時間の表示にだけ使う」は嘘になる
+    expect(screen.queryByText(/所要時間の表示にだけ使う/)).toBeNull();
+    expect(screen.getByText(/^ロード・リザルトの合計/)).toBeTruthy();
+  });
+
+  /**
+   * ★ ひとりでライブのロス（OVERHEAD_SEC.solo）は実測前の仮の値。「仮」と出すかは
+   *   SOLO_OVERHEAD_PROVISIONAL だけで決める（値が 33 かどうかでは決めない。2026-11-19 指揮）。
+   */
+  describe("ひとりで周回のロスの既定は、印が立っている間「仮」と出す", () => {
+    // 表のすぐ上の「総合力…・ロス◯秒の場合」（2026-11-19 表の直しで表の下の注から移した）
+    const premise = () => screen.getByText(/の場合$/).textContent ?? "";
+    const lossHint = () =>
+      [...document.querySelectorAll("label")]
+        .find((l) => l.textContent === "1曲あたりのロス（秒）")!
+        .parentElement!.textContent ?? "";
+
+    it("入力なしの順位の前提に「ロス 33秒（仮）」と出す。ほかのタブには出さない", () => {
+      draw();
+      expect(premise()).toContain(`ロス${DEFAULT_OVERHEAD_SEC.solo}秒（仮）`);
+      fireEvent.click(tab("みんなで"));
+      expect(premise()).toContain(`ロス${DEFAULT_OVERHEAD_SEC.manual}秒`);
+      expect(premise()).not.toContain("仮");
+    });
+
+    it("自分の条件の「1曲あたりのロス」の補足に、既定が仮の値だと書く", () => {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true }));
+      draw();
+      expect(lossHint()).toContain("仮");
+      fireEvent.click(tab("みんなで"));
+      expect(lossHint()).not.toContain("仮");
+    });
+
+    it("印が下りたら（Nori が測ったら）、どちらからも「仮」が消える", () => {
+      provisional.value = false;
+      draw();
+      expect(premise()).toContain(`ロス${DEFAULT_OVERHEAD_SEC.solo}秒`);
+      expect(premise()).not.toContain("仮");
+      cleanup();
+      localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true }));
+      draw();
+      expect(lossHint()).not.toContain("仮");
+      expect(screen.getByText("ロード・リザルトの合計")).toBeTruthy();
+    });
+  });
+
+  describe("1曲あたりのロスは、ひとりで周回だけ別に持つ", () => {
+    const input = () =>
+      [...document.querySelectorAll("label")]
+        .find((l) => l.textContent === "1曲あたりのロス（秒）")!
+        .parentElement!.querySelector("input")!;
+    const stored = () => JSON.parse(localStorage.getItem(STORE_KEY) ?? "{}") as Record<string, unknown>;
+
+    it("何も入れていなければ、ひとりで周回で開いたときの欄は ひとりでライブの既定（みんなでライブの 54 ではない）", () => {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true }));
+      draw();
+      expect(tab("ひとりで").getAttribute("aria-checked")).toBe("true");
+      expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.solo));
+    });
+
+    it("みんなで周回のために入れた値（保存済みの 40）は、ひとりで周回には持ち込まない", () => {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true, overhead: "40" }));
+      draw();
+      expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.solo));
+      fireEvent.click(tab("みんなで"));
+      expect(input().value).toBe("40");
+      fireEvent.click(tab("ひとりで"));
+      expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.solo));
+    });
+
+    it("ひとりで周回で入れた値は、ひとりで周回にだけ効き、開き直しても残る（保存の鍵は同じ、欄だけ別）", () => {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true }));
+      draw();
+      fireEvent.change(input(), { target: { value: "45" } });
+      expect(input().value).toBe("45");
+      expect(stored().overheadSolo).toBe("45");
+      expect(stored().overhead).toBeUndefined();
+      fireEvent.click(tab("みんなで"));
+      expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.manual));
+      fireEvent.click(tab("ひとりで"));
+      expect(input().value).toBe("45");
+      cleanup();
+
+      draw();
+      expect(input().value).toBe("45");
+    });
+
+    it("ほかの3つのタブの間の差し替えは今までどおり（触っていなければ既定へ、手で入れた値は残す）", () => {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true }));
+      draw();
+      fireEvent.click(tab("みんなで"));
+      expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.manual));
+      fireEvent.click(tab("ひとりで"));
+      fireEvent.click(tab("オート"));
+      expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.auto));
+      fireEvent.click(tab("みんなで"));
+      expect(input().value).toBe(String(DEFAULT_OVERHEAD_SEC.manual));
+      cleanup();
+
+      localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true, overhead: "40" }));
+      draw();
+      fireEvent.click(tab("みんなで"));
+      fireEvent.click(tab("ひとりで"));
+      fireEvent.click(tab("オート"));
+      expect(input().value).toBe("40");
+    });
+  });
+
+  it("みんなでライブが止まっている間は、ひとりで周回で開く（保存値に知らない mode・古い版・壊れた JSON があっても落ちない）", () => {
+    const blobs = [
+      null,
+      JSON.stringify({ v: 2, mode: "manual", overhead: "54" }),
+      JSON.stringify({ v: 1, mode: "solo" }),
+      "{broken",
+    ];
+    for (const raw of blobs) {
+      if (raw != null) localStorage.setItem(STORE_KEY, raw);
+      draw();
+      expect(tab("ひとりで").getAttribute("aria-checked")).toBe("true");
+      expect(headline().textContent).toBe("ひとりでライブ・時間あたりのイベントポイント");
+      cleanup();
+    }
+  });
+
+  it("再開したら（印が false）、みんなで周回で開く", () => {
+    suspension.value = false;
+    draw();
+    expect(tab("みんなで").getAttribute("aria-checked")).toBe("true");
+    expect(headline().textContent).toBe("みんなでライブ・時間あたりのイベントポイント");
+  });
+});
+
+/**
+ * 画面の文に「協力」を書かない（2026-11-18 Nori: 協力ライブはガルパの名前。公式名は「みんなでライブ」）。
+ * ★ 閉じた段（<details>）の中も textContent に入るので、「この数字について」や補足も含めて見る。
+ */
+describe("画面の文に「協力」が無い", () => {
+  afterEach(() => localStorage.clear());
+  const tab = (name: string) => screen.getByRole("radio", { name });
+
+  it("どのタブでも、自分の条件で計算する欄を開いていても「協力」と書かない", () => {
+    localStorage.setItem("sekai-master:ranking-inputs", JSON.stringify({ v: 2, custom: true }));
+    draw();
+    for (const name of ["みんなで", "ひとりで", "オート", "チャレライ"]) {
+      fireEvent.click(tab(name));
+      expect(document.body.textContent ?? "").not.toContain("協力");
+    }
+  });
+
+  it("実効値の補足は「みんなでライブ」と書く", () => {
+    localStorage.setItem("sekai-master:ranking-inputs", JSON.stringify({ v: 2, custom: true }));
+    draw();
+    fireEvent.click(tab("ひとりで"));
+    expect(screen.getByText(/（みんなでライブ用。このタブでは使いません）/)).toBeTruthy();
+    fireEvent.click(tab("みんなで"));
+    expect(screen.getByText(/（みんなでライブで発動する値）/)).toBeTruthy();
   });
 });
