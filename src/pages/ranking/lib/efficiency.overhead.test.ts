@@ -4,7 +4,7 @@
  * ★ 効率曲ランキングの「ひとりで周回」の既定（DEFAULT_OVERHEAD_SEC.solo）と、
  *   編成ビルダー・楽曲比較のソロ（OVERHEAD_BY_LIVE.solo）は、どちらも src/lib/overhead.ts の
  *   OVERHEAD_SEC.solo を読む。チャレンジライブ（OVERHEAD_SEC.challenge）とは別の値。
- * ★ いまは solo も challenge も 33 秒で同じなので、値を比べるだけではどちらを読んでいるか
+ * ★ 仮の値のころは solo も challenge も 33 秒で同じだったので、値を比べるだけではどちらを読んでいるか
  *   見分けられない。overhead.ts を差し替えて solo だけ別の数字にし、追随するかを見る。
  *   （Nori が測って solo だけ直したとき、1 か所の修正でサイト全体のソロのロスが変わること）
  */
