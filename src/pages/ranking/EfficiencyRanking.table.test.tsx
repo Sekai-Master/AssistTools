@@ -277,3 +277,79 @@ describe("1 曲 1 行（既定）と「難易度ごとに全部並べる」", ()
     expect(rows()).toHaveLength(ENTRIES.length);
   });
 });
+
+/**
+ * 表の上を詰める（2026-11-19 指揮の追加依頼）。
+ * ★ 難易度・譜面レベル・「難易度ごとに全部並べる」は 4 タブ共通で閉じた段「絞り込み」に畳む。
+ *   見出しに今の条件の要約と、既定から変えた数（MoreSettings の作法）。
+ * ★ タブの下の説明は 1 行に縮め、元の文は「この数字について」へ移す（消さない）。
+ */
+describe("絞り込みは閉じた段に畳む", () => {
+  const filter = () =>
+    [...document.querySelectorAll("details")].find((d) =>
+      d.querySelector("summary")?.textContent?.includes("絞り込み"),
+    )!;
+  const summary = () => filter().querySelector("summary")!.textContent ?? "";
+
+  it("4 タブとも、難易度の札・すべて・選択を外す・切り替え・譜面レベルが閉じた段の中にある", () => {
+    draw();
+    for (const name of ["みんなで", "ひとりで", "オート", "チャレライ"]) {
+      fireEvent.click(tab(name));
+      const d = filter();
+      expect(d).toBeTruthy();
+      expect(d.open).toBe(false);
+      for (const label of ["EXPERT", "すべて", "選択を外す", "下限を上げる"]) {
+        expect(d.contains(screen.getByRole("button", { name: label }))).toBe(true);
+      }
+      expect(d.contains(screen.getByRole("checkbox", { name: "難易度ごとに全部並べる" }))).toBe(true);
+    }
+  });
+
+  it("見出しに今の条件の要約を出し、既定のままなら変えた数は出さない", () => {
+    draw();
+    expect(summary()).toContain("すべての難易度・全レベル・1曲1行");
+    expect(summary()).not.toContain("項目を変更中");
+  });
+
+  it("既定から変えると、見出しの要約と変えた数が変わる（畳んでいても表に効く）", () => {
+    draw();
+    fireEvent.click(screen.getByRole("button", { name: "EXPERT" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "難易度ごとに全部並べる" }));
+    expect(summary()).toContain("EXPERT以外・全レベル・難易度ごと");
+    expect(summary()).toContain("2 項目を変更中");
+    // 畳んだ中の値で表が絞られている
+    expect(rowKeys()).not.toContain("074-expert");
+  });
+});
+
+describe("タブの下の説明は 1 行", () => {
+  // タブの直後が見出し（何で並べているか）、その次が説明（EfficiencyRanking.test.tsx と同じたどり方）
+  const headline = () => tab("みんなで").closest('[role="radiogroup"]')!.nextElementSibling!;
+  const body = () => headline().nextElementSibling!.textContent ?? "";
+  const about = () => screen.getByText("この数字について").closest("details")!.textContent ?? "";
+
+  it("4 タブとも説明は 26 字以内（390px の text-xs で 1 行）。見出しは何で並べているかのまま", () => {
+    draw();
+    const heads: Record<string, string> = {
+      みんなで: "みんなでライブ・時間あたりのイベントポイント",
+      ひとりで: "ひとりでライブ・時間あたりのイベントポイント",
+      オート: "オート・1プレイあたりのイベントポイント",
+      チャレライ: "チャレンジライブ・1プレイあたりのスコア",
+    };
+    for (const [name, head] of Object.entries(heads)) {
+      fireEvent.click(tab(name));
+      expect(headline().textContent).toBe(head);
+      expect(body().length).toBeGreaterThan(0);
+      expect(body().length).toBeLessThanOrEqual(26);
+    }
+  });
+
+  it("縮める前の説明は「この数字について」へ移す（消さない）", () => {
+    draw();
+    const text = about();
+    expect(text).toContain("フィーバー込みのみんなでライブの式で計算しています");
+    expect(text).toContain("ひとりでライブのスコアとイベントポイントの式で計算しています");
+    expect(text).toContain("手動とは最適解が逆になります");
+    expect(text).toContain("イベント基礎点も無関係で、純粋にスコアだけを見ます");
+  });
+});

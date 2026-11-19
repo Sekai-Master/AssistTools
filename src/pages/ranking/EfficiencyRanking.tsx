@@ -27,6 +27,8 @@ import {
   type EfficiencyParams,
 } from "./lib/efficiency";
 import { premiseParts } from "./lib/premise";
+import { filterSummary } from "./lib/filterSummary";
+import { MoreSettings } from "../../components/ui/MoreSettings";
 import { ProfileBar, SaveToProfile } from "../../components/ui/ProfileBar";
 import {
   lbNeededForPlays,
@@ -68,33 +70,46 @@ const MODE_OPTIONS: { value: RankingMode; label: string }[] = [
 const SOLO_SKILL_HINT =
   "ソロは1曲のなかで6回スキルが発動します（編成5枚が1回ずつ＋最後にリーダーがもう1回）。1〜5回目の発動順は選べないので、5枚は内部値÷5の平均で計算し、6回目だけリーダーの値を当てています。";
 
-/** タブごとに「どのライブの・何を最大化しているか」を明示する。混同すると最適解が真逆になる。 */
+/**
+ * タブごとに「どのライブの・何を最大化しているか」を明示する。混同すると最適解が真逆になる。
+ *
+ * ★ body はタブの下に出す 1 行（26 字以内。390px の text-xs で 1 行）。何で並べているかは headline が言う。
+ *   縮める前の説明（detail）はページ下の「この数字について」に 4 タブぶん並べる（2026-11-19 指揮の追加依頼）。
+ */
 const MODE_NOTE: Record<
   RankingMode,
-  { headline: string; body: string; metricLabel: string; skillHint: string }
+  { headline: string; body: string; detail: string; metricLabel: string; skillHint: string }
 > = {
   manual: {
     headline: "みんなでライブ・時間あたりのイベントポイント",
-    body: "手で叩くので律速は時間。短い曲ほど有利になります。フィーバー込みのみんなでライブの式で計算しています。",
+    body: "律速は時間。短い曲ほど有利（フィーバー込みの式）",
+    detail:
+      "手で叩くので律速は時間。短い曲ほど有利になります。フィーバー込みのみんなでライブの式で計算しています。",
     metricLabel: "Pt/時",
     skillHint:
       "みんなでライブは1曲のなかで6回スキルが発動します（参加5人が1回ずつ＋アンコール1回）。各発動で乗るのが実効値です。強い人を呼ぶと単価が上がるのは、イベントポイントの式に他4人の合計スコアが入るからで、曲の順位そのものは部屋の顔ぶれでは変わりません。",
   },
   solo: {
     headline: "ひとりでライブ・時間あたりのイベントポイント",
-    body: "手で叩くので律速は時間。短い曲ほど有利になります。ひとりでライブのスコアとイベントポイントの式で計算しています。",
+    body: "律速は時間。短い曲ほど有利（ひとりでライブの式）",
+    detail:
+      "手で叩くので律速は時間。短い曲ほど有利になります。ひとりでライブのスコアとイベントポイントの式で計算しています。",
     metricLabel: "Pt/時",
     skillHint: SOLO_SKILL_HINT,
   },
   auto: {
     headline: "オート・1プレイあたりのイベントポイント",
-    body: "放置するので時間はコストになりません。律速はライブボーナスなので、1回で多く稼げる長尺・高基礎点の曲が有利です。手動とは最適解が逆になります。",
+    body: "律速はライボ。1回で稼げる長尺・高基礎点の曲が有利",
+    detail:
+      "放置するので時間はコストになりません。律速はライブボーナスなので、1回で多く稼げる長尺・高基礎点の曲が有利です。手動とは最適解が逆になります。",
     metricLabel: "Pt/回",
     skillHint: SOLO_SKILL_HINT,
   },
   challenge: {
     headline: "チャレンジライブ・1プレイあたりのスコア",
-    body: "1日1回なので時間もライボも関係ありません。イベント基礎点も無関係で、純粋にスコアだけを見ます。",
+    body: "1日1回。ライボも時間も関係なく、スコアだけを見る",
+    detail:
+      "1日1回なので時間もライボも関係ありません。イベント基礎点も無関係で、純粋にスコアだけを見ます。",
     metricLabel: "スコア",
     skillHint: SOLO_SKILL_HINT,
   },
@@ -859,6 +874,15 @@ export default function EfficiencyRanking() {
     showLoss: mode === "manual" || mode === "solo" || isWindow,
     provisionalLoss: !custom && soloLossProvisional,
   }).join("・");
+  /** 閉じた段「絞り込み」の見出しに出す今の条件の要約と、既定から変えた数。 */
+  const filterNote = filterSummary({
+    all: DIFFICULTY_ORDER.map((d) => DIFFICULTY_LABEL[d]),
+    selected: DIFFICULTY_ORDER.filter((d) => diffs.has(d)).map((d) => DIFFICULTY_LABEL[d]),
+    levelFiltered,
+    lo: loLv,
+    hi: hiLv,
+    allDiffs,
+  });
   /** 表の主役の数字の単位。★ 窓モードの metric は「窓内の合計Pt」。Pt/回 のままだと嘘になる。 */
   const unitLabel = isWindow ? "合計Pt" : note.metricLabel;
 
@@ -906,10 +930,10 @@ export default function EfficiencyRanking() {
           compact
           buttonClassName="min-w-0 whitespace-nowrap"
         />
-        <p className="mt-4 text-sm font-bold text-slate-600">{note.headline}</p>
-        <p className="mt-1 text-xs leading-relaxed text-slate-500">
-          {note.body}
-        </p>
+        {/* ★ 見出し（何で並べているか）＋説明 1 行。余白は 12px・行の高さは text-xs の既定に詰め、
+              390px のひとりでで最初の画面に表が 5 行入るようにした（2026-11-19） */}
+        <p className="mt-3 text-sm font-bold text-slate-600">{note.headline}</p>
+        <p className="mt-1 text-xs text-slate-500">{note.body}</p>
         {/**
          * ★★ **この順位が何を含んでいないかを先に言う。** ★★
          * スコアの式はスキルの発動位置を**平均（期待値）**で置いている。したがって
@@ -933,86 +957,99 @@ export default function EfficiencyRanking() {
           </p>
         )}
 
-        <div className="mt-5 flex flex-wrap items-center gap-2">
-          <span className="mr-1 text-xs font-bold text-slate-500">難易度</span>
-          {DIFFICULTY_ORDER.map((d) => (
+        {/**
+         * ★ 難易度・譜面レベル・並べ方は 4 タブ共通で閉じた段「絞り込み」に畳む（2026-11-19 指揮の追加依頼）。
+         *   開いたままだと表の上で約 200px を使い、390px の最初の画面に表が 2 行しか入らなかった。
+         *   畳んでも表に効くので、見出しに今の条件の要約と既定から変えた数を出す（MoreSettings・countChanged の作法）。
+         *   開閉は保存しない（ほかの閉じた段と同じ）。
+         */}
+        <MoreSettings
+          title="絞り込み"
+          contents={filterNote.text}
+          changed={filterNote.changed}
+          className="mt-3"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-xs font-bold text-slate-500">難易度</span>
+            {DIFFICULTY_ORDER.map((d) => (
+              <NeuButton
+                key={d}
+                active={diffs.has(d)}
+                onClick={() => toggleDiff(d)}
+                className="px-3 py-1.5 text-xs"
+                style={
+                  diffs.has(d)
+                    ? ({ "--unit-color": DIFFICULTY_COLOR[d] } as CSSProperties)
+                    : undefined
+                }
+              >
+                {DIFFICULTY_LABEL[d]}
+              </NeuButton>
+            ))}
+            <span className="mx-1 h-5 w-px bg-slate-300/70" aria-hidden />
             <NeuButton
-              key={d}
-              active={diffs.has(d)}
-              onClick={() => toggleDiff(d)}
               className="px-3 py-1.5 text-xs"
-              style={
-                diffs.has(d)
-                  ? ({ "--unit-color": DIFFICULTY_COLOR[d] } as CSSProperties)
-                  : undefined
-              }
+              onClick={() => setDiffs(new Set(ALL_DIFFS))}
             >
-              {DIFFICULTY_LABEL[d]}
+              すべて
             </NeuButton>
-          ))}
-          <span className="mx-1 h-5 w-px bg-slate-300/70" aria-hidden />
-          <NeuButton
-            className="px-3 py-1.5 text-xs"
-            onClick={() => setDiffs(new Set(ALL_DIFFS))}
-          >
-            すべて
-          </NeuButton>
-          <NeuButton
-            className="px-3 py-1.5 text-xs"
-            onClick={() => setDiffs(new Set())}
-          >
-            選択を外す
-          </NeuButton>
-          {/* ★ 表の上ではなく難易度の行に置く。表の上に足すと、スマホの最初の画面に入る行が減る */}
-          <Switch
-            checked={allDiffs}
-            onChange={(v) => {
-              setAllDiffs(v);
-              persist({ allDiffs: v });
-            }}
-            label="難易度ごとに全部並べる"
-          />
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-          <span className="mr-1 font-bold text-slate-500">譜面レベル</span>
-          <LevelInput
-            value={lvMin}
-            onChange={(v) => {
-              setLvMin(v);
-              persist({ lvMin: v });
-            }}
-            label="下限"
-            min={levels.min}
-            max={levels.max}
-          />
-          <span className="text-slate-400">〜</span>
-          <LevelInput
-            value={lvMax}
-            onChange={(v) => {
-              setLvMax(v);
-              persist({ lvMax: v });
-            }}
-            label="上限"
-            min={levels.min}
-            max={levels.max}
-          />
-          {levelFiltered && (
             <NeuButton
               className="px-3 py-1.5 text-xs"
-              onClick={() => {
-                setLvMin(levels.min);
-                setLvMax(levels.max);
-                persist({ lvMin: levels.min, lvMax: levels.max });
+              onClick={() => setDiffs(new Set())}
+            >
+              選択を外す
+            </NeuButton>
+            {/* ★ 表の上には置かない（スマホの最初の画面に入る行が減る）。難易度の絞り込みと一緒に畳む */}
+            <Switch
+              checked={allDiffs}
+              onChange={(v) => {
+                setAllDiffs(v);
+                persist({ allDiffs: v });
               }}
-            >
-              解除
-            </NeuButton>
-          )}
-          <span className="text-slate-400">
-            叩けるレベルに絞ると、AP前提の理論値が実際の選曲に近づきます
-          </span>
-        </div>
+              label="難易度ごとに全部並べる"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="mr-1 font-bold text-slate-500">譜面レベル</span>
+            <LevelInput
+              value={lvMin}
+              onChange={(v) => {
+                setLvMin(v);
+                persist({ lvMin: v });
+              }}
+              label="下限"
+              min={levels.min}
+              max={levels.max}
+            />
+            <span className="text-slate-400">〜</span>
+            <LevelInput
+              value={lvMax}
+              onChange={(v) => {
+                setLvMax(v);
+                persist({ lvMax: v });
+              }}
+              label="上限"
+              min={levels.min}
+              max={levels.max}
+            />
+            {levelFiltered && (
+              <NeuButton
+                className="px-3 py-1.5 text-xs"
+                onClick={() => {
+                  setLvMin(levels.min);
+                  setLvMax(levels.max);
+                  persist({ lvMin: levels.min, lvMax: levels.max });
+                }}
+              >
+                解除
+              </NeuButton>
+            )}
+            <span className="text-slate-400">
+              叩けるレベルに絞ると、AP前提の理論値が実際の選曲に近づきます
+            </span>
+          </div>
+        </MoreSettings>
       </Panel>
 
       {/*
@@ -1823,10 +1860,24 @@ export default function EfficiencyRanking() {
         <summary className="cursor-pointer text-base font-bold text-slate-700">
           <span>この数字について</span>
           <span className="ml-2 text-xs font-normal text-slate-500">
-            スコアとPtの式・AP 前提・入れていないもの・効率難易度との違い
+            タブの考え方・スコアとPtの式・AP 前提・入れていないもの・効率難易度との違い
           </span>
         </summary>
         <ul className="mt-4 space-y-2 text-xs leading-relaxed text-slate-500">
+          {/* ★ タブの下の説明は 1 行に縮めたので、元の説明はここに 4 タブぶん並べる（2026-11-19。消さない） */}
+          <li>
+            <span className="font-bold text-slate-600">タブの考え方</span>
+            <ul className="mt-1 space-y-1">
+              {MODE_OPTIONS.map((o) => (
+                <li key={o.value}>
+                  <span className="font-bold text-slate-600">
+                    {MODE_NOTE[o.value].headline}
+                  </span>
+                  ：{MODE_NOTE[o.value].detail}
+                </li>
+              ))}
+            </ul>
+          </li>
           <li>
             この順位は<span className="font-bold text-slate-600">1枠補正と巻き込みを含みません</span>
             。スキルの発動位置を平均で置いた計算なので、2〜5枠での実感に近い数字です。
