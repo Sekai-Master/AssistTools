@@ -14,7 +14,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { RankingMusic } from "../ranking/useRankingMusics";
 
-const hook = vi.hoisted(() => ({ calls: [] as boolean[], entries: [] as unknown[] }));
+const hook = vi.hoisted(() => ({ calls: [] as boolean[], entries: [] as unknown[], loading: false }));
 
 vi.mock("../ranking/useRankingMusics", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../ranking/useRankingMusics")>();
@@ -22,7 +22,7 @@ vi.mock("../ranking/useRankingMusics", async (importOriginal) => {
     ...actual,
     useRankingMusics: (enabled = true) => {
       hook.calls.push(enabled);
-      return { entries: enabled ? hook.entries : [], loading: false, error: null };
+      return { entries: enabled ? hook.entries : [], loading: enabled && hook.loading, error: null };
     },
   };
 });
@@ -52,6 +52,7 @@ const envy = (difficulty: string, encore: number): RankingMusic => ({
 beforeEach(() => {
   hook.calls = [];
   hook.entries = [envy("expert", 0.15), envy("master", 0.12)];
+  hook.loading = false;
 });
 
 const summary = () => screen.getByText("アンコールは誰が取るとよいか").closest("summary")!;
@@ -71,6 +72,25 @@ describe("既定は閉じる", () => {
     await open();
     expect(details().open).toBe(true);
     expect(hook.calls.at(-1)).toBe(true);
+  });
+});
+
+describe("読み込み中の表示（useRankingMusics の loading に従う）", () => {
+  it("楽曲データの読み込み中は「読み込み中…」で、曲を選ぶボタンは押せない", async () => {
+    hook.entries = [];
+    hook.loading = true;
+    render(<EncoreAdvice myEffective={262} myRange={null} power={null} />);
+    await open();
+    expect(screen.getByRole("button", { name: "読み込み中…" })).toHaveProperty("disabled", true);
+  });
+
+  it("読み終えて該当が 0 件なら、「読み込み中…」のまま止まらず押せる", async () => {
+    hook.entries = [];
+    hook.loading = false;
+    render(<EncoreAdvice myEffective={262} myRange={null} power={null} />);
+    await open();
+    expect(screen.queryByText("読み込み中…")).toBeNull();
+    expect(screen.getByRole("button", { name: "曲を選ぶ" })).toHaveProperty("disabled", false);
   });
 });
 
