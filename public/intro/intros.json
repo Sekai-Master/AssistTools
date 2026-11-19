@@ -1,5 +1,7 @@
 {
-  "intros": [
+  "heldNote": "2026-11-19〜 公式が「みんなでライブ」を止めている間は、自動の機能紹介を止める（画像に「協力」や古い表が写っているため。Nori 決定）。Worker は intros だけを読むので、intros が空なら何も積まない。撮り直したら held から intros へ戻す。",
+  "intros": [],
+  "held": [
     {
       "slug": "analyzer",
       "phase": "running",

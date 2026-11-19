@@ -420,7 +420,9 @@ describe('積む（runIntro）', () => {
 })
 
 describe('過去の実データでなぞる（222・223 と本物の intros.json）', () => {
-  const real = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', '..', '..', 'public', 'intro', 'intros.json'), 'utf8')) as unknown
+  // 紹介を止めている間（intros が空で held に退避）も、中身はふだんの一覧として試す（2026-11-19〜 みんなでライブ停止中）
+  const file = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', '..', '..', 'public', 'intro', 'intros.json'), 'utf8')) as { intros: unknown[]; held?: unknown[] }
+  const real: unknown = { intros: [...file.intros, ...(file.held ?? [])] }
   const from = jst(2026, 10, 26)
   const until = jst(2026, 11, 10)
 
@@ -440,7 +442,15 @@ describe('過去の実データでなぞる（222・223 と本物の intros.json
 
 describe('サイトに置いた紹介（public/intro/intros.json）', () => {
   const dir = path.join(import.meta.dirname, '..', '..', '..', 'public', 'intro')
-  const raw = JSON.parse(fs.readFileSync(path.join(dir, 'intros.json'), 'utf8')) as { intros: { slug: string; phase?: unknown; text: string; images: { file: string }[] }[] }
+  type Entry = { slug: string; phase?: unknown; text: string; images: { file: string }[] }
+  const file = JSON.parse(fs.readFileSync(path.join(dir, 'intros.json'), 'utf8')) as { intros: Entry[]; held?: Entry[] }
+  // 止めている間は held に退避している。戻したときに落ちないよう、退避した分も同じ決まりで試す
+  const raw = { intros: [...file.intros, ...(file.held ?? [])] }
+  it('止めている間は、Worker が読む intros が空で、held に退避した紹介だけがある（どちらか片方にだけ置く）', () => {
+    if ((file.held ?? []).length === 0) return
+    expect(file.intros).toEqual([])
+    expect(parseIntros(file, SITE)).toEqual([])
+  })
   it('全部の紹介が Worker の読み取りを通る（落ちる紹介は出されないまま気づけない）', () => {
     expect(raw.intros.length).toBeGreaterThan(0)
     expect(parseIntros(raw, SITE).map((e) => e.slug)).toEqual(raw.intros.map((e) => e.slug))
