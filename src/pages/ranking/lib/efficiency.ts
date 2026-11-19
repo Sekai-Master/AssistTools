@@ -202,7 +202,10 @@ export interface EfficiencyMetrics {
   cycleSec: number;
   /** 並べ替えに使う値。モードによって意味が変わる。 */
   metric: number;
-  /** 1位を100としたときの相対値。入力なしで見るときの主役。 */
+  /**
+   * 1位を100としたときの相対値。画面には出していない（2026-11-19 の表の直しで列を削り、
+   * 既定でも絶対値を出すようにした）。並びの比較の値として残す。
+   */
   index: number;
   /** 参考: 時間あたりのイベントポイント。 */
   ptPerHour: number;
@@ -305,7 +308,7 @@ export function rankSongs<T extends EfficiencyEntry>(
       a.musicId.localeCompare(b.musicId),
   );
 
-  // 指数は 1位=100。生の Pt を見せなくても差が読めるようにするための主指標。
+  // 指数は 1位=100。画面には出していない（2026-11-19 の表の直しで列を削った）。並びの比較の値として残す。
   const top = scored.length > 0 ? scored[0].metric : 0;
   return scored.map((r) => ({ ...r, index: top > 0 ? (r.metric / top) * 100 : 0 }));
 }

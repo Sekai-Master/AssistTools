@@ -8,7 +8,7 @@
  * ★ 既定は 1 曲 1 行。「難易度ごとに全部並べる」で今までの並びに戻せる。切り替えは保存する。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import EfficiencyRanking from "./EfficiencyRanking";
 import type { RankingMusic } from "./useRankingMusics";
@@ -199,7 +199,7 @@ describe("表のすぐ上の前提の 1 行", () => {
   it("みんなでは みんなでライブのロス、チャレライはボーナス・焚き数・ロスを書かない", () => {
     draw();
     fireEvent.click(tab("みんなで"));
-    expect(premise().textContent).toContain(`ロス${DEFAULT_OVERHEAD_SEC.manual}秒の場合`);
+    expect(premise().textContent).toContain(`ロス${DEFAULT_OVERHEAD_SEC.manual}秒・他4人は同格の場合`);
     fireEvent.click(tab("チャレライ"));
     expect(premise().textContent).toBe(
       `総合力${(DEFAULT_PARAMS.power / 10000).toFixed(1)}万・スキル${DEFAULT_PARAMS.skillLeader}/${DEFAULT_PARAMS.skillTotal}の場合`,
@@ -367,5 +367,98 @@ describe("タブの下の説明は 1 行", () => {
     expect(text).toContain("ひとりでライブのスコアとイベントポイントの式で計算しています");
     expect(text).toContain("手動とは最適解が逆になります");
     expect(text).toContain("イベント基礎点も無関係で、純粋にスコアだけを見ます");
+  });
+});
+
+/** 検分 gate-263-table.md の直し（2026-11-19）。 */
+describe("検分の直し", () => {
+  // T1: 保存した「換算に使う曲」が 1 曲 1 行で隠れた難易度でも、同じ曲の表の行に寄せる（黙って別の曲の 1 位にしない）
+  it("T1 保存した換算の曲が隠れた難易度なら、同じ曲の表の行を使う", () => {
+    const auto = rankSongs(ENTRIES, { ...DEFAULT_PARAMS, overheadSec: DEFAULT_OVERHEAD_SEC.auto }, "auto");
+    const envy = auto.filter((r) => r.musicId === "074");
+    // オートでは長尺の初音天地開闢神話が 1 位（ranked[0] に戻ると別の曲になる形）
+    expect(auto[0].musicId).toBe("186");
+    const shown = envy[0].difficulty;
+    const hidden = envy[1].difficulty;
+    localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, pick: `074-${hidden}` }));
+    draw();
+    fireEvent.click(tab("オート"));
+    const select = screen.getByRole("combobox", { name: "換算に使う曲" }) as HTMLSelectElement;
+    expect(select.value).toBe(`074-${shown}`);
+    // 保存値は書き換えない
+    expect(JSON.parse(localStorage.getItem(STORE_KEY) ?? "{}").pick).toBe(`074-${hidden}`);
+  });
+
+  // T2: 「（仮）」はロスを書き換えていない間は残す（自分の総合力だけ入れた人のスクショにも残る）
+  it("T2 自分の条件でも、ひとりでのロスを書き換えていなければ「（仮）」を付ける", () => {
+    localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true, power: "330000" }));
+    draw();
+    const line = screen.getByText(/^自分の条件で計算：/).textContent ?? "";
+    expect(line).toContain("総合力33.0万");
+    expect(line).toContain(`ロス${DEFAULT_OVERHEAD_SEC.solo}秒（仮）`);
+  });
+
+  it("T2 「自分の編成で計算する」を押しただけでは「（仮）」は消えない", () => {
+    draw();
+    fireEvent.click(screen.getByRole("button", { name: "自分の編成で計算する" }));
+    expect(screen.getByText(/^自分の条件で計算：/).textContent).toContain("（仮）");
+  });
+
+  // T3: 見出しの要約のレベルはデータの範囲に収める（入力の初期値 0／99 をそのまま出さない）
+  it("T3 下限だけ上げても、見出しの上限はデータの上限", () => {
+    draw();
+    for (let i = 0; i < 3; i++) fireEvent.click(screen.getByRole("button", { name: "下限を上げる" }));
+    const summary = [...document.querySelectorAll("summary")].find((s) => s.textContent?.includes("絞り込み"))!.textContent ?? "";
+    // ENTRIES のレベルは 22〜33。0 → 22 → 23 → 24
+    expect(summary).toContain("レベル24〜33");
+    expect(summary).not.toContain("99");
+  });
+
+  // T4: 畳んだ操作を「上の譜面レベル」とだけ書かない
+  it("T4 「この数字について」は譜面レベルの在りかを「絞り込み」と書く", () => {
+    draw();
+    const about = screen.getByText("この数字について").closest("details")!.textContent ?? "";
+    expect(about).toContain("上の「絞り込み」の譜面レベルで");
+  });
+
+  // T5: 区間モードの合計Ptは注ぎ足すか・残り回数で何倍も変わるので、前提の行に短く出す
+  it("T5 区間モードだけ、前提の行に注ぎ足す前提と残り回数を出し、ロスの補足も替える", () => {
+    localStorage.setItem(
+      STORE_KEY,
+      JSON.stringify({ v: 2, autoFrom: "window", windowMin: "60", refill: true, autoLeft: "10" }),
+    );
+    draw();
+    fireEvent.click(tab("オート"));
+    expect(premise().textContent).toContain("注ぎ足す前提・残り10回の場合");
+    cleanup();
+    localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, custom: true, autoFrom: "window" }));
+    draw();
+    fireEvent.click(tab("オート"));
+    expect(screen.queryByText(/所要時間の表示にだけ使う/)).toBeNull();
+    expect(screen.getByText("ロード・リザルトの合計。区間で回せる回数が変わる")).toBeTruthy();
+  });
+
+  it("T5 ふつうのオートの前提の行には出さない", () => {
+    localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, autoFrom: "lb" }));
+    draw();
+    fireEvent.click(tab("オート"));
+    expect(premise().textContent).not.toContain("注ぎ足す");
+    expect(premise().textContent).not.toContain("残り");
+  });
+
+  // T6: みんなでの Pt/時は「ほかの 4 人は自分と同格」と置いた数字
+  it("T6 みんなでだけ、前提の行に「他4人は同格」を出す", () => {
+    draw();
+    expect(premise().textContent).not.toContain("他4人");
+    fireEvent.click(tab("みんなで"));
+    expect(premise().textContent).toContain("他4人は同格");
+  });
+
+  // T8: 押したら自分の条件のスイッチへフォーカスを移す（欄が開いたことを読み上げで伝える）
+  it("T8 「自分の編成で計算する」を押すと、自分の条件のスイッチにフォーカスが移る", async () => {
+    draw();
+    fireEvent.click(screen.getByRole("button", { name: "自分の編成で計算する" }));
+    const sw = screen.getByRole("checkbox", { name: "自分の条件で計算する" });
+    await waitFor(() => expect(document.activeElement).toBe(sw));
   });
 });

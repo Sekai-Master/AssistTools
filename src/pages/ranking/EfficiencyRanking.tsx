@@ -763,7 +763,15 @@ export default function EfficiencyRanking() {
   const [pickKey, setPickKey] = useState(stored.pick ?? "");
   const keyOf = (r: { musicId: string; difficulty: string }) =>
     `${r.musicId}-${r.difficulty}`;
-  const best = ranked.find((r) => keyOf(r) === pickKey) ?? ranked[0];
+  /**
+   * ★ 探す順は「同じキー → 同じ曲の表の行 → 1位」（検分 T1、2026-11-19）。1曲1行で選んだ難易度が隠れたときに
+   *   黙って別の曲の1位へ替えない（曲は表に残っているので、その曲の表の行を使う）。保存値は書き換えない。
+   */
+  const pickMusic = pickKey.slice(0, pickKey.lastIndexOf("-"));
+  const best =
+    ranked.find((r) => keyOf(r) === pickKey) ??
+    ranked.find((r) => r.musicId === pickMusic) ??
+    ranked[0];
 
   /**
    * 今日まだ残っているオートの回数。
@@ -868,12 +876,26 @@ export default function EfficiencyRanking() {
    * 表のすぐ上の前提の 1 行。**既定でも絶対値を出すので、何を前提にした数字かを表の上で言う**（2026-11-19）。
    * 数字は計算に使っている params から作る（既定なら DEFAULT_PARAMS と DEFAULT_OVERHEAD_SEC の値）。
    * ★ ロスは表の数字を動かすタブ（みんなで・ひとりで・オートの区間モード）でだけ書く。
-   * ★ 「（仮）」は既定のロスを使っている間だけ。自分で入れたロスは仮の値ではない。
+   * ★ 「（仮）」は、印が立っていて、ひとりでのロスを利用者が書き換えていない間（既定と同じ値の間）は付ける
+   *   （検分 T2。自分の総合力だけ入れた人のスクショにも残す）。比べる相手は DEFAULT_OVERHEAD_SEC.solo で、数字を直書きしない。
+   * ★ 表の数字を大きく動かす前提だけを短く足す（検分 T5・T6。「余分な情報は削る」ので最小限）:
+   *   みんなでは他4人を自分と同格と置いた数字、区間モードは注ぎ足すか・オートの残り回数で合計が何倍も変わる。
    */
-  const premise = premiseParts(params, mode, {
-    showLoss: mode === "manual" || mode === "solo" || isWindow,
-    provisionalLoss: !custom && soloLossProvisional,
-  }).join("・");
+  const premise = [
+    ...premiseParts(params, mode, {
+      showLoss: mode === "manual" || mode === "solo" || isWindow,
+      provisionalLoss:
+        soloLossProvisional &&
+        (!custom || Number(overheadSolo) === DEFAULT_OVERHEAD_SEC.solo),
+    }),
+    ...(mode === "manual" ? ["他4人は同格"] : []),
+    ...(isWindow
+      ? [
+          refill ? "注ぎ足す前提" : "注ぎ足さない",
+          `残り${Math.max(0, Number(autoLeft) || 0)}回`,
+        ]
+      : []),
+  ].join("・");
   /**
    * 閉じた段「絞り込み」の見出しに出す今の条件の要約と、既定から変えた数。
    * ★ 読み込み中は譜面レベルの範囲がまだ仮（1〜40）なので、保存したレベルを「絞っている」と数えない
@@ -883,8 +905,9 @@ export default function EfficiencyRanking() {
     all: DIFFICULTY_ORDER.map((d) => DIFFICULTY_LABEL[d]),
     selected: DIFFICULTY_ORDER.filter((d) => diffs.has(d)).map((d) => DIFFICULTY_LABEL[d]),
     levelFiltered: !loading && levelFiltered,
-    lo: loLv,
-    hi: hiLv,
+    // ★ 入力の初期値（0／99）はデータの外なので、見出しにはデータの範囲に収めて出す（検分 T3）
+    lo: Math.max(levels.min, loLv),
+    hi: Math.min(levels.max, hiLv),
     allDiffs,
   });
   /** 表の主役の数字の単位。★ 窓モードの metric は「窓内の合計Pt」。Pt/回 のままだと嘘になる。 */
@@ -898,11 +921,12 @@ export default function EfficiencyRanking() {
     }
     const smooth = motionLevel !== "off" && !osReduce;
     // 開いて描き直してから動かす（畳んだままの高さで止まらないように）。jsdom には scrollIntoView が無い
-    requestAnimationFrame(() =>
-      document
-        .getElementById(CUSTOM_ID)
-        ?.scrollIntoView?.({ behavior: smooth ? "smooth" : "auto", block: "start" }),
-    );
+    requestAnimationFrame(() => {
+      const target = document.getElementById(CUSTOM_ID);
+      target?.scrollIntoView?.({ behavior: smooth ? "smooth" : "auto", block: "start" });
+      // ★ フォーカスもスイッチへ移す（検分 T8）。ボタンに残ると、読み上げの利用者に欄が開いたことが伝わらない
+      target?.querySelector("input")?.focus({ preventScroll: true });
+    });
   };
 
   return (
@@ -1780,7 +1804,10 @@ export default function EfficiencyRanking() {
                         ? soloLossProvisional
                           ? `ロード・リザルトの合計。既定の${DEFAULT_OVERHEAD_SEC.solo}秒はまだ測っていない仮の値`
                           : "ロード・リザルトの合計"
-                        : "ロード・リザルトの合計。所要時間の表示にだけ使う"
+                        : // ★ 区間モードではロスで回せる回数が変わり、順位も変わる（検分 T5）
+                          isWindow
+                          ? "ロード・リザルトの合計。区間で回せる回数が変わる"
+                          : "ロード・リザルトの合計。所要時間の表示にだけ使う"
                   }
                 >
                   <NeuInput
@@ -1904,7 +1931,7 @@ export default function EfficiencyRanking() {
             </code>
             。
             他4人のスコアは分からないので、ここでは自分と同格の4人（自分のスコア×4）と置いています。
-            実際の部屋の顔ぶれで単価は動くので、並び順の比較に使ってください。
+            表の Pt/時 はその前提の値で、実際の部屋の顔ぶれで上下します（他4人が強ければ上がり、弱ければ下がります）。
           </li>
           <li>
             スキルは1曲のなかで
@@ -1920,7 +1947,7 @@ export default function EfficiencyRanking() {
               叩けない譜面は表より不利になります
             </span>
             。
-            上の譜面レベルで自分が安定してAPできる範囲に絞ると、実際の選曲に近づきます。
+            上の「絞り込み」の譜面レベルで自分が安定してAPできる範囲に絞ると、実際の選曲に近づきます。
           </li>
           <li>
             スキルの発動位置は楽曲ごとに決まっていますが、
