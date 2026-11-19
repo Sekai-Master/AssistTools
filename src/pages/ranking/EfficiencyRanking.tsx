@@ -874,11 +874,15 @@ export default function EfficiencyRanking() {
     showLoss: mode === "manual" || mode === "solo" || isWindow,
     provisionalLoss: !custom && soloLossProvisional,
   }).join("・");
-  /** 閉じた段「絞り込み」の見出しに出す今の条件の要約と、既定から変えた数。 */
+  /**
+   * 閉じた段「絞り込み」の見出しに出す今の条件の要約と、既定から変えた数。
+   * ★ 読み込み中は譜面レベルの範囲がまだ仮（1〜40）なので、保存したレベルを「絞っている」と数えない
+   *  （数えると見出しが一瞬「レベル5〜38（1 項目を変更中）」に跳ねてから戻る）。
+   */
   const filterNote = filterSummary({
     all: DIFFICULTY_ORDER.map((d) => DIFFICULTY_LABEL[d]),
     selected: DIFFICULTY_ORDER.filter((d) => diffs.has(d)).map((d) => DIFFICULTY_LABEL[d]),
-    levelFiltered,
+    levelFiltered: !loading && levelFiltered,
     lo: loLv,
     hi: hiLv,
     allDiffs,

@@ -66,9 +66,14 @@ const TENCHI: RankingMusic = {
 };
 const ENTRIES = [ENVY_EXPERT, ENVY_MASTER, TENCHI];
 
+// 読み込み中の形も見るため、読み込みの状態を差し替えられるようにする（既定は読み込み済み）
+const loadState = vi.hoisted(() => ({ loading: false }));
 vi.mock("./useRankingMusics", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./useRankingMusics")>()),
-  useRankingMusics: () => ({ entries: ENTRIES, loading: false, error: null }),
+  useRankingMusics: () =>
+    loadState.loading
+      ? { entries: [], loading: true, error: null }
+      : { entries: ENTRIES, loading: false, error: null },
 }));
 
 // 止まっている期間（ひとりで周回で開く）。印は本物と同じ true
@@ -93,6 +98,7 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   provisional.value = true;
+  loadState.loading = false;
 });
 
 const draw = () =>
@@ -319,6 +325,16 @@ describe("絞り込みは閉じた段に畳む", () => {
     expect(summary()).toContain("2 項目を変更中");
     // 畳んだ中の値で表が絞られている
     expect(rowKeys()).not.toContain("074-expert");
+  });
+
+  // ★ 読み込み中は譜面レベルの範囲がまだ分からない（仮の 1〜40）。保存したレベル（例 5〜38）を
+  //   「絞っている」と数えると、見出しが一瞬「レベル5〜38（1 項目を変更中）」に跳ねてから戻る
+  it("読み込み中は、保存した譜面レベルを「変えた」と数えない", () => {
+    loadState.loading = true;
+    localStorage.setItem(STORE_KEY, JSON.stringify({ v: 2, lvMin: 5, lvMax: 38 }));
+    draw();
+    expect(summary()).toContain("すべての難易度・全レベル・1曲1行");
+    expect(summary()).not.toContain("項目を変更中");
   });
 });
 
