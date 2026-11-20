@@ -55,6 +55,8 @@ const MEMORIES_UNIT: Record<string, string> = {
   ln: 'light_sound',
   mmj: 'idol',
   wxs: 'theme_park',
+  // 226 ワンダーランズ×ショウタイム Memories のマスタの素材名は event_memories_wds_2026（wxs ではない。2026-11-20 に告知が出なかったことで判明）
+  wds: 'theme_park',
   '25': 'school_refusal',
   vs: 'piapro',
 }

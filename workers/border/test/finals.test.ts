@@ -54,7 +54,7 @@ describe('終わった直後の回を歴代の表へ（finals.ts）', () => {
 
   // みんなでライブ停止中の回（special.ts の一覧 ∪ 有効な版の一覧）は、Bot が「みんなでライブ停止中の開催」の印を付けられるよう special を足す
   it('一覧の回（226）の歴代ボーダーの投稿は payload に special: solo。有効な版の一覧に足した回も同じ', async () => {
-    const ev226: EventMeta = { ...EV, id: 226, asset: 'event_memories_wxs_2026' }
+    const ev226: EventMeta = { ...EV, id: 226, asset: 'event_memories_wds_2026' }
     const a = await setup(ev226)
     expect(await runFinals(a.env, endOf(AGG) + 15 * M, a.fetcher(liveBody(226, AGG + 13 * M)))).toMatchObject({ status: 'added', queued: true })
     const [p226] = await unsentPosts(a.env.DB, 'x')
