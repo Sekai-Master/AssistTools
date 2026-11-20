@@ -30,6 +30,20 @@ describe('歴代ボーダーの行', () => {
     })
   })
 
+  it('226 ワンダーランズ×ショウタイム Memories（マスタの素材名 event_memories_wds_2026）も Memories として入れる', () => {
+    const e226: MasterEvent = {
+      id: 226,
+      name: 'ワンダーランズ×ショウタイム Memories',
+      eventType: 'marathon',
+      unit: 'none',
+      assetbundleName: 'event_memories_wds_2026',
+      startAt: 1795154400000,
+      aggregateAt: 1795521599000,
+    }
+    expect(unknownMemories(e226)).toBe(false)
+    expect(historyMeta(e226)).toMatchObject({ id: 226, type: 'memories', typeLabel: 'Memories', unit: 'theme_park', hours: 102 })
+  })
+
   it('名前に memories が入るだけの回は普通のマラソン', () => {
     const m = historyMeta({ ...e221, id: 106, name: '君と紡ぐPrecious memories', assetbundleName: 'event_preciousmemories_2023' })
     expect(m?.type).toBe('marathon')

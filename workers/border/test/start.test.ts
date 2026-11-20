@@ -206,8 +206,8 @@ describe('開始の告知: みんなでライブ停止中の回を前例にし�
    */
   it('一覧の回そのものの告知は、前回の終値の行を特別対応の一文に替え、payload の prev は null', async () => {
     const S226 = Date.UTC(2026, 10, 20, 6, 0)
-    const env = await envWith(226, S226, S226 + 102 * H - 1000, 'event_memories_wxs_2026')
-    await upsertEvents(env.DB, [{ id: 226, name: 'ワンダーランズ×ショウタイム Memories', eventType: 'marathon', unit: 'none', startAt: S226, aggregateAt: S226 + 102 * H - 1000, asset: 'event_memories_wxs_2026' }])
+    const env = await envWith(226, S226, S226 + 102 * H - 1000, 'event_memories_wds_2026')
+    await upsertEvents(env.DB, [{ id: 226, name: 'ワンダーランズ×ショウタイム Memories', eventType: 'marathon', unit: 'none', startAt: S226, aggregateAt: S226 + 102 * H - 1000, asset: 'event_memories_wds_2026' }])
     expect(await runStart(env, S226 - 30 * M)).toMatchObject({ status: 'queued', id: '226:start' })
     const [post] = await unsentPosts(env.DB, 'x')
     expect(post.text).toBe(
