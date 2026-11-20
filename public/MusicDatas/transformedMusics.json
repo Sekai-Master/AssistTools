@@ -6700,7 +6700,7 @@
     "jacketLink": "jacket_s_289.webp",
     "music_time": 108.9,
     "event_rate": 110,
-    "singers": [1, 2, 3, 4, 23, 26],
+    "singers": [1, 2, 3, 4, 23, 25, 26],
     "maxSingers": 4,
     "dancerCount": 1,
     "expertLevel": 25,
@@ -12814,7 +12814,8 @@
     "default": 1450901,
     "Unit": "3_VBS",
     "categories": [
-      "mv_3d"
+      "mv_3d",
+      "mv_2d"
     ],
     "publishedAt": 1744092000000,
     "published": true,
