@@ -1,0 +1,174 @@
+{
+ "source": "Sekai-World/sekai-master-db-diff stamps.json + storage.sekai.best",
+ "fetchedAt": "2026-11-12T10:21:02.192Z",
+ "stamps": [
+  {
+   "id": 14,
+   "name": "[スタンプ]穂波：ごめん…行くね",
+   "asset": "stamp0014",
+   "characterId": 3,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0014/stamp0014.webp",
+   "bytes": 16426
+  },
+  {
+   "id": 421,
+   "name": "[スタンプ]咲希：おつかれさま！",
+   "asset": "stamp0421",
+   "characterId": 2,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0421/stamp0421.webp",
+   "bytes": 21510
+  },
+  {
+   "id": 11,
+   "name": "[スタンプ]みのり：もう1回！",
+   "asset": "stamp0011",
+   "characterId": 5,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0011/stamp0011.webp",
+   "bytes": 15884
+  },
+  {
+   "id": 323,
+   "name": "[スタンプ]KAITO：大丈夫だよ",
+   "asset": "stamp0285",
+   "characterId": 26,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0285/stamp0285.webp",
+   "bytes": 17142
+  },
+  {
+   "id": 424,
+   "name": "[スタンプ]愛莉：ここからスタートよ",
+   "asset": "stamp0424",
+   "characterId": 7,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0424/stamp0424.webp",
+   "bytes": 16296
+  },
+  {
+   "id": 447,
+   "name": "[スタンプ]愛莉：信じて待ちましょ！",
+   "asset": "stamp0447",
+   "characterId": 7,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0447/stamp0447.webp",
+   "bytes": 15744
+  },
+  {
+   "id": 624,
+   "name": "[スタンプ]奏：違う…！",
+   "asset": "stamp0623",
+   "characterId": 17,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0623/stamp0623.webp",
+   "bytes": 16234
+  },
+  {
+   "id": 191,
+   "name": "[スタンプ]えむ：わんだほーい！",
+   "asset": "stamp0168",
+   "characterId": 14,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0168/stamp0168.webp",
+   "bytes": 19552
+  },
+  {
+   "id": 57,
+   "name": "[スタンプ]咲希：またね～",
+   "asset": "stamp0383",
+   "characterId": 2,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0383/stamp0383.webp",
+   "bytes": 19480
+  },
+  {
+   "id": 90,
+   "name": "[スタンプ]みのり：またね！",
+   "asset": "stamp0095",
+   "characterId": 5,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0095/stamp0095.webp",
+   "bytes": 18260
+  },
+  {
+   "id": 265,
+   "name": "[スタンプ]ミク：またね～",
+   "asset": "stamp0239",
+   "characterId": 21,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0239/stamp0239.webp",
+   "bytes": 16166
+  },
+  {
+   "id": 66,
+   "name": "[スタンプ]穂波：ありがとう！",
+   "asset": "stamp0071",
+   "characterId": 3,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0071/stamp0071.webp",
+   "bytes": 15554
+  },
+  {
+   "id": 8,
+   "name": "[スタンプ]一歌：ありがとう",
+   "asset": "stamp0008",
+   "characterId": 1,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0008/stamp0008.webp",
+   "bytes": 15192
+  },
+  {
+   "id": 1,
+   "name": "[スタンプ]ミク：よろしく",
+   "asset": "stamp0001",
+   "characterId": 21,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0001/stamp0001.webp",
+   "bytes": 17990
+  },
+  {
+   "id": 655,
+   "name": "[テキストスタンプ]間違えた！",
+   "asset": "stamp0655",
+   "characterId": null,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0655/stamp0655.webp",
+   "bytes": 7432
+  },
+  {
+   "id": 656,
+   "name": "[テキストスタンプ]大丈夫だよ！",
+   "asset": "stamp0656",
+   "characterId": null,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0656/stamp0656.webp",
+   "bytes": 7198
+  },
+  {
+   "id": 649,
+   "name": "[テキストスタンプ]ちょっと抜けるね",
+   "asset": "stamp0649",
+   "characterId": null,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0649/stamp0649.webp",
+   "bytes": 6500
+  },
+  {
+   "id": 650,
+   "name": "[テキストスタンプ]これで最後！",
+   "asset": "stamp0650",
+   "characterId": null,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0650/stamp0650.webp",
+   "bytes": 7644
+  },
+  {
+   "id": 530,
+   "name": "[テキストスタンプ]１",
+   "asset": "stamp0530",
+   "characterId": null,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0530/stamp0530.webp",
+   "bytes": 1860
+  },
+  {
+   "id": 531,
+   "name": "[テキストスタンプ]２",
+   "asset": "stamp0531",
+   "characterId": null,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0531/stamp0531.webp",
+   "bytes": 2622
+  },
+  {
+   "id": 532,
+   "name": "[テキストスタンプ]３",
+   "asset": "stamp0532",
+   "characterId": null,
+   "url": "https://storage.sekai.best/sekai-jp-assets/stamp/stamp0532/stamp0532.webp",
+   "bytes": 2762
+  }
+ ]
+}

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 248" width="100%" role="img" aria-label="図7 支援鯖の 1 部屋の顔ぶれ。ランナー 1・本走 3・アンコ担当 1 と、部屋の外で待つ待機枠"><style>
+.gf-t{font-family:"M PLUS Rounded 1c",ui-sans-serif,system-ui,sans-serif;fill:var(--neu-ink,#333)}
+.gf-m{fill:var(--color-slate-500,#64748b)}
+.gf-b{font-weight:700}
+.gf-box{fill:var(--neu-hi,#fff);stroke:var(--color-slate-300,#cbd5e1);stroke-width:1}
+.gf-soft{fill:var(--color-slate-100,#f1f5f9)}
+.gf-ac{fill:var(--color-ln,#4455dd)}
+.gf-acs{stroke:var(--color-ln,#4455dd)}
+.gf-acbox{fill:var(--neu-hi,#fff);stroke:var(--color-ln,#4455dd);stroke-width:2}
+.gf-ln{stroke:var(--color-slate-400,#94a3b8);stroke-width:1.5;fill:none}
+.gf-grid{stroke:var(--color-slate-200,#e2e8f0);stroke-width:1}
+.gf-dash{stroke-dasharray:4 3}
+</style><text x="8" y="20" font-size="13" text-anchor="start" class="gf-t gf-b">1 部屋の基本の顔ぶれ〔プレイヤーの間で〕</text><rect x="4" y="28" width="410" height="70" rx="12" class="gf-soft"/><rect x="8" y="34" width="74" height="58" rx="10" class="gf-acbox"/><text x="45" y="68" font-size="12.5" text-anchor="middle" class="gf-t gf-b">ランナー</text><rect x="90" y="34" width="74" height="58" rx="10" class="gf-box"/><text x="127" y="68" font-size="12.5" text-anchor="middle" class="gf-t gf-b">本走</text><rect x="172" y="34" width="74" height="58" rx="10" class="gf-box"/><text x="209" y="68" font-size="12.5" text-anchor="middle" class="gf-t gf-b">本走</text><rect x="254" y="34" width="74" height="58" rx="10" class="gf-box"/><text x="291" y="68" font-size="12.5" text-anchor="middle" class="gf-t gf-b">本走</text><rect x="336" y="34" width="74" height="58" rx="10" class="gf-box"/><text x="373" y="68" font-size="12.5" text-anchor="middle" class="gf-t gf-b">アンコ担当</text><rect x="8" y="126" width="74" height="50" rx="10" class="gf-box gf-dash"/><text x="45" y="156" font-size="12.5" text-anchor="middle" class="gf-t gf-b">待機枠</text><text x="94" y="144" font-size="11.5" text-anchor="start" class="gf-t ">部屋の外で、部屋番号を打って待つ 6 人目</text><text x="94" y="162" font-size="11.5" text-anchor="start" class="gf-t ">（ランナーを除いて 5 人目の支援者）</text><text x="8" y="202" font-size="11" text-anchor="start" class="gf-t gf-m">叩いている人が回線・端末の不具合や体調で抜けたら、待機枠がすぐ</text><text x="8" y="218" font-size="11" text-anchor="start" class="gf-t gf-m">入る。待機枠は上位を目指すサーバーで決める〔走っている人の実感〕</text><text x="8" y="238" font-size="11" text-anchor="start" class="gf-t gf-m">アンコ担当（アンコール担当）もシフト表で決める〔走っている人の実感〕</text></svg>

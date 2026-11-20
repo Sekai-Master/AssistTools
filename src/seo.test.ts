@@ -5,6 +5,7 @@ import {
   NOT_FOUND,
   PAGES,
   docTitle,
+  guideChapterMeta,
   htmlFileOf,
   knowledgeMeta,
   renderHead,
@@ -213,5 +214,49 @@ describe("Google Search Console の所有権の確認", () => {
     expect(html).toMatch(tag);
     expect(renderHead(html, "/deck", PAGES["/deck"])).toMatch(tag);
     expect(renderHead(html, "/nope", NOT_FOUND)).toMatch(tag);
+  });
+});
+
+describe("知識ガイドの章（guideChapterMeta）", () => {
+  it("題は「第N章 名前」、説明は最初の段落から差し込みの行と確かさの印を外したもの", () => {
+    const src = [
+      "## 3. 協力ライブの仕組み",
+      "",
+      "### 3.1 ルームとマッチング",
+      "",
+      "［画像1: ルームを選ぶ画面］",
+      "",
+      "ルームは3種類あります〔公式〕。**総合力**の線で分かれます〔ゲームのデータ〕。",
+      "",
+      "別の段落。",
+    ].join("\r\n");
+    expect(guideChapterMeta(3, src)).toEqual({
+      path: "/guide/3",
+      title: "第3章 協力ライブの仕組み｜プロセカの知識ガイド",
+      description: "ルームは3種類あります。総合力の線で分かれます。",
+    });
+  });
+
+  it("実際の章すべてで、空でない説明が取れ、印・差し込みが残らない", () => {
+    const dir = path.join(ROOT, "docs/guide");
+    const files = fs.readdirSync(dir).filter((f) => /^ch\d+\.md$/.test(f));
+    expect(files.length).toBeGreaterThan(1);
+    for (const f of files) {
+      const n = Number(/\d+/.exec(f)![0]);
+      const m = guideChapterMeta(n, fs.readFileSync(path.join(dir, f), "utf8"));
+      expect(m.title.startsWith(`第${n}章 `), f).toBe(true);
+      expect(m.title, f).not.toContain(`第${n}章 ｜`);
+      expect(m.description.length, f).toBeGreaterThan(10);
+      expect(m.description.length, f).toBeLessThanOrEqual(120);
+      expect(m.description, f).not.toMatch(/[〔［]/);
+    }
+  });
+
+  it("sitemap に章のページを足せる（第 0 章は /guide に載るので渡さない）", () => {
+    const xml = renderSitemap(PAGES, [], ["/guide/1", "/guide/9"]);
+    expect(xml).toContain("<url><loc>https://sekaimaster.pages.dev/guide</loc></url>");
+    expect(xml).toContain("<url><loc>https://sekaimaster.pages.dev/guide/1</loc></url>");
+    expect(xml).toContain("<url><loc>https://sekaimaster.pages.dev/guide/9</loc></url>");
+    expect(xml).not.toContain("/guide/0");
   });
 });
