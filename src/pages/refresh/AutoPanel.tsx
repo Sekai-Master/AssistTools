@@ -3,7 +3,7 @@ import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { TakiInput } from "../../components/ui/TakiInput";
 import { SaveToProfile } from "../../components/ui/ProfileBar";
-import { PASS_LABEL, type PassCourse } from "../ranking/lib/lbRun";
+import { AUTO_MIN_TAKI, capAutoPlays, PASS_LABEL, type PassCourse } from "../ranking/lib/lbRun";
 import { fmtDuration } from "./lib/format";
 import type { AutoConfig } from "./useAutoConfig";
 
@@ -77,13 +77,14 @@ export function AutoPanel({ config }: { config: AutoConfig }) {
             id="pl-auto-used"
             inputMode="numeric"
             value={usedToday}
-            onChange={(e) => setUsedToday(e.target.value.replace(/[^0-9]/g, ""))}
+            // ★ 1日の上限（パスで決まる）を超える回数は入れさせない（Nori 指摘 2026-11-21）
+            onChange={(e) => setUsedToday(capAutoPlays(e.target.value.replace(/[^0-9]/g, ""), runtime.dailyCap))}
             className="max-w-24"
           />
         </Field>
 
-        <Field label="焚き数" hint="回数に上限があるので、1回を濃くするほど得（ライボは焚き数ぶん減る）">
-          <TakiInput value={taki} onChange={setTaki} />
+        <Field label="焚き数" hint="回数に上限があるので、1回を濃くするほど得（ライボは焚き数ぶん減る）。オートは1焚きから">
+          <TakiInput value={taki} min={AUTO_MIN_TAKI} onChange={setTaki} />
         </Field>
       </div>
 

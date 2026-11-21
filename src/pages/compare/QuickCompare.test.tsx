@@ -266,3 +266,32 @@ describe("ライブ種別（みんなで／ひとりで／オート）", () => {
     expect(note).not.toContain("仮");
   });
 });
+
+/**
+ * ★ オートは 0 焚きができない（下限 1。2026-11-21 Nori 指摘）。焚き数はライブ種別の間で共有なので、
+ *   ひとりで・みんなでで 0 にしてからオートへ切り替えても、オートでは 1 として出し・計算する。
+ *   ひとりで・みんなでの 0 焚きはゲームで可能なので変えない。
+ */
+describe("オートの焚き数は 1 から", () => {
+  const KEY = "quickCompare:v1";
+  const radio = (name: string) => screen.getByRole("radio", { name });
+  const takiInput = () => screen.getByLabelText("焚き数") as HTMLInputElement;
+  const ROW = { id: "r1", name: "A", power: "351149", bonus: "425", leader: "150", total: "450" };
+  const CANDIDATE = { name: "A", power: 351_149, bonus: 425, skillLeader: 150, skillTotal: 450 };
+
+  it("ひとりでの 0 焚きからオートへ切り替えると 1 で出して計算し、ひとりでに戻すと 0 のまま", async () => {
+    localStorage.setItem(KEY, JSON.stringify({ rows: [ROW], live: "solo", taki: 0 }));
+    draw();
+    expect(takiInput().value).toBe("0");
+    const user = userEvent.setup();
+    await user.click(radio("オート"));
+    expect(takiInput().value).toBe("1");
+    expect(takiInput().parentElement!.querySelector("button")!.disabled).toBe(true);
+    const [expected] = compareDecks([CANDIDATE], ENVY, { live: "auto", taki: 1, overheadSec: OVERHEAD_BY_LIVE.auto });
+    const [row] = within(screen.getByRole("table")).getAllByRole("row").slice(1);
+    expect(row.textContent).toContain((expected.eventPt as number).toLocaleString());
+    expect(screen.getByText(/オーバーヘッドは/).textContent).toMatch(/^1焚き・/);
+    await user.click(radio("ひとりで"));
+    expect(takiInput().value).toBe("0");
+  });
+});

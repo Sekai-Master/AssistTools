@@ -47,6 +47,31 @@ export const PASS_LIMITS: Record<PassCourse, PassLimits> = {
   precious: { lbCap: 50, autoPlays: 99 },
 };
 
+/**
+ * オートの焚き数の下限。**オートは0焚きで回せない**（Nori 指摘 2026-11-21）。
+ * ひとりで・みんなでは0焚きができるので、焚き数の入力そのものの下限は0のまま。
+ */
+export const AUTO_MIN_TAKI = 1;
+
+/**
+ * オートで使う焚き数。0（ひとりで・みんなでで入れた共有の値や、古い保存値）は1として扱う。
+ *
+ * ★ 窓のランキングで「石・ドリンクで足す」前提のとき、playsUntilEmpty に taki 0 を渡して
+ *   ライボを数えない処理（efficiency.ts の rankSongsInWindow）は計算の都合で、これとは別。
+ */
+export function autoTaki(taki: number): number {
+  return Math.max(AUTO_MIN_TAKI, taki);
+}
+
+/**
+ * オートの回数の入力（数字だけの文字列）を、1日の回数上限（PASS_LIMITS の autoPlays）に収める。
+ * 空欄は空欄のまま返す（消して打ち直せるように）。
+ */
+export function capAutoPlays(value: string, cap: number): string {
+  if (value === "") return value;
+  return Number(value) > cap ? String(cap) : value;
+}
+
 export const PASS_LABEL: Record<PassCourse, string> = {
   // BASIC は解放が何も無いので、未加入と同じ枠に入れて選ばせる。
   none: "なし／BASIC",

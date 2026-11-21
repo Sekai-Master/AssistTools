@@ -31,6 +31,9 @@ import { filterSummary } from "./lib/filterSummary";
 import { MoreSettings } from "../../components/ui/MoreSettings";
 import { ProfileBar, SaveToProfile } from "../../components/ui/ProfileBar";
 import {
+  AUTO_MIN_TAKI,
+  autoTaki,
+  capAutoPlays,
   lbNeededForPlays,
   PASS_LABEL,
   PASS_LIMITS,
@@ -538,6 +541,13 @@ export default function EfficiencyRanking() {
     stored.bonus ?? String(DEFAULT_PARAMS.bonus),
   );
   const [taki, setTaki] = useState(stored.taki ?? DEFAULT_PARAMS.taki);
+  /**
+   * いまのタブで計算に使い・欄に出す焚き数。
+   * ★ **オートは0焚きができない**（下限1。Nori 指摘 2026-11-21）。焚き数の state はタブ間で共有なので、
+   *   ひとりで・みんなでで入れた0がオートに持ち込まれる。state は書き換えず（戻したら0のまま）、
+   *   オートの間だけ1として扱う。
+   */
+  const effTaki = mode === "auto" ? autoTaki(taki) : taki;
   const [skillLeader, setSkillLeader] = useState(
     stored.skillLeader ?? String(DEFAULT_PARAMS.skillLeader),
   );
@@ -567,7 +577,14 @@ export default function EfficiencyRanking() {
    * （値が 33 かどうかでは決めない。Nori が測って印を下ろしたら消える）。
    */
   const soloLossProvisional = mode === "solo" && SOLO_OVERHEAD_PROVISIONAL;
-  const [plays, setPlays] = useState(stored.plays ?? "100");
+  /**
+   * 「回数を指定」のプレイ回数。★ オートの1日の上限（パスで決まる）を超えない。
+   * 保存値が上限を超えていても（旧版の既定 100 など）、読んだときに上限へ収める。
+   */
+  const [plays, setPlays] = useState(() => {
+    const cap = PASS_LIMITS[stored.pass ?? "none"].autoPlays;
+    return capAutoPlays(stored.plays ?? String(cap), cap);
+  });
   // 未保存なら「全部」= データの両端。読み込み前は 0/99 にして誰も弾かない。
   const [lvMin, setLvMin] = useState(stored.lvMin ?? 0);
   const [lvMax, setLvMax] = useState(stored.lvMax ?? 99);
@@ -592,7 +609,7 @@ export default function EfficiencyRanking() {
     if (!custom)
       return {
         ...DEFAULT_PARAMS,
-        taki,
+        taki: effTaki,
         overheadSec: DEFAULT_OVERHEAD_SEC[mode],
       };
     return {
@@ -607,7 +624,7 @@ export default function EfficiencyRanking() {
         ? cappedPower(Number(power) || 0, limitEvent?.powerLimit)
         : Number(power) || 0,
       bonus: Number(bonus) || 0,
-      taki,
+      taki: effTaki,
       skillLeader: Number(skillLeader) || 0,
       skillTotal: Number(skillTotal) || 0,
       overheadSec: Number(overheadValue) || 0,
@@ -617,7 +634,7 @@ export default function EfficiencyRanking() {
     mode,
     power,
     bonus,
-    taki,
+    effTaki,
     skillLeader,
     skillTotal,
     overheadValue,
@@ -661,9 +678,15 @@ export default function EfficiencyRanking() {
   const [startLB, setStartLB] = useState(stored.startLB ?? "25");
   const [pass, setPass] = useState<PassCourse>(stored.pass ?? "none");
   const limits = PASS_LIMITS[pass];
-  const [autoLeft, setAutoLeft] = useState(
-    stored.autoLeft ?? String(PASS_LIMITS[stored.pass ?? "none"].autoPlays),
-  );
+  /**
+   * 今日の残りオート回数。★ パスの1日の上限を超えない（保存値が超えていても読んだときに収める）。
+   */
+  const [autoLeft, setAutoLeft] = useState(() => {
+    const cap = PASS_LIMITS[stored.pass ?? "none"].autoPlays;
+    return capAutoPlays(stored.autoLeft ?? String(cap), cap);
+  });
+  /** 計算に使う残り回数。欄は上限に収めてあるが、計算でも上限を超えさせない。 */
+  const autoLeftNum = Math.min(limits.autoPlays, Math.max(0, Number(autoLeft) || 0));
 
   /**
    * ★ 「残り時間で区切る」に必要な入力は、**表より前**に宣言しておく。
@@ -713,7 +736,7 @@ export default function EfficiencyRanking() {
           windowSec: win,
           startLB: Number(startLB) || 0,
           lbCap: PASS_LIMITS[pass].lbCap,
-          maxPlays: Number(autoLeft) || 0,
+          maxPlays: autoLeftNum,
           regen,
           refill,
         }),
@@ -733,7 +756,7 @@ export default function EfficiencyRanking() {
     windowMin,
     startLB,
     pass,
-    autoLeft,
+    autoLeftNum,
     regen,
     refill,
   ]);
@@ -749,7 +772,7 @@ export default function EfficiencyRanking() {
   /** 表が「この時間内の合計Pt」で並んでいるか。 */
   const isWindow = mode === "auto" && autoFrom === "window";
   const note = MODE_NOTE[mode];
-  const playCount = Number(plays) || 0;
+  const playCount = Math.min(limits.autoPlays, Number(plays) || 0);
   const osReduce = useReducedMotion();
   const motionLevel = resolvePlan(useMotionSetting(), {
     osReduce,
@@ -782,13 +805,15 @@ export default function EfficiencyRanking() {
   /**
    * パスを変えたときは、**まだ触っていない場合だけ**残り回数を新しい上限へ合わせる。
    * 手で入れた値を黙って書き換えると、戻したつもりの数字が変わっていて気付けない。
+   * ★ ただし**新しい上限を超える値は上限に収める**（PRECIOUS の 50 回のまま なし に下げると、
+   *   1日 10 回までのパスで 50 回まわす計算になる。Nori 指摘 2026-11-21）。プレイ回数も同じ。
    */
   const changePass = (next: PassCourse) => {
+    const cap = PASS_LIMITS[next].autoPlays;
     setAutoLeft((cur) =>
-      Number(cur) === limits.autoPlays
-        ? String(PASS_LIMITS[next].autoPlays)
-        : cur,
+      capAutoPlays(Number(cur) === limits.autoPlays ? String(cap) : cur, cap),
     );
+    setPlays((cur) => capAutoPlays(cur, cap));
     setPass(next);
     persist({ pass: next });
   };
@@ -800,15 +825,15 @@ export default function EfficiencyRanking() {
   const cycleSec = best?.cycleSec ?? 0;
   const lbRun = playsUntilEmpty({
     startLB: Number(startLB) || 0,
-    taki,
+    taki: effTaki,
     cycleSec,
     regen,
     lbCap: limits.lbCap,
-    maxPlays: Math.max(0, Number(autoLeft) || 0),
+    maxPlays: autoLeftNum,
   });
   const lbNeed = lbNeededForPlays({
     startLB: Number(startLB) || 0,
-    taki,
+    taki: effTaki,
     plays: playCount,
     cycleSec,
     regen,
@@ -826,17 +851,17 @@ export default function EfficiencyRanking() {
     const windowSec = Math.max(0, Number(windowMin) || 0) * 60;
     const run = playsUntilEmpty({
       startLB: refill ? Number.MAX_SAFE_INTEGER : Number(startLB) || 0,
-      taki: refill ? 0 : taki,
+      taki: refill ? 0 : effTaki,
       cycleSec: best.cycleSec,
       regen,
       lbCap: limits.lbCap,
-      maxPlays: Math.max(0, Number(autoLeft) || 0),
+      maxPlays: autoLeftNum,
       windowSec,
     });
     // 実際に回した回数ぶんの消費を、手持ちから数え直す（refill でも本当の焚き数で）。
     const need = lbNeededForPlays({
       startLB: Number(startLB) || 0,
-      taki,
+      taki: effTaki,
       plays: run.plays,
       cycleSec: best.cycleSec,
       regen,
@@ -858,10 +883,10 @@ export default function EfficiencyRanking() {
     windowMin,
     refill,
     startLB,
-    taki,
+    effTaki,
     regen,
     limits.lbCap,
-    autoLeft,
+    autoLeftNum,
     ranked,
   ]);
 
@@ -892,7 +917,7 @@ export default function EfficiencyRanking() {
     ...(isWindow
       ? [
           refill ? "注ぎ足す前提" : "注ぎ足さない",
-          `残り${Math.max(0, Number(autoLeft) || 0)}回`,
+          `残り${autoLeftNum}回`,
         ]
       : []),
   ].join("・");
@@ -1330,9 +1355,10 @@ export default function EfficiencyRanking() {
                 ))}
               </select>
             </Field>
-            <Field label="焚き数" hint="1プレイで消費するライブボーナス">
+            <Field label="焚き数" hint="1プレイで消費するライブボーナス。オートは1焚きから">
               <TakiInput
-                value={taki}
+                value={effTaki}
+                min={AUTO_MIN_TAKI}
                 onChange={(v) => {
                   setTaki(v);
                   persist({ taki: v });
@@ -1376,7 +1402,7 @@ export default function EfficiencyRanking() {
                   inputMode="numeric"
                   value={autoLeft}
                   onChange={(e) => {
-                    const v = onlyDigits(e.target.value);
+                    const v = capAutoPlays(onlyDigits(e.target.value), limits.autoPlays);
                     setAutoLeft(v);
                     persist({ autoLeft: v });
                   }}
@@ -1392,7 +1418,7 @@ export default function EfficiencyRanking() {
                   inputMode="numeric"
                   value={plays}
                   onChange={(e) => {
-                    const v = onlyDigits(e.target.value);
+                    const v = capAutoPlays(onlyDigits(e.target.value), limits.autoPlays);
                     setPlays(v);
                     persist({ plays: v });
                   }}
@@ -1436,7 +1462,7 @@ export default function EfficiencyRanking() {
                     level={best.playLevel}
                   />
                 </span>
-                {` を ${taki}焚きで ${Math.max(0, Number(windowMin) || 0)}分 まわすと`}
+                {` を ${effTaki}焚きで ${Math.max(0, Number(windowMin) || 0)}分 まわすと`}
               </p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <Stat
@@ -1506,8 +1532,8 @@ export default function EfficiencyRanking() {
                   />
                 </span>
                 {autoFrom === "lb"
-                  ? ` を ${taki}焚きで、ライボ ${Number(startLB) || 0} がなくなるまで まわすと`
-                  : ` を ${taki}焚きで ${fmt(playCount)}回 まわすと`}
+                  ? ` を ${effTaki}焚きで、ライボ ${Number(startLB) || 0} がなくなるまで まわすと`
+                  : ` を ${effTaki}焚きで ${fmt(playCount)}回 まわすと`}
               </p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <Stat
@@ -1520,7 +1546,7 @@ export default function EfficiencyRanking() {
                   sub={
                     autoFrom === "lb"
                       ? lbRun.stoppedBy === "plays"
-                        ? `オートの残り ${Math.max(0, Number(autoLeft) || 0)}回を使い切って止まります`
+                        ? `オートの残り ${autoLeftNum}回を使い切って止まります`
                         : `ライボ切れまで（回復 +${lbRun.regained}）`
                       : `1回 ${fmt(best.eventPt)} Pt`
                   }
@@ -1566,8 +1592,8 @@ export default function EfficiencyRanking() {
                   value={
                     autoFrom === "lb"
                       ? fmt(lbRun.leftover)
-                      : taki > 0
-                        ? fmt(best.eventPt / taki)
+                      : effTaki > 0
+                        ? fmt(best.eventPt / effTaki)
                         : "—"
                   }
                   sub={
@@ -1579,8 +1605,8 @@ export default function EfficiencyRanking() {
                           //   ライボ切れなら「焚き数に足りない端数」で、下げれば使える。
                           lbRun.stoppedBy === "plays"
                           ? "オート回数を使い切って余りました（焚き数を上げると使えます）"
-                          : `${taki}焚きに足りないので止まります`
-                      : taki > 0
+                          : `${effTaki}焚きに足りないので止まります`
+                      : effTaki > 0
                         ? "Pt / ライボ1"
                         : "0焚きでは計算しない"
                   }

@@ -11,7 +11,7 @@
  *   （UX 監査 2026-11-12）。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AutoPanel } from "./AutoPanel";
 import type { AutoConfig } from "./useAutoConfig";
 
@@ -133,5 +133,35 @@ describe("候補が無いときの案内", () => {
     render(<AutoPanel config={fakeConfig()} />);
     expect(redTexts()).toEqual([]);
     expect(document.body.textContent).toContain("1周期 105秒");
+  });
+});
+
+/**
+ * ★ オートの入力をゲームの決まりに収める（2026-11-21 Nori 指摘）。
+ *   オートは 0 焚きができない（下限 1）。今日すでに回した回数は、カラフルパスの 1 日の上限
+ *   （なし／BASIC と DELUXE は 10、PRECIOUS は 99）を超えない。
+ */
+describe("オートの入力の範囲", () => {
+  it("焚き数は 1 より下げられない（下げるボタンが押せず、0 を打っても 1）。補足に「1焚きから」と書く", () => {
+    const setTaki = vi.fn();
+    render(<AutoPanel config={fakeConfig({ taki: 1, setTaki })} />);
+    const input = screen.getByLabelText("焚き数") as HTMLInputElement;
+    expect(input.parentElement!.querySelector("button")!.disabled).toBe(true);
+    fireEvent.change(input, { target: { value: "0" } });
+    expect(setTaki).toHaveBeenLastCalledWith(1);
+    expect(hintOf("焚き数")).toContain("1焚きから");
+  });
+
+  it("今日すでに回した回数に 150 を入れても、上限（なし／BASIC は 10、PRECIOUS は 99）で渡す", () => {
+    const setUsedToday = vi.fn();
+    const runtime = fakeConfig().runtime;
+    const { rerender } = render(<AutoPanel config={fakeConfig({ setUsedToday })} />);
+    fireEvent.change(screen.getByLabelText("今日すでに回した回数"), { target: { value: "150" } });
+    expect(setUsedToday).toHaveBeenLastCalledWith("10");
+    rerender(
+      <AutoPanel config={fakeConfig({ course: "precious", setUsedToday, runtime: { ...runtime, dailyCap: 99 } })} />,
+    );
+    fireEvent.change(screen.getByLabelText("今日すでに回した回数"), { target: { value: "150" } });
+    expect(setUsedToday).toHaveBeenLastCalledWith("99");
   });
 });

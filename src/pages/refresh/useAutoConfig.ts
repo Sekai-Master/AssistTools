@@ -3,7 +3,7 @@ import { OVERHEAD_SEC } from "../../lib/overhead";
 import { useRankingMusics } from "../ranking/useRankingMusics";
 import { DIFFICULTY_LABEL, type Difficulty } from "../ranking/useRankingMusics";
 import { DEFAULT_PARAMS, rankSongs } from "../ranking/lib/efficiency";
-import { PASS_LIMITS, type PassCourse } from "../ranking/lib/lbRun";
+import { autoTaki, capAutoPlays, PASS_LIMITS, type PassCourse } from "../ranking/lib/lbRun";
 
 /** 曲＋難易度の組を1つのキーで扱う（オートは難易度でスコアが変わる）。 */
 export function autoSongKey(musicId: string, difficulty: string): string {
@@ -38,9 +38,25 @@ export function useAutoConfig({
   power: number;
   bonus: number;
 }) {
-  const [course, setCourse] = useState<PassCourse>("none");
-  const [usedToday, setUsedToday] = useState("0");
-  const [taki, setTaki] = useState(10);
+  const [course, setCourseRaw] = useState<PassCourse>("none");
+  const [usedTodayRaw, setUsedToday] = useState("0");
+  const [takiRaw, setTaki] = useState(10);
+  const dailyCap = PASS_LIMITS[course].autoPlays;
+  /**
+   * ★ オートは0焚きができない（下限1。Nori 指摘 2026-11-21）。保存したプランに0が残っていても1として扱う。
+   */
+  const taki = autoTaki(takiRaw);
+  /**
+   * 今日すでに回した回数。★ 1日の上限（パスで決まる）を超えた値は上限で扱う。
+   * ★ 入れたときに切らず、読むときに収める。プランの呼び出しはパスと回数を同じ描画の中で入れるので、
+   *   入れたときに切ると古いパスの上限で切ってしまう（PRECIOUS の 50 回が 10 回になる）。
+   */
+  const usedToday = capAutoPlays(usedTodayRaw, dailyCap);
+  /** パスを変えたら、新しい上限を超える回数を上限に収める（下げたときに超えたまま残さない）。 */
+  const setCourse = (next: PassCourse) => {
+    setCourseRaw(next);
+    setUsedToday((cur) => capAutoPlays(cur, PASS_LIMITS[next].autoPlays));
+  };
   const [songKey, setSongKey] = useState("");
   const [skillLeader, setSkillLeader] = useState("");
   const [skillTotal, setSkillTotal] = useState("");
@@ -106,10 +122,10 @@ export function useAutoConfig({
       cycleSec: hasCycleOverride ? overrideCycle : (selected?.cycleSec ?? 0),
       ptPerPlay: hasOverride ? overridePt : (selected?.eventPt ?? 0),
       taki,
-      dailyCap: PASS_LIMITS[course].autoPlays,
+      dailyCap,
       usedToday: Math.max(0, Number(usedToday) || 0),
     }),
-    [selected, hasOverride, overridePt, hasCycleOverride, overrideCycle, taki, course, usedToday],
+    [selected, hasOverride, overridePt, hasCycleOverride, overrideCycle, taki, dailyCap, usedToday],
   );
 
   return {

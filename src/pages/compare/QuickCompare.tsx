@@ -14,6 +14,7 @@ import { ENVY_ID } from "../analyzer/lib/constants";
 import { bestIndex, compareDecks, findUpset, type DeckCandidate } from "../deck/lib/compare";
 import { UpsetNote } from "../deck/UpsetNote";
 import { DEFAULT_PARAMS, OVERHEAD_BY_LIVE, type LiveType } from "../ranking/lib/efficiency";
+import { AUTO_MIN_TAKI, autoTaki } from "../ranking/lib/lbRun";
 import { DIFFICULTY_LABEL, type Difficulty, type RankingMusic } from "../ranking/useRankingMusics";
 import {
   COMPARE_DIFFICULTIES,
@@ -74,6 +75,11 @@ export function QuickCompare({ entries, loading, error }: { entries: RankingMusi
     setLivePick({ live: next, liveInSuspension: MULTI_LIVE_SUSPENDED });
   };
   const [taki, setTaki] = useState(() => saved.taki ?? getActiveProfile()?.taki ?? DEFAULT_PARAMS.taki);
+  /**
+   * 計算に使い・欄に出す焚き数。★ オートは0焚きができない（下限1。Nori 指摘 2026-11-21）。
+   *   焚き数はライブ種別の間で共有なので、state は書き換えず（ひとりで・みんなでに戻したら0のまま）、オートの間だけ1として扱う。
+   */
+  const liveTaki = live === "auto" ? autoTaki(taki) : taki;
   const [picking, setPicking] = useState(false);
   const profiles = useProfiles().filter(usableProfile);
 
@@ -106,7 +112,7 @@ export function QuickCompare({ entries, loading, error }: { entries: RankingMusi
         usable.map((u, i): DeckCandidate => ({ ...u.candidate, name: names[i] })),
         entry,
         // ★ ロスはライブ種別に追随させる（編成ビルダーの比較と同じ）
-        { live, taki, overheadSec: OVERHEAD_BY_LIVE[live] }
+        { live, taki: liveTaki, overheadSec: OVERHEAD_BY_LIVE[live] }
       )
     : [];
   const best = bestIndex(results);
@@ -242,7 +248,7 @@ export function QuickCompare({ entries, loading, error }: { entries: RankingMusi
                 onChange={pickLive}
                 className="!max-w-72"
               />
-              <TakiInput value={taki} onChange={setTaki} />
+              <TakiInput value={liveTaki} min={live === "auto" ? AUTO_MIN_TAKI : 0} onChange={setTaki} />
             </div>
           </Field>
         </div>
@@ -296,7 +302,7 @@ export function QuickCompare({ entries, loading, error }: { entries: RankingMusi
             </div>
             {upset && <UpsetNote upset={upset} />}
             <p className="mt-3 text-xs leading-relaxed text-slate-400">
-              {taki}焚き・{entry?.title}（{DIFFICULTY_LABEL[difficulty]}）での概算です。計算は効率曲ランキング・編成ビルダーと同じ式で、
+              {liveTaki}焚き・{entry?.title}（{DIFFICULTY_LABEL[difficulty]}）での概算です。計算は効率曲ランキング・編成ビルダーと同じ式で、
               スコアは総合力とスキルから見積もっています。オーバーヘッドは {OVERHEAD_BY_LIVE[live]} 秒
               {/* ★ ひとりでライブのロスは仮の値の印が立っている間「仮」と書く（実測値と書かない） */}
               {overheadBasisNote(live, SOLO_OVERHEAD_PROVISIONAL)}。
