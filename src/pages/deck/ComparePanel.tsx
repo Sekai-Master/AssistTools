@@ -8,6 +8,7 @@ import { SongSearchModal } from "../../components/SongSearchModal";
 import { DIFFICULTY_LABEL, type Difficulty, type RankingMusic } from "../ranking/useRankingMusics";
 import { ENVY_ID } from "../analyzer/lib/constants";
 import { DEFAULT_PARAMS, OVERHEAD_BY_LIVE, type LiveType } from "../ranking/lib/efficiency";
+import { AUTO_MIN_TAKI, autoTaki } from "../ranking/lib/lbRun";
 import { overheadBasisNote } from "../compare/lib/quickCompare";
 import { SOLO_OVERHEAD_PROVISIONAL } from "../../lib/overhead";
 import { ProfileBar } from "../../components/ui/ProfileBar";
@@ -58,6 +59,8 @@ export function ComparePanel({
   // ★ スキル値は**編成ごとに計算する**ので、ここでは持たない（カードのSLから出る）。
   //   共通なのは叩き方の前提（曲・ライブ種別・焚き数）だけ。
   const [taki, setTaki] = useState(() => getActiveProfile()?.taki ?? DEFAULT_PARAMS.taki);
+  // ★ オートは0焚きができない（下限1。Nori 指摘 2026-11-21）。焚き数はライブ種別の間で共有なので、オートの間だけ1として扱う
+  const liveTaki = live === "auto" ? autoTaki(taki) : taki;
   const [picking, setPicking] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
 
@@ -100,12 +103,12 @@ export function ComparePanel({
     //   協力ライブのロスで Pt/時 を出してしまい、ランキングと数字が合わない。
     const cond: CompareCondition = {
       live,
-      taki,
+      taki: liveTaki,
       overheadSec: OVERHEAD_BY_LIVE[live],
       powerLimit: ctx.powerLimit,
     };
     return entry ? compareDecks(candidates, entry, cond) : [];
-  }, [candidates, entry, live, taki, ctx.powerLimit]);
+  }, [candidates, entry, live, liveTaki, ctx.powerLimit]);
   // チャレンジライブは Pt が付かないので、スコアの一番高い編成を最良にする。
   const challenge = mode === "challenge";
   const best = challenge
@@ -153,7 +156,7 @@ export function ComparePanel({
               onChange={setLive}
               className="!max-w-72"
             />
-            <TakiInput value={taki} onChange={setTaki} />
+            <TakiInput value={liveTaki} min={live === "auto" ? AUTO_MIN_TAKI : 0} onChange={setTaki} />
           </div>
         </Field>
 
