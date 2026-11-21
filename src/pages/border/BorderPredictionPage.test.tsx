@@ -355,3 +355,61 @@ describe("みんなでライブ停止中の特別対応の回", () => {
     expect(trend.textContent).not.toContain("8割");
   });
 });
+
+/**
+ * ★ 「いまのモデル」の表の当たり率の欄（2026-11-22 Nori「それは"8割くらい"タイトルラベルが悪いわ」）。
+ *   前は欄の名前が「8割の幅に入った率」で、数字も 82% だったので、「8割 × 8割 = 6割強の信用度」と読めてしまった。
+ *   実際は 1 つの約束（10 回中 8 回は幅に収まる）の答え合わせなので、欄の名前に「8割」を重ねず、表の下で 1 回だけ説明する。
+ *   「624回中」はイベントの数ではなく、1 回のイベントを数時点で答え合わせした合計なので、そう書く。
+ */
+describe("いまのモデルの表の当たり率の欄", () => {
+  const model = {
+    version: "v-test",
+    createdAt: new Date(2026, 10, 21, 12).toISOString(),
+    poolSize: 104,
+    ranks: [
+      {
+        rank: 100,
+        champion: "all",
+        medianAbsError: [
+          { p: 0.5, value: 0.03 },
+          { p: 0.9, value: 0.01 },
+        ],
+        medianAbsErrorEarly: [{ p: 0.04, value: 0.12 }],
+        coverage: [{ p: 0.5, covered: 70, total: 85 }],
+        coverageEarly: [{ p: 0.08, covered: 12, total: 15 }],
+      },
+    ],
+  };
+
+  async function showWithModel() {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/track-record")) return json({ model, reports: [] });
+        return new Response("", { status: 404 });
+      }),
+    );
+    await show();
+    const panel = screen.getByRole("heading", { name: "いまのモデル" }).closest("section");
+    if (!panel) throw new Error("いまのモデルの枠が無い");
+    return panel as HTMLElement;
+  }
+
+  it("欄の名前に「8割」を重ねず、数字は答え合わせの回数と並べる", async () => {
+    const panel = await showWithModel();
+    expect(within(panel).queryByText("8割の幅に入った率")).toBeNull();
+    expect(within(panel).getByRole("columnheader", { name: "幅に収まった実績" })).toBeTruthy();
+    // 70+12 / 85+15 = 82%。「回中」ではなく「答え合わせ」の回数と書く
+    expect(within(panel).getByText("82%（答え合わせ100回）")).toBeTruthy();
+    expect(panel.textContent).not.toMatch(/（\d+回中）/);
+  });
+
+  it("表の下で「8割の幅」の意味と、右の欄が何の答え合わせかを 1 回だけ説明する", async () => {
+    const panel = await showWithModel();
+    const note = within(panel).getByText(/10 回中 8 回/);
+    expect(note.textContent).toContain("「8割の幅」");
+    expect(note.textContent).toContain("数時点で答え合わせした合計");
+  });
+});
