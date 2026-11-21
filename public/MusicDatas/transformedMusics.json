@@ -18445,6 +18445,32 @@
     "masterNotes": 1012
   },
   {
+    "id": "777",
+    "title": "レグルス（REMIX）",
+    "pronunciation": "れぐるす りみっくす",
+    "creatorArtistId": 345,
+    "artistName": "ゆうゆ REMIX by かねこちはる",
+    "default": 2171401,
+    "Unit": "0_VS",
+    "categories": [
+      "image"
+    ],
+    "publishedAt": 1795154400000,
+    "published": true,
+    "isNewlyWrittenMusic": true,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_777.webp",
+    "music_time": 152.1,
+    "event_rate": 122,
+    "singers": [22],
+    "maxSingers": 1,
+    "dancerCount": 1,
+    "expertLevel": 26,
+    "masterLevel": 32,
+    "appendLevel": 35,
+    "masterNotes": 1438
+  },
+  {
     "id": "782",
     "title": "プシ",
     "pronunciation": "ぷし",
