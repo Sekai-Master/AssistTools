@@ -327,7 +327,10 @@ function ModelPanel({ model }: { model: ModelSummary }) {
             <th className="py-1 font-normal">順位</th>
             <th className="hidden py-1 font-normal sm:table-cell">使っている候補</th>
             <th className="py-1 font-normal">誤差の中央値（開始6時間／経過50%／90%）</th>
-            <th className="py-1 font-normal">8割の幅に入った率</th>
+            {/* ★ 欄の名前に「8割」を重ねない（2026-11-22 Nori「それは"8割くらい"タイトルラベルが悪いわ」）。
+                  前は「8割の幅に入った率」で数字も 82% なので、「8割 × 8割 = 6割強の信用度」と読めた。
+                  実際は「10 回中 8 回は幅に収まる」という 1 つの約束の答え合わせ。意味は表の下で 1 回だけ言う */}
+            <th className="py-1 font-normal">幅に収まった実績</th>
           </tr>
         </thead>
         <tbody className="text-slate-700">
@@ -344,12 +347,16 @@ function ModelPanel({ model }: { model: ModelSummary }) {
                 <td className="py-1.5">
                   {fmt(early)}／{fmt(at(0.5))}／{fmt(at(0.9))}
                 </td>
-                <td className="py-1.5">{cov.total > 0 ? `${formatPercent(cov.covered / cov.total)}（${cov.total}回中）` : "—"}</td>
+                {/* ★ total はイベントの数ではなく「イベント × 答え合わせの時点」の数なので「回中」と書かない */}
+                <td className="py-1.5">{cov.total > 0 ? `${formatPercent(cov.covered / cov.total)}（答え合わせ${cov.total}回）` : "—"}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
+      <p className="mt-3 max-w-lg text-xs leading-6 text-slate-500">
+        「8割の幅」は、最終ボーダーが 10 回中 8 回は収まるように広さを決めた幅です。右の欄は、過去の回でその幅に実際に収まった割合です（1 回のイベントを経過50%・60%…の数時点で答え合わせした合計）。
+      </p>
     </Panel>
   );
 }
