@@ -4,7 +4,6 @@ import { ToolPage } from "../../components/ui/ToolPage";
 import { CONFIDENCE_LABEL, RANKS, type Confidence } from "../../../workers/border/src/model";
 import { formatMan, formatRange } from "../../../workers/border/src/posts";
 import { isSpecialReport } from "../../../workers/border/src/special";
-import { DocLink } from "../legal/LegalDoc";
 import { BorderCharts } from "./BorderChart";
 import {
   candidateLabel,
@@ -390,7 +389,6 @@ function HowPanel({ unofficialShownAbove }: { unofficialShownAbove: boolean }) {
       </details>
       <p className="mt-3 max-w-xl text-sm leading-7 text-slate-600">
         {!unofficialShownAbove && "非公式の予測で、外れることがあります。"}予測は経過4%から出し始め（150時間のイベントなら開始から約6時間、246時間なら約10時間）、序盤は幅が広い「目安」として出します。50位・100位は終盤まで個人の事情で大きく動くので、ほかの順位より幅が広めです。
-        ランキングのデータは <DocLink href="https://sekai.best/">Sekai Viewer</DocLink> のものを使っています。
       </p>
     </Panel>
   );

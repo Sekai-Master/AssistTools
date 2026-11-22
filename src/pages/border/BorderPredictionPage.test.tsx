@@ -238,13 +238,14 @@ describe("しくみを畳む・予測の確かさの表示は畳まない", () =
     expect(details.textContent).toContain("人の勘で数字を足すことはしていません");
   });
 
-  it("「序盤は目安」とデータの出典は畳まずに見せる", async () => {
+  it("「序盤は目安」は畳まずに見せ、データの取得元の名前とリンクは出さない（2026-11-22 Nori「ページ内の仕組み的なとこにある記載とリンクも」消す）", async () => {
     serve(snapshot(-72, 72));
     await show();
     const note = screen.getByText(/序盤は幅が広い「目安」/);
     expect(folded(note)).toBe(false);
     expect(note.textContent).toContain("50位・100位は");
-    expect(folded(screen.getByRole("link", { name: "Sekai Viewer" }))).toBe(false);
+    expect(screen.queryByRole("link", { name: "Sekai Viewer" })).toBeNull();
+    expect(note.textContent).not.toContain("Sekai Viewer");
   });
 
   it("予測が出ている回は「非公式の予測で、外れることがあります」を数字の近くで 1 回だけ言う（しくみの段で重ねない）", async () => {
