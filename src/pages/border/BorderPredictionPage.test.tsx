@@ -156,14 +156,15 @@ describe("いま使えるツール", () => {
     expectNoLead(["plan", "worktime", "ranking"]);
   });
 
-  it("終盤（集計の 1 時間前）: アナライザーを先頭に説明つきで、あとは周回プラン", async () => {
+  it("終盤（集計の 1 時間前）: アナライザーを先頭に説明つきで、あとはリフレッシュゲージ計算機・周回プラン", async () => {
     serve(snapshot(-120, 1));
     await show();
-    expect(hrefs()).toEqual(["/analyzer", "/plan"]);
+    expect(hrefs()).toEqual(["/analyzer", "/refresh", "/plan"]);
     const lead = within(shelf()).getByRole("link", { name: new RegExp(tool("analyzer").name) });
     expect(within(lead).getByText(tool("analyzer").description)).toBeTruthy();
     // 説明を添えるのは先頭の 1 つだけ
     expect(within(shelf()).queryByText(tool("plan").description)).toBeNull();
+    expect(within(shelf()).queryByText(tool("refresh").description)).toBeNull();
   });
 
   it("リンクに計測用のクエリ文字列を付けない", async () => {

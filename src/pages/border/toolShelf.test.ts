@@ -115,10 +115,10 @@ describe("shelfItems（時期ごとの入口）", () => {
     expect(paths("mid")).toEqual(["/plan", "/worktime", "/ranking"]);
   });
 
-  it("終盤はアナライザーを先頭に大きく、あとは周回プラン", () => {
+  it("終盤はアナライザーを先頭に大きく、あとはリフレッシュゲージ計算機・周回プラン", () => {
     const items = shelfItems("late");
-    expect(items.map((i) => i.tool.path)).toEqual(["/analyzer", "/plan"]);
-    expect(items.map((i) => i.lead)).toEqual([true, false]);
+    expect(items.map((i) => i.tool.path)).toEqual(["/analyzer", "/refresh", "/plan"]);
+    expect(items.map((i) => i.lead)).toEqual([true, false, false]);
   });
 
   it("序盤・中盤に大きく出すものは無い", () => {
