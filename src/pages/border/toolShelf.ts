@@ -41,11 +41,13 @@ export function toolPhaseOf(event: Pick<Snapshot["event"], "startAt" | "aggregat
 /**
  * 時期ごとに出すツール（src/tools.ts の id）。
  * 序盤は編成を決める、中盤は走る量を見積もる・曲を選ぶ、終盤は着地を合わせる。
+ * ★ 終盤のリフレッシュゲージ計算機は 2026-11-22 に足した（Nori）。最終日の終わりにゲージを 100% ぎりぎりで
+ *   使い切る組み方は、着地の時刻が決まる終盤に要る。
  */
 const SHELF: Record<ToolPhase, readonly string[]> = {
   early: ["deck", "compare", "plan"],
   mid: ["plan", "worktime", "ranking"],
-  late: ["analyzer", "plan"],
+  late: ["analyzer", "refresh", "plan"],
 };
 
 /** 先頭に大きく出す（説明を 1 行添える）ツール。終盤のアナライザーだけ */
