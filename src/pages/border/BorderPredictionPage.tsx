@@ -122,7 +122,7 @@ function CurrentPanel({ snap, model, now }: { snap: Snapshot; model: ModelSummar
 
       {isStale(snap, now) && (
         <p className="mt-3 rounded-lg bg-[color:var(--color-rose-600)]/10 px-3 py-2 text-xs leading-6 text-[color:var(--color-rose-600)]">
-          データ元（sekai.best）の更新が {Math.round((now - snap.sampleAt) / 60_000)} 分止まっています。下の数字はその時点のものです。
+          データの更新が {Math.round((now - snap.sampleAt) / 60_000)} 分止まっています。下の数字はその時点のものです。
         </p>
       )}
 
