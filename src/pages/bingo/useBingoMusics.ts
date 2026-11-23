@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { parseAliases } from "../../lib/songSearch";
 import type { BingoMusic } from "./bingoLogic";
 
 export interface AliasEntry {
@@ -60,18 +61,6 @@ export function parseMusics(raw: unknown): BingoMusic[] {
   }
   out.sort((a, b) => a.default - b.default);
   return out;
-}
-
-function parseAliases(raw: unknown): AliasEntry[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((e): e is AliasEntry => !!e && typeof e === "object")
-    .map((e) => ({
-      alias: isStr((e as AliasEntry).alias) ? (e as AliasEntry).alias : "",
-      songIds: Array.isArray((e as AliasEntry).songIds)
-        ? (e as AliasEntry).songIds.filter((s) => isStr(s) && s !== "")
-        : [],
-    }));
 }
 
 /** BINGO用の楽曲＋エイリアスを読み込む。 */

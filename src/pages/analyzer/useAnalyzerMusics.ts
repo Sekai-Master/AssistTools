@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { parseAliases } from "../../lib/songSearch";
 import type { AliasEntry } from "../bingo/useBingoMusics";
 import { getVerifiedBasePoint } from "./verifiedBasePoints";
 
@@ -84,18 +85,6 @@ function parse(raw: unknown, deletedIds: ReadonlySet<string> = new Set()): Analy
   }
   out.sort((a, b) => Number(a.id) - Number(b.id));
   return out;
-}
-
-function parseAliases(raw: unknown): AliasEntry[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((e): e is AliasEntry => !!e && typeof e === "object")
-    .map((e) => ({
-      alias: isStr((e as AliasEntry).alias) ? (e as AliasEntry).alias : "",
-      songIds: Array.isArray((e as AliasEntry).songIds)
-        ? (e as AliasEntry).songIds.filter((s) => isStr(s))
-        : [],
-    }));
 }
 
 /** public/MusicDatas の楽曲＋エイリアスを読み込む。 */
