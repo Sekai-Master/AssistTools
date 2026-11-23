@@ -17,6 +17,28 @@ export interface AliasEntry {
   songIds: string[];
 }
 
+const nonEmptyStrings = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((s): s is string => typeof s === "string" && s !== "") : [];
+
+/**
+ * public/MusicDatas/aliasMapping.json を AliasEntry の並びにする。アナライザーとビンゴの両方が使う。
+ * alias は文字列か文字列の配列（例 {"alias": ["…", "エビ"], "songIds": ["074"]}）。配列は 1 つずつの行に分ける。
+ * ★ 2026-11-23 まで両方のページが文字列だけを通していて、配列で持つ通称（エビ・カゲプロなど）が検索に出なかった。
+ */
+export function parseAliases(raw: unknown): AliasEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const out: AliasEntry[] = [];
+  for (const e of raw) {
+    if (!e || typeof e !== "object") continue;
+    const { alias, songIds } = e as { alias?: unknown; songIds?: unknown };
+    const ids = nonEmptyStrings(songIds);
+    if (ids.length === 0) continue;
+    const names = typeof alias === "string" ? nonEmptyStrings([alias]) : nonEmptyStrings(alias);
+    for (const name of names) out.push({ alias: name, songIds: ids });
+  }
+  return out;
+}
+
 /**
  * query に当てはまる曲を、元の並びのまま返す。空（空白だけ）なら全部。
  * 曲名・作者・別名は大文字小文字を問わない。読みはそのまま含むかを見る（読みはひらがなで持っている）。
