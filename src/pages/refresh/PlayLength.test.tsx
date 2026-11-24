@@ -8,6 +8,7 @@
  *   - 並べ替えても、ブロックごとの決め方と値は残る。前のブロックを変えると逆算し直す
  *   - 周回プランの保存・呼び出しで、決め方と「次の回復まで」（ダイヤル）の値が戻る
  *   - リフレッシュゲージ計算機でも同じ部品が出る
+ *   - ひとりでライブ想定でも、その 1 周の秒で逆算する（想定を替えると逆算し直す）
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
@@ -16,11 +17,12 @@ import PlanPage from "./PlanPage";
 import RefreshGaugeCalculator from "./RefreshGaugeCalculator";
 import { resetProfilesForTest } from "../../lib/profiles";
 import { minutesToTarget } from "./lib/timeline";
-import { overheadForPace } from "./lib/liveAssumption";
+import { SOLO_DEFAULT_RATE, overheadForPace } from "./lib/liveAssumption";
+import { OVERHEAD_SEC } from "../../lib/overhead";
 import { fmtDuration } from "./lib/format";
 
-// 逆算の期待値をみんなでライブ 28 回/時の式から出すので、想定はみんなでライブに固定する
-// （周回プランにも想定を選ぶ切り替えが入っても、止まっている間の既定のひとりでライブで期待値がずれないように）
+// 開いたときの想定をみんなでライブに固定する（止まっている間の既定はひとりでライブ。印を戻しても期待値がずれないように）。
+// ひとりでライブの逆算は、下の describe で切り替えて確かめる
 vi.mock("../../lib/liveSuspension", () => ({ MULTI_LIVE_SUSPENDED: false }));
 
 // 独りんぼエンヴィー（既定の曲。public/MusicDatas の値。定数は実測の 84）
@@ -168,6 +170,68 @@ describe("ゲージ%で決める（周回プラン）", () => {
     expect(modeOf(playRows()[0])).toBe("ゲージ");
     expect(targetInput(playRows()[0]).value).toBe("80");
     expect(modeOf(playRows()[1])).toBe("時間");
+  });
+});
+
+/**
+ * ひとりでライブ想定（#278 で周回プランにも想定の切り替えが入った）。既定のペースは SOLO_DEFAULT_RATE（いまは 34 回/時）で、
+ * そのときのロスは OVERHEAD_SEC.solo。逆算もこのロスの 1 周の秒で出ること。想定を替えたら逆算し直し、終わりは目標のまま。
+ */
+describe("ひとりでライブ想定の逆算（周回プラン・リフレッシュゲージ）", () => {
+  const OH_SOLO = overheadForPace("solo", String(SOLO_DEFAULT_RATE));
+  const chooseLive = (name: "ひとりでライブ" | "みんなでライブ") =>
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "ライブの種類" })).getByRole("radio", { name }));
+
+  it("既定のペースとロスの前提（ひとりでライブの 1 周はロス OVERHEAD_SEC.solo）", () => {
+    expect(OH_SOLO).toBe(OVERHEAD_SEC.solo);
+    expect(SOLO_DEFAULT_RATE).toBe(Math.round(3600 / (74.8 + OVERHEAD_SEC.solo)));
+  });
+
+  it.each([
+    ["周回プラン", drawPlan],
+    [
+      "リフレッシュゲージ",
+      () =>
+        render(
+          <MemoryRouter>
+            <RefreshGaugeCalculator />
+          </MemoryRouter>,
+        ),
+    ],
+  ] as const)("%s: ひとりでライブの 1 周の秒で逆算し、みんなでライブに替えると逆算し直す", (_, draw) => {
+    draw();
+    chooseLive("ひとりでライブ");
+    expect((screen.getByLabelText("周回ペース") as HTMLInputElement).value).toBe(String(SOLO_DEFAULT_RATE));
+    add("＋稼働");
+    choose(playRows()[0], "ゲージ");
+    type(targetInput(playRows()[0]), "100");
+    const solo = minutesToTarget(0, 100, 84, 74.8, OH_SOLO);
+    expect(solo).toBeCloseTo(((6_600_000 / PER) * (74.8 + OVERHEAD_SEC.solo)) / 60, 9);
+    expect(playRows()[0].textContent).toContain(`%まで${fmtDuration(solo)}`);
+    expect(stat("総時間")).toContain(fmtDuration(solo));
+    expect(stat("終了ゲージ")).toContain("100.0%");
+    expect(stat("ムダ時間")).toBe("ムダ時間0分無駄なし");
+
+    chooseLive("みんなでライブ");
+    const multi = minutesToTarget(0, 100, 84, 74.8, OH);
+    expect(multi).toBeGreaterThan(solo); // ロスが大きいぶん長くかかる
+    expect(playRows()[0].textContent).toContain(`%まで${fmtDuration(multi)}`);
+    expect(stat("終了ゲージ")).toContain("100.0%");
+  });
+
+  it("周回プラン: 前に時間で 1 時間積んでも、ひとりでライブの 1 周で 100% ぎりぎりまでの残りを逆算する", () => {
+    drawPlan();
+    chooseLive("ひとりでライブ");
+    add("＋稼働");
+    add("＋稼働");
+    choose(playRows()[1], "ゲージ");
+    type(targetInput(playRows()[1]), "100");
+    const sec = 74.8 + OH_SOLO;
+    const firstInternal = Math.min(6_600_000, ((60 * 60) / sec) * PER);
+    const rest = minutesToTarget(firstInternal, 100, 84, 74.8, OH_SOLO);
+    expect(playRows()[1].textContent).toContain(`%まで${fmtDuration(rest)}`);
+    expect(stat("総時間")).toContain(fmtDuration(60 + rest));
+    expect(stat("終了ゲージ")).toContain("100.0%");
   });
 });
 
