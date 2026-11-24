@@ -10,7 +10,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { GaugeInputsPanel } from "./GaugeInputsPanel";
-import { WHEEL_ROW } from "../../components/ui/WheelPicker";
+import { WHEEL_PEEK, WHEEL_ROW } from "../../components/ui/WheelPicker";
 import { useGaugeInputs } from "./useGaugeInputs";
 import { OVERHEAD_SEC } from "../../lib/overhead";
 import { SOLO_DEFAULT_RATE } from "./lib/liveAssumption";
@@ -59,7 +59,8 @@ it("「次の回復まで」の補足は、値をどこで読むか（ゲージ�
 
 /**
  * 「次の回復まで」のドラム式のピッカー（2026-11-25、持ち主「円のダイヤルは場所を取りすぎ・デザイン的に浮いている」）。
- * 0〜30 の数字が縦に並び、上下に回すと真ん中の段にスナップして選ばれる。見える段は 3 段（1 段 44px・高さ 132px）。
+ * 0〜30 の数字が縦に並び、上下に回すと真ん中の段にスナップして選ばれる。真ん中の段は 44px、上下の段は 6 割（26px）だけ見せて
+ * 端へ向かって薄くする（高さ 96px・幅 48px。2026-11-25 持ち主「もっと細く」）。
  * ★ キーボードと読み上げは、見えないネイティブの range が受ける（矢印・PageUp/PageDown・Home/End、読み上げ「12分」）。
  *   見えるドラムは指・マウスホイール・クリックで回す。値の持ち方（空＝30分で計算）と計算は前のまま
  */
@@ -101,11 +102,19 @@ describe("「次の回復まで」のピッカー", () => {
     expect(empty()).toBe("2時間42分");
   });
 
-  it("1 段は押せる高さの 44px（見える 3 段で 132px）", () => {
+  it("真ん中の段は押せる高さの 44px、上下の段は 6 割（26px）だけ見せて高さ 96px・幅 48px", () => {
     render(<Harness />);
     expect(WHEEL_ROW).toBe(44);
+    expect(WHEEL_PEEK).toBe(26);
+    expect(Math.abs(WHEEL_PEEK - WHEEL_ROW * 0.6)).toBeLessThan(1);
     expect(row(12).className).toContain("h-11");
-    expect(scroller().parentElement!.className).toContain("h-33");
+    const box = scroller().parentElement!;
+    expect(box.className).toContain("h-24"); // 44 + 26 × 2 = 96px
+    expect(box.className).toContain("w-12");
+    // 上下の余白が見せる量と同じなので、i 段目が真ん中に来るスクロール位置は i × 44px のまま
+    expect(scroller().className).toContain("py-[26px]");
+    // 上下の端へ向かって薄く
+    expect(scroller().className).toContain("mask-image:linear-gradient");
   });
 
   it("回していないとき、出している 30 の段を押すと 30 が入る（回した状態になる）", () => {
@@ -197,6 +206,22 @@ describe("「次の回復まで」のピッカー", () => {
     expect(document.body.textContent).not.toContain("回していない");
     expect(document.body.textContent).not.toContain("として計算）");
   });
+});
+
+// ★ 2026-11-25 持ち主: 「現在のゲージ」と「次の回復まで」を横に並べる。390px でも 1 行、狭すぎる幅（約 344px 未満）だけ折り返す
+it("「現在のゲージ」と「次の回復まで」は同じ行（折り返せる横並び）に置く", () => {
+  render(<Harness />);
+  const gauge = screen.getByLabelText("現在のゲージ");
+  const next = screen.getByRole("slider", { name: "次の回復まで" });
+  const rowOf = (el: HTMLElement) => el.closest("div.flex-wrap");
+  expect(rowOf(gauge)).not.toBeNull();
+  expect(rowOf(gauge)).toBe(rowOf(next));
+  expect(rowOf(gauge)!.className).not.toContain("grid");
+  // 現在のゲージの段は残りの幅を取り（最小 144px）、ピッカーの段は縮めない
+  const gaugeField = gauge.closest("div.space-y-2")!;
+  expect(gaugeField.className).toContain("flex-1");
+  expect(gaugeField.className).toContain("min-w-36");
+  expect(next.closest("div.space-y-2")!.className).toContain("shrink-0");
 });
 
 describe("詳しい説明は閉じた「入力について」に残す（消さない）", () => {

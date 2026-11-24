@@ -1,8 +1,13 @@
 import { useEffect, useRef } from "react";
 import { cn } from "../../lib/utils";
 
-/** 1 段の高さ（px）。押せる高さの 44px（h-11）。見える段は 3 段なので、ドラムの高さは 3 倍の 132px（h-33）。 */
+/** 1 段の高さ（px）。押せる高さの 44px（h-11）。 */
 export const WHEEL_ROW = 44;
+/**
+ * 上下の段の見せる量（px）。1 段の 6 割（4 割は隠す）。ドラムの高さは 44 + 26 × 2 = 96px（h-24）。
+ * 上下の余白も同じ量にするので、i 段目が真ん中に来るスクロール位置は i × 44px のまま（2026-11-25 持ち主「もっと細く」）。
+ */
+export const WHEEL_PEEK = 26;
 /** 回し終わり（最後のスクロールから）の待ち時間。この後にそろえる・指を離したことにする。 */
 const SETTLE_MS = 150;
 
@@ -194,10 +199,10 @@ export function WheelPicker({
       />
       <div
         aria-hidden
-        className="relative h-33 w-16 overflow-hidden rounded-lg bg-neu shadow-neu-inset peer-focus-visible:ring-2 peer-focus-visible:ring-[color:var(--unit-color)]"
+        className="relative h-24 w-12 overflow-hidden rounded-lg bg-neu shadow-neu-inset peer-focus-visible:ring-2 peer-focus-visible:ring-[color:var(--unit-color)]"
       >
-        {/* 真ん中の段の帯 */}
-        <div className="pointer-events-none absolute inset-x-1 top-11 h-11 rounded-md bg-[color:var(--neu-hi)]" />
+        {/* 真ん中の段の帯（上から WHEEL_PEEK） */}
+        <div className="pointer-events-none absolute inset-x-1 top-[26px] h-11 rounded-md bg-[color:var(--neu-hi)]" />
         <div
           ref={scrollerRef}
           tabIndex={-1}
@@ -206,7 +211,8 @@ export function WheelPicker({
           onTouchStart={onTouchStart}
           // 触れただけで回さなかったときも、指の印を下ろす
           onTouchEnd={scheduleSettle}
-          className="relative h-full snap-y snap-mandatory overflow-y-auto py-11 select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          // 上下の段は端へ向かって薄く（真ん中の段 27〜73% はそのまま）
+          className="relative h-full snap-y snap-mandatory overflow-y-auto py-[26px] select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_bottom,rgb(0_0_0/0.4),#000_27%,#000_73%,rgb(0_0_0/0.4))] [-webkit-mask-image:linear-gradient(to_bottom,rgb(0_0_0/0.4),#000_27%,#000_73%,rgb(0_0_0/0.4))]"
         >
           {values.map((v) => (
             <div
