@@ -23,11 +23,18 @@ describe("pickEventItemReduction — configs.json から除数を取り出す", 
     expect(pickEventItemReduction([row("event_item_reduction", "10")])).toBe(10);
   });
 
+  it("1 は受け入れる（1 以上の整数の下端）", () => {
+    expect(pickEventItemReduction([row("event_item_reduction", "1")])).toBe(1);
+  });
+
   it.each([
     ["数でない", "abc"],
     ["空文字", ""],
     ["0", "0"],
     ["負の数", "-7"],
+    ["1 未満の小数", "0.5"],
+    ["ごく小さい数", "1e-9"],
+    ["整数でない", "7.5"],
     ["null", null],
   ])("値が壊れている（%s）なら null", (_label, value) => {
     expect(pickEventItemReduction([row("event_item_reduction", value)])).toBeNull();

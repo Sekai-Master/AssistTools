@@ -33,7 +33,7 @@ const MYSEKAI_ZERO: AdjustCanvasMySekai = { countA: 0, countB: 0, countC: 0, tot
  */
 const badge = (pt: number) => Math.floor(pt / EVENT_ITEM_REDUCTION);
 const badgeText = (n: number) => `バッジ ${n.toLocaleString()}個`;
-/** マイセカイは採取1回ごとに切り捨てる。 */
+/** マイセカイは採った物1個ごとに切り捨てる。 */
 const MYSEKAI_BADGES = badge(1_000) * 3 + badge(500) * 2 + badge(200) * 5;
 
 const MULTI_PLAN: MultiLivePlan = {

@@ -6,7 +6,7 @@ import { MEMORY_A_10X, MEMORY_B_10X, MEMORY_C_10X } from "./constants";
  *
  * ## 式
  *
- *   1回のライブ（またはマイセカイの採取1回）ごとに
+ *   1回のライブ（マイセカイは採った物1個。★5）ごとに
  *   バッジ = floor(そのプレイの獲得イベントPt ÷ 除数)
  *
  * 除数はマスタDB configs.json の `event_item_reduction`。**決め打ちしない。**
@@ -27,7 +27,7 @@ import { MEMORY_A_10X, MEMORY_B_10X, MEMORY_C_10X } from "./constants";
  * 表示を出さないため（同期の定数で済む）。
  *
  * - 自動更新がマスタから取れなかった回は、ファイルを書き換えない（最後に取れた値が残る）。
- * - ファイルが無い・壊れている（数でない・0以下）ときは DEFAULT_EVENT_ITEM_REDUCTION（10）で数える。
+ * - ファイルが無い・壊れている（1以上の整数でない）ときは DEFAULT_EVENT_ITEM_REDUCTION（10）で数える。
  *
  * ## 実機での照合
  *
@@ -44,13 +44,25 @@ import { MEMORY_A_10X, MEMORY_B_10X, MEMORY_C_10X } from "./constants";
  * 3. **1回ごとか累計からか（確定）**: 1回ごとに切り捨て、端数は次の回に持ち越さない。
  *    1炊きで 4,835 Pt（前回までの累計 59,345）→ 483 バッジ。累計から出すなら 484。
  *    所持も 6,417 で、累計 64,180 の 1/10（6,418）より端数の分だけ少ない。
- * 4. **除数 7（確定）**: 11/19 以降の実機の画面で 517 Pt → 73 バッジ（= floor(517÷7)。÷10 なら 51）。
+ * 4. **除数 7（確定。ひとりでライブ・オート・マイセカイのどれにも効く）**: 2026-11-24 19時ごろ、
+ *    226 ワンダーランズ×ショウタイム Memories・ボーナス +390%・総合力 238,561 で計測。全部 floor(Pt÷7)。
+ *    - ひとりでライブ・1炊き（報酬5倍）  4,660 Pt →   665 バッジ（÷10 なら 466）
+ *    - ひとりでライブ・5炊き（25倍）    22,325 Pt → 3,189 バッジ（÷10 なら 2,232）
+ *    - オート・5炊き（25倍）            23,250 Pt → 3,321 バッジ（÷10 なら 2,325）
+ *    - マイセカイの採取                  1,400 Pt →   200 バッジ（÷10 なら 140）
+ *      ワールドパスなし（×100）で、1回の採取で 0.2 メモリの物 5 個（各 140 Pt）と 0.5 メモリの物 2 個
+ *      （各 350 Pt）。単価 700 は calculateUnitBasePt(238,561, 390, false) と一致し、単価の式の裏付けにもなる。
+ *    所持も 1,890 → 5,079（+3,189）→ 8,400（+3,321）で、1回ごとの和と一致する。
+ *    これより前に、11/19 以降の実機の画面で 517 Pt → 73 バッジ（÷10 なら 51）も見ている。
  *
  * ## ★ 実機で裏を取れていない点
  *
- * 5. **7 がオートとマイセカイの採取にも効くか**: configs の値は1つなので全部に効くと見て、
- *    BADGE_REDUCTION の live と mySekai に同じ値を入れている。マイセカイだけ違えば mySekai を分ける。
- *    オートだけ違う場合は、プランが叩き方（ソロ・オート）を持っていないので、それだけでは直せない。
+ * 5. **マイセカイを採った物1個ごとに切り捨てて足すか**（badgesForMySekai の仮定）: 4 の 1,400 Pt → 200 は
+ *    単価 700（baseVal 7）で、1個あたり 140・350 Pt がどちらも 7 で割り切れるため、
+ *    「1個ごと」と「合計から」を見分けられなかった。見分けるには、baseVal が 7 の倍数でない編成で、
+ *    余りが合わせて 7 以上たまる個数を1回の採取で取る計測が要る。例: 総合力 22.5万以上27万未満・
+ *    ボーナス 300〜366%（baseVal 6・単価 600）で 0.5 メモリの物を 2 個（各 300 Pt、余り 6）→
+ *    1個ごとなら 84、合計からなら 85。
  * 6. **ワールドリンク**: サポートユニットのボーナスはバッジには半分しか乗らない
  *    （configs.json `world_bloom_support_deck_event_item_correction_value` = 0.5、
  *    英語版 wiki の "the Support Unit's event points bonus is double the chapter badge bonus"）。
@@ -63,7 +75,10 @@ import { MEMORY_A_10X, MEMORY_B_10X, MEMORY_C_10X } from "./constants";
 /** マスタの値が読めないときの除数。11/19 より前の長いあいだの値。 */
 export const DEFAULT_EVENT_ITEM_REDUCTION = 10;
 
-/** 生成ファイルの値を除数にする。数でない・0以下・無いときは DEFAULT_EVENT_ITEM_REDUCTION。 */
+/**
+ * 生成ファイルの値を除数にする。1以上の整数でない（数でない・0以下・小数・無い）ときは
+ * DEFAULT_EVENT_ITEM_REDUCTION。受け入れる範囲は scripts/lib/badgeConfig.mjs と揃える。
+ */
 export function parseEventItemReduction(raw: unknown): number {
   const n =
     typeof raw === "number"
@@ -71,15 +86,15 @@ export function parseEventItemReduction(raw: unknown): number {
       : typeof raw === "string" && raw.trim() !== ""
         ? Number(raw)
         : Number.NaN;
-  return Number.isFinite(n) && n > 0 ? n : DEFAULT_EVENT_ITEM_REDUCTION;
+  return Number.isInteger(n) && n >= 1 ? n : DEFAULT_EVENT_ITEM_REDUCTION;
 }
 
 /** 獲得Ptをバッジに換算する除数（configs.json の event_item_reduction。ビルド時に読む）。 */
 export const EVENT_ITEM_REDUCTION = parseEventItemReduction(__EVENT_ITEM_REDUCTION__);
 
 /**
- * 種類ごとの除数。今はマスタの値1つを全部に使う（上の ★5）。
- * 実機の計測で種類ごとに違うと分かったら、ここだけを分ける。
+ * 種類ごとの除数。マスタの値1つを全部に使う（ひとりでライブ・オート・マイセカイのどれにも効くことを
+ * 上の 4 で確かめた）。マスタが種類ごとの値を持つようになったら、ここだけを分ける。
  */
 export const BADGE_REDUCTION = {
   /** ライブ（ソロ・オート）。 */
@@ -124,15 +139,15 @@ export function badgesForUnits(
   );
 }
 
-/** 採取1回のPt（単価 × メモリ値）。mySekai.ts の allocateMySekai と同じ 0.1 単位の整数で掛ける。 */
+/** 採った物1個のPt（単価 × メモリ値）。mySekai.ts の allocateMySekai と同じ 0.1 単位の整数で掛ける。 */
 function harvestPt(unitBasePt: number, memory10x: number): number {
   return Math.floor((unitBasePt * memory10x) / 10);
 }
 
 /**
- * マイセカイ採取の合計バッジ数。採取1回ごとに切り捨ててから足す。
+ * マイセカイ採取の合計バッジ数。採った物1個ごとに切り捨ててから足す（実機で未確認の仮定。冒頭の ★5）。
  *
- * ★ 合計Ptを割って済ませない。採取1回のPt（単価×1.0 / 0.5 / 0.2）は単価が100の倍数なので
+ * ★ 合計Ptを割って済ませない。1個のPt（単価×1.0 / 0.5 / 0.2）は単価が100の倍数なので
  *   必ず10の倍数で、除数が 10 のあいだは合計Ptの1/10と一致していた。7 では一致しない
  *   （単価 1,100 の草花 1回 = 220 Pt → 31。合計で割る式では種類をまたいで端数が繰り上がる）。
  */

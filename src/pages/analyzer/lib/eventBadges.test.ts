@@ -23,7 +23,8 @@ import { allocateMySekai, calculateUnitBasePt } from "./mySekai";
  *   今の値を決め打ちすると、マスタが 10 に戻った回にデータ更新ごと止まる。
  *   除数ごとの数え方は、除数を引数で渡して確かめる。
  *
- * ★ ゲームのリザルトの実例（何Ptで何バッジか）との照合は、除数 10 で 3 件（2026-10-26）と除数 7 で 1 件。
+ * ★ ゲームのリザルトの実例（何Ptで何バッジか）との照合は、除数 10 で 3 件（2026-10-26）と
+ *   除数 7 で 5 件（11/19 以降の 517 Pt と、2026-11-24 のひとりでライブ 2・オート 1・マイセカイ 1）。
  *   末尾の「ゲーム内の実例との照合」がそれ。ほかは「式どおりに数えているか」を固めている。
  *   ワールドリンクの実例はまだ無い。
  */
@@ -39,17 +40,18 @@ describe("EVENT_ITEM_REDUCTION — マスタの値に追従する", () => {
     expect(EVENT_ITEM_REDUCTION).toBe(file.eventItemReduction);
   });
 
-  it("ライブとマイセカイに同じ値を使う（種類ごとに分ける判断はまだ付いていない）", () => {
+  it("ライブとマイセカイに同じ値を使う（ひとりでライブ・オート・マイセカイのどれにも効くことを実機で確認）", () => {
     expect(BADGE_REDUCTION.live).toBe(EVENT_ITEM_REDUCTION);
     expect(BADGE_REDUCTION.mySekai).toBe(EVENT_ITEM_REDUCTION);
   });
 });
 
 describe("parseEventItemReduction — 生成ファイルが壊れていたときの落ち方", () => {
-  it("数と数の文字列はそのまま使う", () => {
+  it("1 以上の整数（数と数の文字列）はそのまま使う", () => {
     expect(parseEventItemReduction(7)).toBe(7);
     expect(parseEventItemReduction("7")).toBe(7);
     expect(parseEventItemReduction(10)).toBe(10);
+    expect(parseEventItemReduction(1)).toBe(1);
   });
 
   it.each([
@@ -59,6 +61,9 @@ describe("parseEventItemReduction — 生成ファイルが壊れていたとき
     ["空文字", ""],
     ["0", 0],
     ["負の数", -7],
+    ["1 未満の小数", 0.5],
+    ["ごく小さい数", 1e-9],
+    ["整数でない", "7.5"],
     ["NaN", Number.NaN],
     ["Infinity", Number.POSITIVE_INFINITY],
     ["オブジェクト", { value: 7 }],
@@ -134,14 +139,14 @@ describe("badgesForMySekai — 採取", () => {
   const counts = { countA: 7, countB: 3, countC: 4 };
   const totalPt = unit * 7 + (unit / 2) * 3 + (unit / 5) * 4; // 10,230 Pt
 
-  it("採取1回ごとに切り捨ててから足す", () => {
+  it("採った物1個ごとに切り捨ててから足す", () => {
     expect(unit).toBe(1_100);
     // 1回: 木石 1,100 / キラキラ 550 / 草花 220 Pt
     expect(badgesForMySekai(counts, unit, 10)).toBe(110 * 7 + 55 * 3 + 22 * 4);
     expect(badgesForMySekai(counts, unit, 7)).toBe(157 * 7 + 78 * 3 + 31 * 4);
   });
 
-  it("÷10 では合計Ptの1/10と一致する（採取1回のPtが10の倍数のため。これまでの数え方と同じ）", () => {
+  it("÷10 では合計Ptの1/10と一致する（1個のPtが10の倍数のため。これまでの数え方と同じ）", () => {
     expect(badgesForMySekai(counts, unit, 10)).toBe(Math.floor(totalPt / 10));
   });
 
@@ -200,6 +205,41 @@ describe("ゲーム内の実例との照合", () => {
   it("除数 7: 11/19 以降の実機の画面（517 Pt → 73 バッジ）と一致する。÷10 なら 51", () => {
     expect(badgesForPlay(517, 7)).toBe(73);
     expect(badgesForPlay(517, 10)).toBe(51);
+  });
+
+  // 2026-11-24 19時ごろ、226 ワンダーランズ×ショウタイム Memories・ボーナス +390%・総合力 238,561。
+  it.each([
+    ["ひとりでライブ・1炊き", 4_660, 665, 466],
+    ["ひとりでライブ・5炊き", 22_325, 3_189, 2_232],
+    ["オート・5炊き", 23_250, 3_321, 2_325],
+  ])("除数 7: %s の実機のリザルト（%i Pt → %i バッジ。2026-11-24）と一致する。÷10 なら %i", (_label, pt, got, byTen) => {
+    expect(badgesForPlay(pt, 7)).toBe(got);
+    expect(badgesForPlay(pt, 10)).toBe(byTen);
+  });
+
+  it("除数 7: 所持 1,890 → 5,079 → 8,400（2026-11-24）が1回ごとの和と一致する", () => {
+    expect(1_890 + badgesForPlay(22_325, 7)).toBe(5_079);
+    expect(5_079 + badgesForPlay(23_250, 7)).toBe(8_400);
+  });
+
+  it("除数 7: マイセカイの採取（1,400 Pt → 200 バッジ。2026-11-24）と一致する。ただし1個ごとか合計からかは見分けられない", () => {
+    // ワールドパスなし。単価 700 は実機の 1個あたりの Pt（0.2 メモリ 140・0.5 メモリ 350）と合う
+    const unit = calculateUnitBasePt(238_561, 390, false);
+    expect(unit).toBe(700); // baseVal 7。140・350 Pt はどちらも 7 で割り切れる
+    // 1回の採取で 0.2 メモリの物 5 個・0.5 メモリの物 2 個
+    const got = { countA: 0, countB: 2, countC: 5 };
+    expect(unit * 0.2 * 5 + unit * 0.5 * 2).toBe(1_400);
+    expect(badgesForMySekai(got, unit, 7)).toBe(200);
+    expect(badgesForMySekai(got, unit, 10)).toBe(140);
+    // 合計から割っても 200 になり、1個ごとか合計からかはこの回では分からない（★5 は残る）
+    expect(Math.floor(1_400 / 7)).toBe(200);
+  });
+
+  it("★5 を見分ける計測の例: baseVal 6（単価 600）で 0.5 メモリの物 2 個なら、1個ごとは 84・合計からは 85", () => {
+    const unit = calculateUnitBasePt(250_000, 330, false); // 総合力 22.5万以上27万未満・ボーナス 300〜366%
+    expect(unit).toBe(600);
+    expect(badgesForMySekai({ countA: 0, countB: 2, countC: 0 }, unit, 7)).toBe(84);
+    expect(Math.floor((300 * 2) / 7)).toBe(85);
   });
 
   // 以下 3 件は除数が 10 だった 2026-10-26 の照合。丸め方・炊き倍率・1回ごとかは除数によらない。

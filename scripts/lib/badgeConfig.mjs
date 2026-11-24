@@ -12,7 +12,8 @@
 export const EVENT_ITEM_REDUCTION_KEY = "event_item_reduction";
 
 /**
- * 除数を数で返す。行が無い・数でない・0 以下なら null。
+ * 除数を数で返す。行が無い・1 以上の整数でない（数でない・0 以下・小数）なら null。
+ * 受け入れる範囲は src/pages/analyzer/lib/eventBadges.ts の parseEventItemReduction と揃える。
  * ★ null のとき呼び出し側はファイルを書き換えない（最後に取れた値を残す）。
  */
 export function pickEventItemReduction(configs) {
@@ -26,5 +27,5 @@ export function pickEventItemReduction(configs) {
       : typeof value === "string" && value.trim() !== ""
         ? Number(value)
         : Number.NaN;
-  return Number.isFinite(n) && n > 0 ? n : null;
+  return Number.isInteger(n) && n >= 1 ? n : null;
 }
