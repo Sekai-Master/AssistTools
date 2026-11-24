@@ -122,7 +122,7 @@ export function soloPaceNote(
 }
 
 /**
- * 画像に書き出す「ペース」の行。想定を渡さないとき（周回プランなど、想定を選ばない画面）は足す前と同じ文。
+ * 画像に書き出す「ペース」の行（リフレッシュゲージ）。想定を渡さないときは足す前と同じ文。
  */
 export function paceMetaLine(ratePerHour: number, live?: LiveAssumption): string {
   const basis = live ? `エビ基準・${assumptionTag(live)}` : "エビ基準";
