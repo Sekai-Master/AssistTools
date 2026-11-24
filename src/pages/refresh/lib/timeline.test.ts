@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type Segment, simulateTimeline } from "./timeline";
+import { type Segment, minutesToTarget, playTargetOf, simulateTimeline } from "./timeline";
 
 const OH = 54; // オーバーヘッド既定
 const SEC_PER_PLAY = 74.8 + OH; // エビ1周の実所要秒
@@ -108,5 +108,104 @@ describe("simulateTimeline — 途中参加（開始時のタイマー進捗）"
     expect(r.points[2].decayProgressMin).toBeCloseTo(0, 9);
     expect(r.points[0].endPercent).toBeCloseTo(r.points[0].startPercent, 9);
     expect(r.points[2].endPercent).toBeLessThan(r.points[2].startPercent);
+  });
+});
+
+/**
+ * 稼働をゲージ%で決める（2026-11-24、使い手の要望「切り替えながら積んでいけるといいね」）。
+ * ★ % は「そのブロックの終わりのゲージ」。開始のゲージから目標まで上げる時間を、時間で決めるときの式の逆で出す。
+ */
+describe("ゲージ%で決める稼働（時間の逆算）", () => {
+  const PER = 84 * 157; // エビ1回の内部増加
+  const MAX = 6_600_000;
+  const target = (targetPercent: number, minutes = 60): Segment => ({
+    ...(play(minutes) as Extract<Segment, { kind: "play" }>),
+    id: `t${targetPercent}`,
+    targetPercent,
+  });
+
+  it("式: 分 = (目標の内部値 − 開始の内部値) ÷ 1回の増加 × 1周の秒 ÷ 60", () => {
+    expect(minutesToTarget(0, 100, 84, 74.8, OH)).toBeCloseTo(((MAX / PER) * SEC_PER_PLAY) / 60, 9);
+    expect(minutesToTarget(0.25 * MAX, 50, 84, 74.8, OH)).toBeCloseTo(
+      ((0.25 * MAX) / PER) * (SEC_PER_PLAY / 60),
+      9,
+    );
+  });
+
+  it("0%から100%: ちょうど100%で終わり、ムダは出ない", () => {
+    const r = simulateTimeline([target(100)], 0, OH);
+    expect(r.finalPercent).toBe(100);
+    expect(r.totalWasted).toBe(0);
+    expect(r.totalWastedMinutes).toBe(0);
+    expect(r.points[0].plays).toBeCloseTo(MAX / PER, 6);
+    expect(r.totalMinutes).toBeCloseTo(((MAX / PER) * SEC_PER_PLAY) / 60, 6);
+  });
+
+  it("時間で決めたときと往復が合う（逆算した分を時間で積むと同じ%になる）", () => {
+    const byTarget = simulateTimeline([target(37.5)], 12, OH);
+    const byTime = simulateTimeline([play(byTarget.points[0].minutes)], 12, OH);
+    expect(byTarget.finalPercent).toBe(37.5);
+    expect(byTime.finalPercent).toBeCloseTo(37.5, 9);
+  });
+
+  it("境界: 目標0%・今と同じ%・今より小さい%は 0 分（稼働ではゲージは下がらない）", () => {
+    for (const [start, t] of [
+      [0, 0],
+      [40, 40],
+      [50, 30],
+      [100, 100],
+    ]) {
+      const r = simulateTimeline([target(t)], start, OH);
+      expect(r.points[0].minutes).toBe(0);
+      expect(r.points[0].plays).toBe(0);
+      expect(r.totalMinutes).toBe(0);
+      expect(r.finalPercent).toBeCloseTo(start, 9);
+    }
+  });
+
+  it("境界: 100%を超える目標は100%、負の目標は0%として扱う", () => {
+    expect(simulateTimeline([target(130)], 0, OH).finalPercent).toBe(100);
+    expect(simulateTimeline([target(130)], 0, OH).points[0].minutes).toBeCloseTo(
+      simulateTimeline([target(100)], 0, OH).points[0].minutes,
+      9,
+    );
+    expect(simulateTimeline([target(-5)], 20, OH).points[0].minutes).toBe(0);
+  });
+
+  it("壊れた値（NaN・文字列）は時間で決める扱いに戻す（保存プラン対策）", () => {
+    const nan = { ...play(60), targetPercent: Number.NaN } as Segment;
+    const str = { ...play(60), targetPercent: "100" as unknown as number } as Segment;
+    for (const seg of [nan, str]) {
+      expect(playTargetOf(seg as Extract<Segment, { kind: "play" }>)).toBeNull();
+      expect(simulateTimeline([seg], 0, OH).points[0].minutes).toBe(60);
+    }
+  });
+
+  it("曲の長さが無い・定数0のときは 0 分（割り算で無限にしない）", () => {
+    expect(minutesToTarget(0, 100, 84, 0, 0)).toBe(0);
+    expect(minutesToTarget(0, 100, 0, 74.8, OH)).toBe(0);
+  });
+
+  it("前のブロックの結果から逆算する: 休憩を挟んでも最後のブロックは100%ぎりぎりで終わる", () => {
+    const segs = [play(120), rest(30), target(100)];
+    const r = simulateTimeline(segs, 0, OH);
+    expect(r.finalPercent).toBe(100);
+    expect(r.totalWasted).toBe(0);
+    const need = MAX - (r.points[2].startPercent / 100) * MAX;
+    expect(r.points[2].minutes).toBeCloseTo(((need / PER) * SEC_PER_PLAY) / 60, 6);
+    // 前の稼働を延ばすと、目標のブロックはそのぶん短くなる（終わりの%は変わらない）
+    const longer = simulateTimeline([play(180), rest(30), target(100)], 0, OH);
+    expect(longer.finalPercent).toBe(100);
+    expect(longer.points[2].minutes).toBeLessThan(r.points[2].minutes);
+  });
+
+  it("時間と%を混ぜて積める。各ブロックの長さ（minutes）は開始と終わりの差", () => {
+    const r = simulateTimeline([target(30), rest(45), play(30), target(80), rest(20)], 5, OH, 10);
+    for (const pt of r.points) expect(pt.minutes).toBeCloseTo(pt.endMinute - pt.startMinute, 9);
+    expect(r.points[0].endPercent).toBe(30);
+    expect(r.points[3].endPercent).toBe(80);
+    // ゲージ%のブロックの間も、休憩の30分タイマーは繰り越す（10 + 45 = 55 → 1回減って25、+20 → 45 → もう1回減って15）
+    expect(r.points[1].decayProgressMin).toBeCloseTo(25, 9);
+    expect(r.points[4].decayProgressMin).toBeCloseTo(15, 9);
   });
 });

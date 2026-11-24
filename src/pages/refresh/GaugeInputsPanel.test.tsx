@@ -48,11 +48,21 @@ describe("補足文は 1 行（30 字）まで", () => {
 });
 
 // ★ 検分 #244 低-1: 短くしたときに「どこで読む値か」が落ちていた。読む場所（ゲーム内のゲージ画面）は補足に残す
-it("「次の回復まで」の補足は、値をどこで読むか（ゲージ画面）と空欄のときの扱いを言う", () => {
+it("「次の回復まで」の補足は、値をどこで読むか（ゲージ画面）と回さないときの扱いを言う", () => {
   render(<Harness />);
   const hint = hintOf("次の回復まで");
   expect(hint).toContain("ゲージ画面");
-  expect(hint).toContain("空欄なら30分");
+  expect(hint).toContain("回さなければ30分");
+});
+
+// ★ 検分 #279 L: ダイヤルにしたので「未入力」ではなく「回していない」と言う。回すと消える
+it("全回復までの行の断りは、ダイヤルを回していないときだけ出す", () => {
+  render(<Harness />);
+  fireEvent.change(screen.getByLabelText("現在のゲージ"), { target: { value: "50" } });
+  expect(document.body.textContent).toContain("（「次の回復まで」を回していないので、30分として計算）");
+  expect(document.body.textContent).not.toContain("未入力");
+  fireEvent.change(screen.getByRole("slider", { name: "次の回復まで" }), { target: { value: "12" } });
+  expect(document.body.textContent).not.toContain("回していない");
 });
 
 describe("詳しい説明は閉じた「入力について」に残す（消さない）", () => {

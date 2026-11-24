@@ -14,6 +14,7 @@ import { DurationInput } from "../../components/ui/DurationInput";
 import { TakiInput } from "../../components/ui/TakiInput";
 import { Switch } from "../../components/ui/Switch";
 import { Stat } from "./Stat";
+import { PlayLength, type PlayLengthPatch } from "./PlayLength";
 import { type Segment, mysekaiMemoriOf, simulateTimeline } from "./lib/timeline";
 import {
   MYSEKAI_FULL_HARVEST_MEMORI,
@@ -202,9 +203,10 @@ export function PlanTimeline({
         minutes: 15,
       },
     ]);
-  const setPlayMinutes = (id: string, minutes: number) =>
+  // 時間・ゲージ%の切り替えと値（targetPercent: undefined で時間に戻る）
+  const setPlayLength = (id: string, patch: PlayLengthPatch) =>
     setSegments((s) =>
-      s.map((g) => (g.id === id && g.kind === "play" ? { ...g, minutes } : g)),
+      s.map((g) => (g.id === id && g.kind === "play" ? { ...g, ...patch } : g)),
     );
   const setPlayTaki = (id: string, taki: number) =>
     setSegments((s) =>
@@ -296,8 +298,8 @@ export function PlanTimeline({
           return {
             time,
             label: points
-              ? `${seg.title}　焚き${seg.taki ?? points.refTaki}　${fmtDuration(seg.minutes)}`
-              : `${seg.title}　${fmtDuration(seg.minutes)}`,
+              ? `${seg.title}　焚き${seg.taki ?? points.refTaki}　${fmtDuration(pt.minutes)}`
+              : `${seg.title}　${fmtDuration(pt.minutes)}`,
             sub: points
               ? `+${gained.toLocaleString()}pt ・ ${gauge(pt.endPercent)} ・ ${base}`
               : base,
@@ -554,9 +556,11 @@ export function PlanTimeline({
                         <span className="max-w-36 truncate font-bold text-slate-700">
                           {seg.title}
                         </span>
-                        <DurationInput
-                          value={seg.minutes}
-                          onChange={(v) => setPlayMinutes(seg.id, v)}
+                        <PlayLength
+                          seg={seg}
+                          minutes={pt.minutes}
+                          endPercent={pt.endPercent}
+                          onChange={(patch) => setPlayLength(seg.id, patch)}
                         />
                         <span className="text-xs text-slate-400">
                           ≈{Math.round(pt.plays)}回

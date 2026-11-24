@@ -112,6 +112,15 @@ describe("computePlanPoints", () => {
     expect(rows[1].gained).toBe(0);
   });
 
+  // ★ ゲージ%で決めた稼働は seg.minutes（時間で決めていたときの値）ではなく、逆算した分で点を出す
+  it("ゲージ%で決めた稼働は、逆算した時間ぶんの点が入る", () => {
+    const seg: Segment = { ...(play(0) as Extract<Segment, { kind: "play" }>), targetPercent: 100 };
+    const r = simulateTimeline([seg], 0, OH);
+    const rows = computePlanPoints(r, cfg);
+    expect(r.points[0].minutes).toBeGreaterThan(0);
+    expect(rows[0].gained).toBe(Math.round(500_000 * (r.points[0].minutes / 60)));
+  });
+
   it("単価が0なら採取は0のまま（黙って偽の点数を出さない）", () => {
     const segs: Segment[] = [{ id: "m", kind: "mysekai", memori: 89.5, minutes: 15 }];
     const rows = computePlanPoints(simulateTimeline(segs, 0, OH), {
