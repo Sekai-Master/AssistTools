@@ -3,6 +3,8 @@ import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
+import { Dial } from "../../components/ui/Dial";
+import { DECAY_INTERVAL_MIN } from "./lib/gaugeModel";
 import { SongSearchModal } from "../../components/SongSearchModal";
 import { onJacketError } from "../../lib/img";
 import { isMeasured } from "./lib/refreshConstant";
@@ -49,7 +51,6 @@ export function GaugeInputsPanel({
     gauge,
     setGauge,
     gaugePct,
-    nextDecay,
     setNextDecay,
     nextDecayMin,
     emptyInMinutes,
@@ -145,23 +146,26 @@ export function GaugeInputsPanel({
                 </Field>
 
                 {/* ★ ゲージ%だけでは「30分タイマーがどこまで進んでいるか」が分からない。
-                    イベントの途中で開くのが普通なので、空欄のままだと最大30分ずれる。 */}
+                    イベントの途中で開くのが普通なので、触らないままだと最大30分ずれる。
+                    ★ 0〜30分で上下限がはっきりしているのでダイヤル（2026-11-24）。値の持ち方（空＝未設定＝30分で計算）と計算は前のまま */}
                 <Field
                   label="次の回復まで"
                   htmlFor="rg-next-decay"
-                  hint="ゲージ画面の残り時間。空欄なら30分で計算"
+                  hint="ゲージ画面の残り時間。回さなければ30分で計算"
                 >
-                  <div className="flex items-center gap-2">
-                    <NeuInput
-                      id="rg-next-decay"
-                      inputMode="decimal"
-                      value={nextDecay}
-                      onChange={(e) => setNextDecay(e.target.value)}
-                      placeholder="例: 12"
-                      className="max-w-32"
-                    />
-                    <span className="text-slate-500">分</span>
-                  </div>
+                  <Dial
+                    id="rg-next-decay"
+                    value={nextDecayMin}
+                    fallback={DECAY_INTERVAL_MIN}
+                    max={DECAY_INTERVAL_MIN}
+                    unit="分"
+                    valueText={
+                      nextDecayMin == null
+                        ? `未設定（${DECAY_INTERVAL_MIN}分で計算）`
+                        : `${nextDecayMin}分`
+                    }
+                    onChange={(v) => setNextDecay(String(v))}
+                  />
                 </Field>
               </div>
 
@@ -258,7 +262,7 @@ export function GaugeInputsPanel({
                   </li>
                   <li>
                     <b>次の回復まで</b>:
-                    ゲーム内のゲージ画面に出ている残り時間。空欄なら「たった今プレイを止めた」＝30分として計算します。
+                    ゲーム内のゲージ画面に出ている残り時間。回さなければ「たった今プレイを止めた」＝30分として計算します。
                   </li>
                 </>
               )}
