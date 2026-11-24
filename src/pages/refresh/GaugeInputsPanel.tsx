@@ -126,11 +126,14 @@ export function GaugeInputsPanel({
 
           {showGauge && (
             <div className="space-y-2">
-              <div className="grid gap-4 sm:grid-cols-2">
+              {/* ★ 横に並べる（2026-11-25 持ち主）。390px（枠の中 326px）でも 1 行に収まる。現在のゲージは残りの幅（最小 144px）、
+                  ピッカーの段は縮めない。それより狭い幅（約 344px 未満）だけ折り返して縦になる */}
+              <div className="flex flex-wrap items-start gap-4">
                 <Field
                   label="現在のゲージ"
                   htmlFor="rg-gauge"
                   hint="いまの表示%（0〜100）"
+                  className="min-w-36 flex-1 sm:max-w-xs"
                 >
                   <div className="flex items-center gap-2">
                     <NeuInput
@@ -153,6 +156,7 @@ export function GaugeInputsPanel({
                   label="次の回復まで"
                   htmlFor="rg-next-decay"
                   hint="ゲージ画面の残り時間"
+                  className="shrink-0"
                 >
                   <WheelPicker
                     id="rg-next-decay"
