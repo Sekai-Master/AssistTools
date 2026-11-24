@@ -34,6 +34,23 @@ function cardDataGeneratedAt(): string {
 }
 
 /**
+ * イベントバッジの除数（public/CardDatas/badgeConfig.json の eventItemReduction）。
+ *
+ * 毎回の自動更新（scripts/refresh-card-data.mjs）がマスタの configs.json から写す。
+ * ここは読めた値を**検証せずに**渡すだけで、数かどうかの判定と既定値（10）への落とし方は
+ * src/pages/analyzer/lib/eventBadges.ts の parseEventItemReduction が持つ（試験できる側に置く）。
+ * ファイルが無い・壊れているときは null を渡す（ビルドは止めない）。
+ */
+function eventItemReductionRaw(): unknown {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(root, 'public/CardDatas/badgeConfig.json'), 'utf8'))
+    return raw?.eventItemReduction ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
  * /api/border は本番では Pages Functions（functions/api/border）が返す。
  * 手元の vite にはそれが無いので、本番の同じパスへ中継して画面を確かめられるようにする。
  */
@@ -71,6 +88,7 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(appVersion()),
     __CARD_DATA_GENERATED_AT__: JSON.stringify(cardDataGeneratedAt()),
+    __EVENT_ITEM_REDUCTION__: JSON.stringify(eventItemReductionRaw()),
   },
   test: {
     /*

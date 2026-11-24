@@ -49,7 +49,7 @@ npm run data:refresh
 カード・イベントとマイセカイの家具は別コマンド:
 
 ```bash
-npm run data:refresh-cards    # public/CardDatas/（カード・イベント・サムネイル・立ち絵）
+npm run data:refresh-cards    # public/CardDatas/（カード・イベント・サムネイル・立ち絵・イベントバッジの除数）
 npm run data:refresh-mysekai  # public/MysekaiDatas/（家具とキャラの反応）
 ```
 

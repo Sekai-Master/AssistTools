@@ -65,7 +65,7 @@ export function MySekaiStep({ result }: { result: CalculationResultV6 }) {
         <span className="font-bold" style={{ color: "var(--unit-color)" }}>
           {a.totalPt.toLocaleString()}
         </span>{" "}
-        Pt（単価 {result.unitBasePt} Pt/個） ・ {formatBadges(badgesForMySekai(a.totalPt))}
+        Pt（単価 {result.unitBasePt} Pt/個） ・ {formatBadges(badgesForMySekai(a, result.unitBasePt))}
       </p>
       {/* R5: Step2が着地不能にならないよう動的に確保した額（dynamicReserve）。 */}
       {a.appliedReserve !== undefined && (

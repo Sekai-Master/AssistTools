@@ -67,6 +67,8 @@ export interface AdjustCanvasMySekai {
   countB: number;
   countC: number;
   totalPt: number;
+  /** メモリ1つあたりのPt（result.unitBasePt）。バッジは採取1回ごとに数えるので要る。 */
+  unitBasePt: number;
 }
 
 /**
@@ -135,7 +137,7 @@ function mySekaiRow(m: AdjustCanvasMySekai): PlanCanvasRow | undefined {
     label: "マイセカイ採取",
     sub: `木石 ${m.countA}・キラキラ ${m.countB}・草花 ${m.countC}`,
     percent: `+${m.totalPt.toLocaleString()} Pt`,
-    percentSub: formatBadges(badgesForMySekai(m.totalPt)),
+    percentSub: formatBadges(badgesForMySekai(m, m.unitBasePt)),
     warn: false,
   };
 }
@@ -269,7 +271,7 @@ export function adjustPlanContributions(
       : (step2.plan?.liveBonus ?? step2.current?.lb ?? 0)
     : 0;
   const finalPt = finalRun?.pt ?? 0;
-  const mySekaiBadges = badgesForMySekai(mySekaiPt);
+  const mySekaiBadges = mySekai && mySekaiPt > 0 ? badgesForMySekai(mySekai, mySekai.unitBasePt) : 0;
   const finalBadges = badgesForPlay(finalPt);
   const finalLb = finalRun
     ? finalRun.kind === "earn"

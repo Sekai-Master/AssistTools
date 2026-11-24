@@ -14,11 +14,20 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
 import sharp from "sharp";
+import { pickEventItemReduction } from "./lib/badgeConfig.mjs";
 import { auditLeaks, derive } from "./lib/deriveCardData.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = path.join(__dirname, "../public/CardDatas");
 const BASE = "https://raw.githubusercontent.com/Sekai-World/sekai-master-db-diff/main";
+
+/**
+ * イベントバッジの除数（configs.json の event_item_reduction）を写す先。
+ * アナライザーがビルド時に読む（vite.config.ts の define → eventBadges.ts）。
+ *
+ * ★ 生成時刻を入れない。値が変わった回だけ差分が出るようにする。
+ */
+const BADGE_CONFIG_FILE = path.join(OUT_DIR, "badgeConfig.json");
 
 /**
  * カードのサムネイル。**ジャケット画像（refresh-music-data.js）と同じ方針**で、
@@ -228,6 +237,43 @@ async function syncThumbnails(cards) {
   if (failures.length) console.warn("  取得できなかったもの:", failures.join(", "));
 }
 
+/** 前回書いた除数。無い・読めなければ null。 */
+function previousReduction() {
+  try {
+    return JSON.parse(fs.readFileSync(BADGE_CONFIG_FILE, "utf8"))?.eventItemReduction ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * イベントバッジの除数を写す。
+ *
+ * ★ 取れない・壊れた値（1以上の整数でない）の回は**書き換えずに警告だけ出す**（最後に取れた値が残る）。
+ *   カード・イベントの更新は止めない（除数はアナライザーの補助表示で、こちらの都合で巻き込まない）。
+ */
+async function refreshBadgeConfig() {
+  let reduction = null;
+  try {
+    reduction = pickEventItemReduction(await fetchJson("configs.json"));
+  } catch (err) {
+    console.warn(`::warning::configs.json を取れなかった（${err.message}）`);
+  }
+  const before = previousReduction();
+  if (reduction === null) {
+    console.warn(
+      `::warning::event_item_reduction を取れなかったので badgeConfig.json を書き換えない（前回の値 ${before ?? "なし"} のまま）`
+    );
+    return;
+  }
+  fs.writeFileSync(BADGE_CONFIG_FILE, `${JSON.stringify({ eventItemReduction: reduction })}\n`);
+  console.log(
+    before === reduction
+      ? `イベントバッジの除数: ${reduction}（変化なし）`
+      : `イベントバッジの除数: ${before ?? "なし"} → ${reduction}`
+  );
+}
+
 async function main() {
   // ★ 取得中に日付をまたいでも判定が揺れないよう、時刻は最初に1回だけ固定する。
   const now = Date.now();
@@ -311,6 +357,7 @@ async function main() {
       `  ${name.padEnd(14)} ${kb(json.length).padStart(8)}  (brotli ${kb(zlib.brotliCompressSync(json).length)})`
     );
   }
+  await refreshBadgeConfig();
   // ★ 画像は JSON を書き出したあと（＝未公開データの検算を通したあと）に取りに行く。
   //   out.cards が起点なので、未公開カードのアセットは要求しない。
   await syncThumbnails(out.cards);
