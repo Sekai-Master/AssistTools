@@ -1,8 +1,10 @@
 import { useEffect, useRef } from "react";
 import { cn } from "../../lib/utils";
 
-/** 1 段の高さ（px）。h-10 と同じ。見える段は 3 段なので、ドラムの高さは 3 倍の 120px（h-30）。 */
-const ROW = 40;
+/** 1 段の高さ（px）。押せる高さの 44px（h-11）。見える段は 3 段なので、ドラムの高さは 3 倍の 132px（h-33）。 */
+export const WHEEL_ROW = 44;
+/** 回し終わり（最後のスクロールから）の待ち時間。この後にそろえる・指を離したことにする。 */
+const SETTLE_MS = 150;
 
 /**
  * ドラム式（ホイール）のピッカー。min〜max の整数が縦に並び、上下に回すと真ん中の段にスナップして選ばれる。
@@ -12,7 +14,7 @@ const ROW = 40;
  *   そのまま効く（Switch がネイティブの checkbox を土台にしているのと同じ作り）
  * - 見えるドラムは指・マウスで回す。指はブラウザのスクロールとスナップ（CSS の scroll-snap、慣性もブラウザ）、
  *   マウスホイールは 1 目盛り 1 段、クリックした段も選べる。端の先へのホイールはページのスクロールに渡す
- * - value が null（未設定）のときは fallback の段を出す
+ * - value が null（未設定）のときは fallback の段を出す。その段をクリックすると値が入る
  */
 export function WheelPicker({
   id,
@@ -43,14 +45,20 @@ export function WheelPicker({
   const shown = clamp(value ?? fallback);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  /** なめらかに回している途中の行き先。着くまでの途中の段では値を変えない（指が触れたら捨てる）。 */
+  /** なめらかに回している途中の行き先（段の番号）。着くまでの途中の段では値を変えない。 */
   const target = useRef<number | null>(null);
+  /**
+   * 指で回している途中か（触れてから、回し終わりの待ちが済むまで）。この間は値からドラムを動かさない。
+   * ★ 慣性で回っている最中に、値の更新から scrollTo で引き戻すと、慣性を奪って行き来する（iOS Safari。検分 #286 M）
+   */
+  const fingering = useRef(false);
+  /** スクロールから入れた値。この値への更新では、ドラムを動かさない（もう動いている）。 */
+  const fromScroll = useRef<number | null>(null);
   const mounted = useRef(false);
-  /** 回し終わり（スクロールが止まって少し経った）にスナップの途中で止まっていたら、近い段へそろえる。 */
-  const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
-      if (settle.current) clearTimeout(settle.current);
+      if (settleTimer.current) clearTimeout(settleTimer.current);
     },
     [],
   );
@@ -60,14 +68,21 @@ export function WheelPicker({
     latest.current = { shown, onChange };
   });
 
-  // 値 → ドラムの位置（キーボード・クリック・保存の呼び出し）。指で回したときは同じ段にいるので動かさない
+  const indexOf = (el: HTMLElement) => Math.max(0, Math.min(max - min, Math.round(el.scrollTop / WHEEL_ROW)));
+
+  // 値 → ドラムの位置（キーボード・クリック・ホイール・保存の呼び出し）
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
-    const top = (shown - min) * ROW;
     const first = !mounted.current;
     mounted.current = true;
-    if (Math.round(el.scrollTop / ROW) === shown - min) return;
+    if (fromScroll.current === shown) {
+      fromScroll.current = null;
+      return;
+    }
+    fromScroll.current = null;
+    if (fingering.current || Math.round(el.scrollTop / WHEEL_ROW) === shown - min) return;
+    const top = (shown - min) * WHEEL_ROW;
     const reduce =
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -78,6 +93,34 @@ export function WheelPicker({
     target.current = shown - min;
     el.scrollTo({ top, behavior: "smooth" });
   }, [shown, min]);
+
+  /**
+   * 回し終わり（最後のスクロールから SETTLE_MS 経った）。
+   * - なめらかに回している途中で止まっていたら（行き先 target が残っていたら）、値の段へ置き直して行き先を捨てる（検分 #286 M）
+   * - 指で回したあと段の途中で止まっていたら、近い段へそろえる（ヘッドレスの Chromium で 13.1 段で止まるのを見た）
+   * - 指で回している印を下ろす
+   */
+  const scheduleSettle = () => {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(() => {
+      settleTimer.current = null;
+      fingering.current = false;
+      const el = scrollerRef.current;
+      if (!el) return;
+      if (target.current != null) {
+        el.scrollTop = target.current * WHEEL_ROW;
+        target.current = null;
+        return;
+      }
+      const i = indexOf(el);
+      if (Math.abs(el.scrollTop - i * WHEEL_ROW) > 1) el.scrollTop = i * WHEEL_ROW;
+      const { shown: cur, onChange: change } = latest.current;
+      if (i + min !== cur) {
+        fromScroll.current = i + min;
+        change(i + min);
+      }
+    }, SETTLE_MS);
+  };
 
   useEffect(() => {
     const el = scrollerRef.current;
@@ -90,15 +133,16 @@ export function WheelPicker({
       if (dir === 0 || (dir < 0 && cur <= min) || (dir > 0 && cur >= max)) return;
       e.preventDefault();
       target.current = null;
+      fingering.current = false;
       // マウスの 1 目盛り（行単位か大きな量）は 1 段。トラックパッドの細かい量は 1 段の高さぶんたまったら 1 段
-      if (e.deltaMode !== 0 || Math.abs(e.deltaY) >= ROW) {
+      if (e.deltaMode !== 0 || Math.abs(e.deltaY) >= WHEEL_ROW) {
         acc = 0;
         change(Math.max(min, Math.min(max, cur + dir)));
         return;
       }
       acc += e.deltaY;
-      if (Math.abs(acc) < ROW) return;
-      acc -= Math.sign(acc) * ROW;
+      if (Math.abs(acc) < WHEEL_ROW) return;
+      acc -= Math.sign(acc) * WHEEL_ROW;
       change(Math.max(min, Math.min(max, cur + dir)));
     };
     el.addEventListener("wheel", onWheel, { passive: false });
@@ -108,24 +152,25 @@ export function WheelPicker({
   const onScroll = () => {
     const el = scrollerRef.current;
     if (!el) return;
-    const at = Math.max(0, Math.min(max - min, Math.round(el.scrollTop / ROW)));
-    // ★ ブラウザによっては指を離した後のスナップが段の途中で止まる（ヘッドレスの Chromium で 525px = 13.1 段を見た）
-    if (settle.current) clearTimeout(settle.current);
-    settle.current = setTimeout(() => {
-      const box = scrollerRef.current;
-      if (!box) return;
-      const i = Math.max(0, Math.min(max - min, Math.round(box.scrollTop / ROW)));
-      if (Math.abs(box.scrollTop - i * ROW) > 1) box.scrollTop = i * ROW;
-    }, 150);
+    scheduleSettle();
+    const at = indexOf(el);
     if (target.current != null) {
       if (at === target.current) target.current = null;
       return;
     }
-    if (at + min !== shown) onChange(at + min);
+    if (at + min !== shown) {
+      fromScroll.current = at + min;
+      onChange(at + min);
+    }
   };
 
-  // 指・マウスで触れたら、なめらかに回している途中でも指を優先する。キーボードの操作は range へ
-  const takeOver = () => {
+  // 指で触れたら、なめらかに回している途中でも指を優先する。キーボードの操作は range へ
+  const onTouchStart = () => {
+    target.current = null;
+    fingering.current = true;
+    inputRef.current?.focus({ preventScroll: true });
+  };
+  const onPointerDown = () => {
     target.current = null;
     inputRef.current?.focus({ preventScroll: true });
   };
@@ -149,17 +194,19 @@ export function WheelPicker({
       />
       <div
         aria-hidden
-        className="relative h-30 w-16 overflow-hidden rounded-lg bg-neu shadow-neu-inset peer-focus-visible:ring-2 peer-focus-visible:ring-[color:var(--unit-color)]"
+        className="relative h-33 w-16 overflow-hidden rounded-lg bg-neu shadow-neu-inset peer-focus-visible:ring-2 peer-focus-visible:ring-[color:var(--unit-color)]"
       >
         {/* 真ん中の段の帯 */}
-        <div className="pointer-events-none absolute inset-x-1 top-10 h-10 rounded-md bg-[color:var(--neu-hi)]" />
+        <div className="pointer-events-none absolute inset-x-1 top-11 h-11 rounded-md bg-[color:var(--neu-hi)]" />
         <div
           ref={scrollerRef}
           tabIndex={-1}
           onScroll={onScroll}
-          onPointerDown={takeOver}
-          onTouchStart={takeOver}
-          className="relative h-full snap-y snap-mandatory overflow-y-auto py-10 select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          onPointerDown={onPointerDown}
+          onTouchStart={onTouchStart}
+          // 触れただけで回さなかったときも、指の印を下ろす
+          onTouchEnd={scheduleSettle}
+          className="relative h-full snap-y snap-mandatory overflow-y-auto py-11 select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {values.map((v) => (
             <div
@@ -168,10 +215,12 @@ export function WheelPicker({
               data-selected={v === shown}
               onClick={() => {
                 target.current = null;
-                if (v !== shown) onChange(v);
+                fingering.current = false;
+                // 未設定のときは、出している段（fallback）を押しても値を入れる（回した状態にする）
+                if (v !== shown || value == null) onChange(v);
               }}
               className={cn(
-                "flex h-10 cursor-pointer snap-center items-center justify-center font-num text-base tabular-nums",
+                "flex h-11 cursor-pointer snap-center items-center justify-center font-num text-base tabular-nums",
                 v === shown ? "font-bold text-slate-800" : "text-slate-400",
               )}
             >

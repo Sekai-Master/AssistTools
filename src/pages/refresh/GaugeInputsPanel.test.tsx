@@ -10,6 +10,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { GaugeInputsPanel } from "./GaugeInputsPanel";
+import { WHEEL_ROW } from "../../components/ui/WheelPicker";
 import { useGaugeInputs } from "./useGaugeInputs";
 import { OVERHEAD_SEC } from "../../lib/overhead";
 import { SOLO_DEFAULT_RATE } from "./lib/liveAssumption";
@@ -48,21 +49,22 @@ describe("補足文は 1 行（30 字）まで", () => {
 });
 
 // ★ 検分 #244 低-1: 短くしたときに「どこで読む値か」が落ちていた。読む場所（ゲーム内のゲージ画面）は補足に残す
-it("「次の回復まで」の補足は、値をどこで読むか（ゲージ画面）と回さないときの扱いを言う", () => {
+// ★ 2026-11-25: 回さないときの扱い（30分で計算）は、ピッカーに最初から 30 が出ているので書かない（持ち主）
+it("「次の回復まで」の補足は、値をどこで読むか（ゲージ画面）だけ", () => {
   render(<Harness />);
   const hint = hintOf("次の回復まで");
   expect(hint).toContain("ゲージ画面");
-  expect(hint).toContain("回さなければ30分");
+  expect(hint).toBe("ゲージ画面の残り時間");
 });
 
 /**
  * 「次の回復まで」のドラム式のピッカー（2026-11-25、持ち主「円のダイヤルは場所を取りすぎ・デザイン的に浮いている」）。
- * 0〜30 の数字が縦に並び、上下に回すと真ん中の段にスナップして選ばれる。見える段は 3 段（1 段 40px・高さ 120px）。
+ * 0〜30 の数字が縦に並び、上下に回すと真ん中の段にスナップして選ばれる。見える段は 3 段（1 段 44px・高さ 132px）。
  * ★ キーボードと読み上げは、見えないネイティブの range が受ける（矢印・PageUp/PageDown・Home/End、読み上げ「12分」）。
  *   見えるドラムは指・マウスホイール・クリックで回す。値の持ち方（空＝30分で計算）と計算は前のまま
  */
 describe("「次の回復まで」のピッカー", () => {
-  const ROW = 40;
+  const ROW = WHEEL_ROW;
   const slider = () => screen.getByRole("slider", { name: "次の回復まで" }) as HTMLInputElement;
   const rows = () => [...slider().parentElement!.querySelectorAll<HTMLElement>("[data-value]")];
   const row = (v: number) => rows().find((r) => r.dataset.value === String(v))!;
@@ -97,6 +99,28 @@ describe("「次の回復まで」のピッカー", () => {
     expect(selected()).toEqual(["12"]);
     expect(scroller().scrollTop).toBe(12 * ROW);
     expect(empty()).toBe("2時間42分");
+  });
+
+  it("1 段は押せる高さの 44px（見える 3 段で 132px）", () => {
+    render(<Harness />);
+    expect(WHEEL_ROW).toBe(44);
+    expect(row(12).className).toContain("h-11");
+    expect(scroller().parentElement!.className).toContain("h-33");
+  });
+
+  it("回していないとき、出している 30 の段を押すと 30 が入る（回した状態になる）", () => {
+    const set = vi.fn();
+    function Spy() {
+      const inputs = useGaugeInputs([]);
+      const setNextDecay: typeof inputs.setNextDecay = (v) => {
+        set(v);
+        inputs.setNextDecay(v);
+      };
+      return <GaugeInputsPanel inputs={{ ...inputs, setNextDecay }} musics={[]} aliases={[]} loading={false} />;
+    }
+    render(<Spy />);
+    fireEvent.click(row(30));
+    expect(set).toHaveBeenCalledWith("30");
   });
 
   it("端: 0 と 30 を選べる", () => {

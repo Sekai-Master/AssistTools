@@ -152,7 +152,7 @@ export function GaugeInputsPanel({
                 <Field
                   label="次の回復まで"
                   htmlFor="rg-next-decay"
-                  hint="ゲージ画面の残り時間。回さなければ30分で計算"
+                  hint="ゲージ画面の残り時間"
                 >
                   <WheelPicker
                     id="rg-next-decay"
