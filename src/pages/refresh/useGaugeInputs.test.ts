@@ -4,8 +4,8 @@
  * ゲージ系の共通の入力（useGaugeInputs）の「ライブの想定」（2026-11-18、みんなでライブの停止期間）。
  *
  * ★ この hook はリフレッシュゲージ・周回プラン・必要稼働時間の 3 ページで共有している。
- *   想定を選べるのは**リフレッシュゲージだけ**（liveChoice を渡したときだけ）。渡さないページ
- *   （周回プランは inputs.rate を保存する・必要稼働時間は担当外）は、足す前と 1 つも変わらないこと。
+ *   想定を選べるのは**リフレッシュゲージと周回プラン**（liveChoice を渡したときだけ。周回プランは 2026-11-24 から）。
+ *   渡さないページ（必要稼働時間は担当外）は、足す前と 1 つも変わらないこと。
  * ★ 印は vi.mock で「止まっている」に固定する（検分 L-7。前は途中で return して、印を戻すと黙って飛んでいた）。
  *   再開した側は RefreshGaugeCalculator.resumed.test.tsx が縛る。
  */
@@ -20,7 +20,7 @@ import { SOLO_DEFAULT_RATE } from "./lib/liveAssumption";
 
 const ENVY_LEN = 74.8;
 
-describe("想定を選ばないページ（周回プラン・必要稼働時間）は足す前と同じ", () => {
+describe("想定を選ばないページ（必要稼働時間）は足す前と同じ", () => {
   it("ペース 28・ロスは 28 回/時からの逆算・みんなでライブ", () => {
     const { result } = renderHook(() => useGaugeInputs([]));
     expect(result.current.rate).toBe("28");
@@ -81,5 +81,14 @@ describe("リフレッシュゲージ（liveChoice）", () => {
     expect(result.current.overhead).toBe(overheadFromRate(custom, ENVY_LEN));
     act(() => result.current.setLive("multi"));
     expect(result.current.rate).toBe("25");
+  });
+
+  it("setRateFor は、いまの想定と違う欄にもペースを入れられる（周回プランの呼び出し）", () => {
+    const { result } = draw();
+    act(() => result.current.setRateFor("multi", "30"));
+    expect(result.current.live).toBe("solo");
+    expect(result.current.rate).toBe(String(SOLO_DEFAULT_RATE));
+    act(() => result.current.setLive("multi"));
+    expect(result.current.rate).toBe("30");
   });
 });

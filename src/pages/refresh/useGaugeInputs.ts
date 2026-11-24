@@ -23,9 +23,10 @@ export { DEFAULT_RATE, ENVY_LEN } from "./lib/liveAssumption";
 
 export interface GaugeInputsOptions {
   /**
-   * ライブの想定（ひとりでライブ／みんなでライブ）を選べるようにする。**リフレッシュゲージだけが渡す。**
-   * ★ 渡さないページ（周回プラン・必要稼働時間）は、足す前と同じくみんなでライブのペース 28 回/時で固定。
-   *   周回プランは inputs.rate を名前付きで保存しているので、意味を変えると保存したプランの読み込みが狂う。
+   * ライブの想定（ひとりでライブ／みんなでライブ）を選べるようにする。リフレッシュゲージと周回プランが渡す。
+   * ★ 渡さないページ（必要稼働時間）は、足す前と同じくみんなでライブのペース 28 回/時で固定。
+   * ★ 周回プランは inputs.rate を名前付きで保存している。想定も一緒に保存し、想定の無い旧いプランは
+   *   みんなでライブとして呼び出す（旧いプランの周回ペースはみんなでライブの欄の値。PlanPage の loadPlan）。
    */
   liveChoice?: boolean;
 }
@@ -61,6 +62,9 @@ export function useGaugeInputs(musics: AnalyzerMusic[], options: GaugeInputsOpti
   const [soloRate, setSoloRate] = useState(String(SOLO_DEFAULT_RATE));
   const rate = live === "solo" ? soloRate : multiRate;
   const setRate = live === "solo" ? setSoloRate : setMultiRate;
+  /** 想定を指定して周回ペースを入れる（保存したプランの呼び出し用。setRate はいまの想定の欄に入れる）。 */
+  const setRateFor = (target: LiveAssumption, value: string) =>
+    (target === "solo" ? setSoloRate : setMultiRate)(value);
   const [calibPlays, setCalibPlays] = useState("");
   const [calibMin, setCalibMin] = useState("");
 
@@ -107,7 +111,8 @@ export function useGaugeInputs(musics: AnalyzerMusic[], options: GaugeInputsOpti
     setGauge,
     rate,
     setRate,
-    /** 想定を選べるページか（リフレッシュゲージだけ true）。 */
+    setRateFor,
+    /** 想定を選べるページか（リフレッシュゲージ・周回プランで true）。 */
     liveChoice,
     /** いまの想定。選べないページはいつも "multi"。 */
     live,

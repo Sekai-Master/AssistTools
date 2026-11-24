@@ -4,7 +4,8 @@ import { Panel } from "../../components/ui/Panel";
 import { useAnalyzerMusics } from "../analyzer/useAnalyzerMusics";
 import { liveGaugePercent } from "./lib/gaugeModel";
 import { planSession, playsPerHour } from "./lib/sessionPlanner";
-import { LIVE_ASSUMPTION_LABEL, assumptionTag } from "./lib/liveAssumption";
+import { LIVE_ASSUMPTION_LABEL } from "./lib/liveAssumption";
+import { AssumptionTag } from "./AssumptionTag";
 import type { Segment } from "./lib/timeline";
 import { fmtDuration, nearestRoundTime } from "./lib/format";
 import { Stat } from "./Stat";
@@ -20,7 +21,7 @@ import { ResultBar } from "../../components/ui/ResultBar";
  */
 export default function RefreshGaugeCalculator() {
   const { musics, aliases, loading, error: dataError } = useAnalyzerMusics();
-  // ★ ライブの想定を選べるのはこのページだけ（周回プラン・必要稼働時間は渡さない＝みんなでライブ固定のまま）
+  // ★ ライブの想定を選べるのはこのページと周回プラン（必要稼働時間は渡さない＝みんなでライブ固定のまま）
   const inputs = useGaugeInputs(musics, { liveChoice: true });
   const {
     selectedSong,
@@ -103,9 +104,7 @@ export default function RefreshGaugeCalculator() {
           <Panel>
             <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1">
               <h2 className="text-base font-bold text-slate-700">この曲で走ると</h2>
-              <span className="rounded border border-slate-300 px-1.5 py-0.5 text-xs font-bold text-slate-600">
-                {assumptionTag(live)}
-              </span>
+              <AssumptionTag live={live} />
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <Stat
