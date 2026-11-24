@@ -50,11 +50,11 @@ describe("主な入力と「詳しく計算する」", () => {
     }
   });
 
-  it("任意の入力（基準焚き数・総合力・ボーナス・ワールドパス・オート・プランの保存）は 1 つの閉じた段に入る", () => {
+  it("任意の入力（基準焚き数・総合力・ボーナス・ブースト中の採取・オート・プランの保存）は 1 つの閉じた段に入る", () => {
     draw();
     expect(more().open).toBe(false);
     expect(document.querySelectorAll("details > summary").length).toBeGreaterThan(0);
-    for (const label of ["総合力", "イベントボーナス (%)", "ワールドパス 有効", "カラフルパス", "プラン名"]) {
+    for (const label of ["総合力", "イベントボーナス (%)", "スタミナのブースト中に採る（5倍）", "カラフルパス", "プラン名"]) {
       expect(more().contains(screen.getByLabelText(label))).toBe(true);
     }
     expect(more().textContent).toContain("基準焚き数");
@@ -73,7 +73,7 @@ describe("見出しの変更数", () => {
     expect(summaryText()).not.toContain("変更中");
     await userEvent.type(screen.getByLabelText("総合力"), "336000");
     expect(summaryText()).toContain("1 項目を変更中");
-    await userEvent.click(screen.getByLabelText("ワールドパス 有効"));
+    await userEvent.click(screen.getByLabelText("スタミナのブースト中に採る（5倍）"));
     expect(summaryText()).toContain("2 項目を変更中");
   });
 });

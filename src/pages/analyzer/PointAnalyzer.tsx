@@ -340,9 +340,13 @@ export default function PointAnalyzer() {
             />
           </Field>
           <Switch checked={useMySekai} onChange={setUseMySekai} label="マイセカイを利用する" />
-          {/* R5: ワールドパスはマイセカイ利用時のみ意味を持つので、ON時だけ表示する。 */}
+          {/* R5: ブースト中の採取（5倍）はマイセカイ利用時のみ意味を持つので、ON時だけ表示する。変数名 hasWorldPass は保存済みの値との互換のため据え置き。 */}
           {useMySekai && (
-            <Switch checked={hasWorldPass} onChange={setHasWorldPass} label="ワールドパス 有効" />
+            <Switch
+              checked={hasWorldPass}
+              onChange={setHasWorldPass}
+              label="スタミナのブースト中に採る（5倍）"
+            />
           )}
           {useMySekai && (
             <div className="text-sm text-slate-500">
@@ -358,7 +362,6 @@ export default function PointAnalyzer() {
               <p className="mt-1 text-xs text-amber-700">
                 マイセカイの単価は未確定要素があります。通常スタミナ（水色）とブーストスタミナ（オレンジ）で
                 獲得ポイントが変わるという情報があり、現在の計算はこれを区別していません。
-                ワールドパスの5倍も出典未確認です。参考値として扱ってください。
               </p>
             </div>
           )}

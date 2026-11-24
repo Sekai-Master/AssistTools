@@ -56,7 +56,7 @@ describe("mySekaiPoints — 採取の点数", () => {
    * 総合力33.6万・ボーナス821%・ブースト（×500）で 単価7,500・全回収671,000pt。
    * ここがズレたら、マイセカイの点数はどこかで壊れている。
    */
-  it("実測アンカー: 総合力33.6万・821%・ワールドパスで 7,500pt/メモリ", () => {
+  it("実測アンカー: 総合力33.6万・821%・ブースト中の採取で 7,500pt/メモリ", () => {
     const unit = calculateUnitBasePt(336_000, 821, true);
     expect(unit).toBe(7_500);
     expect(mySekaiPoints(MYSEKAI_FULL_HARVEST_MEMORI, unit)).toBeCloseTo(671_000, -3);
