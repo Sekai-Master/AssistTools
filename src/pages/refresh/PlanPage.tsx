@@ -315,11 +315,11 @@ export default function PlanPage() {
                 placeholder="例: 821"
               />
             </Field>
-            <Field label="ワールドパス">
+            <Field label="マイセカイの採取">
               <Switch
                 checked={hasWorldPass}
                 onChange={setHasWorldPass}
-                label="ワールドパス 有効"
+                label="スタミナのブースト中に採る（5倍）"
               />
             </Field>
           </div>

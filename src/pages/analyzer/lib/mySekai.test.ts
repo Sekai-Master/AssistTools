@@ -10,7 +10,7 @@ describe("calculateUnitBasePt", () => {
     expect(calculateUnitBasePt(313_460, 416, false)).toBe(800);
   });
 
-  it("ワールドパスで単価が5倍になる", () => {
+  it("ブースト中の採取で単価が5倍になる", () => {
     const base = calculateUnitBasePt(297_159, 615, false);
     expect(calculateUnitBasePt(297_159, 615, true)).toBe(base * 5);
   });

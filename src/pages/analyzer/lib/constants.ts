@@ -78,7 +78,6 @@ export const MAX_SEARCH_BONUS_10X = 10000;
 /** マイセカイ単価の総合力係数の除数。 */
 export const TALENT_COEF_DIVISOR = 450000;
 
-/** マイセカイ単価の倍率。ワールドパス所持で5倍になる。 */
 /**
  * 協力ライブのイベントPt係数で、他4人の合計スコア由来の項に掛かる上限。
  *
@@ -90,6 +89,10 @@ export const TALENT_COEF_DIVISOR = 450000;
  */
 export const MULTI_OTHER_SCORE_CAP = 16;
 
+/**
+ * マイセカイ単価の倍率。通常は ×1（100）、スタミナのブースト中の採取は ×5（500）。
+ * 5倍は実機で確認済み（2026-11-24）。名前の WORLD_PASS は保存済みの値との互換のため据え置き。
+ */
 export const MYSEKAI_MULTIPLIER = 100;
 export const MYSEKAI_MULTIPLIER_WORLD_PASS = 500;
 

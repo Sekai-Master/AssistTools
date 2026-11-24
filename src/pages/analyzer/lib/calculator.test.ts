@@ -53,7 +53,7 @@ describe("calculatePlanV6 — ゴールデン（リファクタで動かして�
     expect(r.isVerified).toBe(true);
   });
 
-  it("ワールドパス無しでも同じ着地になる（配分だけ変わる）", () => {
+  it("ブーストなしでも同じ着地になる（配分だけ変わる）", () => {
     const r = calculatePlanV6(
       128_202_307,
       128_311_005,
