@@ -19,6 +19,10 @@ import { minutesToTarget } from "./lib/timeline";
 import { overheadForPace } from "./lib/liveAssumption";
 import { fmtDuration } from "./lib/format";
 
+// 逆算の期待値をみんなでライブ 28 回/時の式から出すので、想定はみんなでライブに固定する
+// （周回プランにも想定を選ぶ切り替えが入っても、止まっている間の既定のひとりでライブで期待値がずれないように）
+vi.mock("../../lib/liveSuspension", () => ({ MULTI_LIVE_SUSPENDED: false }));
+
 // 独りんぼエンヴィー（既定の曲。public/MusicDatas の値。定数は実測の 84）
 vi.mock("../analyzer/useAnalyzerMusics", () => ({
   useAnalyzerMusics: () => ({
@@ -67,7 +71,7 @@ const stat = (label: string) => screen.getByText(label, { selector: "div" }).par
 const rowGauge = (row: Element) => /ゲージ([\d.]+)%/.exec(row.textContent ?? "")?.[1];
 const add = (name: "＋稼働" | "＋休憩") => fireEvent.click(screen.getByRole("button", { name }));
 
-// 周回プランは想定を選ばない（みんなでライブ 28 回/時）。逆算の期待値も同じ式から出す
+// 周回プランはみんなでライブ 28 回/時（上の vi.mock）。逆算の期待値も同じ式から出す
 const OH = overheadForPace("multi", "28");
 const PER = 84 * 157;
 
