@@ -6,6 +6,8 @@
  * 2026-11-24 から、ブロックごとに「終わりのゲージ%」で指定することもできる（targetPercent）。
  * そのブロックの開始時点のゲージから目標まで上げるのに要る時間を逆算して、時間の代わりに使う
  * （イベントの終わりに100%ぎりぎりで終える組み方。前のブロックを動かしても目標で終わる）。
+ * 2026-11-25 から休憩も「終わりのゲージ%」で指定できる。ゲージは30分ごとに一段ずつ下がるので、
+ * 入れた%以下になる段まで休む時間を逆算する（restMinutesToTarget。ちょうどの%にはならない）。
  *
  * ## 減少（公式スライド準拠, 2026-03）
  * - 最終プレイから5分後に計測開始。その5分も計測に含まれる（＝実質「最終プレイから30分で初回減少」）。
@@ -64,6 +66,12 @@ export type Segment =
       kind: "rest";
       minutes: number;
       /**
+       * 休んだ後のゲージの目標（表示% 0〜100）。入っていると時間（minutes）の代わりに、
+       * ここ以下になる段まで休む時間を逆算して使う（restMinutesToTarget）。無ければ時間で決める。
+       * 2026-11-25 追加なので旧データには無い。
+       */
+      targetPercent?: number;
+      /**
        * この休憩でオートライブを回す。
        *
        * ★ **オートはゲージを増やさない種別**（公式文言。100%でもイベントPは入る）なので、
@@ -88,13 +96,44 @@ export function mysekaiMemoriOf(
 }
 
 /**
- * 稼働ブロックの目標ゲージ%（0〜100 に収める）。時間で決めるブロックは null。
+ * 稼働・休憩ブロックの目標ゲージ%（0〜100 に収める）。時間で決めるブロックは null。
  * ★ 保存プランは端末に残り続けるので、壊れた値（文字列・NaN）は時間で決める扱いに戻す。
  */
-export function playTargetOf(seg: Extract<Segment, { kind: "play" }>): number | null {
+export function targetPercentOf(
+  seg: Extract<Segment, { kind: "play" | "rest" }>
+): number | null {
   const t = seg.targetPercent;
   if (typeof t !== "number" || !Number.isFinite(t)) return null;
   return Math.max(0, Math.min(100, t));
+}
+
+/** 稼働ブロックの目標ゲージ%（targetPercentOf の稼働版。#279 からの名前）。 */
+export function playTargetOf(seg: Extract<Segment, { kind: "play" }>): number | null {
+  return targetPercentOf(seg);
+}
+
+/**
+ * 休憩で、開始のゲージ（内部値）が目標の表示%以下になるまでに要る分と、下がる段の数。
+ *
+ * 休憩中のゲージは、累計30分たまるごとに decayPer30min ずつ下がる（離散）。最初の段は前から繰り越した
+ * タイマーの残りで来る:
+ *   段の数 n = ⌈(開始の内部値 − 目標の内部値) ÷ decayPer30min⌉（目標が開始以上なら 0）
+ *   分 = n が 0 なら 0、そうでなければ (30 − 繰り越しの進捗) + (n − 1) × 30
+ * 段が下がった瞬間に休むのを止めるので、休んだ後のタイマーは 0 から。目標は 0〜100% に収める（0 なら 0% まで）。
+ */
+export function restMinutesToTarget(
+  startInternal: number,
+  targetPercent: number,
+  decayProgressMin: number,
+  spec: GaugeSpec = GAUGE_SPEC
+): { minutes: number; ticks: number } {
+  const need = startInternal - internalFromPercent(targetPercent, spec);
+  if (!(need > 0) || !(spec.decayPer30min > 0)) return { minutes: 0, ticks: 0 };
+  // ちょうど段の値（70% → 45% など）を浮動小数の端数で 1 段多く数えない
+  const ticks = Math.ceil(need / spec.decayPer30min - 1e-9);
+  if (ticks <= 0) return { minutes: 0, ticks: 0 };
+  const progress = Math.max(0, Math.min(DECAY_INTERVAL_MIN, decayProgressMin));
+  return { minutes: DECAY_INTERVAL_MIN - progress + (ticks - 1) * DECAY_INTERVAL_MIN, ticks };
 }
 
 /**
@@ -181,7 +220,7 @@ export function simulateTimeline(
     if (seg.kind === "play") {
       // プレイ中は減少タイマー停止（decayProgress は据え置き＝繰り越し）。
       const secPerPlay = playSeconds(seg.songLengthSec, overheadSec);
-      const target = playTargetOf(seg);
+      const target = targetPercentOf(seg);
       segMinutes =
         target == null
           ? seg.minutes
@@ -216,12 +255,24 @@ export function simulateTimeline(
       segMinutes = Math.max(0, seg.minutes);
       minute += segMinutes;
     } else {
-      // 休憩: 進捗を繰り越し加算し、30分ごとに減少。
-      segMinutes = Math.max(0, seg.minutes);
-      decayProgress += segMinutes;
-      while (decayProgress >= DECAY_INTERVAL_MIN) {
-        decayProgress -= DECAY_INTERVAL_MIN;
-        internal = Math.max(0, internal - spec.decayPer30min);
+      const target = targetPercentOf(seg);
+      if (target == null) {
+        // 休憩: 進捗を繰り越し加算し、30分ごとに減少。
+        segMinutes = Math.max(0, seg.minutes);
+        decayProgress += segMinutes;
+        while (decayProgress >= DECAY_INTERVAL_MIN) {
+          decayProgress -= DECAY_INTERVAL_MIN;
+          internal = Math.max(0, internal - spec.decayPer30min);
+        }
+      } else {
+        // ゲージで決める休憩: 目標以下になる段まで休み、段が下がった瞬間に止める（タイマーは 0 から）。
+        // 0 分（目標が今以上）のときは何もしない。進捗 30（次の回復まで 0 分）でも段を下げない。
+        const r = restMinutesToTarget(internal, target, decayProgress, spec);
+        segMinutes = r.minutes;
+        if (r.ticks > 0) {
+          internal = Math.max(0, internal - r.ticks * spec.decayPer30min);
+          decayProgress = 0;
+        }
       }
       minute += segMinutes;
     }

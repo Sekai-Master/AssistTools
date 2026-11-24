@@ -4,11 +4,14 @@
  * 稼働ブロックを「時間」と「ゲージ%」で切り替えて積む（2026-11-24、使い手の要望「切り替えながら積んでいけるといいね」）。
  * ★ 縛ること
  *   - ゲージ%で決めたブロックは、開始のゲージから入れた%まで上げる時間を逆算して入る（100% ならムダ 0 で終わる）
- *   - 切り替えでプランが動かない（時間→ゲージ はいまの終わりの%、ゲージ→時間 は逆算した分を引き継ぐ）
+ *   - 切り替えでは、時間→ゲージ はいまの終わりの%、ゲージ→時間 は逆算した分を引き継ぐ（稼働はプランが動かない。
+ *     休憩は段が下がった瞬間に終わる長さ＝進捗 0 なら 30 分の倍数のときだけ動かない）
  *   - 並べ替えても、ブロックごとの決め方と値は残る。前のブロックを変えると逆算し直す
  *   - 周回プランの保存・呼び出しで、決め方と「次の回復まで」（ダイヤル）の値が戻る
  *   - リフレッシュゲージ計算機でも同じ部品が出る
  *   - ひとりでライブ想定でも、その 1 周の秒で逆算する（想定を替えると逆算し直す）
+ *   - 休憩も「時間」と「ゲージ」で切り替えられる（2026-11-25、持ち主「45%まで回復したら、残り55%でイベント終了まで走る」）。
+ *     入れた%以下になる段まで休む時間と、休んだ後の%を出す。繰り越しの30分タイマーも効く
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
@@ -16,7 +19,7 @@ import { MemoryRouter } from "react-router-dom";
 import PlanPage from "./PlanPage";
 import RefreshGaugeCalculator from "./RefreshGaugeCalculator";
 import { resetProfilesForTest } from "../../lib/profiles";
-import { minutesToTarget } from "./lib/timeline";
+import { minutesToTarget, restMinutesToTarget } from "./lib/timeline";
 import { SOLO_DEFAULT_RATE, overheadForPace } from "./lib/liveAssumption";
 import { OVERHEAD_SEC } from "../../lib/overhead";
 import { fmtDuration } from "./lib/format";
@@ -60,6 +63,9 @@ const drawPlan = () =>
 /** 稼働ブロックの行（上から順）。 */
 const playRows = () =>
   screen.queryAllByRole("radiogroup", { name: "稼働の長さの決め方" }).map((g) => g.closest("li")!);
+/** 休憩ブロックの行（上から順）。 */
+const restRows = () =>
+  screen.queryAllByRole("radiogroup", { name: "休憩の長さの決め方" }).map((g) => g.closest("li")!);
 const modeOf = (row: Element) =>
   within(row as HTMLElement)
     .getAllByRole("radio")
@@ -285,5 +291,173 @@ describe("リフレッシュゲージ計算機", () => {
     const slider = screen.getByRole("slider", { name: "次の回復まで" }) as HTMLInputElement;
     expect(slider.min).toBe("0");
     expect(slider.max).toBe("30");
+  });
+});
+
+/**
+ * 休憩をゲージで決める（2026-11-25）。休憩中のゲージは30分ごとに一段（550,000 = 8.33%）下がるので、
+ * 入れた%以下になる段まで休む。ブロックには休む時間と、休んだ後の実際の%（「45%まで 2時間0分 → 43.4%」）を出す。
+ */
+describe("休憩をゲージで決める", () => {
+  const MAX = 6_600_000;
+  const D = 550_000;
+  const chooseLive = (name: "ひとりでライブ" | "みんなでライブ") =>
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "ライブの種類" })).getByRole("radio", { name }));
+  /** 現在 g% から、ロス oh で 1 時間稼働したあとの%。 */
+  const afterHour = (g: number, oh: number) => g + (((60 * 60) / (74.8 + oh)) * PER * 100) / MAX;
+
+  it("休憩を足した直後は時間で決める（前のまま）", () => {
+    drawPlan();
+    add("＋休憩");
+    expect(modeOf(restRows()[0])).toBe("時間");
+    expect((within(restRows()[0] as HTMLElement).getByLabelText("分") as HTMLInputElement).value).toBe("30");
+  });
+
+  it.each([
+    ["みんなでライブ", OH],
+    ["ひとりでライブ", overheadForPace("solo", String(SOLO_DEFAULT_RATE))],
+  ] as const)("例（%s）: 現在70% → 稼働1時間 → 休憩ゲージ45 → 稼働ゲージ100 で、終了100.0%・ムダ0分", (live, oh) => {
+    drawPlan();
+    chooseLive(live);
+    type(screen.getByLabelText("現在のゲージ"), "70");
+    add("＋稼働");
+    add("＋休憩");
+    add("＋稼働");
+    choose(restRows()[0], "ゲージ");
+    type(targetInput(restRows()[0]), "45");
+    choose(playRows()[1], "ゲージ");
+    type(targetInput(playRows()[1]), "100");
+
+    const g1 = afterHour(70, oh);
+    const rest = restMinutesToTarget((g1 / 100) * MAX, 45, 0);
+    const g2 = g1 - (rest.ticks * D * 100) / MAX;
+    const last = minutesToTarget((g2 / 100) * MAX, 100, 84, 74.8, oh);
+    expect(rest.ticks).toBe(Math.ceil(((g1 - 45) / 100) * (MAX / D)));
+    expect(rest.minutes).toBe(30 * rest.ticks);
+    expect(restRows()[0].textContent).toContain(`%まで${fmtDuration(rest.minutes)}→ ${g2.toFixed(1)}%`);
+    expect(Number(rowGauge(restRows()[0]))).toBeCloseTo(Number(g2.toFixed(1)), 9);
+    expect(playRows()[1].textContent).toContain(`%まで${fmtDuration(last)}`);
+    expect(stat("総時間")).toContain(fmtDuration(60 + rest.minutes + last));
+    expect(stat("終了ゲージ")).toContain("100.0%");
+    expect(stat("ムダ時間")).toBe("ムダ時間0分無駄なし");
+  });
+
+  it("前の稼働を延ばすと、休む時間を逆算し直す（休んだ後の%は 45 以下のまま）", () => {
+    drawPlan();
+    type(screen.getByLabelText("現在のゲージ"), "70");
+    add("＋稼働");
+    add("＋休憩");
+    choose(restRows()[0], "ゲージ");
+    type(targetInput(restRows()[0]), "45");
+    const before = restRows()[0].textContent;
+    for (let i = 0; i < 4; i++) {
+      fireEvent.click(within(playRows()[0] as HTMLElement).getByRole("button", { name: "30分増やす" }));
+    }
+    expect(restRows()[0].textContent).not.toBe(before);
+    expect(Number(rowGauge(restRows()[0]))).toBeLessThanOrEqual(45);
+  });
+
+  it("目標が今以上なら 0 分で、休んだ後の%は今のまま", () => {
+    drawPlan();
+    type(screen.getByLabelText("現在のゲージ"), "70");
+    add("＋休憩");
+    choose(restRows()[0], "ゲージ");
+    type(targetInput(restRows()[0]), "80");
+    expect(restRows()[0].textContent).toContain("%まで0分→ 70.0%");
+  });
+
+  it("「次の回復まで」10 分（タイマーが 20 分進んでいる）なら、1 段下までは 10 分", () => {
+    drawPlan();
+    type(screen.getByLabelText("現在のゲージ"), "60");
+    fireEvent.change(screen.getByRole("slider", { name: "次の回復まで" }), { target: { value: "10" } });
+    add("＋休憩");
+    choose(restRows()[0], "ゲージ");
+    type(targetInput(restRows()[0]), "55");
+    expect(restRows()[0].textContent).toContain(`%まで10分→ ${(60 - (D * 100) / MAX).toFixed(1)}%`);
+  });
+
+  it("30 分の倍数の休憩は、切り替えてもプランが動かない（時間→ゲージ は休んだ後の%を切り上げて引き継ぎ、ゲージ→時間 は逆算した分）", () => {
+    drawPlan();
+    type(screen.getByLabelText("現在のゲージ"), "70");
+    add("＋稼働");
+    add("＋休憩");
+    fireEvent.click(within(restRows()[0] as HTMLElement).getByRole("button", { name: "30分増やす" })); // 1時間
+    const endBefore = rowGauge(restRows()[0]);
+    choose(restRows()[0], "ゲージ");
+    expect(Number(targetInput(restRows()[0]).value)).toBeGreaterThanOrEqual(Number(endBefore));
+    expect(restRows()[0].textContent).toContain("%まで1時間0分");
+    expect(rowGauge(restRows()[0])).toBe(endBefore);
+    choose(restRows()[0], "時間");
+    const row = restRows()[0] as HTMLElement;
+    expect((within(row).getByLabelText("時間") as HTMLInputElement).value).toBe("1");
+    expect((within(row).getByLabelText("分") as HTMLInputElement).value).toBe("0");
+  });
+
+  // ★ 検分 #285 M: ゲージは30分ごとの段なので、30 分の倍数でない休憩は切り替えると縮む。この動きのまま固定する
+  it("30 分の倍数でない休憩（進捗 0 の 45 分）は、ゲージにすると段が下がった 30 分に縮み、タイマーの端数 15 分は落ちる", () => {
+    drawPlan();
+    type(screen.getByLabelText("現在のゲージ"), "70");
+    add("＋休憩");
+    fireEvent.change(within(restRows()[0] as HTMLElement).getByLabelText("分"), { target: { value: "45" } });
+    const step = (70 - (D * 100) / MAX).toFixed(1);
+    expect(rowGauge(restRows()[0])).toBe(step); // 45 分で 1 段
+    expect(restRows()[0].textContent).toContain("次の減少まであと15分（累計15/30分・繰り越し）");
+    choose(restRows()[0], "ゲージ");
+    expect(targetInput(restRows()[0]).value).toBe(step);
+    expect(restRows()[0].textContent).toContain(`%まで30分→ ${step}%`);
+    expect(restRows()[0].textContent).toContain("次の減少まであと30分（累計0/30分・繰り越し）");
+    choose(restRows()[0], "時間");
+    expect((within(restRows()[0] as HTMLElement).getByLabelText("分") as HTMLInputElement).value).toBe("30");
+  });
+
+  it("1 段も下がらない休憩（10 分）は、ゲージにすると 0 分になり、時間に戻しても 10 分は戻らない", () => {
+    drawPlan();
+    type(screen.getByLabelText("現在のゲージ"), "70");
+    add("＋休憩");
+    fireEvent.change(within(restRows()[0] as HTMLElement).getByLabelText("分"), { target: { value: "10" } });
+    expect(restRows()[0].textContent).toContain("次の減少まであと20分（累計10/30分・繰り越し）");
+    choose(restRows()[0], "ゲージ");
+    expect(targetInput(restRows()[0]).value).toBe("70");
+    expect(restRows()[0].textContent).toContain("%まで0分→ 70.0%");
+    choose(restRows()[0], "時間");
+    const row = restRows()[0] as HTMLElement;
+    expect((within(row).getByLabelText("時間") as HTMLInputElement).value).toBe("0");
+    expect((within(row).getByLabelText("分") as HTMLInputElement).value).toBe("0");
+  });
+
+  it("並べ替え・保存と呼び出しで、休憩の決め方と%が残る", () => {
+    drawPlan();
+    type(screen.getByLabelText("現在のゲージ"), "70");
+    add("＋休憩");
+    add("＋休憩");
+    choose(restRows()[1], "ゲージ");
+    type(targetInput(restRows()[1]), "45");
+    fireEvent.click(within(restRows()[1] as HTMLElement).getByRole("button", { name: "上へ" }));
+    expect(modeOf(restRows()[0])).toBe("ゲージ");
+    expect(targetInput(restRows()[0]).value).toBe("45");
+    expect(modeOf(restRows()[1])).toBe("時間");
+
+    type(screen.getByLabelText("プラン名"), "休憩");
+    fireEvent.click(screen.getByRole("button", { name: "この内容を保存" }));
+    cleanup();
+    drawPlan();
+    fireEvent.click(screen.getByRole("button", { name: "呼び出し" }));
+    expect(modeOf(restRows()[0])).toBe("ゲージ");
+    expect(targetInput(restRows()[0]).value).toBe("45");
+    expect(modeOf(restRows()[1])).toBe("時間");
+  });
+
+  it("リフレッシュゲージ計算機でも休憩をゲージで決められる", () => {
+    render(
+      <MemoryRouter>
+        <RefreshGaugeCalculator />
+      </MemoryRouter>,
+    );
+    type(screen.getByLabelText("現在のゲージ"), "70");
+    add("＋休憩");
+    choose(restRows()[0], "ゲージ");
+    type(targetInput(restRows()[0]), "45");
+    expect(restRows()[0].textContent).toContain("%まで1時間30分→ 45.0%");
+    expect(stat("終了ゲージ")).toContain("45.0%");
   });
 });

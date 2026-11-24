@@ -14,7 +14,7 @@ import { DurationInput } from "../../components/ui/DurationInput";
 import { TakiInput } from "../../components/ui/TakiInput";
 import { Switch } from "../../components/ui/Switch";
 import { Stat } from "./Stat";
-import { PlayLength, type PlayLengthPatch } from "./PlayLength";
+import { BlockLength, type BlockLengthPatch } from "./BlockLength";
 import { type Segment, mysekaiMemoriOf, simulateTimeline } from "./lib/timeline";
 import {
   MYSEKAI_FULL_HARVEST_MEMORI,
@@ -143,7 +143,8 @@ export function PlanTimeline({
       blocks.push({
         index: i,
         startMinute: pt.startMinute,
-        restMinutes: seg.minutes,
+        // ゲージで決める休憩は逆算した分（seg.minutes は時間で決めていたときの値）
+        restMinutes: pt.minutes,
         requested: seg.auto.plays ?? null,
       });
     });
@@ -203,10 +204,12 @@ export function PlanTimeline({
         minutes: 15,
       },
     ]);
-  // 時間・ゲージ%の切り替えと値（targetPercent: undefined で時間に戻る）
-  const setPlayLength = (id: string, patch: PlayLengthPatch) =>
+  // 稼働・休憩の時間・ゲージ%の切り替えと値（targetPercent: undefined で時間に戻る）
+  const setLength = (id: string, patch: BlockLengthPatch) =>
     setSegments((s) =>
-      s.map((g) => (g.id === id && g.kind === "play" ? { ...g, ...patch } : g)),
+      s.map((g) =>
+        g.id === id && (g.kind === "play" || g.kind === "rest") ? { ...g, ...patch } : g,
+      ),
     );
   const setPlayTaki = (id: string, taki: number) =>
     setSegments((s) =>
@@ -227,10 +230,6 @@ export function PlanTimeline({
           ? { ...g, auto: { ...g.auto, plays } }
           : g,
       ),
-    );
-  const setRestMinutes = (id: string, minutes: number) =>
-    setSegments((s) =>
-      s.map((g) => (g.id === id && g.kind === "rest" ? { ...g, minutes } : g)),
     );
   const setMysekaiMemori = (id: string, memori: number) =>
     setSegments((s) =>
@@ -345,8 +344,8 @@ export function PlanTimeline({
           time,
           label:
             autoRow && autoRow.plays > 0
-              ? `休憩＋オート${autoRow.plays}回　${fmtDuration(seg.minutes)}`
-              : `休憩　${fmtDuration(seg.minutes)}`,
+              ? `休憩＋オート${autoRow.plays}回　${fmtDuration(pt.minutes)}`
+              : `休憩　${fmtDuration(pt.minutes)}`,
           sub: points
             ? [
                 gained > 0 ? `+${gained.toLocaleString()}pt` : null,
@@ -556,11 +555,11 @@ export function PlanTimeline({
                         <span className="max-w-36 truncate font-bold text-slate-700">
                           {seg.title}
                         </span>
-                        <PlayLength
+                        <BlockLength
                           seg={seg}
                           minutes={pt.minutes}
                           endPercent={pt.endPercent}
-                          onChange={(patch) => setPlayLength(seg.id, patch)}
+                          onChange={(patch) => setLength(seg.id, patch)}
                         />
                         <span className="text-xs text-slate-400">
                           ≈{Math.round(pt.plays)}回
@@ -643,9 +642,11 @@ export function PlanTimeline({
                           bedtime
                         </span>
                         <span className="font-bold text-slate-600">休憩</span>
-                        <DurationInput
-                          value={seg.minutes}
-                          onChange={(v) => setRestMinutes(seg.id, v)}
+                        <BlockLength
+                          seg={seg}
+                          minutes={pt.minutes}
+                          endPercent={pt.endPercent}
+                          onChange={(patch) => setLength(seg.id, patch)}
                         />
                         {points && auto && (
                           <>
