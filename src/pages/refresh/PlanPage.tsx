@@ -417,6 +417,7 @@ export default function PlanPage() {
         live={live}
         liveTag
         auto={autoConfig.runtime}
+        restUntilEnd
         segments={segments}
         setSegments={setSegments}
         startTime={startTime}
