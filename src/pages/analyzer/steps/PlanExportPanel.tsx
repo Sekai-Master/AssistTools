@@ -64,6 +64,7 @@ export function PlanExportPanel({
           countB: result.mySekaiAllocation.countB,
           countC: result.mySekaiAllocation.countC,
           totalPt: result.mySekaiAllocation.totalPt,
+          unitBasePt: result.unitBasePt,
         }
       : undefined;
 

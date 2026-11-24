@@ -11,6 +11,7 @@ import type { MultiLivePlan } from "./multiLiveAdjust";
 import type { AdjustmentPlan } from "./liveAdjust";
 import type { FinalRunPlan } from "./finalRun";
 import { calcLivePt } from "./calcLivePt";
+import { EVENT_ITEM_REDUCTION } from "./eventBadges";
 
 /**
  * adjustPlanCanvas（R5 で全ステップ対応）の安全網。
@@ -22,8 +23,18 @@ import { calcLivePt } from "./calcLivePt";
 const SONG: AdjustCanvasSong = { title: "独りんぼエンヴィー", jacketUrl: "https://x/e.png" };
 const MELT: AdjustCanvasSong = { title: "メルト", jacketUrl: "https://x/m.png" };
 
-const MYSEKAI: AdjustCanvasMySekai = { countA: 2, countB: 1, countC: 3, totalPt: 5_000 };
-const MYSEKAI_ZERO: AdjustCanvasMySekai = { countA: 0, countB: 0, countC: 0, totalPt: 0 };
+// 単価 1,000: 木石 1,000 × 3 + キラキラ 500 × 2 + 草花 200 × 5 = 5,000 Pt
+const MYSEKAI: AdjustCanvasMySekai = { countA: 3, countB: 2, countC: 5, totalPt: 5_000, unitBasePt: 1_000 };
+const MYSEKAI_ZERO: AdjustCanvasMySekai = { countA: 0, countB: 0, countC: 0, totalPt: 0, unitBasePt: 1_000 };
+
+/**
+ * 1回ぶんのバッジ。★ 除数はデータ更新で 7 と 10 を行き来しうるので、期待値は今の値から作る
+ * （決め打ちすると、値が変わった回のデータ更新が npm test で止まる）。除数ごとの数え方は eventBadges.test.ts。
+ */
+const badge = (pt: number) => Math.floor(pt / EVENT_ITEM_REDUCTION);
+const badgeText = (n: number) => `バッジ ${n.toLocaleString()}個`;
+/** マイセカイは採取1回ごとに切り捨てる。 */
+const MYSEKAI_BADGES = badge(1_000) * 3 + badge(500) * 2 + badge(200) * 5;
 
 const MULTI_PLAN: MultiLivePlan = {
   units: [
@@ -198,10 +209,10 @@ describe("buildAdjustPlanCanvasData — 各行のイベントバッジ（percent
   it("全ステップの行に、その行の獲得Ptに対応するバッジ数が付く", () => {
     const d = buildAdjustPlanCanvasData({ ...COMMON, mySekai: MYSEKAI, step2: STEP2_MULTI, finalRun: FINAL_EARN });
     expect(d.rows.map((r) => r.percentSub)).toEqual([
-      "バッジ 500個", // マイセカイ 5,000 Pt
-      "バッジ 6,243個", // 62,437 Pt × 1回
-      "バッジ 3,618個", // 18,090 Pt × 2回 = 1,809 × 2
-      "バッジ 100個", // ラストプレイ 1,005 Pt
+      badgeText(MYSEKAI_BADGES), // マイセカイ 5,000 Pt（採取ごと）
+      badgeText(badge(62_437)), // 62,437 Pt × 1回
+      badgeText(badge(18_090) * 2), // 18,090 Pt × 2回
+      badgeText(badge(1_005)), // ラストプレイ 1,005 Pt
     ]);
   });
 
@@ -214,14 +225,15 @@ describe("buildAdjustPlanCanvasData — 各行のイベントバッジ（percent
     };
     const d = buildAdjustPlanCanvasData({ ...COMMON, step2: { kind: "multi", plan, songForBase: () => SONG } });
     expect(d.rows[0].percent).toBe("+14,205 Pt");
-    expect(d.rows[0].percentSub).toBe("バッジ 1,419個"); // 1,420 ではない
+    // ÷10 なら 1,419（合計を割る 1,420 ではない）、÷7 なら 2,028（2,029 ではない）
+    expect(d.rows[0].percentSub).toBe(badgeText(badge(4_735) * 3));
   });
 
   it("sweep（1本で取り切る）と scoreZero の締めにも付く", () => {
     const sweep = buildAdjustPlanCanvasData({ ...COMMON, step2: STEP2_SWEEP });
-    expect(sweep.rows[0].percentSub).toBe("バッジ 300個");
+    expect(sweep.rows[0].percentSub).toBe(badgeText(badge(3_000)));
     const zero = buildAdjustPlanCanvasData({ ...COMMON, finalRun: FINAL_ZERO });
-    expect(zero.rows[0].percentSub).toBe("バッジ 109個");
+    expect(zero.rows[0].percentSub).toBe(badgeText(badge(1_090)));
   });
 });
 
@@ -256,8 +268,9 @@ describe("buildAdjustPlanCanvasData — 合計（マイセカイはライブ回�
   it("合計獲得の下にイベントバッジの合計を添える（1回ごとに切り捨てた和）", () => {
     const d = buildAdjustPlanCanvasData({ ...COMMON, mySekai: MYSEKAI, step2: STEP2_MULTI, finalRun: FINAL_EARN });
     const sub = d.summary.find((s) => s.label === "合計獲得")!.sub;
-    // マイセカイ 5,000→500 / 62,437→6,243 / 18,090→1,809 ×2 / ラストプレイ 1,005→100
-    expect(sub).toBe("バッジ 10,461個（目安）");
+    // ÷10 なら マイセカイ 500 / 62,437→6,243 / 18,090→1,809 ×2 / ラストプレイ 1,005→100 = 10,461
+    const total = MYSEKAI_BADGES + badge(62_437) + badge(18_090) * 2 + badge(1_005);
+    expect(sub).toBe(`${badgeText(total)}（目安）`);
   });
 
   it("LB合計はクリスタル換算つき・回復時間（約Nh）は出さない", () => {
