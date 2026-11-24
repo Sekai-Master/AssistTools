@@ -31,6 +31,7 @@ import { fmtClock, fmtDuration, parseClock } from "./lib/format";
 import { type LiveAssumption, assumptionTag, paceMetaLine } from "./lib/liveAssumption";
 import { AssumptionTag } from "./AssumptionTag";
 import { RestUntilEndLine } from "./RestUntilEndLine";
+import { clockToMs } from "./lib/restUntilEnd";
 import type { AnalyzerMusic } from "../analyzer/useAnalyzerMusics";
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
@@ -132,6 +133,13 @@ export function PlanTimeline({
   const [notice, setNotice] = useState<string | null>(null);
 
   const startMOD = parseClock(startTime);
+  /**
+   * 開始時刻の日付を決める基準の時刻（イベ乙までの行に使う）。タイムラインの時刻は開始時刻の日を起点に数えるので、
+   * 基準は開いたときと開始時刻を打ち直したときだけ取り、時間が過ぎても取り直さない
+   * （刻々の「いま」で決めると、21:00 開始が 22:01 に翌日へ飛ぶ）。
+   */
+  const [startRefAt, setStartRefAt] = useState(() => Date.now());
+  const startAt = startMOD === null ? null : clockToMs(startMOD, startRefAt);
   const result = useMemo(
     () => simulateTimeline(segments, startPercent, overhead, startDecayProgress),
     [segments, startPercent, overhead, startDecayProgress],
@@ -452,7 +460,10 @@ export function PlanTimeline({
             id="rg-start"
             type="time"
             value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
+            onChange={(e) => {
+              setStartTime(e.target.value);
+              setStartRefAt(Date.now());
+            }}
             className="max-w-32"
           />
         </Field>
@@ -860,14 +871,14 @@ export function PlanTimeline({
             />
           </div>
           {/* 終わりの後も上の曲で走る想定。開始時刻が空欄だと終わりの日時が決まらないので出さない */}
-          {restUntilEnd && canAddPlay && selectedSong && startMOD !== null && result.points.length > 0 && (
+          {restUntilEnd && canAddPlay && selectedSong && startAt !== null && result.points.length > 0 && (
             <RestUntilEndLine
               startPercent={result.finalPercent}
               decayProgressMin={result.points[result.points.length - 1].decayProgressMin}
               refreshConstant={getRefreshConstant(selectedSong.basePoint, selectedSong.id)}
               songLengthSec={selectedSong.musicTime}
               overheadSec={overhead}
-              from={{ startMinOfDay: startMOD, offsetMinutes: result.totalMinutes }}
+              fromMs={startAt + result.totalMinutes * 60_000}
               className="mt-3"
             />
           )}

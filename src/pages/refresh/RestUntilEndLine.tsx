@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { useCurrentBorder } from "../hub/useCurrentBorder";
-import { clockToMs, formatEventEnd, restUntilEnd, restUntilEndParts } from "./lib/restUntilEnd";
+import { formatEventEnd, restUntilEnd, restUntilEndParts } from "./lib/restUntilEnd";
+
+/** これより新しく読んだ回があれば、出し直しのときに読みに行かない。 */
+const FRESH_MS = 5 * 60_000;
 
 interface Props {
   /** 起点のゲージ（表示%） */
@@ -12,10 +15,10 @@ interface Props {
   songLengthSec: number;
   overheadSec: number;
   /**
-   * 起点の時刻。省略は「いま」（リフレッシュゲージ）。
-   * 周回プランは積んだタイムラインの終わり（開始時刻の時計 + 総時間）。
+   * 起点の日時(ms)。省略は「いま」（リフレッシュゲージ）。
+   * 周回プランは積んだタイムラインの終わり（開始時刻の日時 + 総時間。日付は PlanTimeline が固定する）。
    */
-  from?: { startMinOfDay: number; offsetMinutes: number };
+  fromMs?: number;
   className?: string;
 }
 
@@ -32,14 +35,15 @@ export function RestUntilEndLine({
   refreshConstant,
   songLengthSec,
   overheadSec,
-  from,
+  fromMs,
   className = "",
 }: Props) {
-  const { current } = useCurrentBorder();
+  // 周回プランでは積む・消すたびにこの行が出入りする。覚えている値が新しければ読みに行かない（Workers の呼び出し枠）
+  const { current } = useCurrentBorder({ freshMs: FRESH_MS });
   const now = useMinuteClock();
   if (!current) return null;
   const aggregateAt = current.event.aggregateAt;
-  const originMs = from ? clockToMs(from.startMinOfDay, now) + from.offsetMinutes * 60_000 : now;
+  const originMs = fromMs ?? now;
   const r = restUntilEnd({
     startPercent,
     decayProgressMin,

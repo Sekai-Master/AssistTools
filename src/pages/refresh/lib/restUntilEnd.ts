@@ -79,7 +79,7 @@ export function restUntilEnd(input: RestUntilEndInput, spec: GaugeSpec = GAUGE_S
   return null;
 }
 
-/** 表示%（小数第 2 位切り捨て。ゲーム内の表示と同じ）。 */
+/** 表示%（小数第 1 位まで、それより下は切り捨て。ゲーム内の表示と同じ）。 */
 const fmtPercent = (p: number) => (Math.floor(p * 10 + EPS) / 10).toFixed(1);
 
 /** 1 行の文を [前, 強調する値, 後] に分けたもの。endLabel は formatEventEnd の「11/29 20:59」。 */
@@ -103,11 +103,12 @@ export function formatEventEnd(ms: number): string {
 
 /**
  * 時計の時刻（その日の分）→ 日時(ms)。周回プランの開始時刻は日付を持たないので、
- * いまの 1 時間前から先の 23 時間のうちのその時刻とする（ゲージ・タイマーは「いま」の値を開始に使うので、開始は先の予定とみなす）。
+ * 基準の時刻 refMs の 1 時間前から先の 23 時間のうちのその時刻とする（ゲージ・タイマーは「いま」の値を開始に使うので、開始は先の予定とみなす）。
+ * ★ refMs は開始時刻を入れた（変えた）ときの時刻。刻々と進む「いま」を渡すと、時間が過ぎたときに日付が翌日へ飛ぶ（PlanTimeline が固定する）。
  */
-export function clockToMs(minOfDay: number, nowMs: number): number {
-  const d = new Date(nowMs);
+export function clockToMs(minOfDay: number, refMs: number): number {
+  const d = new Date(refMs);
   d.setHours(Math.floor(minOfDay / 60), minOfDay % 60, 0, 0);
-  if (d.getTime() < nowMs - 60 * 60_000) d.setDate(d.getDate() + 1);
+  if (d.getTime() < refMs - 60 * 60_000) d.setDate(d.getDate() + 1);
   return d.getTime();
 }

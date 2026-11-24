@@ -185,4 +185,40 @@ describe("周回プラン（タイムラインの終わりから）", () => {
     expect(r?.kind).toBe("rest");
     expect(line(restUntilEndText(r!, "11/29 20:59"))).toBeTruthy();
   });
+
+  it("開始 21:00 のまま 22:01 を過ぎても、開始の日付は翌日へ飛ばない（行は変わらない）", async () => {
+    // 1 分ごとの描き直し（setInterval）も進める
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    vi.setSystemTime(NOW);
+    serve(snapshot(AGGREGATE_AT));
+    draw();
+    type(screen.getByLabelText("現在のゲージ"), "70");
+    type(screen.getByLabelText("開始時刻"), "21:00");
+    fireEvent.click(screen.getByRole("button", { name: /＋稼働/ }));
+    await settle();
+    const before = anyLine()?.textContent;
+    expect(before).toMatch(/^イベ乙（11\/29 20:59）までに/);
+    await act(async () => {
+      vi.advanceTimersByTime(71 * 60_000); // 22:01
+    });
+    expect(anyLine()?.textContent).toBe(before);
+  });
+
+  it("積む・消すで行が出入りしても、5 分以内に読んだ回があれば読み直さない", async () => {
+    serve(snapshot(AGGREGATE_AT));
+    draw();
+    type(screen.getByLabelText("現在のゲージ"), "70");
+    fireEvent.click(screen.getByRole("button", { name: /＋稼働/ }));
+    await settle();
+    expect(anyLine()).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "クリア" }));
+    expect(anyLine()).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /＋稼働/ }));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(anyLine()).toBeTruthy();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
 });
