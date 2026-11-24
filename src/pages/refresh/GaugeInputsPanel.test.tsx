@@ -8,7 +8,7 @@
  *   前は 3 本で 27＋49＋74 字あり、同じ文が 3 ページに出ていた。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { GaugeInputsPanel } from "./GaugeInputsPanel";
 import { useGaugeInputs } from "./useGaugeInputs";
 import { OVERHEAD_SEC } from "../../lib/overhead";
@@ -55,14 +55,124 @@ it("「次の回復まで」の補足は、値をどこで読むか（ゲージ�
   expect(hint).toContain("回さなければ30分");
 });
 
-// ★ 検分 #279 L: ダイヤルにしたので「未入力」ではなく「回していない」と言う。回すと消える
-it("全回復までの行の断りは、ダイヤルを回していないときだけ出す", () => {
-  render(<Harness />);
-  fireEvent.change(screen.getByLabelText("現在のゲージ"), { target: { value: "50" } });
-  expect(document.body.textContent).toContain("（「次の回復まで」を回していないので、30分として計算）");
-  expect(document.body.textContent).not.toContain("未入力");
-  fireEvent.change(screen.getByRole("slider", { name: "次の回復まで" }), { target: { value: "12" } });
-  expect(document.body.textContent).not.toContain("回していない");
+/**
+ * 「次の回復まで」のドラム式のピッカー（2026-11-25、持ち主「円のダイヤルは場所を取りすぎ・デザイン的に浮いている」）。
+ * 0〜30 の数字が縦に並び、上下に回すと真ん中の段にスナップして選ばれる。見える段は 3 段（1 段 40px・高さ 120px）。
+ * ★ キーボードと読み上げは、見えないネイティブの range が受ける（矢印・PageUp/PageDown・Home/End、読み上げ「12分」）。
+ *   見えるドラムは指・マウスホイール・クリックで回す。値の持ち方（空＝30分で計算）と計算は前のまま
+ */
+describe("「次の回復まで」のピッカー", () => {
+  const ROW = 40;
+  const slider = () => screen.getByRole("slider", { name: "次の回復まで" }) as HTMLInputElement;
+  const rows = () => [...slider().parentElement!.querySelectorAll<HTMLElement>("[data-value]")];
+  const row = (v: number) => rows().find((r) => r.dataset.value === String(v))!;
+  const selected = () => rows().filter((r) => r.dataset.selected === "true").map((r) => r.dataset.value);
+  const scroller = () => row(0).parentElement!;
+  /** 全回復までの行（現在のゲージ 50% なら 減少 6 回 = 次の回復まで + 5 × 30 分）。 */
+  const empty = () => /全回復まで\s*(\d+時間\d+分|\d+分)/.exec(document.body.textContent ?? "")?.[1];
+  const wheel = (deltaY: number) => {
+    const e = new WheelEvent("wheel", { deltaY, bubbles: true, cancelable: true });
+    // ホイールの受け口は addEventListener（passive: false）なので、fireEvent ではなく act で包んで送る
+    act(() => {
+      scroller().dispatchEvent(e);
+    });
+    return e.defaultPrevented;
+  };
+
+  it("0〜30 の段が上から順に並び、回していないときは 30 が真ん中（30分で計算）", () => {
+    render(<Harness />);
+    expect(rows().map((r) => r.textContent)).toEqual(Array.from({ length: 31 }, (_, i) => String(i)));
+    expect(selected()).toEqual(["30"]);
+    expect(slider().value).toBe("30");
+    expect(slider().getAttribute("aria-valuetext")).toBe("30分");
+    expect(scroller().scrollTop).toBe(30 * ROW);
+  });
+
+  it("段をクリックするとその分が選ばれ、真ん中へ回り、計算に入る", () => {
+    render(<Harness />);
+    fireEvent.change(screen.getByLabelText("現在のゲージ"), { target: { value: "50" } });
+    expect(empty()).toBe("3時間0分");
+    fireEvent.click(row(12));
+    expect(slider().getAttribute("aria-valuetext")).toBe("12分");
+    expect(selected()).toEqual(["12"]);
+    expect(scroller().scrollTop).toBe(12 * ROW);
+    expect(empty()).toBe("2時間42分");
+  });
+
+  it("端: 0 と 30 を選べる", () => {
+    render(<Harness />);
+    fireEvent.click(row(0));
+    expect(slider().getAttribute("aria-valuetext")).toBe("0分");
+    expect(scroller().scrollTop).toBe(0);
+    fireEvent.click(row(30));
+    expect(slider().getAttribute("aria-valuetext")).toBe("30分");
+  });
+
+  it("指で回して止まった段（スクロール位置 ÷ 1 段の高さ）が選ばれる", () => {
+    render(<Harness />);
+    scroller().scrollTop = 7 * ROW + 12; // スナップの途中でも近い段
+    fireEvent.scroll(scroller());
+    expect(slider().getAttribute("aria-valuetext")).toBe("7分");
+    expect(selected()).toEqual(["7"]);
+  });
+
+  it("スナップが段の途中で止まったら、止まって少し経ってから近い段にそろえる", () => {
+    vi.useFakeTimers();
+    try {
+      render(<Harness />);
+      scroller().scrollTop = 7 * ROW + 5;
+      fireEvent.scroll(scroller());
+      expect(slider().getAttribute("aria-valuetext")).toBe("7分");
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(scroller().scrollTop).toBe(7 * ROW);
+      expect(slider().getAttribute("aria-valuetext")).toBe("7分");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("キーボード（range の値が変わる）で選ぶと、ドラムもその段へ回る", () => {
+    render(<Harness />);
+    fireEvent.change(slider(), { target: { value: "13" } });
+    expect(slider().getAttribute("aria-valuetext")).toBe("13分");
+    expect(selected()).toEqual(["13"]);
+    expect(scroller().scrollTop).toBe(13 * ROW);
+    // range は 0〜30・1 刻み（矢印 ±1、Home/End で端はブラウザが受ける）
+    expect([slider().min, slider().max, slider().step]).toEqual(["0", "30", "1"]);
+  });
+
+  it("マウスホイール 1 目盛りで 1 段。端の先へは回さず、ページのスクロールに渡す", () => {
+    render(<Harness />);
+    expect(wheel(100)).toBe(false); // 30 から下へ（端）
+    expect(slider().getAttribute("aria-valuetext")).toBe("30分");
+    expect(wheel(-100)).toBe(true);
+    expect(slider().getAttribute("aria-valuetext")).toBe("29分");
+    fireEvent.click(row(0));
+    expect(wheel(-100)).toBe(false); // 0 から上へ（端）
+    expect(wheel(100)).toBe(true);
+    expect(slider().getAttribute("aria-valuetext")).toBe("1分");
+  });
+
+  it("トラックパッドの細かい量は 1 段の高さぶんたまったら 1 段", () => {
+    render(<Harness />);
+    fireEvent.click(row(10));
+    wheel(15);
+    wheel(15);
+    expect(slider().getAttribute("aria-valuetext")).toBe("10分");
+    wheel(15);
+    expect(slider().getAttribute("aria-valuetext")).toBe("11分");
+  });
+
+  // ★ 持ち主 2026-11-25: 回していないときの断りの文は消す（ピッカーに 30 が出ている）
+  it("全回復までの行に、回していないときの断りを出さない", () => {
+    render(<Harness />);
+    fireEvent.change(screen.getByLabelText("現在のゲージ"), { target: { value: "50" } });
+    expect(empty()).toBe("3時間0分");
+    expect(document.body.textContent).not.toContain("回していない");
+    expect(document.body.textContent).not.toContain("として計算）");
+  });
 });
 
 describe("詳しい説明は閉じた「入力について」に残す（消さない）", () => {

@@ -7,7 +7,7 @@
  *   - 切り替えでは、時間→ゲージ はいまの終わりの%、ゲージ→時間 は逆算した分を引き継ぐ（稼働はプランが動かない。
  *     休憩は段が下がった瞬間に終わる長さ＝進捗 0 なら 30 分の倍数のときだけ動かない）
  *   - 並べ替えても、ブロックごとの決め方と値は残る。前のブロックを変えると逆算し直す
- *   - 周回プランの保存・呼び出しで、決め方と「次の回復まで」（ダイヤル）の値が戻る
+ *   - 周回プランの保存・呼び出しで、決め方と「次の回復まで」（ピッカー）の値が戻る
  *   - リフレッシュゲージ計算機でも同じ部品が出る
  *   - ひとりでライブ想定でも、その 1 周の秒で逆算する（想定を替えると逆算し直す）
  *   - 休憩も「時間」と「ゲージ」で切り替えられる（2026-11-25、持ち主「45%まで回復したら、残り55%でイベント終了まで走る」）。
@@ -242,7 +242,7 @@ describe("ひとりでライブ想定の逆算（周回プラン・リフレッ�
 });
 
 describe("保存・呼び出し（周回プラン）", () => {
-  it("決め方・目標の%・「次の回復まで」のダイヤルの値が、保存したプランから戻る", () => {
+  it("決め方・目標の%・「次の回復まで」のピッカーの値が、保存したプランから戻る", () => {
     drawPlan();
     fireEvent.change(screen.getByRole("slider", { name: "次の回復まで" }), { target: { value: "12" } });
     add("＋稼働");
@@ -256,7 +256,7 @@ describe("保存・呼び出し（周回プラン）", () => {
     cleanup();
     drawPlan();
     expect(playRows()).toHaveLength(0);
-    expect(screen.getByRole("slider", { name: "次の回復まで" }).getAttribute("aria-valuetext")).toBe("未設定（30分で計算）");
+    expect(screen.getByRole("slider", { name: "次の回復まで" }).getAttribute("aria-valuetext")).toBe("30分");
     fireEvent.click(screen.getByRole("button", { name: "呼び出し" }));
     expect(modeOf(playRows()[0])).toBe("時間");
     expect(modeOf(playRows()[1])).toBe("ゲージ");
@@ -265,6 +265,50 @@ describe("保存・呼び出し（周回プラン）", () => {
     expect(slider.value).toBe("12");
     expect(slider.getAttribute("aria-valuetext")).toBe("12分");
     expect(stat("終了ゲージ")).toContain("100.0%");
+  });
+});
+
+/**
+ * 保存したプランの「次の回復まで」が空・壊れた値のとき（2026-11-25、ピッカーに替えたときに足した）。
+ * ★ 保存は端末に残り続けるので、文字でない値（数・null）でも落ちずに読み、読めない値は 30（回していない）として出す。
+ *   前は数が入っていると nextDecay.trim() で落ちていた。
+ */
+describe("保存したプランの「次の回復まで」（空・壊れた値）", () => {
+  const KEY = "sekaimaster:plans:v1";
+  const saveRaw = (nextDecay: unknown) =>
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        {
+          name: "前の",
+          savedAt: 1,
+          startTime: "20:00",
+          segments: [],
+          inputs: { songId: "074", gauge: "50", nextDecay, rate: "28", currentPt: "", hourlyRate: "500000", refTaki: 5 },
+        },
+      ]),
+    );
+  const slider = () => screen.getByRole("slider", { name: "次の回復まで" }) as HTMLInputElement;
+  const empty = () => /全回復まで\s*(\d+時間\d+分|\d+分)/.exec(document.body.textContent ?? "")?.[1];
+
+  it.each([
+    { label: "空", saved: "", shown: "30", emptyIn: "3時間0分" },
+    { label: "項目が無い（旧い保存）", saved: undefined, shown: "30", emptyIn: "3時間0分" },
+    { label: "分の文字", saved: "12", shown: "12", emptyIn: "2時間42分" },
+    { label: "数（文字でない）", saved: 12, shown: "12", emptyIn: "2時間42分" },
+    { label: "数でない文字", saved: "abc", shown: "30", emptyIn: "3時間0分" },
+    { label: "負", saved: "-5", shown: "30", emptyIn: "3時間0分" },
+    { label: "30 を超える", saved: "99", shown: "30", emptyIn: "3時間0分" },
+    { label: "null", saved: null, shown: "30", emptyIn: "3時間0分" },
+  ] as const)("$label → ピッカーは $shown 分の段", ({ saved, shown, emptyIn }) => {
+    saveRaw(saved);
+    drawPlan();
+    fireEvent.click(screen.getByRole("button", { name: "呼び出し" }));
+    expect(slider().value).toBe(shown);
+    expect(slider().getAttribute("aria-valuetext")).toBe(`${shown}分`);
+    const rows = [...slider().parentElement!.querySelectorAll<HTMLElement>("[data-value]")];
+    expect(rows.filter((r) => r.dataset.selected === "true").map((r) => r.dataset.value)).toEqual([shown]);
+    expect(empty()).toBe(emptyIn);
   });
 });
 
@@ -282,7 +326,7 @@ describe("リフレッシュゲージ計算機", () => {
     expect(stat("ムダ時間")).toBe("ムダ時間0分無駄なし");
   });
 
-  it("「次の回復まで」はダイヤル（0〜30 の slider）", () => {
+  it("「次の回復まで」はピッカー（0〜30 の slider）", () => {
     render(
       <MemoryRouter>
         <RefreshGaugeCalculator />
