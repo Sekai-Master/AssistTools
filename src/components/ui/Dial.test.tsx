@@ -112,6 +112,53 @@ describe("指・マウス", () => {
     spy.mockRestore();
   });
 
+  // ★ 検分 #279 M: 前は「1 回で半周より大きく動いたら端へ」だったので、中心のそばを横切る・素早く振ると 0 や 30 に化けた
+  it("中心のそばを横切っても、端（0・30）に化けず前の値のまま", () => {
+    const spy = placeSvg();
+    render(<Harness />);
+    fireEvent.pointerDown(ring(), point(50)); // 20
+    expect(slider().value).toBe("20");
+    fireEvent.pointerMove(ring(), point(50, 30)); // 中心へ寄る
+    fireEvent.pointerMove(ring(), point(-130, 25)); // 中心の向こう
+    fireEvent.pointerMove(ring(), point(-130)); // 反対側の輪（2 分の向き）
+    expect(slider().value).toBe("20");
+    fireEvent.pointerMove(ring(), point(-120));
+    expect(slider().value).toBe("20");
+    // 指が値の所（20 = 50°）へ戻ってくると、また追う
+    fireEvent.pointerMove(ring(), point(-60));
+    fireEvent.pointerMove(ring(), point(0));
+    fireEvent.pointerMove(ring(), point(48));
+    fireEvent.pointerMove(ring(), point(60));
+    expect(slider().value).toBe("21");
+    spy.mockRestore();
+  });
+
+  it.each([
+    { from: 10, to: -170, start: "16" },
+    { from: -10, to: 175, start: "14" },
+    { from: 0, to: 130, start: "15" },
+  ])("素早く振って向きが $from° → $to° と跳んでも、値は $start のまま", ({ from, to, start }) => {
+    const spy = placeSvg();
+    render(<Harness />);
+    fireEvent.pointerDown(ring(), point(from));
+    expect(slider().value).toBe(start);
+    fireEvent.pointerMove(ring(), point(to));
+    expect(slider().value).toBe(start);
+    spy.mockRestore();
+  });
+
+  // ★ 検分 #279 L: 捕まえられない環境で輪の外で離すと、回している途中のままになり、ボタンを押さずに輪の上を動かすだけで値が変わった
+  it("輪の外（ページのどこか）で離したら、その後に輪の上を動かしても変わらない", () => {
+    const spy = placeSvg();
+    render(<Harness />);
+    fireEvent.pointerDown(ring(), point(0));
+    expect(slider().value).toBe("15");
+    fireEvent.pointerUp(window, { pointerId: 1 });
+    fireEvent.pointerMove(ring(), point(30));
+    expect(slider().value).toBe("15");
+    spy.mockRestore();
+  });
+
   it("中心の近くは拾わない（向きが定まらない）", () => {
     const spy = placeSvg();
     const onChange = vi.fn();

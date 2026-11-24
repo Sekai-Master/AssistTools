@@ -177,7 +177,7 @@ export function GaugeInputsPanel({
                   </span>
                   {nextDecayMin == null && (
                     <span className="text-slate-400">
-                      （次の回復まで未入力。30分として計算）
+                      （「次の回復まで」を回していないので、30分として計算）
                     </span>
                   )}
                 </p>

@@ -1,11 +1,23 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { cn } from "../../lib/utils";
-import { DIAL_SWEEP_DEG, dialAngle, dialValueFromPoint } from "./dialMath";
+import {
+  DIAL_SWEEP_DEG,
+  type DialDrag,
+  dialAngle,
+  dialAngleOfPoint,
+  dialMove,
+  dialStart,
+} from "./dialMath";
 
 /** 目盛りの円（viewBox 100 の中）。溝と値の弧はこの円の 300° ぶん。 */
 const R = 38;
 const CIRC = 2 * Math.PI * R;
 const TRACK = (CIRC * DIAL_SWEEP_DEG) / 360;
+/**
+ * 指の位置を拾わない内側（直径に対する半径の比）。指を受ける輪の内側の縁と同じ（下の見えない輪は半径 25〜50）。
+ * 回している途中に中心をまたぐと、ここを抜けた先で向きが反転するので、dialMove が「跳び」として前の値で止める。
+ */
+const INNER = 0.25;
 /** 円の描き始め（右）を、目盛りの始まり（左下、真上から -150°）へ回す角度。 */
 const ARC_ROTATE = `rotate(${-DIAL_SWEEP_DEG / 2 - 90} 50 50)`;
 
@@ -49,37 +61,46 @@ export function Dial({
   const set = value != null;
   const hitRef = useRef<SVGCircleElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  /** 回している途中か・ひとつ前の値（切れ目をまたいで端から端へ飛ばないため）。 */
-  const active = useRef(false);
-  const last = useRef<number | undefined>(undefined);
+  /** 回している途中の状態（null は回していない）。dialMath の dialStart・dialMove が作る。 */
+  const drag = useRef<DialDrag | null>(null);
   // 回している間は、つまみの動きを指に遅れさせない（押した所へ飛ぶときだけ動かす）
   const [dragging, setDragging] = useState(false);
 
-  // 輪をなぞってもページがスクロールしないように。React の touch は passive なので、ここだけ自前で付ける
-  useEffect(() => {
-    const el = hitRef.current;
-    if (!el) return;
-    const stop = (e: TouchEvent) => e.preventDefault();
-    el.addEventListener("touchstart", stop, { passive: false });
-    return () => el.removeEventListener("touchstart", stop);
+  const end = useCallback(() => {
+    if (!drag.current) return;
+    drag.current = null;
+    setDragging(false);
   }, []);
 
-  const pick = (e: ReactPointerEvent<SVGCircleElement>) => {
+  useEffect(() => {
+    // 輪をなぞってもページがスクロールしないように。React の touch は passive なので、ここだけ自前で付ける
+    const el = hitRef.current;
+    const noScroll = (e: TouchEvent) => e.preventDefault();
+    el?.addEventListener("touchstart", noScroll, { passive: false });
+    // ★ 指を捕まえられない環境では、輪の外で離すと輪に pointerup が来ない。ページのどこで離しても終える
+    //   （終えないと、ボタンを押さずに輪の上を動かすだけで値が変わる。検分 #279 L）
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    return () => {
+      el?.removeEventListener("touchstart", noScroll);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+  }, [end]);
+
+  /** 指の向き。中心の近く（輪の内側）は向きが定まらないので null（その移動は無かったことにする）。 */
+  const angleOf = (e: ReactPointerEvent<SVGCircleElement>): number | null => {
     const rect = e.currentTarget.ownerSVGElement?.getBoundingClientRect();
-    if (!rect || rect.width === 0) return;
+    if (!rect || rect.width === 0) return null;
     const dx = e.clientX - (rect.left + rect.width / 2);
     const dy = e.clientY - (rect.top + rect.height / 2);
-    // 中心の近くは向きが定まらないので拾わない
-    if (Math.hypot(dx, dy) < rect.width * 0.12) return;
-    const v = dialValueFromPoint(dx, dy, min, max, last.current);
-    last.current = v;
-    if (v !== value) onChange(v);
+    if (Math.hypot(dx, dy) < rect.width * INNER) return null;
+    return dialAngleOfPoint(dx, dy);
   };
 
-  const end = () => {
-    active.current = false;
-    last.current = undefined;
-    setDragging(false);
+  const commit = (s: DialDrag) => {
+    drag.current = s;
+    if (s.value !== value) onChange(s.value);
   };
 
   const angle = dialAngle(shown, min, max);
@@ -179,14 +200,17 @@ export function Dial({
               // 捕まえられない環境では、輪の上を動く間だけ追う
             }
             inputRef.current?.focus({ preventScroll: true });
-            active.current = true;
-            last.current = undefined;
-            pick(e);
+            const deg = angleOf(e);
+            if (deg != null) commit(dialStart(deg, min, max));
           }}
           onPointerMove={(e) => {
-            if (!active.current) return;
+            if (!drag.current) return;
+            // ボタンを離したのに終わっていなければ、ここで終える（マウス）
+            if (e.pointerType === "mouse" && e.buttons === 0) return end();
+            const deg = angleOf(e);
+            if (deg == null) return;
             if (!dragging) setDragging(true);
-            pick(e);
+            commit(dialMove(drag.current, deg, min, max));
           }}
           onPointerUp={end}
           onPointerCancel={end}
