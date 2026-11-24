@@ -271,6 +271,18 @@ export async function upsertShapes(db: D1Database, shapes: readonly Shape[], now
   }
 }
 
+/**
+ * afterId より後の回のうち、まだ集計前（aggregate_at > now）でいちばん早く始まる回。サイトのイベ乙までの行（public.ts の /upcoming）用。
+ * 主キーの範囲（id > afterId）だけを読むので、読むのはこれからの回の数行（events 表は直近とこれからの回の写し）。
+ */
+export async function nextEventAfter(db: D1Database, afterId: number, now: number): Promise<EventMeta | null> {
+  const r = await db
+    .prepare('SELECT * FROM events WHERE id > ?1 AND aggregate_at > ?2 ORDER BY start_at LIMIT 1')
+    .bind(afterId, now)
+    .first<EventRow>()
+  return r ? toMeta(r) : null
+}
+
 /** その回のロゴの素材名（/CardDatas/logo/<asset>.webp）。主キーで1行だけ読む。 */
 export async function eventAsset(db: D1Database, id: number): Promise<string | null> {
   const r = await db.prepare('SELECT asset FROM events WHERE id = ?1').bind(id).first<{ asset: string | null }>()

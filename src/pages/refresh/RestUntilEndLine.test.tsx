@@ -39,6 +39,7 @@ vi.mock("../analyzer/useAnalyzerMusics", () => ({
 import RefreshGaugeCalculator from "./RefreshGaugeCalculator";
 import PlanPage from "./PlanPage";
 import { forgetCurrentBorder } from "../hub/useCurrentBorder";
+import { forgetUpcoming } from "./useEventSchedule";
 import { resetProfilesForTest } from "../../lib/profiles";
 import { overheadForPace, SOLO_DEFAULT_RATE } from "./lib/liveAssumption";
 import { clockToMs, restUntilEnd, restUntilEndText } from "./lib/restUntilEnd";
@@ -50,6 +51,10 @@ const NOW = Date.UTC(2026, 10, 24, 11, 50);
 const AGGREGATE_AT = Date.UTC(2026, 10, 29, 11, 59, 59);
 const SOLO_OH = overheadForPace("solo", String(SOLO_DEFAULT_RATE));
 
+/** 227 の始まり 11/25 15:00 JST */
+const START_227 = Date.UTC(2026, 10, 25, 6, 0);
+
+/** /api/border/current の回（開催中として、始まりは 4 日前） */
 function snapshot(aggregateAt: number) {
   return {
     event: {
@@ -57,7 +62,7 @@ function snapshot(aggregateAt: number) {
       name: "Leo/need Memories",
       type: "marathon",
       unit: "light_sound",
-      startAt: Date.UTC(2026, 10, 25, 6, 0),
+      startAt: NOW - 96 * 3_600_000,
       aggregateAt,
       durationHours: 102,
     },
@@ -69,12 +74,25 @@ function snapshot(aggregateAt: number) {
   };
 }
 
+const json = (body: unknown, status: number) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+/** current も upcoming も同じ応答（current で出せる場面用） */
 function serve(body: unknown, status = 200) {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } })),
+    vi.fn(async () => json(body, status)),
   );
 }
+
+/** current と upcoming を別々に返す */
+function serveBoth(current: [unknown, number], upcoming: [unknown, number]) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => (String(url).endsWith("/upcoming") ? json(...upcoming) : json(...current))),
+  );
+}
+const fetchedUrls = () => vi.mocked(fetch).mock.calls.map((c) => String(c[0]));
 
 async function settle() {
   await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
@@ -93,6 +111,7 @@ beforeEach(() => {
   vi.setSystemTime(NOW);
   localStorage.clear();
   forgetCurrentBorder();
+  forgetUpcoming();
   resetProfilesForTest();
 });
 afterEach(() => {
@@ -128,10 +147,43 @@ describe("リフレッシュゲージ（いまから）", () => {
     expect(line(text)).toBeTruthy();
   });
 
-  it("回が終わっている（次の回はまだ current に出ない）なら出さない", async () => {
-    serve(snapshot(NOW - 60 * 60_000));
+  it("開催中なら次の回（/upcoming）は読まない", async () => {
+    serve(snapshot(AGGREGATE_AT));
     draw();
     await settle();
+    expect(anyLine()).toBeTruthy();
+    expect(fetchedUrls().some((u) => u.endsWith("/upcoming"))).toBe(false);
+  });
+
+  it("回が終わっていれば次の回（/upcoming）のイベ乙で出す。始まる前は、起点を次の回の始まり（11/25 15:00）にする", async () => {
+    serveBoth(
+      [snapshot(NOW - 60 * 60_000), 200],
+      [{ event: { id: 227, name: "Leo/need Memories", startAt: START_227, aggregateAt: AGGREGATE_AT } }, 200],
+    );
+    draw();
+    type(screen.getByLabelText("現在のゲージ"), "70");
+    await vi.waitFor(() => expect(fetchedUrls().some((u) => u.endsWith("/api/border/upcoming"))).toBe(true));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    const r = restUntilEnd({
+      startPercent: 70,
+      decayProgressMin: 0,
+      minutesLeft: (AGGREGATE_AT - START_227) / 60_000,
+      refreshConstant: 84,
+      songLengthSec: 74.8,
+      overheadSec: SOLO_OH,
+    });
+    expect(line(restUntilEndText(r!, "11/29 20:59"))).toBeTruthy();
+  });
+
+  it("回が終わっていて次の回が分からない（/upcoming が 404）なら出さない", async () => {
+    serveBoth([snapshot(NOW - 60 * 60_000), 200], [{ error: "no upcoming event" }, 404]);
+    draw();
+    await vi.waitFor(() => expect(fetchedUrls().some((u) => u.endsWith("/upcoming"))).toBe(true));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
     expect(screen.getByRole("heading", { name: "この曲で走ると" })).toBeTruthy();
     expect(anyLine()).toBeNull();
   });

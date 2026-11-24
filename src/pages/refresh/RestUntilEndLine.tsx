@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useCurrentBorder } from "../hub/useCurrentBorder";
+import { useEventSchedule } from "./useEventSchedule";
 import { formatEventEnd, restUntilEnd, restUntilEndParts } from "./lib/restUntilEnd";
 
 /** これより新しく読んだ回があれば、出し直しのときに読みに行かない。 */
@@ -25,9 +25,9 @@ interface Props {
 /**
  * 「イベ乙（11/29 20:59）までに、あと合計 2時間30分休めば 100% ちょうど」の 1 行（計算は lib/restUntilEnd.ts）。
  *
- * イベ乙の時刻は /api/border/current（同じサイトの Pages Functions。トップの開催中のイベントと同じ読み口）の回の aggregateAt。
- * ★ 利用者のブラウザから外部へ接続しない（プライバシーポリシー第 5 項）ので、同じオリジンのものだけを使う。
- *   その回が終わっていて次の回の日程が分からない（次の回は始まるまで current に出ない）あいだは、この行を出さない。
+ * イベ乙の時刻は、開催中なら /api/border/current の回、終わっていれば /api/border/upcoming の次の回の aggregateAt（useEventSchedule）。
+ * ★ 利用者のブラウザから外部へ接続しない（プライバシーポリシー第 5 項）ので、同じオリジンのものだけを使う。分からなければ出さない。
+ * ★ 次の回がまだ始まっていなければ、起点を次の回の始まりにする（始まるまでは走れない。ゲージは入れた値のまま始まる扱い）。
  */
 export function RestUntilEndLine({
   startPercent,
@@ -39,11 +39,11 @@ export function RestUntilEndLine({
   className = "",
 }: Props) {
   // 周回プランでは積む・消すたびにこの行が出入りする。覚えている値が新しければ読みに行かない（Workers の呼び出し枠）
-  const { current } = useCurrentBorder({ freshMs: FRESH_MS });
   const now = useMinuteClock();
-  if (!current) return null;
-  const aggregateAt = current.event.aggregateAt;
-  const originMs = fromMs ?? now;
+  const schedule = useEventSchedule(now, FRESH_MS);
+  if (!schedule) return null;
+  const { aggregateAt } = schedule;
+  const originMs = Math.max(fromMs ?? now, schedule.startAt);
   const r = restUntilEnd({
     startPercent,
     decayProgressMin,
