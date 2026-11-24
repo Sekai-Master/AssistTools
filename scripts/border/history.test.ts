@@ -44,6 +44,22 @@ describe('歴代ボーダーの行', () => {
     expect(historyMeta(e226)).toMatchObject({ id: 226, type: 'memories', typeLabel: 'Memories', unit: 'theme_park', hours: 102 })
   })
 
+  it('227 Leo/need Memories（マスタの素材名 event_memories_lon_2026）も Memories として入れる', () => {
+    // マスタの値そのまま（2026-11-24 取得）
+    const e227: MasterEvent = {
+      id: 227,
+      name: 'Leo/need Memories',
+      eventType: 'marathon',
+      unit: 'none',
+      assetbundleName: 'event_memories_lon_2026',
+      startAt: 1795586400000,
+      aggregateAt: 1795953599000,
+      rankingAnnounceAt: 1795954199000,
+    }
+    expect(unknownMemories(e227)).toBe(false)
+    expect(historyMeta(e227)).toMatchObject({ id: 227, type: 'memories', typeLabel: 'Memories', unit: 'light_sound', start: '2026-11-25', hours: 102 })
+  })
+
   it('名前に memories が入るだけの回は普通のマラソン', () => {
     const m = historyMeta({ ...e221, id: 106, name: '君と紡ぐPrecious memories', assetbundleName: 'event_preciousmemories_2023' })
     expect(m?.type).toBe('marathon')

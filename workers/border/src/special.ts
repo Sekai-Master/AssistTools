@@ -26,9 +26,10 @@ import { GRID, RANKS, chooseTable, durationHours, interpGrid, progressAt, type E
 
 /**
  * みんなでライブ停止中に開催した回（学習から外し、特別モデルで当てる）。正本はここ1か所。
- * 227（Leo/need Memories、11/25〜）は停止のままか未定（2026-11-19 時点）。決まったらここに足してマージし、解析ジョブを回す
+ * 227（Leo/need Memories、11/25 15:00〜11/29 20:59・102時間）も停止のまま開催（ゲーム内のお知らせの 11/24 12:00 の追記。
+ * 調整・補てんは 226 と同じ）。みんなでライブは 11/30 の v7.1.1 の後に再開し、11/30 からの回はふだんどおり＝一覧に足さない
  */
-export const SOLO_ONLY_EVENTS: readonly number[] = [226]
+export const SOLO_ONLY_EVENTS: readonly number[] = [226, 227]
 
 /**
  * 特別扱いの回か（Worker の判定は全部これ1つ。2026-11-19 検分 G1）: このファイルの一覧 ∪ 有効な版の model.special.events。

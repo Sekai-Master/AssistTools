@@ -152,24 +152,26 @@ describe('開始の告知を積む（runStart）', () => {
 })
 
 /**
- * みんなでライブ停止中の回（226 など。special.ts）は「同じ種別・同じ長さの前回」にしない（2026-11-19 指示書）。
- * 227（Leo/need Memories）が 102時間なら、226（同じ Memories・102時間）を飛ばして 222 を出す
+ * みんなでライブ停止中の回（226・227。special.ts）は「同じ種別・同じ長さの前回」にしない（2026-11-19 指示書）。
+ * 227 は 2026-11-24 に一覧に入った（公式の追記で停止のまま開催と決まった）。一覧に無い回の例には、架空の 228・229 を使う
  */
 describe('開始の告知: みんなでライブ停止中の回を前例にしない', () => {
-  // 227 を仮に 11/25 15:00 開始・102時間とする
+  // 227 はマスタの値（素材名 event_memories_lon_2026・11/25 15:00 開始・102時間。2026-11-24 確認）
   const S227 = Date.UTC(2026, 10, 25, 6, 0)
   const A227 = S227 + 102 * H - 1000
-  const table = {
-    events: [
-      row(222, 'MORE MORE JUMP！ Memories', 'memories', 102, { '50': 1, '100': 2, '1000': 3 }),
-      row(226, 'ワンダーランズ×ショウタイム Memories', 'memories', 102, { '50': 4, '100': 5, '1000': 6 }),
-      row(227, 'Leo/need Memories', 'memories', 102, { '50': 7, '100': 8, '1000': 9 }),
-    ],
-  }
-  async function envWith(id: number, start: number, agg: number, asset: string) {
+  // 228・229 は架空の回（一覧に無い Memories・102時間）
+  const S228 = S227 + 6 * 24 * H
+  const S229 = S228 + 6 * 24 * H
+  const base = [
+    row(222, 'MORE MORE JUMP！ Memories', 'memories', 102, { '50': 1, '100': 2, '1000': 3 }),
+    row(226, 'ワンダーランズ×ショウタイム Memories', 'memories', 102, { '50': 4, '100': 5, '1000': 6 }),
+    row(227, 'Leo/need Memories', 'memories', 102, { '50': 7, '100': 8, '1000': 9 }),
+  ]
+  const with228 = [...base, row(228, 'e228', 'memories', 102, { '50': 10, '100': 11, '1000': 12 })]
+  async function envWith(id: number, start: number, agg: number, asset: string, events = base) {
     const env: Env = { DB: createD1(), SITE_ORIGIN: SITE, ADMIN_TOKEN: 'tok' }
     await upsertEvents(env.DB, [{ id, name: `e${id}`, eventType: 'marathon', unit: 'none', startAt: start, aggregateAt: agg, asset }])
-    await kvSet(env.DB, 'finals', table, 0)
+    await kvSet(env.DB, 'finals', { events }, 0)
     return env
   }
   const prevOf = async (env: Env) => {
@@ -177,27 +179,25 @@ describe('開始の告知: みんなでライブ停止中の回を前例にし�
     return JSON.parse(post.payload as string).prev as { id: number } | null
   }
 
-  it('このファイルの一覧（SOLO_ONLY_EVENTS）の 226 は飛ばす', async () => {
-    const env = await envWith(227, S227, A227, 'event_memories_ln_2026')
-    expect(await runStart(env, S227 - 30 * M)).toMatchObject({ status: 'queued' })
+  it('このファイルの一覧（SOLO_ONLY_EVENTS）の 226・227 は飛ばす', async () => {
+    const env = await envWith(228, S228, S228 + 102 * H - 1000, 'event_memories_vs_2026')
+    expect(await runStart(env, S228 - 30 * M)).toMatchObject({ status: 'queued' })
     expect(await prevOf(env)).toMatchObject({ id: 222 })
   })
 
   it('有効な版のモデルの一覧（model.special.events）に足した回も飛ばす（Worker を反映し直さなくてよい）', async () => {
-    const S228 = S227 + 6 * 24 * H
-    const env = await envWith(228, S228, S228 + 102 * H - 1000, 'event_memories_vs_2026')
-    const model = { version: 'share-median-v1@e225-x', createdAt: '', algorithm: 'share-median-v1', grid: [], ranks: {}, special: { events: [226, 227] } }
+    const env = await envWith(229, S229, S229 + 102 * H - 1000, 'event_memories_25_2026', with228)
+    const model = { version: 'share-median-v1@e225-x', createdAt: '', algorithm: 'share-median-v1', grid: [], ranks: {}, special: { events: [226, 227, 228] } }
     await putModel(env.DB, model as unknown as Model, {}, 0)
-    await runStart(env, S228 - 30 * M)
+    await runStart(env, S229 - 30 * M)
     expect(await prevOf(env)).toMatchObject({ id: 222 })
   })
 
   it('有効な版のモデルが無い・一覧が無いときは、このファイルの一覧だけで飛ばす', async () => {
-    const S228 = S227 + 6 * 24 * H
-    const env = await envWith(228, S228, S228 + 102 * H - 1000, 'event_memories_vs_2026')
+    const env = await envWith(229, S229, S229 + 102 * H - 1000, 'event_memories_25_2026', with228)
     await putModel(env.DB, { version: 'v', createdAt: '', algorithm: 'share-median-v1', grid: [], ranks: {} } as unknown as Model, {}, 0)
-    await runStart(env, S228 - 30 * M)
-    expect(await prevOf(env)).toMatchObject({ id: 227 })
+    await runStart(env, S229 - 30 * M)
+    expect(await prevOf(env)).toMatchObject({ id: 228 })
   })
 
   /**
@@ -227,17 +227,37 @@ describe('開始の告知: みんなでライブ停止中の回を前例にし�
     expect(JSON.stringify(payload)).not.toContain('MORE MORE JUMP')
   })
 
-  it('有効な版のモデルの一覧に足した回（227 など）の告知も同じにする。一覧に無い回の payload には special を付けない', async () => {
-    const env = await envWith(227, S227, A227, 'event_memories_ln_2026')
-    const model = { version: 'share-median-v1@e225-x', createdAt: '', algorithm: 'share-median-v1', grid: [], ranks: {}, special: { events: [226, 227] } }
+  // 227 の告知（11/25 14:45）。マスタの値そのままで、有効な版のモデルに一覧が無くても（このファイルの一覧だけで）特別対応になる
+  it('227 Leo/need Memories の告知は、このファイルの一覧だけで特別対応の一文になり、payload の prev は null', async () => {
+    const env = await envWith(227, S227, A227, 'event_memories_lon_2026')
+    await upsertEvents(env.DB, [{ id: 227, name: 'Leo/need Memories', eventType: 'marathon', unit: 'none', startAt: S227, aggregateAt: A227, asset: 'event_memories_lon_2026' }])
+    expect(await runStart(env, S227 - 30 * M)).toMatchObject({ status: 'queued', id: '227:start' })
+    const [post] = await unsentPosts(env.DB, 'x')
+    expect(post.text).toBe(
+      [
+        'まもなく15:00から「Leo/need Memories」開始🎶（11/29 20:59まで・102時間）',
+        '',
+        START_SOLO_NOTE,
+        '予測は11/26 15時ごろから、日報は毎日21時ごろ。',
+        'https://sekaimaster.pages.dev/border/history',
+      ].join('\n'),
+    )
+    expect(xWeight(post.text)).toBeLessThanOrEqual(START_TEXT_MAX_WEIGHT)
+    expect(JSON.parse(post.payload as string)).toMatchObject({ kind: 'start', prev: null, special: 'solo', event: { id: 227, type: 'memories', unit: 'light_sound', hours: 102 } })
+  })
+
+  it('有効な版のモデルの一覧に足した回（228 など）の告知も同じにする。一覧に無い回の payload には special を付けない', async () => {
+    const A228 = S228 + 102 * H - 1000
+    const env = await envWith(228, S228, A228, 'event_memories_vs_2026')
+    const model = { version: 'share-median-v1@e225-x', createdAt: '', algorithm: 'share-median-v1', grid: [], ranks: {}, special: { events: [226, 227, 228] } }
     await putModel(env.DB, model as unknown as Model, {}, 0)
-    await runStart(env, S227 - 30 * M)
+    await runStart(env, S228 - 30 * M)
     const [post] = await unsentPosts(env.DB, 'x')
     expect(post.text).toContain(START_SOLO_NOTE)
     expect(JSON.parse(post.payload as string)).toMatchObject({ prev: null, special: 'solo' })
 
-    const plain = await envWith(227, S227, A227, 'event_memories_ln_2026')
-    await runStart(plain, S227 - 30 * M)
+    const plain = await envWith(228, S228, A228, 'event_memories_vs_2026')
+    await runStart(plain, S228 - 30 * M)
     const [p2] = await unsentPosts(plain.DB, 'x')
     expect(p2.text).not.toContain(START_SOLO_NOTE)
     expect('special' in JSON.parse(p2.payload as string)).toBe(false)
