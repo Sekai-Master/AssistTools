@@ -3,6 +3,9 @@
  * 各ブロックの「開始→終了の時刻・ゲージ%」を出す。100%超過の無駄も検出。
  *
  * プレイブロックは「時間(分)」で指定する（イベランのシフトが1時間・30分区切りのため）。
+ * 2026-11-24 から、ブロックごとに「終わりのゲージ%」で指定することもできる（targetPercent）。
+ * そのブロックの開始時点のゲージから目標まで上げるのに要る時間を逆算して、時間の代わりに使う
+ * （イベントの終わりに100%ぎりぎりで終える組み方。前のブロックを動かしても目標で終わる）。
  *
  * ## 減少（公式スライド準拠, 2026-03）
  * - 最終プレイから5分後に計測開始。その5分も計測に含まれる（＝実質「最終プレイから30分で初回減少」）。
@@ -15,6 +18,7 @@ import {
   DECAY_INTERVAL_MIN,
   GAUGE_SPEC,
   type GaugeSpec,
+  internalFromPercent,
   liveGaugeInternal,
   mySekaiGaugeInternal,
 } from "./gaugeModel";
@@ -31,6 +35,12 @@ export type Segment =
       songLengthSec: number;
       /** このブロックの走行時間(分)。シフト単位（60/30等）で指定。 */
       minutes: number;
+      /**
+       * このブロックの終わりのゲージ（表示% 0〜100）。入っていると時間（minutes）の代わりに、
+       * ここまで上げるのに要る時間を逆算して使う（minutesToTarget）。無ければ時間で決める。
+       * 2026-11-24 追加なので旧データには無い。
+       */
+      targetPercent?: number;
       /** 焚き数（ライブボーナス消費数 0〜10）。点数計算に使う。ゲージには影響しない。 */
       taki?: number;
     }
@@ -77,11 +87,46 @@ export function mysekaiMemoriOf(
   return 0;
 }
 
+/**
+ * 稼働ブロックの目標ゲージ%（0〜100 に収める）。時間で決めるブロックは null。
+ * ★ 保存プランは端末に残り続けるので、壊れた値（文字列・NaN）は時間で決める扱いに戻す。
+ */
+export function playTargetOf(seg: Extract<Segment, { kind: "play" }>): number | null {
+  const t = seg.targetPercent;
+  if (typeof t !== "number" || !Number.isFinite(t)) return null;
+  return Math.max(0, Math.min(100, t));
+}
+
+/**
+ * 稼働で、開始のゲージ（内部値）から目標の表示%まで上げるのに要る分。
+ *
+ * 時間で決めるときの式（周回数 = 分 × 60 ÷ 1周の秒、内部値 += 周回数 × 1回の増加）を逆にしたもの:
+ *   分 = (目標の内部値 − 開始の内部値) ÷ 1回の増加 × 1周の秒 ÷ 60
+ * 稼働ではゲージは下がらないので、目標が開始以下なら 0 分。目標は 0〜100% に収める。
+ */
+export function minutesToTarget(
+  startInternal: number,
+  targetPercent: number,
+  refreshConstant: number,
+  songLengthSec: number,
+  overheadSec: number,
+  spec: GaugeSpec = GAUGE_SPEC
+): number {
+  const per = liveGaugeInternal(refreshConstant, spec);
+  const secPerPlay = playSeconds(songLengthSec, overheadSec);
+  if (!(per > 0) || !(secPerPlay > 0)) return 0;
+  const need = internalFromPercent(targetPercent, spec) - startInternal;
+  if (!(need > 0)) return 0;
+  return ((need / per) * secPerPlay) / 60;
+}
+
 export interface SegmentResult {
   segment: Segment;
   /** 開始からの相対分 */
   startMinute: number;
   endMinute: number;
+  /** このブロックの長さ(分)。ゲージ%で決める稼働は逆算した分（segment.minutes ではない）。 */
+  minutes: number;
   startPercent: number;
   endPercent: number;
   /** プレイブロックの周回数（分×ペースの逆算。休憩は0） */
@@ -131,17 +176,33 @@ export function simulateTimeline(
     let plays = 0;
     let wasted = 0;
     let wastedMin = 0;
+    let segMinutes = 0;
 
     if (seg.kind === "play") {
       // プレイ中は減少タイマー停止（decayProgress は据え置き＝繰り越し）。
       const secPerPlay = playSeconds(seg.songLengthSec, overheadSec);
-      plays = secPerPlay > 0 ? (seg.minutes * 60) / secPerPlay : 0;
+      const target = playTargetOf(seg);
+      segMinutes =
+        target == null
+          ? seg.minutes
+          : minutesToTarget(
+              internal,
+              target,
+              seg.refreshConstant,
+              seg.songLengthSec,
+              overheadSec,
+              spec
+            );
+      plays = secPerPlay > 0 ? (segMinutes * 60) / secPerPlay : 0;
       const per = liveGaugeInternal(seg.refreshConstant, spec);
       const effective = per > 0 ? Math.max(0, (spec.max - internal) / per) : plays;
-      wasted = Math.max(0, plays - effective);
+      // 目標%は100%以下なので、ゲージ%で決めたブロックにムダは出ない（浮動小数の端数も拾わない）。
+      wasted = target == null ? Math.max(0, plays - effective) : 0;
       wastedMin = (wasted * secPerPlay) / 60;
       internal = Math.min(spec.max, internal + plays * per);
-      minute += seg.minutes;
+      // 逆算した時間で積むと、浮動小数の端数で 99.99999…% になる。ちょうど目標で終える。
+      if (target != null && segMinutes > 0) internal = internalFromPercent(target, spec);
+      minute += segMinutes;
       totalPlays += plays;
       totalWasted += wasted;
       totalWastedMinutes += wastedMin;
@@ -152,21 +213,24 @@ export function simulateTimeline(
         spec.max,
         internal + mySekaiGaugeInternal(mysekaiMemoriOf(seg) * spec.staminaPerMemori, 0, spec)
       );
-      minute += Math.max(0, seg.minutes);
+      segMinutes = Math.max(0, seg.minutes);
+      minute += segMinutes;
     } else {
       // 休憩: 進捗を繰り越し加算し、30分ごとに減少。
-      decayProgress += Math.max(0, seg.minutes);
+      segMinutes = Math.max(0, seg.minutes);
+      decayProgress += segMinutes;
       while (decayProgress >= DECAY_INTERVAL_MIN) {
         decayProgress -= DECAY_INTERVAL_MIN;
         internal = Math.max(0, internal - spec.decayPer30min);
       }
-      minute += Math.max(0, seg.minutes);
+      minute += segMinutes;
     }
 
     points.push({
       segment: seg,
       startMinute,
       endMinute: minute,
+      minutes: segMinutes,
       startPercent: (startInternal / spec.max) * 100,
       endPercent: (internal / spec.max) * 100,
       plays,

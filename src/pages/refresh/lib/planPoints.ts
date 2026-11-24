@@ -81,7 +81,8 @@ export function computePlanPoints(
     let gained = 0;
     if (seg.kind === "play") {
       // 100%到達後は加点されない＝ゲージと点数が連動する。
-      const effMin = Math.max(0, seg.minutes - pt.wastedMinutes);
+      // 長さは pt.minutes（ゲージ%で決めたブロックは逆算した分。seg.minutes は時間で決めていたときの値）。
+      const effMin = Math.max(0, pt.minutes - pt.wastedMinutes);
       gained =
         takiRate(cfg.hourlyRate, cfg.refTaki, seg.taki ?? cfg.refTaki) * (effMin / 60);
     } else if (seg.kind === "mysekai") {
