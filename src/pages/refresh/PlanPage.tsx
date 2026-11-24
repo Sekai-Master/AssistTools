@@ -154,7 +154,16 @@ export default function PlanPage() {
     inputs.setSongId(plan.inputs.songId);
     inputs.setGauge(plan.inputs.gauge);
     // 旧データには無いので、欠けていたら空欄（＝30分フル扱い）に戻す。
-    inputs.setNextDecay(plan.inputs.nextDecay ?? "");
+    // ★ 端末に残った保存は型が崩れていることがある。文字でない値（数・null）で nextDecay.trim() が落ちていたので、
+    //   数は文字にし、それ以外は空欄にする（読めない文字・範囲の外は useGaugeInputs の nextDecayMin が 30 分扱いにする）。
+    const savedNext = plan.inputs.nextDecay as unknown;
+    inputs.setNextDecay(
+      typeof savedNext === "string"
+        ? savedNext
+        : typeof savedNext === "number" && Number.isFinite(savedNext)
+          ? String(savedNext)
+          : "",
+    );
     // 想定も旧データには無い。旧データの周回ペースはみんなでライブの値なので、みんなでライブとして戻す。
     const savedLive = liveOfSavedPlan(plan.inputs);
     inputs.setLive(savedLive);

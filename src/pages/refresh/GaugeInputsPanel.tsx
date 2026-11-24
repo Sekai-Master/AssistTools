@@ -3,7 +3,7 @@ import { Field } from "../../components/ui/Field";
 import { NeuInput } from "../../components/ui/NeuInput";
 import { NeuButton } from "../../components/ui/NeuButton";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
-import { Dial } from "../../components/ui/Dial";
+import { WheelPicker } from "../../components/ui/WheelPicker";
 import { DECAY_INTERVAL_MIN } from "./lib/gaugeModel";
 import { SongSearchModal } from "../../components/SongSearchModal";
 import { onJacketError } from "../../lib/img";
@@ -147,23 +147,20 @@ export function GaugeInputsPanel({
 
                 {/* ★ ゲージ%だけでは「30分タイマーがどこまで進んでいるか」が分からない。
                     イベントの途中で開くのが普通なので、触らないままだと最大30分ずれる。
-                    ★ 0〜30分で上下限がはっきりしているのでダイヤル（2026-11-24）。値の持ち方（空＝未設定＝30分で計算）と計算は前のまま */}
+                    ★ 0〜30分で上下限がはっきりしているので、ドラム式のピッカー（2026-11-25。前の円のダイヤルは場所を取りすぎた）。
+                      値の持ち方（空＝未設定＝30分で計算）と計算は前のまま。回していないときは 30 の段を出す */}
                 <Field
                   label="次の回復まで"
                   htmlFor="rg-next-decay"
-                  hint="ゲージ画面の残り時間。回さなければ30分で計算"
+                  hint="ゲージ画面の残り時間"
                 >
-                  <Dial
+                  <WheelPicker
                     id="rg-next-decay"
                     value={nextDecayMin}
                     fallback={DECAY_INTERVAL_MIN}
                     max={DECAY_INTERVAL_MIN}
                     unit="分"
-                    valueText={
-                      nextDecayMin == null
-                        ? `未設定（${DECAY_INTERVAL_MIN}分で計算）`
-                        : `${nextDecayMin}分`
-                    }
+                    valueText={`${Math.round(nextDecayMin ?? DECAY_INTERVAL_MIN)}分`}
                     onChange={(v) => setNextDecay(String(v))}
                   />
                 </Field>
@@ -175,11 +172,6 @@ export function GaugeInputsPanel({
                   <span className="font-bold text-slate-600">
                     {fmtDuration(emptyInMinutes)}
                   </span>
-                  {nextDecayMin == null && (
-                    <span className="text-slate-400">
-                      （「次の回復まで」を回していないので、30分として計算）
-                    </span>
-                  )}
                 </p>
               )}
             </div>
