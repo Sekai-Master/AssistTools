@@ -4,7 +4,8 @@
  * 稼働ブロックを「時間」と「ゲージ%」で切り替えて積む（2026-11-24、使い手の要望「切り替えながら積んでいけるといいね」）。
  * ★ 縛ること
  *   - ゲージ%で決めたブロックは、開始のゲージから入れた%まで上げる時間を逆算して入る（100% ならムダ 0 で終わる）
- *   - 切り替えでプランが動かない（時間→ゲージ はいまの終わりの%、ゲージ→時間 は逆算した分を引き継ぐ）
+ *   - 切り替えでは、時間→ゲージ はいまの終わりの%、ゲージ→時間 は逆算した分を引き継ぐ（稼働はプランが動かない。
+ *     休憩は段が下がった瞬間に終わる長さ＝進捗 0 なら 30 分の倍数のときだけ動かない）
  *   - 並べ替えても、ブロックごとの決め方と値は残る。前のブロックを変えると逆算し直す
  *   - 周回プランの保存・呼び出しで、決め方と「次の回復まで」（ダイヤル）の値が戻る
  *   - リフレッシュゲージ計算機でも同じ部品が出る
@@ -375,7 +376,7 @@ describe("休憩をゲージで決める", () => {
     expect(restRows()[0].textContent).toContain(`%まで10分→ ${(60 - (D * 100) / MAX).toFixed(1)}%`);
   });
 
-  it("切り替えでプランが動かない（時間→ゲージ は休んだ後の%を切り上げて引き継ぎ、ゲージ→時間 は逆算した分）", () => {
+  it("30 分の倍数の休憩は、切り替えてもプランが動かない（時間→ゲージ は休んだ後の%を切り上げて引き継ぎ、ゲージ→時間 は逆算した分）", () => {
     drawPlan();
     type(screen.getByLabelText("現在のゲージ"), "70");
     add("＋稼働");
@@ -389,6 +390,38 @@ describe("休憩をゲージで決める", () => {
     choose(restRows()[0], "時間");
     const row = restRows()[0] as HTMLElement;
     expect((within(row).getByLabelText("時間") as HTMLInputElement).value).toBe("1");
+    expect((within(row).getByLabelText("分") as HTMLInputElement).value).toBe("0");
+  });
+
+  // ★ 検分 #285 M: ゲージは30分ごとの段なので、30 分の倍数でない休憩は切り替えると縮む。この動きのまま固定する
+  it("30 分の倍数でない休憩（進捗 0 の 45 分）は、ゲージにすると段が下がった 30 分に縮み、タイマーの端数 15 分は落ちる", () => {
+    drawPlan();
+    type(screen.getByLabelText("現在のゲージ"), "70");
+    add("＋休憩");
+    fireEvent.change(within(restRows()[0] as HTMLElement).getByLabelText("分"), { target: { value: "45" } });
+    const step = (70 - (D * 100) / MAX).toFixed(1);
+    expect(rowGauge(restRows()[0])).toBe(step); // 45 分で 1 段
+    expect(restRows()[0].textContent).toContain("次の減少まであと15分（累計15/30分・繰り越し）");
+    choose(restRows()[0], "ゲージ");
+    expect(targetInput(restRows()[0]).value).toBe(step);
+    expect(restRows()[0].textContent).toContain(`%まで30分→ ${step}%`);
+    expect(restRows()[0].textContent).toContain("次の減少まであと30分（累計0/30分・繰り越し）");
+    choose(restRows()[0], "時間");
+    expect((within(restRows()[0] as HTMLElement).getByLabelText("分") as HTMLInputElement).value).toBe("30");
+  });
+
+  it("1 段も下がらない休憩（10 分）は、ゲージにすると 0 分になり、時間に戻しても 10 分は戻らない", () => {
+    drawPlan();
+    type(screen.getByLabelText("現在のゲージ"), "70");
+    add("＋休憩");
+    fireEvent.change(within(restRows()[0] as HTMLElement).getByLabelText("分"), { target: { value: "10" } });
+    expect(restRows()[0].textContent).toContain("次の減少まであと20分（累計10/30分・繰り越し）");
+    choose(restRows()[0], "ゲージ");
+    expect(targetInput(restRows()[0]).value).toBe("70");
+    expect(restRows()[0].textContent).toContain("%まで0分→ 70.0%");
+    choose(restRows()[0], "時間");
+    const row = restRows()[0] as HTMLElement;
+    expect((within(row).getByLabelText("時間") as HTMLInputElement).value).toBe("0");
     expect((within(row).getByLabelText("分") as HTMLInputElement).value).toBe("0");
   });
 
