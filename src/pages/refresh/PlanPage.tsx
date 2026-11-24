@@ -24,6 +24,7 @@ import {
   type SavedPlan,
   deletePlan,
   listPlans,
+  liveOfSavedPlan,
   savePlan,
 } from "./lib/planStorage";
 
@@ -37,8 +38,9 @@ const onlyDigits = (v: string) => v.replace(/[^0-9]/g, "");
  */
 export default function PlanPage() {
   const { musics, aliases, loading, error: dataError } = useAnalyzerMusics();
-  const inputs = useGaugeInputs(musics);
-  const { selectedSong, overhead, gaugePct, ratePerHour } = inputs;
+  // ★ ライブの想定を選べる（リフレッシュゲージと同じ）。みんなでライブが止まっている間はひとりでライブで開く。
+  const inputs = useGaugeInputs(musics, { liveChoice: true });
+  const { selectedSong, overhead, gaugePct, ratePerHour, live } = inputs;
 
   const [currentPt, setCurrentPt] = useState("");
   const [hourlyRate, setHourlyRate] = useState("500000");
@@ -123,6 +125,7 @@ export default function PlanPage() {
         gauge: inputs.gauge,
         nextDecay: inputs.nextDecay,
         rate: inputs.rate,
+        live,
         currentPt,
         hourlyRate,
         refTaki,
@@ -152,7 +155,10 @@ export default function PlanPage() {
     inputs.setGauge(plan.inputs.gauge);
     // 旧データには無いので、欠けていたら空欄（＝30分フル扱い）に戻す。
     inputs.setNextDecay(plan.inputs.nextDecay ?? "");
-    inputs.setRate(plan.inputs.rate);
+    // 想定も旧データには無い。旧データの周回ペースはみんなでライブの値なので、みんなでライブとして戻す。
+    const savedLive = liveOfSavedPlan(plan.inputs);
+    inputs.setLive(savedLive);
+    inputs.setRateFor(savedLive, plan.inputs.rate);
     setCurrentPt(plan.inputs.currentPt);
     setHourlyRate(plan.inputs.hourlyRate);
     setRefTaki(plan.inputs.refTaki);
@@ -408,6 +414,8 @@ export default function PlanPage() {
         startPercent={gaugePct}
         startDecayProgress={inputs.startDecayProgress}
         ratePerHour={ratePerHour}
+        live={live}
+        liveTag
         auto={autoConfig.runtime}
         segments={segments}
         setSegments={setSegments}

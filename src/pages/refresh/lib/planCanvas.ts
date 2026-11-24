@@ -17,7 +17,10 @@ export function watermark(toolId: string): string {
 }
 
 export interface PlanCanvasRow {
-  /** "21:00 → 22:00" などの時刻レンジ */
+  /**
+   * "21:00 → 22:00" などの時刻レンジ。
+   * 通常行で 1 行に収まらない時刻があると、" → " の前後で 2 行に分けて描く（timeLines）。
+   */
   time: string;
   /** "独りんぼエンヴィー 1時間" / "休憩 30分" */
   label: string;
@@ -117,6 +120,13 @@ const INK = "#334155";
 const MUTED = "#64748b";
 const WARN = "#e11d48";
 const JACKET = 34;
+/** 通常行の時刻の左端と、その右のジャケット（無ければラベル）の左端。 */
+const TIME_X = PAD + 4;
+const NORMAL_LABEL_X = PAD + 150;
+const TIME_FONT = "12px sans-serif";
+/** 時刻に使える幅。ジャケット・ラベルとの間に 8px 空ける。 */
+const TIME_MAX_W = NORMAL_LABEL_X - TIME_X - 8;
+const TIME_ARROW = " → ";
 /** 強調行のジャケットは通常行より一段大きくする。 */
 const JACKET_EMPHASIS = 40;
 const LB_ICON = 22;
@@ -199,6 +209,13 @@ export async function drawPlanCanvas(
   data.meta.forEach((m, i) => ctx.fillText(m, PAD, 88 + i * 20));
 
   // 行
+  // ★ 通常行の時刻は幅を測ってから描く。前は測らずに 1 行で描いていて、(+1d) が付くと
+  //   固定の位置（NORMAL_LABEL_X）にあるジャケット・曲名の下に潜っていた（2026-11-24 修正）。
+  //   1 つでも収まらない行があれば、全部の行を 2 行にそろえる（行ごとに 1 行・2 行が混ざらないように）。
+  ctx.font = TIME_FONT;
+  const splitTime = data.rows.some(
+    (r) => !isEmphasisRow(r) && ctx.measureText(r.time).width > TIME_MAX_W,
+  );
   let y = HEADER_H;
   for (let i = 0; i < data.rows.length; i++) {
     const r = data.rows[i];
@@ -210,7 +227,7 @@ export async function drawPlanCanvas(
     if (isEmphasisRow(r)) {
       drawEmphasisRow(ctx, r, y, rh, data, imgs, lbImg);
     } else {
-      drawNormalRow(ctx, r, y, data, imgs);
+      drawNormalRow(ctx, r, y, data, imgs, splitTime);
     }
     y += rh;
   }
@@ -247,23 +264,44 @@ export async function drawPlanCanvas(
   );
 }
 
-/** 通常行（従来通り54px・1段組）。新フィールドを持つ行では呼ばれない＝旧描画を1pxも変えない。 */
+/**
+ * 通常行の時刻を描く行。split のときは「開始」「↓ 終了」の 2 行（画面のタイムラインと同じ並び）。
+ * " → " を含まない時刻（アナライザーの「採取 n個」など）は 1 行のまま。
+ */
+function timeLines(time: string, split: boolean): string[] {
+  const i = time.indexOf(TIME_ARROW);
+  if (!split || i < 0) return [time];
+  return [time.slice(0, i), `↓ ${time.slice(i + TIME_ARROW.length)}`];
+}
+
+/**
+ * 通常行（従来通り54px・1段組）。新フィールドを持つ行では呼ばれない＝旧描画を1pxも変えない。
+ * splitTime は、時刻が 1 行に収まらない行が画像の中にあるとき true（時刻を 2 行で描く）。
+ */
 function drawNormalRow(
   ctx: CanvasRenderingContext2D,
   r: PlanCanvasRow,
   y: number,
   data: PlanCanvasData,
   imgs: Map<string, HTMLImageElement>,
+  splitTime: boolean,
 ): void {
   const cy = y + ROW_H / 2;
-  // 時刻
+  // 時刻。2 行のときはラベル・補足の 2 行と同じ高さに置く。
+  // 収まらない分は「…」で切る（2 行にしても入らない長さでも、ジャケット・曲名には重ねない）。
   ctx.textAlign = "left";
   ctx.fillStyle = MUTED;
-  ctx.font = "12px sans-serif";
-  ctx.fillText(r.time, PAD + 4, cy);
+  ctx.font = TIME_FONT;
+  const lines = timeLines(r.time, splitTime);
+  if (lines.length === 1) {
+    ctx.fillText(truncate(ctx, lines[0], TIME_MAX_W), TIME_X, cy);
+  } else {
+    ctx.fillText(truncate(ctx, lines[0], TIME_MAX_W), TIME_X, cy - 8);
+    ctx.fillText(truncate(ctx, lines[1], TIME_MAX_W), TIME_X, cy + 10);
+  }
 
   // ジャケット
-  let labelX = PAD + 150;
+  let labelX = NORMAL_LABEL_X;
   const jimg = r.jacket ? imgs.get(r.jacket) : undefined;
   if (jimg) {
     const jy = cy - JACKET / 2;

@@ -5,6 +5,7 @@
  */
 import type { Segment } from "./timeline";
 import type { PassCourse } from "../../ranking/lib/lbRun";
+import type { LiveAssumption } from "./liveAssumption";
 
 /** 休憩中オートの設定（プラン全体で1つ）。2026-08-27 追加。 */
 export interface SavedAutoInputs {
@@ -23,7 +24,12 @@ export interface SavedPlanInputs {
   gauge: string;
   /** 「次の回復まで ○分」。2026-08-27 に追加したので、旧データには無い。 */
   nextDecay?: string;
+  /** 周回ペース（エビ基準・回/時）。live の想定の欄の値。 */
   rate: string;
+  /**
+   * どちらのライブの想定で組んだか。2026-11-24 に追加したので旧データには無い（liveOfSavedPlan で読む）。
+   */
+  live?: LiveAssumption;
   currentPt: string;
   hourlyRate: string;
   refTaki: number;
@@ -76,6 +82,15 @@ function write(plans: SavedPlan[]): void {
   } catch {
     // 容量超過・ストレージ不可は無視（保存は best-effort）
   }
+}
+
+/**
+ * 保存したプランの想定。想定が無い・読めない値なら "multi"。
+ * ★ 想定を足す前の周回プランは、みんなでライブのペース（既定 28 回/時）で保存していた。
+ *   ひとりでライブの欄に戻すと、みんなでライブのペースに「ひとりでライブ想定」の札が付き、画像にもそう書かれる。
+ */
+export function liveOfSavedPlan(inputs: SavedPlanInputs): LiveAssumption {
+  return inputs.live === "solo" ? "solo" : "multi";
 }
 
 /** 新しい順の一覧。 */

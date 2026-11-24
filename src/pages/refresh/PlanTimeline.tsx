@@ -28,7 +28,8 @@ import {
 } from "./lib/planCanvas";
 import { getRefreshConstant } from "./lib/refreshConstant";
 import { fmtClock, fmtDuration, parseClock } from "./lib/format";
-import { type LiveAssumption, paceMetaLine } from "./lib/liveAssumption";
+import { type LiveAssumption, assumptionTag, paceMetaLine } from "./lib/liveAssumption";
+import { AssumptionTag } from "./AssumptionTag";
 import type { AnalyzerMusic } from "../analyzer/useAnalyzerMusics";
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
@@ -81,10 +82,13 @@ interface Props {
   /** エビ基準の周回ペース(回/時)。画像のメタ表示に使う。 */
   ratePerHour: number;
   /**
-   * どちらのライブの想定か（リフレッシュゲージだけが渡す）。渡すと画像の「ペース」の行に書き足す。
-   * 渡さない周回プランの画像は足す前と同じ文。
+   * どちらのライブの想定か（リフレッシュゲージと周回プランが渡す）。渡すと画像の周回ペースの後ろに書き足す。
    */
   live?: LiveAssumption;
+  /**
+   * 見出しの横に想定の札を出す（周回プラン）。リフレッシュゲージは上の「この曲で走ると」に札があるので出さない。
+   */
+  liveTag?: boolean;
   /** 指定すると各プレイに焚き数を持たせ、累積到達ポイントも計算・表示する（全部入り） */
   points?: PointsConfig;
   /** 指定すると休憩ブロックに「オートを回す」を出せる（周回プランのみ） */
@@ -109,6 +113,7 @@ export function PlanTimeline({
   startDecayProgress = 0,
   ratePerHour,
   live,
+  liveTag = false,
   points,
   auto,
   segments,
@@ -273,7 +278,7 @@ export function PlanTimeline({
         : (selectedSong?.title ?? "リフレッシュゲージ"),
       meta: points
         ? [
-            `時速 ${points.hourlyRate.toLocaleString()} pt/時（基準焚き${points.refTaki}）・${ratePerHour}回/時`,
+            `時速 ${points.hourlyRate.toLocaleString()} pt/時（基準焚き${points.refTaki}）・${ratePerHour}回/時${live ? `（${assumptionTag(live)}）` : ""}`,
             `現在 ${points.startPoints.toLocaleString()} pt ・ 開始 ${startTime || "—"} ・ ゲージ ${startPercent}%`,
           ]
         : [
@@ -420,14 +425,21 @@ export function PlanTimeline({
     a.click();
   };
 
+  const title = points
+    ? "タイムライン（曲・休憩・マイセカイ・到達pt）"
+    : "周回プラン（休憩込み）";
+  const showTag = liveTag && live != null;
+
   return (
-    <Panel
-      title={
-        points
-          ? "タイムライン（曲・休憩・マイセカイ・到達pt）"
-          : "周回プラン（休憩込み）"
-      }
-    >
+    // ★ 札は見出し（h2）の外に置き、見出しの名前は変えない（リフレッシュゲージの「この曲で走ると」と同じ形）。
+    //   Panel の title は文字しか受けないので、札を出すときは見出しを Panel と同じ形で手で書く。
+    <Panel title={showTag ? undefined : title}>
+      {showTag && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <h2 className="text-base font-bold text-slate-700">{title}</h2>
+          <AssumptionTag live={live} />
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <Field label="開始時刻" htmlFor="rg-start" className="!space-y-1">
           <NeuInput
