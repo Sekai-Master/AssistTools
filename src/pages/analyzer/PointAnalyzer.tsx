@@ -349,7 +349,7 @@ export default function PointAnalyzer() {
                 label="スタミナのブースト中に採る（5倍）"
               />
               <p className="mt-1 text-xs text-slate-500">
-                ライブボーナスでスタミナを回復すると、その分がブーストされます。
+                ライブボーナスで回復した分（ワールドパス中は毎日の回復分も）がブーストされます。
               </p>
             </div>
           )}

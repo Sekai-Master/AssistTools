@@ -91,7 +91,7 @@ export const MULTI_OTHER_SCORE_CAP = 16;
 
 /**
  * マイセカイ単価の倍率。通常は ×1（100）、スタミナのブースト中の採取は ×5（500）。
- * 5倍は実機で確認済み（2026-11-24）。名前の WORLD_PASS は保存済みの値との互換のため据え置き。
+ * 5倍は実機で確認済み（2026-11-24）。ブーストになるのはライブボーナスで回復した分と、ワールドパス中の毎日の回復分。名前の WORLD_PASS は保存済みの値との互換のため据え置き。
  */
 export const MYSEKAI_MULTIPLIER = 100;
 export const MYSEKAI_MULTIPLIER_WORLD_PASS = 500;
