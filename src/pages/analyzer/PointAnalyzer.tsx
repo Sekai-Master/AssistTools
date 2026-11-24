@@ -342,16 +342,11 @@ export default function PointAnalyzer() {
           <Switch checked={useMySekai} onChange={setUseMySekai} label="マイセカイを利用する" />
           {/* R5: ブースト中の採取（5倍）はマイセカイ利用時のみ意味を持つので、ON時だけ表示する。変数名 hasWorldPass は保存済みの値との互換のため据え置き。 */}
           {useMySekai && (
-            <div>
-              <Switch
-                checked={hasWorldPass}
-                onChange={setHasWorldPass}
-                label="スタミナのブースト中に採る（5倍）"
-              />
-              <p className="mt-1 text-xs text-slate-500">
-                ライブボーナスで回復した分（ワールドパス中は毎日の回復分も）がブーストされます。
-              </p>
-            </div>
+            <Switch
+              checked={hasWorldPass}
+              onChange={setHasWorldPass}
+              label="スタミナのブースト中に採る（5倍）"
+            />
           )}
           {useMySekai && (
             <div className="text-sm text-slate-500">
