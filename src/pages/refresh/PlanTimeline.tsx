@@ -1,6 +1,7 @@
 import {
   type Dispatch,
   type SetStateAction,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -32,6 +33,8 @@ import { type LiveAssumption, assumptionTag, paceMetaLine } from "./lib/liveAssu
 import { AssumptionTag } from "./AssumptionTag";
 import { RestUntilEndLine } from "./RestUntilEndLine";
 import { clockToMs } from "./lib/restUntilEnd";
+import { isFitRest, isUntilEnd, resolveFitToEnd } from "./lib/fitToEnd";
+import { useEventSchedule } from "./useEventSchedule";
 import type { AnalyzerMusic } from "../analyzer/useAnalyzerMusics";
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
@@ -140,10 +143,32 @@ export function PlanTimeline({
    */
   const [startRefAt, setStartRefAt] = useState(() => Date.now());
   const startAt = startMOD === null ? null : clockToMs(startMOD, startRefAt);
-  const result = useMemo(
-    () => simulateTimeline(segments, startPercent, overhead, startDecayProgress),
-    [segments, startPercent, overhead, startDecayProgress],
+  /**
+   * 休憩の「自動」と最後の稼働の「イベ乙まで」（lib/fitToEnd.ts）。使っているときだけイベ乙の時刻を読む（EventEndProbe）。
+   * 長さを入れた写しを積む。行に渡す segment も写し（決め方の印はそのまま。書き戻しは id で元へ）。
+   */
+  const lastIndex = segments.length - 1;
+  const usesFit = segments.some(isFitRest) || isUntilEnd(segments, lastIndex);
+  const [eventEndMs, setEventEndMs] = useState<number | null>(null);
+  const fit = useMemo(
+    () =>
+      resolveFitToEnd(segments, {
+        startPercent,
+        overheadSec: overhead,
+        startDecayProgress,
+        minutesToEnd:
+          // 集計は 20:59:59。分に切り捨て、終わりの時刻を 20:59 と出す（21:00 に繰り上げない）
+          usesFit && eventEndMs != null && startAt !== null ? Math.floor((eventEndMs - startAt) / 60_000) : null,
+      }),
+    [segments, startPercent, overhead, startDecayProgress, usesFit, eventEndMs, startAt],
   );
+  const result = useMemo(
+    () => simulateTimeline(fit.segments, startPercent, overhead, startDecayProgress),
+    [fit.segments, startPercent, overhead, startDecayProgress],
+  );
+  /** 自動の休憩・イベ乙までの稼働の長さを「—」にするか。 */
+  const autoUnsolved = fit.status !== "solved";
+  const endUnsolved = fit.status === "noEnd" || fit.status === "past";
 
   /**
    * 休憩に積んだオート。**ゲージには効かない**ので timeline とは別に計算する
@@ -448,6 +473,7 @@ export function PlanTimeline({
     // ★ 札は見出し（h2）の外に置き、見出しの名前は変えない（リフレッシュゲージの「この曲で走ると」と同じ形）。
     //   Panel の title は文字しか受けないので、札を出すときは見出しを Panel と同じ形で手で書く。
     <Panel title={showTag ? undefined : title}>
+      {usesFit && <EventEndProbe onChange={setEventEndMs} />}
       {showTag && (
         <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1">
           <h2 className="text-base font-bold text-slate-700">{title}</h2>
@@ -577,6 +603,8 @@ export function PlanTimeline({
                           seg={seg}
                           minutes={pt.minutes}
                           endPercent={pt.endPercent}
+                          isLast={i === lastIndex}
+                          unsolved={isUntilEnd(segments, i) && endUnsolved}
                           onChange={(patch) => setLength(seg.id, patch)}
                         />
                         <span className="text-xs text-slate-400">
@@ -664,6 +692,7 @@ export function PlanTimeline({
                           seg={seg}
                           minutes={pt.minutes}
                           endPercent={pt.endPercent}
+                          unsolved={isFitRest(seg) && autoUnsolved}
                           onChange={(patch) => setLength(seg.id, patch)}
                         />
                         {points && auto && (
@@ -871,7 +900,7 @@ export function PlanTimeline({
             />
           </div>
           {/* 終わりの後も上の曲で走る想定。開始時刻が空欄だと終わりの日時が決まらないので出さない */}
-          {restUntilEnd && canAddPlay && selectedSong && startAt !== null && result.points.length > 0 && (
+          {restUntilEnd && canAddPlay && selectedSong && startAt !== null && result.points.length > 0 && !isUntilEnd(segments, lastIndex) && (
             <RestUntilEndLine
               startPercent={result.finalPercent}
               decayProgressMin={result.points[result.points.length - 1].decayProgressMin}
@@ -903,4 +932,21 @@ export function PlanTimeline({
       )}
     </Panel>
   );
+}
+
+/** イベ乙の時刻を読み直さない長さ（RestUntilEndLine と同じ）。 */
+const EVENT_FRESH_MS = 5 * 60_000;
+
+/**
+ * イベ乙の時刻（集計の aggregateAt）を親へ渡すだけの見えない部品。休憩の「自動」か最後の稼働の「イベ乙まで」を
+ * 使っているときだけ置く（使っていないページで /api/border/current を読まない。Workers の呼び出し枠）。
+ * 読み口は RestUntilEndLine と同じ useEventSchedule（開催中ならその回、終わっていれば次の回）。分からなければ null。
+ */
+function EventEndProbe({ onChange }: { onChange: (ms: number | null) => void }) {
+  const [now] = useState(() => Date.now());
+  const end = useEventSchedule(now, EVENT_FRESH_MS)?.aggregateAt ?? null;
+  useEffect(() => {
+    onChange(end);
+  }, [end, onChange]);
+  return null;
 }
