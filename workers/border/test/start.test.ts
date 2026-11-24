@@ -156,7 +156,7 @@ describe('開始の告知を積む（runStart）', () => {
  * 227（Leo/need Memories）が 102時間なら、226（同じ Memories・102時間）を飛ばして 222 を出す
  */
 describe('開始の告知: みんなでライブ停止中の回を前例にしない', () => {
-  // 227 を仮に 11/25 15:00 開始・102時間とする
+  // 227 はマスタの値（素材名 event_memories_lon_2026・11/25 15:00 開始・102時間。2026-11-24 確認）
   const S227 = Date.UTC(2026, 10, 25, 6, 0)
   const A227 = S227 + 102 * H - 1000
   const table = {
@@ -178,7 +178,7 @@ describe('開始の告知: みんなでライブ停止中の回を前例にし�
   }
 
   it('このファイルの一覧（SOLO_ONLY_EVENTS）の 226 は飛ばす', async () => {
-    const env = await envWith(227, S227, A227, 'event_memories_ln_2026')
+    const env = await envWith(227, S227, A227, 'event_memories_lon_2026')
     expect(await runStart(env, S227 - 30 * M)).toMatchObject({ status: 'queued' })
     expect(await prevOf(env)).toMatchObject({ id: 222 })
   })
@@ -228,7 +228,7 @@ describe('開始の告知: みんなでライブ停止中の回を前例にし�
   })
 
   it('有効な版のモデルの一覧に足した回（227 など）の告知も同じにする。一覧に無い回の payload には special を付けない', async () => {
-    const env = await envWith(227, S227, A227, 'event_memories_ln_2026')
+    const env = await envWith(227, S227, A227, 'event_memories_lon_2026')
     const model = { version: 'share-median-v1@e225-x', createdAt: '', algorithm: 'share-median-v1', grid: [], ranks: {}, special: { events: [226, 227] } }
     await putModel(env.DB, model as unknown as Model, {}, 0)
     await runStart(env, S227 - 30 * M)
@@ -236,7 +236,7 @@ describe('開始の告知: みんなでライブ停止中の回を前例にし�
     expect(post.text).toContain(START_SOLO_NOTE)
     expect(JSON.parse(post.payload as string)).toMatchObject({ prev: null, special: 'solo' })
 
-    const plain = await envWith(227, S227, A227, 'event_memories_ln_2026')
+    const plain = await envWith(227, S227, A227, 'event_memories_lon_2026')
     await runStart(plain, S227 - 30 * M)
     const [p2] = await unsentPosts(plain.DB, 'x')
     expect(p2.text).not.toContain(START_SOLO_NOTE)

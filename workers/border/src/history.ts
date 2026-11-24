@@ -57,6 +57,9 @@ const MEMORIES_UNIT: Record<string, string> = {
   wxs: 'theme_park',
   // 226 ワンダーランズ×ショウタイム Memories のマスタの素材名は event_memories_wds_2026（wxs ではない。2026-11-20 に告知が出なかったことで判明）
   wds: 'theme_park',
+  // 227 Leo/need Memories のマスタの素材名は event_memories_lon_2026（ln ではない。2026-11-24 にマスタで確認。ln も残す）
+  lon: 'light_sound',
+  // ★ '25'・vs は推測のまま（マスタにまだ出ていない）。新しい Memories がマスタに入ったら素材名を照合する
   '25': 'school_refusal',
   vs: 'piapro',
 }
