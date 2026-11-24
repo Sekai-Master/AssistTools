@@ -35,7 +35,7 @@ const renderPage = () =>
 /** 広い画面の目次（横の余白）。 */
 const sideToc = () => screen.getByRole("navigation", { name: "版の目次" });
 /** 狭い画面の畳んだ一覧の開け閉めボタン。 */
-const foldButton = () => screen.getByRole("button", { name: /版の目次/ });
+const foldButton = () => screen.getByRole("button", { name: /^版の目次/ });
 
 describe("更新履歴の版の目次", () => {
   it("版の枠ごとにアンカー（id）があり、ヘッダーに隠れないよう上に余白を取る", () => {
