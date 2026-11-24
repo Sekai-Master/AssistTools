@@ -68,7 +68,15 @@ export interface CurrentBorder {
   loading: boolean;
 }
 
-export function useCurrentBorder(): CurrentBorder {
+export interface CurrentBorderOptions {
+  /**
+   * 覚えている値がこれより新しければ、出したときに読みに行かない（ms。既定 0＝毎回読む）。
+   * 出入りの多い所（周回プランのイベ乙までの行）で、Workers の呼び出しを出すたびに重ねないため。10 分ごとの読み直しは同じ。
+   */
+  freshMs?: number;
+}
+
+export function useCurrentBorder({ freshMs = 0 }: CurrentBorderOptions = {}): CurrentBorder {
   const [data, setData] = useState<CurrentBorder>(() => {
     const m = remembered(Date.now());
     return m ? { current: m.snap, loading: false } : { current: null, loading: true };
@@ -97,7 +105,8 @@ export function useCurrentBorder(): CurrentBorder {
           if (!signal.aborted) setData((d) => ({ ...d, loading: false }));
         });
     };
-    load();
+    const m = remembered(Date.now());
+    if (!(m && Date.now() - m.at < freshMs)) load();
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") load();
     }, REFRESH_MS);
@@ -110,7 +119,7 @@ export function useCurrentBorder(): CurrentBorder {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [freshMs]);
 
   return data;
 }

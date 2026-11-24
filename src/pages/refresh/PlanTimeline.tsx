@@ -30,6 +30,8 @@ import { getRefreshConstant } from "./lib/refreshConstant";
 import { fmtClock, fmtDuration, parseClock } from "./lib/format";
 import { type LiveAssumption, assumptionTag, paceMetaLine } from "./lib/liveAssumption";
 import { AssumptionTag } from "./AssumptionTag";
+import { RestUntilEndLine } from "./RestUntilEndLine";
+import { clockToMs } from "./lib/restUntilEnd";
 import type { AnalyzerMusic } from "../analyzer/useAnalyzerMusics";
 
 const JACKET_BASE = `${import.meta.env.BASE_URL}MusicDatas/jacket/`;
@@ -93,6 +95,11 @@ interface Props {
   points?: PointsConfig;
   /** 指定すると休憩ブロックに「オートを回す」を出せる（周回プランのみ） */
   auto?: AutoRuntimeInput;
+  /**
+   * 合計の下に「イベ乙までに、あと合計何分休めば 100% ちょうど」を、タイムラインの終わりから出す（周回プラン）。
+   * リフレッシュゲージは上の「この曲で走ると」に「いま」からの同じ行があるので出さない。
+   */
+  restUntilEnd?: boolean;
   /** タイムライン本体（親が保持＝保存/呼び出し対象）。 */
   segments: Segment[];
   setSegments: Dispatch<SetStateAction<Segment[]>>;
@@ -116,6 +123,7 @@ export function PlanTimeline({
   liveTag = false,
   points,
   auto,
+  restUntilEnd = false,
   segments,
   setSegments,
   startTime,
@@ -125,6 +133,13 @@ export function PlanTimeline({
   const [notice, setNotice] = useState<string | null>(null);
 
   const startMOD = parseClock(startTime);
+  /**
+   * 開始時刻の日付を決める基準の時刻（イベ乙までの行に使う）。タイムラインの時刻は開始時刻の日を起点に数えるので、
+   * 基準は開いたときと開始時刻を打ち直したときだけ取り、時間が過ぎても取り直さない
+   * （刻々の「いま」で決めると、21:00 開始が 22:01 に翌日へ飛ぶ）。
+   */
+  const [startRefAt, setStartRefAt] = useState(() => Date.now());
+  const startAt = startMOD === null ? null : clockToMs(startMOD, startRefAt);
   const result = useMemo(
     () => simulateTimeline(segments, startPercent, overhead, startDecayProgress),
     [segments, startPercent, overhead, startDecayProgress],
@@ -445,7 +460,10 @@ export function PlanTimeline({
             id="rg-start"
             type="time"
             value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
+            onChange={(e) => {
+              setStartTime(e.target.value);
+              setStartRefAt(Date.now());
+            }}
             className="max-w-32"
           />
         </Field>
@@ -852,6 +870,18 @@ export function PlanTimeline({
               sub={result.totalWasted >= 1 ? "休憩を挟もう" : "無駄なし"}
             />
           </div>
+          {/* 終わりの後も上の曲で走る想定。開始時刻が空欄だと終わりの日時が決まらないので出さない */}
+          {restUntilEnd && canAddPlay && selectedSong && startAt !== null && result.points.length > 0 && (
+            <RestUntilEndLine
+              startPercent={result.finalPercent}
+              decayProgressMin={result.points[result.points.length - 1].decayProgressMin}
+              refreshConstant={getRefreshConstant(selectedSong.basePoint, selectedSong.id)}
+              songLengthSec={selectedSong.musicTime}
+              overheadSec={overhead}
+              fromMs={startAt + result.totalMinutes * 60_000}
+              className="mt-3"
+            />
+          )}
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <NeuButton onClick={copyImage} className="!py-1.5">

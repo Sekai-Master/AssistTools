@@ -6,7 +6,7 @@
  * ★ D1 の読み取り行数も無料枠（500万行/日・SAWAYAKA と共有）を食うので、
  *   事前に組み立てた1行（kv）を返す。予測ログの表を毎回なめない。
  */
-import { activeModelSummary, allReports, eventAsset, kvGet, shapesOf } from './db.ts'
+import { activeModelSummary, allReports, eventAsset, kvGet, nextEventAfter, shapesOf } from './db.ts'
 
 /** 形の順位の数（50・100・200・500・1000・2000） */
 const SHAPE_RANKS = 6
@@ -36,11 +36,58 @@ async function withEventAsset(db: D1Database, body: string): Promise<string> {
   }
 }
 
+/** /upcoming で返す回。名前と期間だけ */
+interface UpcomingEvent {
+  id: number
+  name: string
+  startAt: number
+  aggregateAt: number
+}
+
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+/** kv の current の回（id・名前・期間）。読めなければ null */
+function currentEventOf(raw: string | null): UpcomingEvent | null {
+  if (!raw) return null
+  try {
+    const ev = (JSON.parse(raw) as { event?: Record<string, unknown> }).event
+    if (!ev || !isNum(ev.id) || !isNum(ev.startAt) || !isNum(ev.aggregateAt)) return null
+    return { id: ev.id, name: typeof ev.name === 'string' ? ev.name : '', startAt: ev.startAt, aggregateAt: ev.aggregateAt }
+  } catch {
+    return null
+  }
+}
+
 /**
- * path は "/current" "/track-record" "/finals" "/events/{id}/history" "/events/{id}/shape" のどれか。該当しなければ null。
+ * 次に集計を迎える回（サイトのリフレッシュゲージ・周回プランの「イベ乙までに、あと合計何分休めば」の行）。
+ * - current の回がまだ集計前ならその回
+ * - 終わっていれば、events 表のその回より後（主キーの範囲）で集計前の、いちばん早く始まる回。マラソンでなければ出さない
+ * ★ 次の回は今の回が終わってから返す（始まる前の回を早く出しすぎない。2 つ先の回も返さない）。
+ *   events 表は解析ジョブがマスタの日程から入れる（collect.ts の parseSchedule・scripts/border/analyze.ts）
+ * ★ 読むのは kv の current の 1 行と、events のこれからの回の数行。キャッシュ 5 分
+ */
+async function upcomingResponse(db: D1Database, now: number): Promise<Response> {
+  const notFound = () =>
+    new Response(JSON.stringify({ error: 'no upcoming event' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=300' },
+    })
+  const cur = currentEventOf(await kvGet(db, 'current'))
+  if (!cur) return notFound()
+  if (cur.aggregateAt > now) return rawJson(JSON.stringify({ event: cur }), 300)
+  const next = await nextEventAfter(db, cur.id, now)
+  if (!next || next.eventType !== 'marathon') return notFound()
+  const event: UpcomingEvent = { id: next.id, name: next.name, startAt: next.startAt, aggregateAt: next.aggregateAt }
+  return rawJson(JSON.stringify({ event }), 300)
+}
+
+/**
+ * path は "/current" "/upcoming" "/track-record" "/finals" "/events/{id}/history" "/events/{id}/shape" のどれか。該当しなければ null。
  * 返す JSON の形はサイト側の src/pages/border/types.ts と揃える。
  */
-export async function publicBorderResponse(db: D1Database, path: string): Promise<Response | null> {
+export async function publicBorderResponse(db: D1Database, path: string, now: number = Date.now()): Promise<Response | null> {
+  if (path === '/upcoming') return upcomingResponse(db, now)
+
   if (path === '/current') {
     const v = await kvGet(db, 'current')
     return v ? rawJson(await withEventAsset(db, v), 60) : new Response(JSON.stringify({ error: 'no data yet' }), { status: 404, headers: { 'Content-Type': 'application/json; charset=utf-8' } })

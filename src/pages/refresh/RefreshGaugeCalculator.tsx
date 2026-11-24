@@ -13,6 +13,7 @@ import { useGaugeInputs } from "./useGaugeInputs";
 import { GaugeInputsPanel } from "./GaugeInputsPanel";
 import { PlanTimeline } from "./PlanTimeline";
 import { ResultBar } from "../../components/ui/ResultBar";
+import { RestUntilEndLine } from "./RestUntilEndLine";
 
 /**
  * リフレッシュゲージ。現在ゲージから「100%まで何分・持続ペース」を確認しつつ、
@@ -122,6 +123,14 @@ export default function RefreshGaugeCalculator() {
                 sub={`休憩 約${plan.restSharePercent.toFixed(0)}%`}
               />
             </div>
+            <RestUntilEndLine
+              startPercent={gaugePct}
+              decayProgressMin={startDecayProgress}
+              refreshConstant={rc}
+              songLengthSec={len}
+              overheadSec={overhead}
+              className="mt-4"
+            />
             <p className="mt-4 text-xs text-slate-500">
               100%（続行不可）に達したら、非活動30分ごとに8.33%回復。全回復まで
               {fmtDuration(plan.fullRecoveryMinutes)}
