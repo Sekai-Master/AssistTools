@@ -18747,6 +18747,31 @@
     "masterNotes": 1310
   },
   {
+    "id": "796",
+    "title": "ジグソーパズル",
+    "pronunciation": "じぐそーぱずる",
+    "creatorArtistId": 27,
+    "artistName": "まふまふ",
+    "default": 1171501,
+    "Unit": "0_VS",
+    "categories": [
+      "original"
+    ],
+    "publishedAt": 1795413600000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_796.webp",
+    "music_time": 121.7,
+    "event_rate": 114,
+    "singers": [23],
+    "maxSingers": 1,
+    "dancerCount": 1,
+    "expertLevel": 26,
+    "masterLevel": 29,
+    "masterNotes": 1011
+  },
+  {
     "id": "802",
     "title": "君に贈る未来",
     "pronunciation": "きみにおくるみらい",
