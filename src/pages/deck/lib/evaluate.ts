@@ -79,7 +79,7 @@ export function evaluateDeck(
       cards.map((c, i) => ({
         cardId: c.id,
         ch: c.ch,
-        // ★ ブルフェスは特訓済みなら面（特訓前／特訓後）でスキルが変わる。選んだ面の id を渡す。
+        // ★ ブルフェスは絵の面（特訓前／特訓後）でスキルが変わる。いま使われる方の id を渡す。
         activeSkillId: activeSkillId(c, ctx.states[c.id]),
         unit: power.perCard[i]?.unit ?? c.supportUnit ?? "piapro",
         level: ctx.states[c.id]?.skillLevel ?? 1,

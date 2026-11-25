@@ -36,33 +36,16 @@ export interface CardState {
   episodes: { first: boolean; latter: boolean };
   canvas: boolean;
   /**
-   * 絵だけ特訓前のものを出す。
-   * ★ **計算には一切効かない、見た目だけの設定。** 特訓後の絵より前の絵が好き、
-   *   というだけの理由で特訓フラグを外されると、上限レベルも後編も巻き添えで
-   *   狂って数字が合わなくなる。だから絵の切り替えは別の設定として持つ。
+   * 絵を特訓前のものにする（特訓フラグとは別の設定）。
+   * ★ 特訓後の絵より前の絵が好き、というだけの理由で特訓フラグを外されると、
+   *   上限レベルも後編も巻き添えで狂って数字が合わなくなる。だから絵の切り替えは別の設定として持つ。
+   * ★ **特訓後スキルを持つカード（ブルームフェス限定）では、絵の面がスキルも決める。**
+   *   ゲームでは特訓済みのカードの絵を特訓前／特訓後で切り替えると、使うスキルも切り替わる
+   *  （Nori 確認 2026-11-25）。判定は deckInputs.showsTrainedArt / activeSkillId の 1 か所。
+   *   それ以外のカードでは計算に効かない。
    */
   artUntrained?: boolean;
-  /**
-   * 使うスキルの面（ブルームフェス限定カードのように特訓後スキルを持つカードだけ意味を持つ）。
-   * ゲームでは特訓済みのカードの表示を特訓前／特訓後で切り替えると、使うスキルも切り替わる。
-   *
-   * ★ **既定値を書き込まない。** 押していないカードは undefined のまま持ち、
-   *   計算のたびに DEFAULT_SKILL_SIDE で読む。既定を変えたときに、選んでいない人の
-   *   カードまで古い既定で固まらないようにするため。
-   * ★ 特訓していないカードでは、ここに何が入っていても特訓前の面（deckInputs.activeSkillId）。
-   * ★ artUntrained（絵だけの設定）とは連動させない。あちらは計算に効かないと約束している。
-   */
-  skillSide?: SkillSide;
 }
-
-/** スキルの面。"normal" が特訓前（カードの skillId）、"trained" が特訓後（stSkillId）。 */
-export type SkillSide = "normal" | "trained";
-
-/**
- * スキルの面の既定。**特訓前**＝この欄を足す前の計算と同じ数字になる側。
- * ★ 既存の利用者の数字を黙って変えないための既定。変えるときはここ1か所だけ直す。
- */
-export const DEFAULT_SKILL_SIDE: SkillSide = "normal";
 
 export type CardStates = Record<number, CardState>;
 
@@ -143,7 +126,6 @@ export function isCardState(v: unknown): v is CardState {
     return false;
   }
   if (c.artUntrained != null && typeof c.artUntrained !== "boolean") return false;
-  if (c.skillSide != null && c.skillSide !== "normal" && c.skillSide !== "trained") return false;
   if (c.skillLevel != null && (!isFiniteNum(c.skillLevel) || c.skillLevel < 1 || c.skillLevel > 4)) {
     return false;
   }

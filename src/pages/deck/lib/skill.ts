@@ -54,9 +54,9 @@ export interface SkillDeckCard {
   cardId: number;
   ch: number;
   /**
-   * いま使われる面のスキル id（deckInputs.activeSkillId）。
-   * ★ カードの skillId をそのまま入れない。ブルームフェス限定カードは特訓済みなら
-   *   特訓後スキル（stSkillId）に切り替えられるので、どちらの面かを決めてから渡す。
+   * いま使われるスキルの id（deckInputs.activeSkillId）。
+   * ★ カードの skillId をそのまま入れない。ブルームフェス限定カードは特訓後の絵なら
+   *   特訓後スキル（stSkillId）を使うので、絵の面で決めてから渡す。
    */
   activeSkillId?: number;
   /** power.ts の resolveUnit と同じ「そのカードが名乗るユニット枠」。 */
@@ -103,16 +103,36 @@ export function isCharacterRankMissing(ranks: Record<number, number> | undefined
 
 const clampLevel = (level: number, len: number) => Math.min(Math.max(Math.trunc(level) || 1, 1), len);
 
-/**
- * 素のスコアアップ%（編成の影響を入れない値）。参照系スキルの計算にも使う。
- * ★ いま使われる面のスキルで引く。参照系スキルが特訓後の面のブルフェスを参照するときも
- *   この値（キャラクターランクぶんを含まない素の値）を見る。ゲームが何を見るかは未実測
- *  （issue #21 の 1 番と同じ問題）なので、ここは変えずに測ってから決める。
- */
+/** 素のスコアアップ%（編成の影響を入れない値）。いま使われるスキルで引く。 */
 function baseOf(card: SkillDeckCard, skills: Map<number, SkillRow>): number | null {
   const s = card.activeSkillId == null ? undefined : skills.get(card.activeSkillId);
   if (!s || s.base.length === 0) return null;
   return s.base[clampLevel(card.level, s.base.length) - 1] ?? 0;
+}
+
+interface RankBonus {
+  bonus: number;
+  note: string;
+  rankMissing?: true;
+}
+
+/**
+ * キャラクターランクによる上乗せ（ブルフェスの特訓後スキル 22）。段（ランク2ごとに+1%、
+ * ランク100で+50%）のうち届いた一番上を採る。ランクが空なら 0 と未入力の印。
+ */
+function characterRankBonus(
+  card: SkillDeckCard,
+  skill: SkillRow | undefined,
+  ranks?: Record<number, number>
+): RankBonus | null {
+  const e = skill?.enhance;
+  if (e?.type !== "character_rank" || !e.steps?.length) return null;
+  if (isCharacterRankMissing(ranks, card.ch)) {
+    return { bonus: 0, note: "キャラクターランク未入力", rankMissing: true };
+  }
+  const rank = ranks![card.ch];
+  const hit = e.steps.filter((s) => s.rank <= rank).map((s) => s.value);
+  return { bonus: hit.length ? Math.max(...hit) : 0, note: `キャラクターランク${rank}` };
 }
 
 /**
@@ -130,6 +150,17 @@ export function deckSkill(
   const missing: number[] = [];
 
   const bases = deck.map((c) => baseOf(c, table));
+  const rankBonuses = deck.map((c, i) =>
+    bases[i] == null ? null : characterRankBonus(c, table.get(c.activeSkillId!), opts.characterRanks)
+  );
+  /**
+   * 参照スキルが見る相手の値。**素の値＋キャラクターランクぶん**。
+   * ★ 特訓後の絵のブルフェス（22）はいまの値（ランク84なら 110＋42＝152）を見る。
+   *   素の 110 でも最大の 160 でもない（Nori 確認 2026-11-25）。ランクが空の相手は素の値（SL4 なら 110）。
+   * ★ ユニット加算（同ユニット◯人ごと等）のぶんは入れない。編成込みを見るかは未実測（issue #21 の 1 番）。
+   * ★ 相手も参照スキルなら、その上乗せは入れず素の値を見る（参照同士で循環させない）。
+   */
+  const referable = bases.map((b, i) => (b == null ? null : b + (rankBonuses[i]?.bonus ?? 0)));
 
   const perCard: CardSkill[] = deck.map((card, i) => {
     const base = bases[i];
@@ -162,20 +193,15 @@ export function deckSkill(
       const lv = clampLevel(card.level, e.rates.length) - 1;
       const rate = e.rates[lv] ?? 0;
       const cap = e.caps?.[lv] ?? Infinity;
-      const othersMax = Math.max(0, ...bases.filter((v, j) => j !== i && v != null).map((v) => v!));
+      const othersMax = Math.max(0, ...referable.filter((v, j) => j !== i && v != null).map((v) => v!));
       bonus = Math.min((othersMax * rate) / 100, cap);
       note = "他メンバー参照（上限）";
-    } else if (e?.type === "character_rank" && e.steps?.length) {
-      // 自分のキャラのランク。段（ランク2ごとに+1%、ランク100で+50%）のうち届いた一番上を採る。
-      if (isCharacterRankMissing(opts.characterRanks, card.ch)) {
-        rankMissing = true;
-        note = "キャラクターランク未入力";
-      } else {
-        const rank = opts.characterRanks![card.ch];
-        const hit = e.steps.filter((s) => s.rank <= rank).map((s) => s.value);
-        bonus = hit.length ? Math.max(...hit) : 0;
-        note = `キャラクターランク${rank}`;
-      }
+    } else if (rankBonuses[i]) {
+      // 自分のキャラのランク（characterRankBonus）。ランクが空なら +0 で、黙らずに印を立てる。
+      const r = rankBonuses[i]!;
+      bonus = r.bonus;
+      note = r.note;
+      rankMissing = r.rankMissing;
     }
 
     return {

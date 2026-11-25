@@ -6,7 +6,7 @@ import { cardArtUrl, eventLogoUrl, loadCardArt } from "./lib/cardArt";
 import { cn } from "../../lib/utils";
 import { drawDeckCanvas, resolveColor } from "./lib/deckCanvas";
 import { buildShareCard, shareFileName } from "./lib/share";
-import type { CatalogCard } from "./lib/deckInputs";
+import { showsTrainedArt, type CatalogCard } from "./lib/deckInputs";
 import type { CardStates } from "./lib/deckStore";
 import type { DeckEval } from "./lib/evaluate";
 
@@ -77,8 +77,7 @@ export function SharePanel({
      *   立ち絵を持っているのは★4と birthday だけなので、★3以下がリーダーなら簡易版になる。
      */
     const leader = cards.find((c) => c.id === leaderCardId) ?? cards[0];
-    const s = leader ? states[leader.id] : undefined;
-    const url = leader ? cardArtUrl(leader, !!s?.trained && !s?.artUntrained) : null;
+    const url = leader ? cardArtUrl(leader, showsTrainedArt(leader, states[leader.id])) : null;
     const logoUrl = hideBonus || noBonus ? null : eventLogoUrl(eventAsset);
     const [heroArt, eventLogo] = await Promise.all([
       url ? loadCardArt(url) : Promise.resolve(null),

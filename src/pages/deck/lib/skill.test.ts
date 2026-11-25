@@ -193,16 +193,62 @@ describe("キャラクターランクで伸びるスキル（ブルフェスの�
   });
 
   /**
-   * ★ 参照スキル（23）が特訓後の面のブルフェスを参照するとき、相手の「スコアUP最大値」に
-   *   何を使うか（110 のみ／110＋ランク分／160）は未実測（issue #21 の 1 番と同じ）。
-   *   いまは**相手の素の値（active な面の base＝110）**を見る。測るまで変えないことを固定する。
+   * ★ 参照スキル（23）が特訓後の絵のブルフェス（22）を参照するときは、相手の**いまの値**
+   *  （素の値＋キャラクターランクぶん）を見る。素の 110 でも最大の 160 でもない
+   *  （Nori 確認 2026-11-25。ランク84 なら 110＋42＝152 を参照する）。
    */
-  it("参照スキルは相手の素の値（ランクぶんを含まない110）を見る（未実測・現状の挙動）", () => {
+  describe("参照スキルが特訓後のブルフェスを参照する", () => {
     const self = card(1, 23, "light_sound", 4); // 素80・参照50%・上限70
     const partner = card(949, 22, "light_sound", 4, ch);
-    const r = deckSkill([self, partner], skills, { characterRanks: { [ch]: 100 } });
-    expect(r.perCard[1].value).toBe(160);
-    expect(r.perCard[0].bonus).toBe(55); // 110 × 50%（160 × 50% なら上限70）
+    const ref = (ranks: Record<number, number> | undefined, p = partner) =>
+      deckSkill([self, p], skills, { characterRanks: ranks });
+
+    it("相手がランク84なら 152 を参照し、76 は上限70で止まって合計150", () => {
+      const r = ref({ [ch]: 84 });
+      expect(r.perCard[1].value).toBe(152);
+      expect(r.perCard[0].bonus).toBe(70);
+      expect(r.perCard[0].value).toBe(150);
+    });
+
+    it("上限に届かないときはちょうど半分（ランク40 → 130 の50%＝65、合計145）", () => {
+      const r = ref({ [ch]: 40 });
+      expect(r.perCard[1].value).toBe(130);
+      expect(r.perCard[0].bonus).toBe(65);
+      expect(r.perCard[0].value).toBe(145);
+    });
+
+    it("スキルレベルぶんの素の値に乗ったものを参照する（相手 SL1・ランク60 → 120 の50%＝60）", () => {
+      expect(ref({ [ch]: 60 }, card(949, 22, "light_sound", 1, ch)).perCard[0].bonus).toBe(60);
+    });
+
+    // ★ 相手のランクが空なら、相手は +0（110）で計算して未入力の印を立てる。参照する側もその 110 を見る。
+    it("相手のランクが未入力なら 110 を参照する（合計135）。印は相手にだけ立つ", () => {
+      const r = ref({});
+      expect(r.perCard[1].value).toBe(110);
+      expect(r.perCard[1].rankMissing).toBe(true);
+      expect(r.perCard[0].value).toBe(135);
+      expect(r.perCard[0].rankMissing).toBeUndefined();
+    });
+
+    // ★ 参照スキル同士は互いの上乗せを見ない（循環させない）。相手が参照スキルなら素の値。
+    it("相手も参照スキルなら、相手の素の値（80）を参照する", () => {
+      const r = deckSkill([self, card(2, 23, "light_sound", 4), card(3, 4, "idol", 4)], skills);
+      expect(r.perCard[1].value).toBe(140); // 相手は★4の120を参照して 80＋60
+      expect(r.perCard[0].bonus).toBe(60); // 自分も 120 を見る（相手の 140 は見ない）
+      expect(deckSkill([self, card(2, 23, "light_sound", 4)], skills).perCard[0].bonus).toBe(40); // 80 の50%
+    });
+
+    /**
+     * ★ ユニット加算（同ユニット1人ごと等）の相手は、いまも**素の値**を見る。
+     *   編成込みを見るかは未実測（issue #21 の 1 番）。今回の確認はキャラクターランクのぶんだけ。
+     */
+    it("ユニット加算の相手は素の値を見る（未実測・現状の挙動）", () => {
+      // 相手は skill 15（レオニ1人ごと+10%、SL4 の素100）。自分と★1（素40）がレオニなので 100＋20＝120。
+      const p = card(2, 15, "light_sound", 4);
+      const r = deckSkill([self, p, card(3, 1, "light_sound", 4)], skills);
+      expect(r.perCard[1].value).toBe(120);
+      expect(r.perCard[0].bonus).toBe(50); // 素の 100 の50%（編成込みの 120 なら 60）
+    });
   });
 });
 

@@ -5,14 +5,13 @@ import { UNIT_SHORT, characterName } from "./lib/characters";
 import { RarityBadge } from "./RarityBadge";
 import {
   applyTrained,
-  canSwitchSkillSide,
   isTrainable,
   levelCapOf,
-  SKILL_SIDE_LABEL,
-  skillSideOf,
+  showsTrainedArt,
+  usesTrainedSkill,
   type CatalogCard,
 } from "./lib/deckInputs";
-import type { CardState, SkillSide } from "./lib/deckStore";
+import type { CardState } from "./lib/deckStore";
 import { isCharacterRankMissing } from "./lib/skill";
 import { CardThumb } from "./CardThumb";
 
@@ -38,15 +37,12 @@ const chip = (active: boolean, className?: string) =>
 function CardStateEditor({
   card,
   state,
-  characterRanks,
   onChange,
 }: {
   card: CatalogCard;
   state: CardState;
-  characterRanks?: Record<number, number>;
   onChange: (patch: Partial<CardState>) => void;
 }) {
-  const side = skillSideOf(card, state);
   // ★ 特訓前は上限が10低い（★3=40 / ★4=50）。実機で作れない状態を入力させない。
   const maxLevel = levelCapOf(card, state.trained);
   const trainable = isTrainable(card);
@@ -112,15 +108,20 @@ function CardStateEditor({
           キャンバス
         </button>
 
-        {/* ★ 絵だけ特訓前に戻す。**計算には効かない見た目だけの設定**なので、
-            計算に効くボタンと並べず、行の一番右にアイコンだけで置く。
-            特訓を外して絵を戻すと、上限レベルと後編まで巻き添えで動いてしまう。 */}
+        {/* ★ 絵を特訓前に戻す。行の一番右にアイコンだけで置く。
+            特訓を外して絵を戻すと、上限レベルと後編まで巻き添えで動いてしまう。
+            ★ 特訓後スキルを持つカード（ブルフェス）は、ゲームと同じく絵の面でスキルも切り替わる
+            （deckInputs.showsTrainedArt）。それ以外のカードでは計算に効かない。文言もそれに合わせる。 */}
         {trainable && state.trained && (
           <button
             type="button"
             aria-pressed={!!state.artUntrained}
-            aria-label="絵を特訓前と切り替える"
-            title="絵だけ特訓前と切り替えます（計算には影響しません）"
+            aria-label={card.stSkillId != null ? "絵とスキルを特訓前と切り替える" : "絵を特訓前と切り替える"}
+            title={
+              card.stSkillId != null
+                ? "絵とスキルを特訓前と切り替えます"
+                : "絵だけ特訓前と切り替えます（計算には影響しません）"
+            }
             onClick={() => onChange({ artUntrained: !state.artUntrained })}
             className={cn(
               "ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
@@ -167,29 +168,6 @@ function CardStateEditor({
           </button>
         ))}
       </div>
-
-      {/* ★ ブルフェスの特訓後スキル。ゲームでは表示を特訓前／特訓後で切り替えるとスキルも変わる。
-          特訓済みで特訓後スキルを持つカードにだけ出す。特訓後の面はキャラクターランクで伸びるので、
-          ランクが入っていなければ +0 で計算していることをその場で出す。 */}
-      {canSwitchSkillSide(card, state) && (
-        <div className="flex flex-wrap items-center gap-1">
-          <span className="mr-1 text-xs text-slate-500">スキル</span>
-          {(["normal", "trained"] as SkillSide[]).map((s) => (
-            <button
-              key={s}
-              type="button"
-              aria-pressed={side === s}
-              onClick={() => onChange({ skillSide: s })}
-              className={chip(side === s)}
-            >
-              {SKILL_SIDE_LABEL[s]}
-            </button>
-          ))}
-          {side === "trained" && isCharacterRankMissing(characterRanks, card.ch) && (
-            <span className="ml-1 text-xs text-rose-600">キャラランク未入力</span>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -208,7 +186,7 @@ export function DeckSlots({
 }: {
   slots: (CatalogCard | null)[];
   states: Record<number, CardState>;
-  /** キャラクターランク（特訓後スキルの未入力の表示に使う）。 */
+  /** キャラクターランク（ブルフェスの特訓後スキルの未入力の印に使う）。 */
   characterRanks?: Record<number, number>;
   leaderIndex: number;
   /** 育成状態の編集を開いている枠。null なら全部閉じている。 */
@@ -243,7 +221,7 @@ export function DeckSlots({
                   {/* マスターランクはゲームと同じくカードの左下にひし形で出す。 */}
                   <CardThumb
                     card={card}
-                    trained={!!state?.trained && !state?.artUntrained}
+                    trained={showsTrainedArt(card, state)}
                     masterRank={state?.masterRank ?? 0}
                     size={48}
                   />
@@ -264,11 +242,11 @@ export function DeckSlots({
                       {state?.trained && " 特訓"}
                       {/* マスターランクはサムネのひし形で出しているので、文字では繰り返さない。 */}
                       {state && ` ・ SL${state.skillLevel ?? 1}`}
-                      {skillSideOf(card, state) === "trained" && ` ${SKILL_SIDE_LABEL.trained}スキル`}
                     </span>
-                    {/* ★ ランクが空だと +0 で計算している。編集パネルを開かない人にも見えるよう、ここにも出す。
+                    {/* ★ ブルフェスの特訓後スキルはキャラクターランクで伸びる。ランクが空だと +0 で計算しているので、
+                        編集パネルを開かない人にも見えるよう 1 行表示に出す（開いていてもこの行は出ている）。
                         上の行はスマホ幅で末尾が「…」に切れるので、印は別の行に置く。 */}
-                    {skillSideOf(card, state) === "trained" && isCharacterRankMissing(characterRanks, card.ch) && (
+                    {usesTrainedSkill(card, state) && isCharacterRankMissing(characterRanks, card.ch) && (
                       <span className="block text-xs text-rose-600">キャラランク未入力</span>
                     )}
                   </button>
@@ -296,7 +274,6 @@ export function DeckSlots({
                     <CardStateEditor
                       card={card}
                       state={state}
-                      characterRanks={characterRanks}
                       onChange={(patch) => onStateChange(card.id, patch)}
                     />
                     <div className="mt-2 flex justify-end">

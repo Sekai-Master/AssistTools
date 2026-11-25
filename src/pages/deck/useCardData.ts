@@ -68,7 +68,7 @@ const power3 = (v: unknown) => numArr3(v);
 export interface CardData {
   cards: CatalogCard[];
   events: EventRow[];
-  /** スキルの原型（22種）。カードは skillId（特訓後の面は stSkillId）でここを引く。 */
+  /** スキルの原型（22種）。カードは skillId（特訓後の絵のブルフェスは stSkillId）でここを引く。 */
   skills: SkillRow[];
   bonusTables: BonusTables;
   powerTables: PowerTables;

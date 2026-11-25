@@ -8,7 +8,7 @@
  */
 import type { DeckCard } from "./eventBonus";
 import type { DeckPowerCard, PowerCardData } from "./power";
-import { DEFAULT_SKILL_SIDE, type CardState, type CardStates, type SkillSide } from "./deckStore";
+import type { CardState, CardStates } from "./deckStore";
 
 /** cards.json のカード1枚。power.ts が使う分＋画面表示に要る分。 */
 export interface CatalogCard extends PowerCardData {
@@ -20,33 +20,33 @@ export interface CatalogCard extends PowerCardData {
 }
 
 /**
- * いまスキルの面を切り替えられるか。**特訓後スキルを持ち、かつ特訓済み**のときだけ。
- * 特訓していないカードは特訓前のスキルしか使えない（ゲームと同じ）。
+ * 特訓後の絵を出しているか。**絵とスキルの両方がこれ 1 つで決まる**（DeckSlots・SharePanel・
+ * 紹介カードの絵と、activeSkillId）。別々に書くと、絵と計算に使うスキルが食い違う。
  *
  * ★ 育成状態が未登録のカードは toPowerDeck と同じく「特訓できるなら特訓済み」で読む。
+ *   特訓前に倒すと、比較パネル（台帳に無いカードを含む保存編成）と編成を開いたとき
+ *  （既定の育成状態が書き込まれる）とで、ブルフェスのスキル値が食い違う。
  */
-export function canSwitchSkillSide(card: CatalogCard, state: CardState | undefined): boolean {
-  if (card.stSkillId == null) return false;
-  return state?.trained ?? isTrainable(card);
-}
-
-/** スキルの面の呼び名。画面のボタンと紹介カードで同じ語を使う。 */
-export const SKILL_SIDE_LABEL: Record<SkillSide, string> = { normal: "特訓前", trained: "特訓後" };
-
-/** いま使われるスキルの面。切り替えられないカードは常に特訓前。 */
-export function skillSideOf(card: CatalogCard, state: CardState | undefined): SkillSide {
-  if (!canSwitchSkillSide(card, state)) return "normal";
-  return state?.skillSide ?? DEFAULT_SKILL_SIDE;
+export function showsTrainedArt(card: PowerCardData, state: CardState | undefined): boolean {
+  return (state?.trained ?? isTrainable(card)) && !state?.artUntrained;
 }
 
 /**
- * スキル計算に渡すスキルの id（いま使われる面のもの）。
+ * スキル計算に渡すスキルの id。
  *
- * ★ カードの skillId を直接渡さない。ブルフェスの特訓後の面を選んでいても、
- *   特訓前のスキルで計算されたまま画面は正常に見えてしまう。
+ * ★ ブルームフェス限定カード（stSkillId を持つ）は、**ゲームと同じく絵の面でスキルが決まる**
+ *  （Nori 確認 2026-11-25）。特訓後の絵なら特訓後スキル、特訓前の絵・特訓前なら特訓前スキル。
+ *   スキルの面を別の設定として持たない（絵とスキルが別々に動く経路を作らない）。
+ * ★ カードの skillId を直接渡さない。特訓後の絵を出しているのに特訓前のスキルで
+ *   計算されたまま、画面は正常に見えてしまう。
  */
 export function activeSkillId(card: CatalogCard, state: CardState | undefined): number | undefined {
-  return skillSideOf(card, state) === "trained" ? card.stSkillId : card.skillId;
+  return usesTrainedSkill(card, state) ? card.stSkillId : card.skillId;
+}
+
+/** 特訓後スキル（stSkillId）を使っているか。キャラクターランク未入力の印もこれで出す。 */
+export function usesTrainedSkill(card: CatalogCard, state: CardState | undefined): boolean {
+  return card.stSkillId != null && showsTrainedArt(card, state);
 }
 
 /** 特訓まで済ませたときの上限レベル。★1=20 / ★2=30 / ★3=50 / ★4・birthday=60。 */
@@ -129,9 +129,8 @@ export function toPowerDeck(cards: CatalogCard[], states: CardStates): DeckPower
  *   総合力だけが数千多く出る（画面は何も警告しない）。
  * ★ **後編は特訓後にしか読めない**ので、特訓を外したら未読に戻す。
  *   サイドストーリーは1編成で1万以上動くので、ここのズレは大きい。
- * ★ 絵だけ特訓前に戻す設定（artUntrained）は見た目の話なので、ここでは触らない。
- * ★ スキルの面（skillSide）も残す。特訓を外している間は activeSkillId が特訓前の面に
- *   倒すので、計算には効かない。特訓し直したときに選んでいた面へ戻る。
+ * ★ 絵を特訓前にする設定（artUntrained）は残す。特訓を外している間は特訓前の絵・特訓前の
+ *   スキルになり（showsTrainedArt）、特訓し直したときに選んでいた絵の面へ戻る。
  */
 export function applyTrained(state: CardState, card: PowerCardData, trained: boolean): CardState {
   const cap = levelCapOf(card, trained);
