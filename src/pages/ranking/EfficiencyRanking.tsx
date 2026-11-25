@@ -1,4 +1,5 @@
 import { useMemo, useState, type CSSProperties } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ToolPage } from "../../components/ui/ToolPage";
 import { Panel } from "../../components/ui/Panel";
 import { Field } from "../../components/ui/Field";
@@ -25,7 +26,9 @@ import {
   DEFAULT_PARAMS,
   type RankingMode,
   type EfficiencyParams,
+  type SoloBy,
 } from "./lib/efficiency";
+import { parseRankingQuery } from "./lib/rankingQuery";
 import { premiseParts } from "./lib/premise";
 import { filterSummary } from "./lib/filterSummary";
 import { MoreSettings } from "../../components/ui/MoreSettings";
@@ -67,6 +70,16 @@ const MODE_OPTIONS: { value: RankingMode; label: string }[] = [
   { value: "solo", label: "ひとりで" },
   { value: "auto", label: "オート" },
   { value: "challenge", label: "チャレライ" },
+];
+
+/**
+ * 「ひとりで」タブの並べ方（2026-11-25）。ラベルは 390px で折れない 5 文字ずつ。
+ * ★ みんなでライブが止まり、ひとりでライブを手で叩いて走る人が多い。ライボが律速の人には
+ *   時間あたりより 1 回あたりのイベントPtが正しい軸になる（オートのタブはオートのスコアで別の数字）。
+ */
+const SOLO_BY_OPTIONS: { value: SoloBy; label: string }[] = [
+  { value: "hour", label: "時間あたり" },
+  { value: "play", label: "1回あたり" },
 ];
 
 /** ソロ（ひとりでライブ・オート・チャレライ）のスキルの効き方。3つのタブで同じ文。 */
@@ -116,6 +129,21 @@ const MODE_NOTE: Record<
     metricLabel: "スコア",
     skillHint: SOLO_SKILL_HINT,
   },
+};
+
+type ModeNote = (typeof MODE_NOTE)[RankingMode];
+
+/**
+ * 「ひとりで」を「1回あたり」で並べるときの見出し・説明。MODE_NOTE.solo の代わりに使う。
+ * ★ body は MODE_NOTE と同じく 26 字以内。detail は「この数字について」に ひとりでの次の行として出す。
+ */
+const SOLO_PER_PLAY_NOTE: ModeNote = {
+  headline: "ひとりでライブ・1回あたりのイベントポイント",
+  body: "律速はライボ。1回で稼げる曲が有利",
+  detail:
+    "ライボが律速なら、時間ではなく1回で稼げるイベントポイントで比べます。長尺・高基礎点の曲が上に来ます。手で叩いたAPのスコアで計算するので、同じ曲でもオートのタブより1回のポイントが高めに出ます。",
+  metricLabel: "Pt/回",
+  skillHint: SOLO_SKILL_HINT,
 };
 
 const onlyDigits = (v: string) => v.replace(/[^0-9]/g, "");
@@ -201,6 +229,8 @@ interface Stored {
   applyLimit?: boolean;
   /** 表を難易度ごとに全部並べるか。既定（false）は1曲1行（2026-11-19）。 */
   allDiffs?: boolean;
+  /** 「ひとりで」の並べ方。既定（未保存）は時間あたり（2026-11-25）。 */
+  soloBy?: SoloBy;
 }
 
 const str = (v: unknown): string | undefined =>
@@ -247,6 +277,7 @@ function loadStored(): Stored {
       regen: typeof s.regen === "boolean" ? s.regen : undefined,
       applyLimit: typeof s.applyLimit === "boolean" ? s.applyLimit : undefined,
       allDiffs: typeof s.allDiffs === "boolean" ? s.allDiffs : undefined,
+      soloBy: s.soloBy === "hour" || s.soloBy === "play" ? s.soloBy : undefined,
       autoFrom:
         s.autoFrom === "lb" || s.autoFrom === "plays" || s.autoFrom === "window"
           ? s.autoFrom
@@ -467,14 +498,26 @@ const LIMIT_LABEL: Record<WindowRow["limitedBy"], string> = {
 export default function EfficiencyRanking() {
   const { entries, loading, error } = useRankingMusics();
   const stored = useMemo(() => loadStored(), []);
+  /**
+   * URL の指定（?tab=solo&by=play など。2026-11-25）。投稿のリンクから一発で並びを開くため、
+   * **最初の描画のときだけ**読み、保存値より優先する。URL へは書き戻さず、保存もしない。
+   */
+  const [searchParams] = useSearchParams();
+  const [query] = useState(() => parseRankingQuery(searchParams));
 
   /**
    * ★ タブは保存しない（毎回ここから開く）。みんなでライブが止まっている間は、
    *   使えないタブを最初に見せないよう「ひとりで周回」で開く（2026-11-18 Nori 決定。再開したら印を戻すだけで元に戻る）。
+   *   URL で指定があればそのタブで開く。
    */
-  const [mode, setMode] = useState<RankingMode>(
-    MULTI_LIVE_SUSPENDED ? "solo" : "manual",
+  const initialMode: RankingMode =
+    query.tab ?? (MULTI_LIVE_SUSPENDED ? "solo" : "manual");
+  const [mode, setMode] = useState<RankingMode>(initialMode);
+  /** 「ひとりで」の並べ方。URL の指定 → 保存値 → 時間あたり（今までの並び）の順。 */
+  const [soloBy, setSoloBy] = useState<SoloBy>(
+    query.by ?? stored.soloBy ?? "hour",
   );
+  const soloPerPlay = mode === "solo" && soloBy === "play";
   const [diffs, setDiffs] = useState<Set<Difficulty>>(() => new Set(ALL_DIFFS));
   /**
    * 表を難易度ごとに全部並べるか。**既定は1曲1行**（選んだ難易度・レベルの中で、その曲の一番上の行だけ）。
@@ -554,18 +597,27 @@ export default function EfficiencyRanking() {
   const [skillTotal, setSkillTotal] = useState(
     stored.skillTotal ?? String(DEFAULT_PARAMS.skillTotal),
   );
+  /**
+   * 共有の欄（overhead）が最初に合わせるタブ。ふだんはみんなでの既定で、URL でオート・チャレライを
+   * 指定して開いたときだけそのタブ（タブを押して切り替えたのと同じ欄の値で開く）。
+   */
+  const initialOverheadMode: Exclude<RankingMode, "solo"> =
+    initialMode === "solo" ? "manual" : initialMode;
   // 既定はモードで違う（オートはリザルト送りを詰められないぶん長い）。
   // ★ この欄はみんなで周回・オート周回・チャレライの3つで共有する。ひとりで周回は下の overheadSolo。
-  const [overhead, setOverhead] = useState(
-    stored.overhead ?? String(DEFAULT_OVERHEAD_SEC.manual),
+  // ★ 保存値がみんなでの既定と同じ（＝触っていない）なら、changeMode と同じく開いたタブの既定へ差し替える。
+  const [overhead, setOverhead] = useState(() =>
+    stored.overhead != null &&
+    Number(stored.overhead) !== DEFAULT_OVERHEAD_SEC.manual
+      ? stored.overhead
+      : String(DEFAULT_OVERHEAD_SEC[initialOverheadMode]),
   );
   /**
    * 共有の欄（overhead）がいまどのタブの既定に合わせているか。ひとりで周回を挟んでも、
    * 3つのタブの間の「触っていなければ既定へ差し替える」は今までどおりに動かすために持つ。
    */
-  const [overheadMode, setOverheadMode] = useState<
-    Exclude<RankingMode, "solo">
-  >("manual");
+  const [overheadMode, setOverheadMode] =
+    useState<Exclude<RankingMode, "solo">>(initialOverheadMode);
   /** ひとりで周回のロス。未入力ならそのタブの既定（OVERHEAD_SEC.solo）。 */
   const [overheadSolo, setOverheadSolo] = useState(
     stored.overheadSolo ?? String(DEFAULT_OVERHEAD_SEC.solo),
@@ -742,11 +794,12 @@ export default function EfficiencyRanking() {
         }),
       );
     }
-    return top(rankSongs(filtered, params, mode));
+    return top(rankSongs(filtered, params, mode, { soloBy }));
   }, [
     entries,
     params,
     mode,
+    soloBy,
     diffs,
     allDiffs,
     loLv,
@@ -771,7 +824,7 @@ export default function EfficiencyRanking() {
 
   /** 表が「この時間内の合計Pt」で並んでいるか。 */
   const isWindow = mode === "auto" && autoFrom === "window";
-  const note = MODE_NOTE[mode];
+  const note = soloPerPlay ? SOLO_PER_PLAY_NOTE : MODE_NOTE[mode];
   const playCount = Math.min(limits.autoPlays, Number(plays) || 0);
   const osReduce = useReducedMotion();
   const motionLevel = resolvePlan(useMotionSetting(), {
@@ -987,6 +1040,20 @@ export default function EfficiencyRanking() {
               390px のひとりでで最初の画面に表が 5 行入るようにした（2026-11-19） */}
         <p className="mt-3 text-sm font-bold text-slate-600">{note.headline}</p>
         <p className="mt-1 text-xs text-slate-500">{note.body}</p>
+        {/* ★ 「ひとりで」だけの並べ方（2026-11-25）。開いてすぐ見えるよう、閉じた段「絞り込み」には入れない。
+              見出し（何で並べているか）がこれで替わるので、見出しのすぐ下に置く。 */}
+        {mode === "solo" && (
+          <SegmentedControl
+            options={SOLO_BY_OPTIONS}
+            value={soloBy}
+            onChange={(v) => {
+              setSoloBy(v);
+              persist({ soloBy: v });
+            }}
+            ariaLabel="ひとりでの並べ方"
+            className="mt-2 max-w-xs"
+          />
+        )}
         {/**
          * ★★ **この順位が何を含んでいないかを先に言う。** ★★
          * スコアの式はスキルの発動位置を**平均（期待値）**で置いている。したがって
@@ -1224,13 +1291,26 @@ export default function EfficiencyRanking() {
                                 data-sub
                                 className="ml-auto text-right font-num tabular-nums"
                               >
-                                <span className="whitespace-nowrap">
-                                  {perHour.toFixed(1)}回/時
-                                </span>
-                                ・
-                                <span className="whitespace-nowrap">
-                                  1回 {fmt(r.eventPt)}Pt
-                                </span>
+                                {/*
+                                 * ★ 主役の数字と同じ量を小さな字で繰り返さない。1回あたりなら Pt/時 を回す。
+                                 *   回/時 も並べると本番の字体で 390px の行に収まらず、内訳だけ次の行へ折れて
+                                 *   1 行が高くなる（2026-11-25 撮影で確認）ので、1回あたりでは Pt/時 だけにする。
+                                 */}
+                                {soloPerPlay ? (
+                                  <span className="whitespace-nowrap">
+                                    1時間 {fmt(r.ptPerHour)}Pt
+                                  </span>
+                                ) : (
+                                  <>
+                                    <span className="whitespace-nowrap">
+                                      {perHour.toFixed(1)}回/時
+                                    </span>
+                                    ・
+                                    <span className="whitespace-nowrap">
+                                      1回 {fmt(r.eventPt)}Pt
+                                    </span>
+                                  </>
+                                )}
                               </span>
                             )}
                             {w && (
@@ -1925,12 +2005,15 @@ export default function EfficiencyRanking() {
           <li>
             <span className="font-bold text-slate-600">タブの考え方</span>
             <ul className="mt-1 space-y-1">
-              {MODE_OPTIONS.map((o) => (
-                <li key={o.value}>
-                  <span className="font-bold text-slate-600">
-                    {MODE_NOTE[o.value].headline}
-                  </span>
-                  ：{MODE_NOTE[o.value].detail}
+              {/* ひとりでの「1回あたり」は、ひとりでの次の行に出す（2026-11-25） */}
+              {MODE_OPTIONS.flatMap((o) =>
+                o.value === "solo"
+                  ? [MODE_NOTE.solo, SOLO_PER_PLAY_NOTE]
+                  : [MODE_NOTE[o.value]],
+              ).map((n) => (
+                <li key={n.headline}>
+                  <span className="font-bold text-slate-600">{n.headline}</span>
+                  ：{n.detail}
                 </li>
               ))}
             </ul>
