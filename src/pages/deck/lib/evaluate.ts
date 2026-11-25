@@ -7,7 +7,7 @@
  */
 import { eventBonus, type BonusTables, type EventBonusResult } from "./eventBonus";
 import { deckPower, type DeckPowerResult, type PlayerState, type PowerTables } from "./power";
-import { filledCards, toBonusDeck, toPowerDeck, type CatalogCard } from "./deckInputs";
+import { activeSkillId, filledCards, toBonusDeck, toPowerDeck, type CatalogCard } from "./deckInputs";
 import { deckSkill, type DeckSkillResult, type SkillRow } from "./skill";
 import type { CardStates } from "./deckStore";
 
@@ -79,7 +79,8 @@ export function evaluateDeck(
       cards.map((c, i) => ({
         cardId: c.id,
         ch: c.ch,
-        skillId: c.skillId,
+        // ★ ブルフェスは特訓済みなら面（特訓前／特訓後）でスキルが変わる。選んだ面の id を渡す。
+        activeSkillId: activeSkillId(c, ctx.states[c.id]),
         unit: power.perCard[i]?.unit ?? c.supportUnit ?? "piapro",
         level: ctx.states[c.id]?.skillLevel ?? 1,
       })),

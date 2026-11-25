@@ -10,7 +10,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  activeSkillId,
   applyTrained,
+  canSwitchSkillSide,
+  skillSideOf,
   defaultEventId,
   displayBonus,
   filledCards,
@@ -23,7 +26,7 @@ import {
   type CatalogCard,
   type EventRow,
 } from "./deckInputs";
-import { defaultCardState, type CardStates } from "./deckStore";
+import { DEFAULT_SKILL_SIDE, defaultCardState, type CardStates } from "./deckStore";
 
 const cardsJson = JSON.parse(
   fs.readFileSync(path.join(process.cwd(), "public/CardDatas/cards.json"), "utf8")
@@ -83,6 +86,59 @@ describe("特訓と上限レベル", () => {
   it("上限より低いレベルは触らない", () => {
     const s = { ...defaultCardState(60, true), level: 30 };
     expect(applyTrained(s, card(471), false).level).toBe(30);
+  });
+});
+
+/**
+ * ブルームフェス限定カードのスキルの面。
+ * 949（★4・特訓前スキル 23・特訓後スキル 22）と、特訓後スキルを持たない 471 で見る。
+ */
+describe("スキルの面（特訓前／特訓後）", () => {
+  const bloom = () => card(949);
+  const trained = { ...defaultCardState(60, true) };
+  const untrained = { ...defaultCardState(50, true), trained: false };
+
+  it("配信データのブルフェスは特訓後スキルを持ち、普通のカードは持たない", () => {
+    expect(bloom()).toMatchObject({ skillId: 23, stSkillId: 22 });
+    expect(card(471).stSkillId).toBeUndefined();
+  });
+
+  it("既定は特訓前の面（この欄を足す前と同じ数字）", () => {
+    expect(DEFAULT_SKILL_SIDE).toBe("normal");
+    expect(skillSideOf(bloom(), trained)).toBe("normal");
+    expect(activeSkillId(bloom(), trained)).toBe(23);
+  });
+
+  it("特訓済みで特訓後の面を選ぶと、特訓後スキルになる", () => {
+    expect(activeSkillId(bloom(), { ...trained, skillSide: "trained" })).toBe(22);
+    expect(activeSkillId(bloom(), { ...trained, skillSide: "normal" })).toBe(23);
+  });
+
+  // ★ 特訓していないカードは特訓前のスキルしか使えない（ゲームと同じ）。
+  it("特訓していなければ、特訓後の面を選んでいても特訓前のスキル", () => {
+    const s = { ...untrained, skillSide: "trained" as const };
+    expect(canSwitchSkillSide(bloom(), s)).toBe(false);
+    expect(skillSideOf(bloom(), s)).toBe("normal");
+    expect(activeSkillId(bloom(), s)).toBe(23);
+  });
+
+  it("特訓後スキルを持たないカードは、何を選んでいても自分の skillId", () => {
+    const c = card(471);
+    expect(canSwitchSkillSide(c, trained)).toBe(false);
+    expect(activeSkillId(c, { ...trained, skillSide: "trained" })).toBe(c.skillId);
+  });
+
+  it("育成状態が未登録なら特訓済み・既定の面で読む（toPowerDeck と同じ既定）", () => {
+    expect(canSwitchSkillSide(bloom(), undefined)).toBe(true);
+    expect(activeSkillId(bloom(), undefined)).toBe(23);
+  });
+
+  it("特訓を外しても選んだ面は残り、特訓し直すと戻る", () => {
+    const on = { ...trained, skillSide: "trained" as const };
+    const off = applyTrained(on, bloom(), false);
+    expect(off.skillSide).toBe("trained");
+    expect(activeSkillId(bloom(), off)).toBe(23);
+    expect(activeSkillId(bloom(), applyTrained(off, bloom(), true))).toBe(22);
   });
 });
 

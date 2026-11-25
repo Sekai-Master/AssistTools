@@ -88,6 +88,16 @@ describe("育成状態のラベル", () => {
   it("台帳に無いカードでも落ちない", () => {
     expect(growthLabel(undefined, card(1, "x", 1))).toBe("Lv60 SL1");
   });
+
+  it("ブルフェスで特訓後の面のスキルを使っているときだけ「特訓後スキル」を足す", () => {
+    const bloom = { ...card(949, "x", 17), skillId: 23, stSkillId: 22 };
+    expect(growthLabel(state({ skillSide: "trained" }), bloom)).toBe("Lv60 特訓 SL4 特訓後スキル");
+    expect(growthLabel(state(), bloom)).toBe("Lv60 特訓 SL4");
+    // 特訓していなければ特訓後の面は使えない。
+    expect(growthLabel(state({ trained: false, skillSide: "trained" }), bloom)).toBe("Lv60 SL4");
+    // 特訓後スキルを持たないカードでは何も足さない。
+    expect(growthLabel(state({ skillSide: "trained" }), card(1, "x", 1))).toBe("Lv60 特訓 SL4");
+  });
 });
 
 describe("紹介カードの中身", () => {

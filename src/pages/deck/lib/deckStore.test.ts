@@ -69,6 +69,27 @@ describe("育成状態", () => {
     expect(Object.keys(parsed)).toEqual(["1"]);
   });
 
+  it("スキルの面は normal / trained だけ通し、それ以外の値は1件ごと落とす", () => {
+    const ok = defaultCardState(60, true);
+    const parsed = parseCardStates({
+      1: { ...ok, skillSide: "trained" },
+      2: { ...ok, skillSide: "normal" },
+      3: { ...ok, skillSide: "after" },
+      4: { ...ok, skillSide: 1 },
+    });
+    expect(Object.keys(parsed)).toEqual(["1", "2"]);
+    expect(parsed[1].skillSide).toBe("trained");
+  });
+
+  // ★ 既定を変えたとき、選んでいない人のカードが古い既定で固まらないように。
+  it("スキルの面は既定値を書き込まない（未選択は undefined のまま往復する）", () => {
+    expect("skillSide" in defaultCardState(60, true)).toBe(false);
+    writeCardStates({ 1: defaultCardState(60, true), 2: { ...defaultCardState(60, true), skillSide: "trained" } });
+    const back = readCardStates();
+    expect("skillSide" in back[1]).toBe(false);
+    expect(back[2].skillSide).toBe("trained");
+  });
+
   it("配列や null を渡されても空で返る", () => {
     expect(parseCardStates([1, 2])).toEqual({});
     expect(parseCardStates(null)).toEqual({});

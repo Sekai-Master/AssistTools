@@ -8,13 +8,14 @@
  *   画像の数字と画面の数字が食い違うのが一番たちが悪い。
  */
 import { ATTR_COLOR, characterName } from "./characters";
-import { displayBonus, type CatalogCard } from "./deckInputs";
+import { displayBonus, SKILL_SIDE_LABEL, skillSideOf, type CatalogCard } from "./deckInputs";
 import type { CardState } from "./deckStore";
 import type { DeckCanvasCard, DeckCanvasData } from "./deckCanvas";
 import type { DeckEval } from "./evaluate";
 
 /**
  * 「Lv60 特訓 SL4」。育成状態は数字の根拠なので必ず添える。
+ * ブルフェスで特訓後の面のスキルを使っているときは「特訓後スキル」を足す（スキル値が変わるため）。
  * ★ マスターランクはここに入れない。ゲームと同じく**カードの左下にひし形**で描く
  *   （deckCanvas.drawMasterRank）。文字とひし形の両方に出すと二重になる。
  */
@@ -23,6 +24,7 @@ export function growthLabel(state: CardState | undefined, card: CatalogCard): st
   const parts = [`Lv${s?.level ?? card.power[0]?.length ?? 1}`];
   if (s?.trained) parts.push("特訓");
   parts.push(`SL${s?.skillLevel ?? 1}`);
+  if (skillSideOf(card, s) === "trained") parts.push(SKILL_SIDE_LABEL.trained + "スキル");
   return parts.join(" ");
 }
 

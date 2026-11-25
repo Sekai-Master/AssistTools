@@ -507,6 +507,7 @@ export default function DeckBuilder() {
           onLeader={setLeaderIndex}
           onToggleOpen={(i) => setOpenIndex((cur) => (cur === i ? null : i))}
           onStateChange={patchState}
+          characterRanks={player.characterRanks}
         />
 
         <p className="mt-3 text-xs text-slate-400">

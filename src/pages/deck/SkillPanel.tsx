@@ -52,6 +52,10 @@ export function SkillPanel({ cards, result }: { cards: CatalogCard[]; result: De
                     素 {c.base}% ＋ {round(c.bonus)}%（{c.note}）
                   </div>
                 )}
+                {/* ★ キャラクターランクで伸びるのにランクが無い。+0 のまま黙らない。 */}
+                {c.rankMissing && (
+                  <div className="text-xs text-rose-600">キャラクターランク未入力（+0 で計算）</div>
+                )}
               </li>
             );
           })}

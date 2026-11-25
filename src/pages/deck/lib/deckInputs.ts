@@ -8,13 +8,45 @@
  */
 import type { DeckCard } from "./eventBonus";
 import type { DeckPowerCard, PowerCardData } from "./power";
-import type { CardState, CardStates } from "./deckStore";
+import { DEFAULT_SKILL_SIDE, type CardState, type CardStates, type SkillSide } from "./deckStore";
 
 /** cards.json のカード1枚。power.ts が使う分＋画面表示に要る分。 */
 export interface CatalogCard extends PowerCardData {
   name: string;
   skillId?: number;
+  /** 特訓後スキル。ブルームフェス限定カードだけが持つ（無いカードには欄が無い）。 */
+  stSkillId?: number;
   asset?: string;
+}
+
+/**
+ * いまスキルの面を切り替えられるか。**特訓後スキルを持ち、かつ特訓済み**のときだけ。
+ * 特訓していないカードは特訓前のスキルしか使えない（ゲームと同じ）。
+ *
+ * ★ 育成状態が未登録のカードは toPowerDeck と同じく「特訓できるなら特訓済み」で読む。
+ */
+export function canSwitchSkillSide(card: CatalogCard, state: CardState | undefined): boolean {
+  if (card.stSkillId == null) return false;
+  return state?.trained ?? isTrainable(card);
+}
+
+/** スキルの面の呼び名。画面のボタンと紹介カードで同じ語を使う。 */
+export const SKILL_SIDE_LABEL: Record<SkillSide, string> = { normal: "特訓前", trained: "特訓後" };
+
+/** いま使われるスキルの面。切り替えられないカードは常に特訓前。 */
+export function skillSideOf(card: CatalogCard, state: CardState | undefined): SkillSide {
+  if (!canSwitchSkillSide(card, state)) return "normal";
+  return state?.skillSide ?? DEFAULT_SKILL_SIDE;
+}
+
+/**
+ * スキル計算に渡すスキルの id（いま使われる面のもの）。
+ *
+ * ★ カードの skillId を直接渡さない。ブルフェスの特訓後の面を選んでいても、
+ *   特訓前のスキルで計算されたまま画面は正常に見えてしまう。
+ */
+export function activeSkillId(card: CatalogCard, state: CardState | undefined): number | undefined {
+  return skillSideOf(card, state) === "trained" ? card.stSkillId : card.skillId;
 }
 
 /** 特訓まで済ませたときの上限レベル。★1=20 / ★2=30 / ★3=50 / ★4・birthday=60。 */
@@ -98,6 +130,8 @@ export function toPowerDeck(cards: CatalogCard[], states: CardStates): DeckPower
  * ★ **後編は特訓後にしか読めない**ので、特訓を外したら未読に戻す。
  *   サイドストーリーは1編成で1万以上動くので、ここのズレは大きい。
  * ★ 絵だけ特訓前に戻す設定（artUntrained）は見た目の話なので、ここでは触らない。
+ * ★ スキルの面（skillSide）も残す。特訓を外している間は activeSkillId が特訓前の面に
+ *   倒すので、計算には効かない。特訓し直したときに選んでいた面へ戻る。
  */
 export function applyTrained(state: CardState, card: PowerCardData, trained: boolean): CardState {
   const cap = levelCapOf(card, trained);

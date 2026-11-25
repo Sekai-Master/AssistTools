@@ -53,7 +53,12 @@ export const MAX_SKILL_LEVEL = 4;
 export interface SkillDeckCard {
   cardId: number;
   ch: number;
-  skillId?: number;
+  /**
+   * いま使われる面のスキル id（deckInputs.activeSkillId）。
+   * ★ カードの skillId をそのまま入れない。ブルームフェス限定カードは特訓済みなら
+   *   特訓後スキル（stSkillId）に切り替えられるので、どちらの面かを決めてから渡す。
+   */
+  activeSkillId?: number;
   /** power.ts の resolveUnit と同じ「そのカードが名乗るユニット枠」。 */
   unit: string;
   level: number;
@@ -68,6 +73,11 @@ export interface CardSkill {
   value: number;
   /** 上乗せの理由（画面に出す。黙って増えていると信用できない）。 */
   note?: string;
+  /**
+   * キャラクターランクで伸びるスキルなのに、そのキャラのランクが入っていない。
+   * ★ 上乗せは 0 で計算しているので、**黙って +0 にしない**よう画面に出す。
+   */
+  rankMissing?: boolean;
 }
 
 export interface DeckSkillResult {
@@ -82,11 +92,25 @@ export interface DeckSkillResult {
   missing: number[];
 }
 
+/**
+ * キャラクターランクが入っていないか。ゲームのランクは 1 から始まるので、0 以下も未入力とみなす
+ *（プレイヤー設定の入力欄は空欄を 0 で表示する）。
+ */
+export function isCharacterRankMissing(ranks: Record<number, number> | undefined, ch: number): boolean {
+  const r = ranks?.[ch];
+  return r == null || !(r > 0);
+}
+
 const clampLevel = (level: number, len: number) => Math.min(Math.max(Math.trunc(level) || 1, 1), len);
 
-/** 素のスコアアップ%（編成の影響を入れない値）。参照系スキルの計算にも使う。 */
+/**
+ * 素のスコアアップ%（編成の影響を入れない値）。参照系スキルの計算にも使う。
+ * ★ いま使われる面のスキルで引く。参照系スキルが特訓後の面のブルフェスを参照するときも
+ *   この値（キャラクターランクぶんを含まない素の値）を見る。ゲームが何を見るかは未実測
+ *  （issue #21 の 1 番と同じ問題）なので、ここは変えずに測ってから決める。
+ */
 function baseOf(card: SkillDeckCard, skills: Map<number, SkillRow>): number | null {
-  const s = card.skillId == null ? undefined : skills.get(card.skillId);
+  const s = card.activeSkillId == null ? undefined : skills.get(card.activeSkillId);
   if (!s || s.base.length === 0) return null;
   return s.base[clampLevel(card.level, s.base.length) - 1] ?? 0;
 }
@@ -113,10 +137,11 @@ export function deckSkill(
       missing.push(card.cardId);
       return { cardId: card.cardId, base: 0, bonus: 0, value: 0 };
     }
-    const skill = table.get(card.skillId!)!;
+    const skill = table.get(card.activeSkillId!)!;
     const e = skill.enhance;
     let bonus = 0;
     let note: string | undefined;
+    let rankMissing: boolean | undefined;
 
     if (e?.type === "sub_unit" && e.unit && e.per) {
       // 自身を除く同ユニットの人数ぶん。5枚全員がそのユニットなら、さらにもう1回。
@@ -141,13 +166,26 @@ export function deckSkill(
       bonus = Math.min((othersMax * rate) / 100, cap);
       note = "他メンバー参照（上限）";
     } else if (e?.type === "character_rank" && e.steps?.length) {
-      const rank = opts.characterRanks?.[card.ch] ?? 0;
-      const hit = e.steps.filter((s) => s.rank <= rank).map((s) => s.value);
-      bonus = hit.length ? Math.max(...hit) : 0;
-      note = `キャラクターランク${rank}`;
+      // 自分のキャラのランク。段（ランク2ごとに+1%、ランク100で+50%）のうち届いた一番上を採る。
+      if (isCharacterRankMissing(opts.characterRanks, card.ch)) {
+        rankMissing = true;
+        note = "キャラクターランク未入力";
+      } else {
+        const rank = opts.characterRanks![card.ch];
+        const hit = e.steps.filter((s) => s.rank <= rank).map((s) => s.value);
+        bonus = hit.length ? Math.max(...hit) : 0;
+        note = `キャラクターランク${rank}`;
+      }
     }
 
-    return { cardId: card.cardId, base, bonus, value: base + bonus, note };
+    return {
+      cardId: card.cardId,
+      base,
+      bonus,
+      value: base + bonus,
+      note,
+      ...(rankMissing ? { rankMissing } : {}),
+    };
   });
 
   const total = perCard.reduce((s, c) => s + c.value, 0);
