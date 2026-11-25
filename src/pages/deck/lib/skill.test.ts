@@ -13,14 +13,15 @@ import { multiEffectiveSkill } from "../../ranking/lib/efficiency";
 
 const cardsJson = JSON.parse(
   fs.readFileSync(path.join(process.cwd(), "public/CardDatas/cards.json"), "utf8")
-) as { cards: { id: number; ch: number; skillId?: number }[]; skills: SkillRow[] };
+) as { cards: { id: number; ch: number; skillId?: number; stSkillId?: number }[]; skills: SkillRow[] };
 const skills = cardsJson.skills;
 const byId = new Map(skills.map((s) => [s.id, s]));
 
+/** skillId は「いま使われる面のスキル」（activeSkillId）として渡す。 */
 const card = (cardId: number, skillId: number, unit: string, level = 4, ch = 1): SkillDeckCard => ({
   cardId,
   ch,
-  skillId,
+  activeSkillId: skillId,
   unit,
   level,
 });
@@ -36,8 +37,10 @@ describe("配信しているスキル表", () => {
     }
   });
 
-  it("公開済みカードが使っているスキルだけが入っている", () => {
-    const used = new Set(cardsJson.cards.map((c) => c.skillId));
+  // ★ 特訓後スキル（ブルフェスの stSkillId）も「使っている」に数える。派生データ側
+  //   （deriveCardData の usedSkillIds）と同じ集合で見ないと、片方だけ直したときに気付けない。
+  it("公開済みカードが使っているスキルだけが入っている（特訓後スキルを含む）", () => {
+    const used = new Set(cardsJson.cards.flatMap((c) => [c.skillId, c.stSkillId]));
     for (const s of skills) expect(used.has(s.id)).toBe(true);
   });
 });
@@ -128,6 +131,124 @@ describe("編成で変わるスキル", () => {
   it("上乗せがあったカードは理由を返す（黙って増やさない）", () => {
     const r = deckSkill([card(1, 15, "light_sound"), card(2, 15, "light_sound")], skills);
     expect(r.perCard[0].note).toContain("同ユニット1人");
+  });
+});
+
+/**
+ * ブルームフェス限定カードの特訓後スキル（skill 22）。
+ * 「スコアが110%UP、更にキャラクターランク2毎に+1%（ランク100で最大+50%）」。
+ * ★ 段は配信データの実物（50段）で確かめる。合成データだと段の形が変わったときに気付けない。
+ */
+describe("キャラクターランクで伸びるスキル（ブルフェスの特訓後・id22）", () => {
+  const ch = 17; // 949 のキャラ。ランクは自分のキャラのものを見る。
+  const at = (ranks: Record<number, number> | undefined, level = 4) =>
+    deckSkill([card(949, 22, "light_sound", level, ch)], skills, { characterRanks: ranks }).perCard[0];
+
+  it("配信データに 22 があり、ランク2ごとに+1%の段を50段持つ", () => {
+    const s = byId.get(22)!;
+    expect(s.base).toEqual([90, 95, 100, 110]);
+    expect(s.enhance?.type).toBe("character_rank");
+    expect(s.enhance?.steps).toHaveLength(50);
+    expect(s.enhance?.steps?.[0]).toEqual({ rank: 2, value: 1 });
+    expect(s.enhance?.steps?.at(-1)).toEqual({ rank: 100, value: 50 });
+  });
+
+  it("SL4・ランク60 → 110＋30＝140", () => {
+    expect(at({ [ch]: 60 }).value).toBe(140);
+    expect(at({ [ch]: 60 }).note).toBe("キャラクターランク60");
+  });
+
+  it("奇数ランクは下の段（ランク59 → +29）", () => {
+    expect(at({ [ch]: 59 }).value).toBe(139);
+    expect(at({ [ch]: 1 }).value).toBe(110);
+  });
+
+  it("ランク100以上は +50 で頭打ち（160）", () => {
+    expect(at({ [ch]: 100 }).value).toBe(160);
+    expect(at({ [ch]: 250 }).value).toBe(160);
+  });
+
+  it("スキルレベルぶんの素の値に乗る（SL1・ランク60 → 90＋30）", () => {
+    expect(at({ [ch]: 60 }, 1).value).toBe(120);
+  });
+
+  it("他のキャラのランクは見ない", () => {
+    expect(at({ 1: 100 }).value).toBe(110);
+  });
+
+  /** ★ 黙って +0 にしない。未入力は印を付けて返し、画面に出す。 */
+  it("ランクが未入力なら +0 で計算し、rankMissing を立てる", () => {
+    const cases: (Record<number, number> | undefined)[] = [undefined, {}, { [ch]: 0 }];
+    for (const ranks of cases) {
+      const r = at(ranks);
+      expect(r.value).toBe(110);
+      expect(r.rankMissing).toBe(true);
+      expect(r.note).toBe("キャラクターランク未入力");
+    }
+    expect(at({ [ch]: 60 }).rankMissing).toBeUndefined();
+  });
+
+  it("キャラクターランクに関係ないスキルでは rankMissing を立てない", () => {
+    expect(deckSkill([card(1, 4, "light_sound")], skills).perCard[0].rankMissing).toBeUndefined();
+  });
+
+  /**
+   * ★ 参照スキル（23）が特訓後の絵のブルフェス（22）を参照するときは、相手の**いまの値**
+   *  （素の値＋キャラクターランクぶん）を見る。素の 110 でも最大の 160 でもない
+   *  （Nori 確認 2026-11-25。ランク84 なら 110＋42＝152 を参照する）。
+   */
+  describe("参照スキルが特訓後のブルフェスを参照する", () => {
+    const self = card(1, 23, "light_sound", 4); // 素80・参照50%・上限70
+    const partner = card(949, 22, "light_sound", 4, ch);
+    const ref = (ranks: Record<number, number> | undefined, p = partner) =>
+      deckSkill([self, p], skills, { characterRanks: ranks });
+
+    it("相手がランク84なら 152 を参照し、76 は上限70で止まって合計150", () => {
+      const r = ref({ [ch]: 84 });
+      expect(r.perCard[1].value).toBe(152);
+      expect(r.perCard[0].bonus).toBe(70);
+      expect(r.perCard[0].value).toBe(150);
+    });
+
+    it("上限に届かないときはちょうど半分（ランク40 → 130 の50%＝65、合計145）", () => {
+      const r = ref({ [ch]: 40 });
+      expect(r.perCard[1].value).toBe(130);
+      expect(r.perCard[0].bonus).toBe(65);
+      expect(r.perCard[0].value).toBe(145);
+    });
+
+    it("スキルレベルぶんの素の値に乗ったものを参照する（相手 SL1・ランク60 → 120 の50%＝60）", () => {
+      expect(ref({ [ch]: 60 }, card(949, 22, "light_sound", 1, ch)).perCard[0].bonus).toBe(60);
+    });
+
+    // ★ 相手のランクが空なら、相手は +0（110）で計算して未入力の印を立てる。参照する側もその 110 を見る。
+    it("相手のランクが未入力なら 110 を参照する（合計135）。印は相手にだけ立つ", () => {
+      const r = ref({});
+      expect(r.perCard[1].value).toBe(110);
+      expect(r.perCard[1].rankMissing).toBe(true);
+      expect(r.perCard[0].value).toBe(135);
+      expect(r.perCard[0].rankMissing).toBeUndefined();
+    });
+
+    // ★ 参照スキル同士は互いの上乗せを見ない（循環させない）。相手が参照スキルなら素の値。
+    it("相手も参照スキルなら、相手の素の値（80）を参照する", () => {
+      const r = deckSkill([self, card(2, 23, "light_sound", 4), card(3, 4, "idol", 4)], skills);
+      expect(r.perCard[1].value).toBe(140); // 相手は★4の120を参照して 80＋60
+      expect(r.perCard[0].bonus).toBe(60); // 自分も 120 を見る（相手の 140 は見ない）
+      expect(deckSkill([self, card(2, 23, "light_sound", 4)], skills).perCard[0].bonus).toBe(40); // 80 の50%
+    });
+
+    /**
+     * ★ ユニット加算（同ユニット1人ごと等）の相手は、いまも**素の値**を見る。
+     *   編成込みを見るかは未実測（issue #21 の 1 番）。今回の確認はキャラクターランクのぶんだけ。
+     */
+    it("ユニット加算の相手は素の値を見る（未実測・現状の挙動）", () => {
+      // 相手は skill 15（レオニ1人ごと+10%、SL4 の素100）。自分と★1（素40）がレオニなので 100＋20＝120。
+      const p = card(2, 15, "light_sound", 4);
+      const r = deckSkill([self, p, card(3, 1, "light_sound", 4)], skills);
+      expect(r.perCard[1].value).toBe(120);
+      expect(r.perCard[0].bonus).toBe(50); // 素の 100 の50%（編成込みの 120 なら 60）
+    });
   });
 });
 

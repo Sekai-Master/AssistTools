@@ -8,7 +8,7 @@
  *   画像の数字と画面の数字が食い違うのが一番たちが悪い。
  */
 import { ATTR_COLOR, characterName } from "./characters";
-import { displayBonus, type CatalogCard } from "./deckInputs";
+import { displayBonus, showsTrainedArt, type CatalogCard } from "./deckInputs";
 import type { CardState } from "./deckStore";
 import type { DeckCanvasCard, DeckCanvasData } from "./deckCanvas";
 import type { DeckEval } from "./evaluate";
@@ -54,7 +54,7 @@ export function buildShareCard(opts: {
       // カードごとのスキル値も出す（編成で変わるので、1枚ずつ見せる意味がある）。
       skill: skill == null ? undefined : `${round(skill)}%`,
       // 絵は画面と同じものを出す（「絵は特訓前」を選んでいればその絵）。
-      thumb: opts.thumbUrl(c, !!s?.trained && !s?.artUntrained),
+      thumb: opts.thumbUrl(c, showsTrainedArt(c, s)),
       name: c.name,
       character: characterName(c.ch),
       sub: growthLabel(s, c),

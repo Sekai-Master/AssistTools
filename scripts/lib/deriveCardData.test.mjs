@@ -189,6 +189,81 @@ describe("カードの圧縮", () => {
   });
 });
 
+/**
+ * ブルームフェス限定カードの「特訓後スキル」（specialTrainingSkillId）。
+ *
+ * ★ スキル表は日付欄を持たないので、残すかどうかは「公開済みカードが指しているか」で決める。
+ *   特訓後スキルも数えないと、公開済みカードの特訓後の面が丸ごと消える（実際に 22 が消えていた）。
+ *   逆に、**未公開カードだけが指すスキルは出さない**（説明文だけで内容が漏れる）。
+ */
+describe("特訓後スキル", () => {
+  const skill = (id, base) => ({
+    id,
+    shortDescription: `スキル${id}`,
+    skillEffects: [
+      {
+        skillEffectType: "score_up",
+        skillEffectDetails: base.map((v, i) => ({ level: i + 1, activateEffectValue: v })),
+      },
+    ],
+  });
+  const withSkills = () => ({
+    ...src(),
+    cards: [
+      card(1, 過去),
+      card(2, 過去, { skillId: 23, specialTrainingSkillId: 22 }),
+      // 未公開カード: 特訓前スキル 31・特訓後スキル 30 はどちらもこのカードしか使っていない。
+      card(999, 未来, { skillId: 31, specialTrainingSkillId: 30 }),
+    ],
+    skills: [
+      skill(1, [100, 105, 110, 120]),
+      skill(22, [90, 95, 100, 110]),
+      skill(23, [60, 65, 70, 80]),
+      skill(30, [200, 200, 200, 200]),
+      skill(31, [300, 300, 300, 300]),
+    ],
+  });
+
+  it("特訓後スキルの id をカードに載せる（無いカードには欄ごと付けない）", () => {
+    expect(slimCard(card(2, 過去, { specialTrainingSkillId: 22 })).stSkillId).toBe(22);
+    expect("stSkillId" in slimCard(card(1, 過去))).toBe(false);
+  });
+
+  it("公開済みカードが特訓後スキルとして指すスキルは残る", () => {
+    const out = derive(withSkills(), NOW);
+    expect(out.skills.map((s) => s.id).sort((a, b) => a - b)).toEqual([1, 22, 23]);
+  });
+
+  it("未公開カードだけが指すスキルは落ちる（特訓前・特訓後とも）", () => {
+    const out = derive(withSkills(), NOW);
+    expect(out.skills.some((s) => s.id === 30)).toBe(false);
+    expect(out.skills.some((s) => s.id === 31)).toBe(false);
+    expect(出力に含まれない(out, "スキル30")).toBe(true);
+    expect(出力に含まれない(out, "スキル31")).toBe(true);
+  });
+
+  it("最終検算: 特訓後スキルとしてだけ使われるスキルは問題にしない", () => {
+    const out = derive(withSkills(), NOW);
+    const allowed = {
+      cardIds: new Set(out.cards.map((c) => c.id)),
+      eventIds: new Set(out.events.map((e) => e.id)),
+    };
+    expect(auditLeaks(out, allowed)).toEqual([]);
+  });
+
+  it("最終検算: どのカードも指していないスキルが紛れ込んだら止める", () => {
+    const out = derive(withSkills(), NOW);
+    out.skills.push({ id: 30, base: [200, 200, 200, 200], desc: "スキル30" });
+    const allowed = {
+      cardIds: new Set(out.cards.map((c) => c.id)),
+      eventIds: new Set(out.events.map((e) => e.id)),
+    };
+    const problems = auditLeaks(out, allowed);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("id=30");
+  });
+});
+
 describe("withoutDangling", () => {
   it("許可されていない参照を落とす", () => {
     const rows = [{ cardId: 1 }, { cardId: 2 }];

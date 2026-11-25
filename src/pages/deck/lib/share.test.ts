@@ -88,6 +88,13 @@ describe("育成状態のラベル", () => {
   it("台帳に無いカードでも落ちない", () => {
     expect(growthLabel(undefined, card(1, "x", 1))).toBe("Lv60 SL1");
   });
+
+  // ★ ブルフェスの特訓後スキルは絵の面で決まる。紹介カードは絵を載せるので、文字では繰り返さない。
+  it("ブルフェスでもスキルの面の文字は足さない（絵が面を示す）", () => {
+    const bloom = { ...card(1475, "x", 2), skillId: 23, stSkillId: 22 };
+    expect(growthLabel(state(), bloom)).toBe("Lv60 特訓 SL4");
+    expect(growthLabel(state({ artUntrained: true }), bloom)).toBe("Lv60 特訓 SL4");
+  });
 });
 
 describe("紹介カードの中身", () => {

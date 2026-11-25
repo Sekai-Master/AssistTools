@@ -15,6 +15,7 @@ import {
   BACKUP_APP,
   BACKUP_VERSION,
 } from "./backup";
+import { defaultCardState, parseCardStates } from "../../deck/lib/deckStore";
 
 const store = (init: Record<string, string> = {}) => {
   const m = new Map(Object.entries(init));
@@ -72,6 +73,17 @@ describe("取り込み", () => {
     expect(parsed.problems).toEqual([]);
     expect(applyBackup(parsed.entries, dest.write)).toBe(2);
     expect(dest.all()).toEqual(src.all());
+  });
+
+  // ★ 絵の面（artUntrained）はブルフェスの特訓後スキルを決める。取り込み後の読み込みでも残ること。
+  it("育成状態の「絵は特訓前」は往復して読み込みまで残る", () => {
+    const cards = JSON.stringify({ 1475: { ...defaultCardState(60, true), artUntrained: true } });
+    const src = store({ "sekaimaster:deck:cards:v1": cards });
+    const dest = store();
+    const parsed = parseBackup(JSON.stringify(buildBackup(src.read, 0)), dest.read);
+    applyBackup(parsed.entries, dest.write);
+    const states = parseCardStates(JSON.parse(dest.read("sekaimaster:deck:cards:v1")!));
+    expect(states[1475].artUntrained).toBe(true);
   });
 
   it("いま入っているものと、入ってくるものの両方を見せる", () => {

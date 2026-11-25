@@ -69,6 +69,30 @@ describe("育成状態", () => {
     expect(Object.keys(parsed)).toEqual(["1"]);
   });
 
+  // ★ 絵の面はブルフェスの特訓後スキルを決めるので、保存とバックアップの往復で落ちてはいけない。
+  it("絵を特訓前にする設定は往復して残る", () => {
+    const states = { 1475: { ...defaultCardState(60, true), artUntrained: true }, 471: defaultCardState(60, true) };
+    writeCardStates(states);
+    const back = readCardStates();
+    expect(back[1475].artUntrained).toBe(true);
+    expect("artUntrained" in back[471]).toBe(false);
+  });
+
+  /**
+   * ★ 一時期のブランチ（PR #292 の途中）は skillSide という欄を持っていた。本番には出ていないが、
+   *   手元にその欄が残った保存を読んでも1件ごと落とさない（知らない欄は無視する）。
+   */
+  it("知らない欄（旧 skillSide）が残っていても落とさない", () => {
+    const ok = defaultCardState(60, true);
+    const parsed = parseCardStates({
+      1: { ...ok, skillSide: "trained" },
+      2: { ...ok, skillSide: "after" },
+      3: { ...ok, skillSide: 1, artUntrained: true },
+    });
+    expect(Object.keys(parsed)).toEqual(["1", "2", "3"]);
+    expect(parsed[3].artUntrained).toBe(true);
+  });
+
   it("配列や null を渡されても空で返る", () => {
     expect(parseCardStates([1, 2])).toEqual({});
     expect(parseCardStates(null)).toEqual({});

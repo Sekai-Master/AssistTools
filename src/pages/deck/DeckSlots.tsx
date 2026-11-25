@@ -3,8 +3,16 @@ import { NeuInput } from "../../components/ui/NeuInput";
 import { cn } from "../../lib/utils";
 import { UNIT_SHORT, characterName } from "./lib/characters";
 import { RarityBadge } from "./RarityBadge";
-import { applyTrained, isTrainable, levelCapOf, type CatalogCard } from "./lib/deckInputs";
+import {
+  applyTrained,
+  isTrainable,
+  levelCapOf,
+  showsTrainedArt,
+  usesTrainedSkill,
+  type CatalogCard,
+} from "./lib/deckInputs";
 import type { CardState } from "./lib/deckStore";
+import { isCharacterRankMissing } from "./lib/skill";
 import { CardThumb } from "./CardThumb";
 
 /**
@@ -100,15 +108,20 @@ function CardStateEditor({
           キャンバス
         </button>
 
-        {/* ★ 絵だけ特訓前に戻す。**計算には効かない見た目だけの設定**なので、
-            計算に効くボタンと並べず、行の一番右にアイコンだけで置く。
-            特訓を外して絵を戻すと、上限レベルと後編まで巻き添えで動いてしまう。 */}
+        {/* ★ 絵を特訓前に戻す。行の一番右にアイコンだけで置く。
+            特訓を外して絵を戻すと、上限レベルと後編まで巻き添えで動いてしまう。
+            ★ 特訓後スキルを持つカード（ブルフェス）は、ゲームと同じく絵の面でスキルも切り替わる
+            （deckInputs.showsTrainedArt）。それ以外のカードでは計算に効かない。文言もそれに合わせる。 */}
         {trainable && state.trained && (
           <button
             type="button"
             aria-pressed={!!state.artUntrained}
-            aria-label="絵を特訓前と切り替える"
-            title="絵だけ特訓前と切り替えます（計算には影響しません）"
+            aria-label={card.stSkillId != null ? "絵とスキルを特訓前と切り替える" : "絵を特訓前と切り替える"}
+            title={
+              card.stSkillId != null
+                ? "絵とスキルを特訓前と切り替えます"
+                : "絵だけ特訓前と切り替えます（計算には影響しません）"
+            }
             onClick={() => onChange({ artUntrained: !state.artUntrained })}
             className={cn(
               "ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
@@ -169,9 +182,12 @@ export function DeckSlots({
   onLeader,
   onToggleOpen,
   onStateChange,
+  characterRanks,
 }: {
   slots: (CatalogCard | null)[];
   states: Record<number, CardState>;
+  /** キャラクターランク（ブルフェスの特訓後スキルの未入力の印に使う）。 */
+  characterRanks?: Record<number, number>;
   leaderIndex: number;
   /** 育成状態の編集を開いている枠。null なら全部閉じている。 */
   openIndex: number | null;
@@ -205,7 +221,7 @@ export function DeckSlots({
                   {/* マスターランクはゲームと同じくカードの左下にひし形で出す。 */}
                   <CardThumb
                     card={card}
-                    trained={!!state?.trained && !state?.artUntrained}
+                    trained={showsTrainedArt(card, state)}
                     masterRank={state?.masterRank ?? 0}
                     size={48}
                   />
@@ -227,6 +243,12 @@ export function DeckSlots({
                       {/* マスターランクはサムネのひし形で出しているので、文字では繰り返さない。 */}
                       {state && ` ・ SL${state.skillLevel ?? 1}`}
                     </span>
+                    {/* ★ ブルフェスの特訓後スキルはキャラクターランクで伸びる。ランクが空だと +0 で計算しているので、
+                        編集パネルを開かない人にも見えるよう 1 行表示に出す（開いていてもこの行は出ている）。
+                        上の行はスマホ幅で末尾が「…」に切れるので、印は別の行に置く。 */}
+                    {usesTrainedSkill(card, state) && isCharacterRankMissing(characterRanks, card.ch) && (
+                      <span className="block text-xs text-rose-600">キャラランク未入力</span>
+                    )}
                   </button>
                   <button
                     type="button"

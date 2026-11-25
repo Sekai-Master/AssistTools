@@ -31,6 +31,8 @@ function isCard(v: unknown): v is CatalogCard {
   const c = v as Partial<CatalogCard>;
   if (!isNum(c.id) || !isNum(c.ch) || !isStr(c.rarity) || !isStr(c.attr) || !isStr(c.name)) return false;
   if (!numArr3(c.trained)) return false;
+  // 特訓後スキルは持たないカードの方が多いので必須にしない。入っているのに数値でないものは落とす。
+  if (c.stSkillId != null && !isNum(c.stSkillId)) return false;
   return (
     Array.isArray(c.power) &&
     c.power.length === 3 &&
@@ -66,7 +68,7 @@ const power3 = (v: unknown) => numArr3(v);
 export interface CardData {
   cards: CatalogCard[];
   events: EventRow[];
-  /** スキルの原型（21種）。カードは skillId でここを引く。 */
+  /** スキルの原型（22種）。カードは skillId（特訓後の絵のブルフェスは stSkillId）でここを引く。 */
   skills: SkillRow[];
   bonusTables: BonusTables;
   powerTables: PowerTables;
