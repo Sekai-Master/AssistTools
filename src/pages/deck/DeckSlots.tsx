@@ -243,12 +243,6 @@ export function DeckSlots({
                       {/* マスターランクはサムネのひし形で出しているので、文字では繰り返さない。 */}
                       {state && ` ・ SL${state.skillLevel ?? 1}`}
                     </span>
-                    {/* ★ ブルフェスの特訓後スキルはキャラクターランクで伸びる。ランクが空だと +0 で計算しているので、
-                        編集パネルを開かない人にも見えるよう 1 行表示に出す（開いていてもこの行は出ている）。
-                        上の行はスマホ幅で末尾が「…」に切れるので、印は別の行に置く。 */}
-                    {usesTrainedSkill(card, state) && isCharacterRankMissing(characterRanks, card.ch) && (
-                      <span className="block text-xs text-rose-600">キャラランク未入力</span>
-                    )}
                   </button>
                   <button
                     type="button"
@@ -268,6 +262,12 @@ export function DeckSlots({
                     ×
                   </button>
                 </div>
+                {/* ★ ブルフェスの特訓後スキルはキャラクターランクで伸びる。ランクが空だと +0 で計算しているので、
+                    編集パネルを開かない人にも見えるよう、閉じた枠にも出す（開いていても出ている）。
+                    名前の列の中だとスマホ幅で「キャラランク未／入力」と折れたので、行の下にサムネの右から 1 行で置く（2026-11-25）。 */}
+                {usesTrainedSkill(card, state) && isCharacterRankMissing(characterRanks, card.ch) && (
+                  <p className="mt-1 whitespace-nowrap pl-14 text-xs text-rose-600">キャラランク未入力</p>
+                )}
 
                 {openIndex === i && state && (
                   <>
