@@ -74,26 +74,28 @@ const renderSlot = (
 };
 
 const row = (name: RegExp) => screen.getByRole("button", { name });
+/** 枠 1 つ（li）。印はボタンの外、行の下に出る。 */
+const slot = (name: RegExp) => row(name).closest("li")!;
 
 describe("枠の 1 行表示（特訓後スキルのキャラランク未入力）", () => {
   it("特訓後の絵（既定）でランクが空なら、閉じた枠にも印を出す", () => {
     renderSlot(state(), {});
-    expect(row(/押し込めた想い/).textContent).toContain("キャラランク未入力");
+    expect(slot(/押し込めた想い/).textContent).toContain("キャラランク未入力");
   });
 
   it("ランクが入っていれば印を出さない", () => {
     renderSlot(state(), { 2: 84 });
-    expect(row(/押し込めた想い/).textContent).not.toContain("未入力");
+    expect(slot(/押し込めた想い/).textContent).not.toContain("未入力");
   });
 
   it("特訓前の絵ではランクが空でも印を出さない（特訓前のスキルはランクを使わない）", () => {
     renderSlot(state({ artUntrained: true }), {});
-    expect(row(/押し込めた想い/).textContent).not.toContain("未入力");
+    expect(slot(/押し込めた想い/).textContent).not.toContain("未入力");
   });
 
   it("特訓していなければ印を出さない", () => {
     renderSlot(state({ trained: false, level: 50 }), {});
-    expect(row(/押し込めた想い/).textContent).not.toContain("未入力");
+    expect(slot(/押し込めた想い/).textContent).not.toContain("未入力");
   });
 
   it("スキルの面を文字では出さない（サムネの絵が面を示す）", () => {
