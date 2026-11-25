@@ -73,13 +73,14 @@ const MODE_OPTIONS: { value: RankingMode; label: string }[] = [
 ];
 
 /**
- * 「ひとりで」タブの並べ方（2026-11-25）。ラベルは 390px で折れない 5 文字ずつ。
+ * 「ひとりで」タブの並べ方（2026-11-25）。ラベルは持ち主の指定で「時間効率優先」「ライボ効率優先」（同日）。
+ *   390px で折れないよう whitespace-nowrap（max-w-xs の半分に 7 文字が入る）。
  * ★ みんなでライブが止まり、ひとりでライブを手で叩いて走る人が多い。ライボが律速の人には
  *   時間あたりより 1 回あたりのイベントPtが正しい軸になる（オートのタブはオートのスコアで別の数字）。
  */
 const SOLO_BY_OPTIONS: { value: SoloBy; label: string }[] = [
-  { value: "hour", label: "時間あたり" },
-  { value: "play", label: "1回あたり" },
+  { value: "hour", label: "時間効率優先" },
+  { value: "play", label: "ライボ効率優先" },
 ];
 
 /** ソロ（ひとりでライブ・オート・チャレライ）のスキルの効き方。3つのタブで同じ文。 */
@@ -1052,6 +1053,7 @@ export default function EfficiencyRanking() {
             }}
             ariaLabel="ひとりでの並べ方"
             className="mt-2 max-w-xs"
+            buttonClassName="min-w-0 whitespace-nowrap"
           />
         )}
         {/**

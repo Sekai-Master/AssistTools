@@ -88,8 +88,8 @@ const draw = (url = "/ranking") =>
   );
 
 const tab = (name: string) => screen.getByRole("radio", { name });
-const byHour = () => screen.queryByRole("radio", { name: "時間あたり" });
-const byPlay = () => screen.queryByRole("radio", { name: "1回あたり" });
+const byHour = () => screen.queryByRole("radio", { name: "時間効率優先" });
+const byPlay = () => screen.queryByRole("radio", { name: "ライボ効率優先" });
 const rows = () => [...document.querySelectorAll<HTMLElement>("[data-ranking-row]")];
 const rowKeys = () => rows().map((r) => r.dataset.rankingRow);
 const mainNumbers = () => rows().map((r) => r.querySelector("[data-main-number]")?.textContent ?? "");
