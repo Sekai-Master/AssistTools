@@ -266,6 +266,11 @@ export function DeckSlots({
                       {state && ` ・ SL${state.skillLevel ?? 1}`}
                       {skillSideOf(card, state) === "trained" && ` ${SKILL_SIDE_LABEL.trained}スキル`}
                     </span>
+                    {/* ★ ランクが空だと +0 で計算している。編集パネルを開かない人にも見えるよう、ここにも出す。
+                        上の行はスマホ幅で末尾が「…」に切れるので、印は別の行に置く。 */}
+                    {skillSideOf(card, state) === "trained" && isCharacterRankMissing(characterRanks, card.ch) && (
+                      <span className="block text-xs text-rose-600">キャラランク未入力</span>
+                    )}
                   </button>
                   <button
                     type="button"
