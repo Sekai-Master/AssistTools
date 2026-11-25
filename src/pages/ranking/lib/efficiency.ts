@@ -70,6 +70,17 @@ import { playsUntilEmpty } from "./lbRun";
  */
 export type RankingMode = "manual" | "solo" | "auto" | "challenge";
 
+/**
+ * 「ひとりで」タブの並べ方（2026-11-25）。
+ *
+ *   hour … 時間あたりのイベントPt（既定。律速が時間の人向け）
+ *   play … 1回あたりのイベントPt（律速がライボの人向け。長尺・高基礎点の曲が上に来る）
+ *
+ * ★ play でもスコアとPtの式はひとりでライブのまま（手で叩いた AP の理論値）。オートのタブは
+ *   オートのスコア（別の式で、同じ曲でも低い）で 1 回あたりを出すので、数字は一致しない。
+ */
+export type SoloBy = "hour" | "play";
+
 /** スコア式の種別。ランキングの種類から一意に決まる。 */
 export type LiveType = "multi" | "solo" | "auto";
 
@@ -269,24 +280,33 @@ export function eventPtFor(
  *
  * metric の定義:
  *   manual    … 時間あたりイベントPt（協力ライブの式）
- *   solo      … 時間あたりイベントPt（ひとりでライブの式）
+ *   solo      … 時間あたりイベントPt（ひとりでライブの式）。opts.soloBy が "play" なら 1プレイあたりイベントPt
  *   auto      … 1プレイあたりイベントPt（放置前提なので時間を割らない）
  *   challenge … 1プレイあたりスコア
+ *
+ * opts.soloBy は solo のときだけ効く（ほかのモードでは無視する）。並べる量が変わるだけで、
+ * score・eventPt・cycleSec・ptPerHour の値と、同点の扱い（短い曲→ID順）は変わらない。
  */
 export function rankSongs<T extends EfficiencyEntry>(
   entries: T[],
   params: EfficiencyParams,
   mode: RankingMode,
+  opts: { soloBy?: SoloBy } = {},
 ): (T & EfficiencyMetrics)[] {
   const live = LIVE_BY_MODE[mode];
-  // 手で叩くモード（協力・ひとり）は時間が律速なので、時間あたりで並べる。
-  const perHour = mode === "manual" || mode === "solo";
+  // 手で叩くモード（協力・ひとり）。1周の秒数（Pt/時）を出すので曲長が要る。
+  const handPlayed = mode === "manual" || mode === "solo";
+  // ひとりでの「1回あたり」だけは、手で叩いても 1 プレイの Pt で並べる（律速がライボの人向け）。
+  const soloPerPlay = mode === "solo" && opts.soloBy === "play";
+  // 手で叩くモードは時間が律速なので、既定は時間あたりで並べる。
+  const perHour = handPlayed && !soloPerPlay;
   const scored: (T & Omit<EfficiencyMetrics, "index">)[] = [];
 
   for (const e of entries) {
     // 必須フィールドはモードごとに違う。チャレライは曲長も基礎点も metric に無関係なので、
     // それを理由に曲を落とすと「メタが揃っていない新曲だけ消える」ことになる。
-    if (perHour && e.musicTime == null) continue;
+    // ★ ひとりでは並べ方によらず曲長を要る（行に Pt/時 を出す。並べ方を替えて曲が増減しないように）。
+    if (handPlayed && e.musicTime == null) continue;
     if (mode !== "challenge" && e.eventRate == null) continue;
 
     const score = calcScore(e, params, live);
@@ -296,7 +316,7 @@ export function rankSongs<T extends EfficiencyEntry>(
     const eventPt = mode === "challenge" ? 0 : eventPtFor(live, score, e.eventRate!, params);
     const ptPerHour = cycleSec > 0 ? (eventPt / cycleSec) * 3600 : 0;
 
-    const metric = perHour ? ptPerHour : mode === "auto" ? eventPt : score;
+    const metric = perHour ? ptPerHour : mode === "auto" || soloPerPlay ? eventPt : score;
     scored.push({ ...e, score, eventPt, cycleSec, metric, ptPerHour });
   }
 

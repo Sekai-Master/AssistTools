@@ -580,3 +580,60 @@ describe("rankSongs — ひとりで周回", () => {
     expect(DEFAULT_OVERHEAD_SEC.solo).toBe(OVERHEAD_BY_LIVE.solo);
   });
 });
+
+/**
+ * ひとりでの並べ方「1回あたり」（2026-11-25）。
+ * ★ みんなでライブが止まって、ひとりでライブを手で叩いて走る人が多い。ライボが律速の人には、
+ *   時間あたりより 1 回あたりのイベントPtが正しい軸になる。スコア・Pt の式はそのまま（ソロ式・AP 前提）で、
+ *   並べる量だけを eventPt に替える。オートのタブ（オートのスコア）とは数字が別。
+ */
+describe("rankSongs — ひとりで・1回あたり", () => {
+  const entries = [ENVY, TENCHI];
+
+  it("並べ方を指定しなければ、今までどおり時間あたり", () => {
+    const r = rankSongs(entries, PARAMS, "solo");
+    expect(r.map((x) => x.metric)).toEqual(r.map((x) => x.ptPerHour));
+    expect(rankSongs(entries, PARAMS, "solo", { soloBy: "hour" })).toEqual(r);
+  });
+
+  it("1回あたりなら metric は1プレイのPtで、その降順に並ぶ（長尺の初音天地開闢神話が上）", () => {
+    const r = rankSongs(entries, PARAMS, "solo", { soloBy: "play" });
+    expect(r).toHaveLength(2);
+    for (const x of r) expect(x.metric).toBe(x.eventPt);
+    expect(r[0].title).toBe("初音天地開闢神話");
+    expect(r[0].metric).toBeGreaterThan(r[1].metric);
+    expect(r[0].index).toBe(100);
+  });
+
+  it("スコア・1プレイのPt・Pt/時 の値そのものは時間あたりと同じ（並びと metric だけが替わる）", () => {
+    const hour = rankSongs(entries, PARAMS, "solo");
+    const play = rankSongs(entries, PARAMS, "solo", { soloBy: "play" });
+    for (const x of play) {
+      const h = hour.find((y) => y.musicId === x.musicId)!;
+      expect(x.score).toBe(h.score);
+      expect(x.eventPt).toBe(h.eventPt);
+      expect(x.ptPerHour).toBe(h.ptPerHour);
+    }
+  });
+
+  it("同点なら今までの並べ方と同じく曲が短い順、それも同じならID順", () => {
+    const long = { ...ENVY, musicId: "900", musicTime: 120 };
+    const sameShort = { ...ENVY, musicId: "001" };
+    const r = rankSongs([long, ENVY, sameShort], PARAMS, "solo", { soloBy: "play" });
+    expect(r.map((x) => x.musicId)).toEqual(["001", "074", "900"]);
+  });
+
+  it("ほかのタブには効かない（みんなで・オート・チャレライの並びは指定しても同じ）", () => {
+    for (const mode of ["manual", "auto", "challenge"] as const) {
+      expect(rankSongs(entries, PARAMS, mode, { soloBy: "play" })).toEqual(rankSongs(entries, PARAMS, mode));
+    }
+  });
+
+  it("オートのタブ（オートのスコア）より 1 回の Pt は低くならない（手で叩いた AP のスコアで出す）", () => {
+    const play = rankSongs(entries, PARAMS, "solo", { soloBy: "play" });
+    const auto = rankSongs(entries, PARAMS, "auto");
+    for (const x of play) {
+      expect(x.eventPt).toBeGreaterThanOrEqual(auto.find((y) => y.musicId === x.musicId)!.eventPt);
+    }
+  });
+});
