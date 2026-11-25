@@ -13,7 +13,7 @@ import { multiEffectiveSkill } from "../../ranking/lib/efficiency";
 
 const cardsJson = JSON.parse(
   fs.readFileSync(path.join(process.cwd(), "public/CardDatas/cards.json"), "utf8")
-) as { cards: { id: number; ch: number; skillId?: number }[]; skills: SkillRow[] };
+) as { cards: { id: number; ch: number; skillId?: number; stSkillId?: number }[]; skills: SkillRow[] };
 const skills = cardsJson.skills;
 const byId = new Map(skills.map((s) => [s.id, s]));
 
@@ -36,8 +36,10 @@ describe("配信しているスキル表", () => {
     }
   });
 
-  it("公開済みカードが使っているスキルだけが入っている", () => {
-    const used = new Set(cardsJson.cards.map((c) => c.skillId));
+  // ★ 特訓後スキル（ブルフェスの stSkillId）も「使っている」に数える。派生データ側
+  //   （deriveCardData の usedSkillIds）と同じ集合で見ないと、片方だけ直したときに気付けない。
+  it("公開済みカードが使っているスキルだけが入っている（特訓後スキルを含む）", () => {
+    const used = new Set(cardsJson.cards.flatMap((c) => [c.skillId, c.stSkillId]));
     for (const s of skills) expect(used.has(s.id)).toBe(true);
   });
 });

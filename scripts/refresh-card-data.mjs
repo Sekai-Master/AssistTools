@@ -307,7 +307,7 @@ async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
   // カタログ（大きい）とボーナス表（小さく、更新が速い）を分ける。
   const files = {
-    // スキルはカードが skillId で引くので、カタログと同じファイルに置く（21行しかない）。
+    // スキルはカードが skillId（特訓後は stSkillId）で引くので、カタログと同じファイルに置く（22行しかない）。
     "cards.json": { cards: out.cards, skills: out.skills, generatedAt: out.generatedAt },
     "bonuses.json": {
       generatedAt: out.generatedAt,

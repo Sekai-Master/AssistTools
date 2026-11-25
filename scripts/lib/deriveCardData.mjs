@@ -79,6 +79,11 @@ export function slimCard(c) {
     // "none" は全体の大半なので落とす（ユニット限定カードだけが値を持つ）。
     supportUnit: c.supportUnit && c.supportUnit !== "none" ? c.supportUnit : undefined,
     skillId: c.skillId,
+    /**
+     * 特訓後スキル（ブルームフェス限定カードだけが持つ）。特訓済みのカードは、表示を
+     * 特訓前／特訓後で切り替えると使うスキルも切り替わる。無いカードには欄ごと付けない。
+     */
+    ...(c.specialTrainingSkillId != null ? { stSkillId: c.specialTrainingSkillId } : {}),
     name: c.prefix,
     asset: c.assetbundleName,
     /** 特訓による固定加算（param1/2/3）。 */
@@ -93,6 +98,23 @@ export function slimCard(c) {
 }
 
 /**
+ * 出力に残したカード（slimCard 済み）が指しているスキルの id。特訓前（skillId）と
+ * 特訓後（stSkillId）の両方を数える。
+ *
+ * ★★ 必ず**公開済みとして残ったカード**を渡すこと。生のマスタ（src.cards）から数えると、
+ *   未公開カード専用のスキルが素通しになる。スキル表の絞り込みと最終検算（auditLeaks）は
+ *   どちらもこの関数を通す（片方だけ直すと、検算が絞り込みの穴を見逃す）。
+ */
+export function usedSkillIds(slimCards) {
+  const ids = new Set();
+  for (const c of slimCards ?? []) {
+    if (c.skillId != null) ids.add(c.skillId);
+    if (c.stSkillId != null) ids.add(c.stSkillId);
+  }
+  return ids;
+}
+
+/**
  * 派生データを1回で作る。**入力は生のマスタDB、出力は配信してよいものだけ。**
  *
  * @param src 各 json をそのまま渡す
@@ -101,7 +123,7 @@ export function slimCard(c) {
 /**
  * スキルを「スキルレベルごとのスコアアップ％」へ削る。
  *
- * マスタのスキルは21種の原型しかなく、全カードがこれを共有している。
+ * マスタのスキルは原型が22種しかなく（2026-11 時点）、全カードがこれを共有している。
  * 効果は種類ごとに形が違うので、**画面が計算に使える形**へ揃える:
  *
  *   base[レベル-1] … 素のスコアアップ％
@@ -186,6 +208,8 @@ export function slimSkill(s) {
 export function derive(src, nowMs) {
   const cards = published(src.cards, nowMs);
   const cardIds = new Set(cards.map((c) => c.id));
+  const slimCards = cards.map(slimCard);
+  const skillIds = usedSkillIds(slimCards);
 
   const events = published(src.events, nowMs);
   const eventIds = new Set(events.map((e) => e.id));
@@ -214,17 +238,19 @@ export function derive(src, nowMs) {
 
   return {
     generatedAt: nowMs,
-    cards: cards.map(slimCard),
+    cards: slimCards,
     /**
-     * スキル（21種の原型）。カードは skillId でここを引く。
+     * スキルの原型。カードは skillId（特訓前）と stSkillId（特訓後・ブルフェスのみ）でここを引く。
      *
      * ★★ **公開済みカードが実際に使っているスキルだけ**を出す。★★
      *   この表は日付欄を持たないので未公開判定が効かない。素通しすると、
      *   未公開カード専用の新スキルの説明文（「◯◯を1人編成する毎に…」など）が
      *   カード本体より先に世に出る。参照されていないものは落とす。
+     * ★ 特訓後スキルも数える。数えないと、公開済みブルフェスの特訓後の面（skill 22）が
+     *   丸ごと消える（2026-11 まで実際に消えていた）。
      */
     skills: (src.skills ?? [])
-      .filter((s) => new Set(cards.map((c) => c.skillId)).has(s.id))
+      .filter((s) => skillIds.has(s.id))
       .map(slimSkill)
       .filter(Boolean),
     /**
@@ -381,11 +407,11 @@ export function auditLeaks(out, allowed) {
   check(out.cards, "id", allowed.cardIds, "cards");
   check(out.events, "id", allowed.eventIds, "events");
   check(out.episodes, "cardId", allowed.cardIds, "episodes");
-  // ★ スキルは日付欄を持たないので、公開済みカードが使っているものだけであることを
-  //   ここで確かめる。未公開カード専用の新スキルは説明文だけで内容が漏れる。
-  const usedSkillIds = new Set((out.cards ?? []).map((c) => c.skillId));
+  // ★ スキルは日付欄を持たないので、公開済みカードが使っているもの（特訓後スキルを含む）
+  //   だけであることをここで確かめる。未公開カード専用の新スキルは説明文だけで内容が漏れる。
+  const used = usedSkillIds(out.cards);
   for (const s of out.skills ?? []) {
-    if (!usedSkillIds.has(s.id)) {
+    if (!used.has(s.id)) {
       problems.push(`skills: id=${s.id} は公開済みカードが使っていない`);
     }
   }
