@@ -13,6 +13,7 @@
  *      差し替えるか・どこまで差し替えるかは順位ごとに前向き検証で選び、現行に勝てなければ差し替えない
  *   6. 標本が1〜2件しかない長さには、その長さの直近の回を3割だけ混ぜた専用の表を焼く（thinTable。Worker は参考値として出す）
  *   7. これから始まる回の長さに前例が足りなければ、その日程の率モデルの表を借り先に混ぜて焼く（rate:長さ / thin 表）
+ *   8. これから始まる回の長さの表には、その回の暦（休みの日＝土日＋祝日の並び）の倍率をかける。過去の回の誤差も同じ倍率で直す（holidayRatio）
  *
  * 人が方向の補正を足す枠は作らない（brain log 2026-09-02 §11.3）。偏りの補正は
  * 「補正つき候補」が前向き検証で勝ったときだけ自動で採用される。
@@ -47,6 +48,7 @@ import {
   type ThinDuration,
 } from './model.ts'
 import { fitRate, rateShareTable } from './rate.ts'
+import { HOLIDAYS_LAST_DAY, beyondHolidayList } from './holidays.ts'
 import { SOLO_ONLY_EVENTS, SPECIAL_ALGORITHM, SPECIAL_DEFAULT_PARAMS, type SpecialEventCurves, type SpecialModel } from './special.ts'
 
 export const ALGORITHM = 'share-median-v1' as const
@@ -508,6 +510,94 @@ export function rateMixed(history: readonly HistoryEvent[], rank: number, evals:
   })
 }
 
+// ---------------------------------------------------------------------------
+// 休みの日の項（2026-11-26。検証は border-research/experiments/holiday-term の V1・H1）
+//
+// 率モデルに「休みの日（土日＋祝日、holidays.ts）の1時間あたりの伸びは平日の exp(β) 倍」の項を足した当てはめ（項あり）と、
+// これまでの当てはめ（項なし）を両方作り、その回の実際の日程での表の比 r(p) = S_項あり(p) ÷ S_項なし(p) を倍率にする。
+// r は「この回の暦が、ならした暦からどれだけずれるか」の形。期間ごとの表に入っている率モデルの表は幾何平均の半分なので、強さも半分（r^0.5）:
+//   これから始まる回の長さの表 = いまの表（王者の表と、項なし・標準の日程の率モデルの表の幾何平均）× r^0.5。序盤の blend の部分はそのまま
+//   thin・rate:長さ の表も表全体 × r^0.5
+//   帯・裾・切り替え点に使う過去の回の誤差も、その回の r で (1 + e) ÷ r^0.5 − 1 に直す（王者の選び方は混ぜる前の誤差のまま）
+//   特別モデルの曲線（bakeSpecial）は、項ありの率モデルの曲線そのもの
+// 標準の日程（standardMeta = 元日の開始）の表は項なしのまま。項ありを通すと、これからの回が無い長さの表すべてに正月の暦が焼かれる。
+// 全 68 回の当て直しで外れ幅は序盤 7.63→7.01%・中盤 5.48→5.05%・終盤 3.43→3.29%（当たり率 82.4→82.2% で差の区間は 0 をまたぐ）、
+// 休日に終わる回の終了 72〜48 時間前の過小予測（平日に終わる回との差）は −3.7 → −1.8 ポイント。全強度（r^1）は逆向きに行き過ぎた。
+// ★ 長さで引く表に、これから始まる最初の回の暦を焼く。解析ジョブが止まったまま次の回が始まると、同じ長さなら前の回の暦の表が残る
+// ---------------------------------------------------------------------------
+
+/** 休みの日の倍率 r の指数（表は × r^HOLIDAY_WEIGHT、過去の回の誤差は ÷ r^HOLIDAY_WEIGHT） */
+export const HOLIDAY_WEIGHT = 0.5
+
+const holidayRateCache = new Map<string, (number | null)[] | null>()
+/** rateTableFor の休みの日の項ありの版（その日程の暦が入った表） */
+function holidayRateTableFor(
+  history: readonly HistoryEvent[],
+  rank: number,
+  target: Pick<EventMeta, 'startAt' | 'aggregateAt'>,
+): (number | null)[] | null {
+  const key = `${rank}|${target.startAt}|${target.aggregateAt}|${history.map((h) => `${h.meta.id}.${shapeId(h.shapes.get(rank))}`).join(',')}`
+  if (!holidayRateCache.has(key)) {
+    const fit = fitRate(history, rank, { holiday: true })
+    holidayRateCache.set(key, fit ? rateShareTable(fit, target) : null)
+  }
+  return holidayRateCache.get(key) ?? null
+}
+
+/**
+ * history で学習した率モデル（項あり・なし）の、target の日程での倍率 r(p) = S_項あり(p) ÷ S_項なし(p)。
+ * どちらかが当てはまらなければ null（倍率をかけない）。両端や欠けた点は null
+ */
+export function holidayRatio(
+  history: readonly HistoryEvent[],
+  rank: number,
+  target: Pick<EventMeta, 'startAt' | 'aggregateAt'>,
+): (number | null)[] | null {
+  const withTerm = holidayRateTableFor(history, rank, target)
+  const plain = rateTableFor(history, rank, target)
+  if (!withTerm || !plain) return null
+  return GRID.map((_, i) => {
+    const a = withTerm[i]
+    const b = plain[i]
+    return a != null && b != null && a > 0 && b > 0 ? a / b : null
+  })
+}
+
+/** 表 × r^HOLIDAY_WEIGHT（r が無い点はそのまま） */
+function holidayScaled(table: readonly (number | null)[], r: readonly (number | null)[] | null): (number | null)[] {
+  return r == null ? [...table] : table.map((v, i) => (v == null || r[i] == null ? v : v * (r[i] as number) ** HOLIDAY_WEIGHT))
+}
+
+/**
+ * 前向き検証の各回の誤差を、その回の暦の倍率で直す: e' = (1 + e) ÷ r^HOLIDAY_WEIGHT − 1。
+ * r は「その回の開始前の回で学習した率モデル（項あり・なし）の、その回自身の日程の表」の比（rateMixed と同じリーク防止）
+ */
+export function holidayMixed(history: readonly HistoryEvent[], rank: number, evals: readonly EventEval[]): EventEval[] {
+  const byId = new Map(history.map((h) => [h.meta.id, h]))
+  return evals.map((ev) => {
+    const h = byId.get(ev.eventId) as HistoryEvent
+    const r = holidayRatio(
+      history.filter((x) => x.meta.aggregateAt < h.meta.startAt),
+      rank,
+      h.meta,
+    )
+    const scale = (errs: readonly (number | null)[]) =>
+      r == null ? [...errs] : errs.map((e, j) => (e == null || r[j] == null ? e : (1 + e) / (r[j] as number) ** HOLIDAY_WEIGHT - 1))
+    return { ...ev, errors: Object.fromEntries(CANDIDATES.map((c) => [c, scale(ev.errors[c])])) as EventEval['errors'] }
+  })
+}
+
+/**
+ * これから始まるマラソンのうち、日程（集計の終わり）が祝日の一覧の受け持つ最後の日（holidays.ts の HOLIDAYS_LAST_DAY）を越える回の知らせ。
+ * 越えた日は土日だけで休みを判定する（祝日が平日扱いになる）ので、一覧に翌年を足す合図。
+ * ★ ジョブのログは外から見えうるので、回の日程（マスタにだけある未発表の日時）は書かない。回の番号は解析ジョブがもともと日程の行に出している
+ */
+export function holidayListWarnings(events: readonly EventMeta[], now: number): string[] {
+  return events
+    .filter((e) => e.eventType === 'marathon' && e.aggregateAt >= now && beyondHolidayList(e.aggregateAt))
+    .map((e) => `${e.id} の日程が祝日の一覧の最後の日 ${HOLIDAYS_LAST_DAY} を越えている。workers/border/src/holidays.ts に内閣府の CSV から翌年の祝日を足す`)
+}
+
 /** これから終わる（aggregateAt が now 以降の）マラソンを、長さごとに開始がいちばん早い回で */
 function upcomingByDuration(events: readonly EventMeta[], now: number): Map<number, EventMeta> {
   const out = new Map<number, EventMeta>()
@@ -599,9 +689,12 @@ export function bakeSpecial(
         failed = rank
         break
       }
+      // 曲線は休みの日の項ありの率モデル（その回の暦が入る）。特別モデルは率モデルの表をそのまま曲線にする（王者の表との幾何平均が無い）ので、
+      // 倍率の強さを半分にする理由が無く、項ありの曲線そのものを使う。項ありが当てはまらなければ項なしのまま
+      const curveFit = fitRate(history, rank, { holiday: true }) ?? fit
       ranks[String(rank)] = {
-        spurt: rateShareTable(fit, meta).map(round5),
-        flat: rateShareTable(fit, meta, { remaining: false }).map(round5),
+        spurt: rateShareTable(curveFit, meta).map(round5),
+        flat: rateShareTable(curveFit, meta, { remaining: false }).map(round5),
       }
     }
     if (failed != null) {
@@ -633,14 +726,17 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
     })
   const createdAt = new Date(now).toISOString()
   const upcoming = upcomingByDuration(events, now)
+  // 祝日の一覧（holidays.ts）の最後の日を越える日程の回があれば、解析ジョブのログに警告を出す（GitHub Actions の注釈。ジョブは止めない）
+  for (const w of holidayListWarnings(events, now)) console.log(`::warning title=ボーダー予測の祝日の一覧::${w}`)
 
   const ranks: Record<string, RankModel> = {}
   const rankSummaries: RankSummary[] = []
   for (const rank of RANKS) {
     const walk = walkForward(history, rank)
     const champion = walk.champion
-    // 前向き検証の誤差は率モデルと混ぜた表のもの。王者（walk.champion）と各回の王者の記録は混ぜる前の採点で決まったまま
-    const evals = rateMixed(history, rank, walk.evals)
+    // 前向き検証の誤差は率モデルと混ぜた表のもの。王者（walk.champion）と各回の王者の記録は混ぜる前の採点で決まったまま。
+    // さらに各回の暦の倍率（休みの日の項）で直す。帯・裾・切り替え点・debias の候補の表（sameAllErrs）もこの直した誤差で作る
+    const evals = holidayMixed(history, rank, rateMixed(history, rank, walk.evals))
     const blendErrs = blendErrors(history, rank, evals)
     const early = walkEarlyBlend(evals, blendErrs)
     const switchAt = early.switchAt
@@ -662,9 +758,18 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
     const tables: Record<string, (number | null)[]> = {}
     // 「同じ長さ」の表は標本3件以上の長さだけ。1〜2件の長さに表を作ると Worker が完全一致として使い、
     // 参考値の札（extrapolatedFrom）も帯の広げも外れる（221 の 102h が学習に入ると 222 が確度を名乗る。2026-10-26）
-    // 長さがわかっているので、王者の表と、その長さ（標準の日程）の率モデルの表を幾何平均してから、序盤を blend に差し替える
+    // 長さがわかっているので、王者の表と、その長さ（標準の日程）の率モデルの表を幾何平均してから、序盤を blend に差し替える。
+    // これから始まる回の長さなら、その回の暦の倍率（holidayRatio）を幾何平均の表にだけかける（blend の部分はそのまま）
+    const ratios = new Map<number, (number | null)[]>()
+    for (const [d, upcomingMeta] of upcoming) {
+      const r = holidayRatio(history, rank, upcomingMeta)
+      if (r) ratios.set(d, r)
+    }
     for (const d of knownDurations) {
-      const base = geoTables(candidateTable(champion, d, history, rank, sameAllErrs), rateTableFor(history, rank, standardMeta(d)))
+      const base = holidayScaled(
+        geoTables(candidateTable(champion, d, history, rank, sameAllErrs), rateTableFor(history, rank, standardMeta(d))),
+        ratios.get(d) ?? null,
+      )
       tables[String(d)] = switchAt == null ? base : earlyBlended(base, blendTable(d, history, rank), switchAt)
     }
     // 以下の all・far_long・far_short（学習に無い長さ用）は、当てる回の長さがわからないので blend にも率モデルにも差し替えない
@@ -707,6 +812,12 @@ export function fitModel(events: readonly EventMeta[], shapes: readonly Shape[],
         const fallback = min != null && d < min ? tables.far_short : max != null && d > max ? tables.far_long : tables.all
         tables[rateKey(d)] = geoTables(fallback, rt)
       }
+    }
+    // これから始まる回の長さの thin・rate:長さ の表にも、その回の暦の倍率をかける（表全体。序盤の blend の部分も含む）
+    for (const [d, r] of ratios) {
+      if (knownDurations.includes(d)) continue
+      if (tables[thinKey(d)]) tables[thinKey(d)] = holidayScaled(tables[thinKey(d)], r)
+      if (tables[rateKey(d)]) tables[rateKey(d)] = holidayScaled(tables[rateKey(d)], r)
     }
     const minProgress = minProgressFrom(band)
     ranks[String(rank)] = {

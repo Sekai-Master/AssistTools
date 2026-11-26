@@ -8,8 +8,14 @@
  * で説明する。alpha_k（回ごとの切片）は回の規模を吸うだけで、表を作るときは打ち消すので捨てる。
  *   f, g … log1p(時間) の結び目に置いた折れ線（ヒンジ）基底
  *   h     … 時刻の区分定数（円環）
+ *
+ * 休みの日の項（holiday: true のときだけ。2026-11-26）: y に β × (区間のうち休みの日〈土日＋祝日、holidays.ts〉の時間の割合) を足す（1 列）。
+ * 表を作るときは、積分の刻みの時刻が休みの日なら対数に β を足す。全履歴の当てはめでは β はどの順位も正
+ * （exp(β) = 50位 1.27 〜 2000位 1.10。休みの日の1時間あたりの伸びが、同じ条件の平日の何倍か）。
+ * 使い方は fit.ts（項あり・なしの表の比で、これから始まる回の表を直す）。検証は border-research/experiments/holiday-term
  */
 import { GRID, eventEndMs, type EventMeta, type HistoryEvent } from './model.ts'
+import { isOffAt, offFraction } from './holidays.ts'
 
 export interface RateOptions {
   /** 切片以外の全係数にかける小さな尻押さえ（既定 1.0）。f/g/h の定数分の不定を潰す */
@@ -18,6 +24,8 @@ export interface RateOptions {
   smooth?: number
   /** 時刻効果のビン数（既定 8 = 3時間刻み） */
   clockBins?: number
+  /** 休みの日の項を足すか（既定 false = 項なし。これまでの式と1ビットも同じ） */
+  holiday?: boolean
 }
 
 export interface RateFit {
@@ -37,9 +45,11 @@ export interface RateFit {
   nRows: number
   /** 当てはめ残差の二乗平均平方根（y = log 比率の単位） */
   sigma: number
+  /** 休みの日の項の係数 β（対数）。項なしの当てはめでは null */
+  holiday: number | null
 }
 
-const DEFAULTS: Required<RateOptions> = { ridge: 1.0, smooth: 5.0, clockBins: 8 }
+const DEFAULTS: Required<RateOptions> = { ridge: 1.0, smooth: 5.0, clockBins: 8, holiday: false }
 
 /** 経過・残り時間の結び目（時間）。長い回ほど粗くなるよう倍々に置く */
 const KNOT_HOURS = [0, 2, 4, 8, 16, 32, 64, 128, 256] as const
@@ -122,6 +132,8 @@ interface IntervalRow {
   gi: number
   gt: number
   cb: number
+  /** 区間のうち休みの日の時間の割合（項なしの当てはめでは 0） */
+  off: number
 }
 
 interface Row {
@@ -171,9 +183,11 @@ export function fitRateIntervals(events: readonly RateEventIntervals[], rank: nu
     ridge: opts.ridge ?? DEFAULTS.ridge,
     smooth: opts.smooth ?? DEFAULTS.smooth,
     clockBins: opts.clockBins ?? DEFAULTS.clockBins,
+    holiday: opts.holiday ?? DEFAULTS.holiday,
   }
   const B = options.clockBins
   if (!Number.isInteger(B) || B < 1) return null
+  const useHoliday = options.holiday
 
   // 1. 区間ごとの行を作る。行を1本も出さない回は切片の列を持たない（持つと特異になる）
   const perEvent: { eventId: number; rows: IntervalRow[] }[] = []
@@ -185,27 +199,31 @@ export function fitRateIntervals(events: readonly RateEventIntervals[], rank: nu
       const m = (e0 + e1) / 2
       const [bi, bt] = hatPos(Math.log1p(m))
       const [gi, gt] = hatPos(Math.log1p(ev.spanH - m))
-      rows.push({ y: Math.log(d / (e1 - e0)), bi, bt, gi, gt, cb: clockBin(mod(c0 + m, 24), B) })
+      const off = useHoliday ? offFraction(ev.startAt + e0 * HOUR_MS, ev.startAt + e1 * HOUR_MS) : 0
+      rows.push({ y: Math.log(d / (e1 - e0)), bi, bt, gi, gt, cb: clockBin(mod(c0 + m, 24), B), off })
     }
     if (rows.length > 0) perEvent.push({ eventId: ev.eventId, rows })
   }
   const nEv = perEvent.length
   if (nEv < MIN_EVENTS) return null
 
-  // 列の並び: [切片 × nEv][beta × K][gamma × K][clock × B]
+  // 列の並び: [切片 × nEv][beta × K][gamma × K][clock × B]（休みの日の項ありなら、最後に [休み × 1]）
   const offBeta = nEv
   const offGamma = nEv + K
   const offClock = nEv + 2 * K
-  const n = offClock + B
+  const offHoliday = offClock + B
+  const n = offHoliday + (useHoliday ? 1 : 0)
 
   const rows: Row[] = []
   perEvent.forEach((ev, k) => {
     for (const r of ev.rows) {
-      rows.push({
-        cols: [k, offBeta + r.bi, offBeta + r.bi + 1, offGamma + r.gi, offGamma + r.gi + 1, offClock + r.cb],
-        vals: [1, 1 - r.bt, r.bt, 1 - r.gt, r.gt, 1],
-        y: r.y,
-      })
+      const cols = [k, offBeta + r.bi, offBeta + r.bi + 1, offGamma + r.gi, offGamma + r.gi + 1, offClock + r.cb]
+      const vals = [1, 1 - r.bt, r.bt, 1 - r.gt, r.gt, 1]
+      if (useHoliday && r.off > 0) {
+        cols.push(offHoliday)
+        vals.push(r.off)
+      }
+      rows.push({ cols, vals, y: r.y })
     }
   })
 
@@ -248,6 +266,7 @@ export function fitRateIntervals(events: readonly RateEventIntervals[], rank: nu
     nEvents: nEv,
     nRows: rows.length,
     sigma: Math.sqrt(rss / rows.length),
+    holiday: useHoliday ? theta[offHoliday] : null,
   }
 }
 
@@ -264,7 +283,8 @@ export function rateComponents(fit: RateFit, elapsedH: number, remainingH: numbe
  * 指定の日程のシェア表（GRID の51点。0 → 1 の単調増加）を作る。
  * base(t) = exp(f(t) + g(span − t) + h(c0 + t)) を細かい刻みの中点則で積分し、全体で割る。
  * remaining: false のときは g（残り時間の折れ線＝終盤の追い込み）を外す。みんなでライブ停止中の回の特別モデル（special.ts）の
- * 「追い込みなし」の曲線 S_flat に使う
+ * 「追い込みなし」の曲線 S_flat に使う。
+ * 休みの日の項つきの当てはめ（fit.holiday が null でない）なら、刻みの時刻が休みの日のとき対数に β を足す（その日程の暦が表に入る）
  */
 export function rateShareTable(
   fit: RateFit,
@@ -284,6 +304,7 @@ export function rateShareTable(
     const t = (i + 0.5) * dt
     const c = rateComponents(fit, t, spanH - t, c0 + t)
     logs[i] = c.f + (useRemaining ? c.g : 0) + c.h
+    if (fit.holiday != null && isOffAt(meta.startAt + t * HOUR_MS)) logs[i] += fit.holiday
     if (logs[i] > top) top = logs[i]
   }
   const cum = new Float64Array(steps + 1)

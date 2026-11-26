@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   BAND_EVENTS,
   BAND_MIN_EVENTS,
@@ -7,6 +7,7 @@ import {
   BUCKETS,
   CHECKPOINTS,
   EARLY_CHECKPOINTS,
+  HOLIDAY_WEIGHT,
   TARGET_COVERAGE,
   WIDE_TAILS,
   bakeSpecial,
@@ -18,6 +19,9 @@ import {
   earlyBlended,
   fitModel,
   fnv1a,
+  holidayListWarnings,
+  holidayMixed,
+  holidayRatio,
   rateMixed,
   tailCurve,
   thinTable,
@@ -279,12 +283,23 @@ const geoMean = (a: readonly (number | null)[], b: readonly (number | null)[]) =
 
 const round5 = (t: readonly (number | null)[]) => t.map((v) => (v == null ? null : Math.round(v * 1e5) / 1e5))
 
-/** hist で学習した率モデルの、meta の日程での表 */
-function rateTableOf(hist: readonly HistoryEvent[], rank: number, meta: Pick<EventMeta, 'startAt' | 'aggregateAt'>): (number | null)[] {
-  const fit = fitRate(hist, rank)
+/** hist で学習した率モデルの、meta の日程での表（holiday: true なら休みの日の項ありの当てはめ） */
+function rateTableOf(hist: readonly HistoryEvent[], rank: number, meta: Pick<EventMeta, 'startAt' | 'aggregateAt'>, holiday = false): (number | null)[] {
+  const fit = fitRate(hist, rank, { holiday })
   if (!fit) throw new Error('率モデルが当てはまらない')
   return rateShareTable(fit, meta)
 }
+
+/** 休みの日の倍率 r = 項ありの表 ÷ 項なしの表（その日程）。fit.ts の holidayRatio を使わずに作る */
+function ratioOf(hist: readonly HistoryEvent[], rank: number, meta: Pick<EventMeta, 'startAt' | 'aggregateAt'>): (number | null)[] {
+  const a = rateTableOf(hist, rank, meta, true)
+  const b = rateTableOf(hist, rank, meta)
+  return a.map((v, i) => (v != null && b[i] != null && v > 0 && (b[i] as number) > 0 ? v / (b[i] as number) : null))
+}
+
+/** 表 × r^0.5（r が無い点はそのまま）。fit.ts がこれから始まる回の長さの表にかけるもの */
+const holidayScale = (t: readonly (number | null)[], r: readonly (number | null)[]) =>
+  t.map((v, i) => (v == null || r[i] == null ? v : v * (r[i] as number) ** 0.5))
 
 describe('fitModel の序盤の差し替え', () => {
   // 開始からの時間で決まる伸び（1 − e^(−t/20h)）の回を、長さを変えて並べる。経過の割合でそろえると序盤がずれる
@@ -321,8 +336,8 @@ describe('fitModel の序盤の差し替え', () => {
     const { summary, hist } = fitFrom(historyOf(DURATIONS.map((hours) => ({ hours, f: byElapsed(hours) }))))
     const r = summary.ranks.find((x) => x.rank === 1000)
     const walk = walkForward(hist, 1000)
-    // 誤差は率モデルと混ぜた表のもの
-    const evals = rateMixed(hist, 1000, walk.evals)
+    // 誤差は率モデルと混ぜた表のもので、各回の暦の倍率（休みの日の項）で直したもの
+    const evals = holidayMixed(hist, 1000, rateMixed(hist, 1000, walk.evals))
     const blend = blendErrors(hist, 1000, evals)
     const early = walkEarlyBlend(evals, blend)
     const i = GRID.indexOf(0.08)
@@ -348,7 +363,7 @@ describe('fitModel の序盤の差し替え', () => {
     const { model, summary, hist } = fitFrom(historyOf(DURATIONS.map((hours) => ({ hours, f: byElapsed(hours) }))))
     const r = summary.ranks.find((x) => x.rank === 1000) as (typeof summary.ranks)[number]
     const walk = walkForward(hist, 1000)
-    const evals = rateMixed(hist, 1000, walk.evals)
+    const evals = holidayMixed(hist, 1000, rateMixed(hist, 1000, walk.evals))
     const blend = blendErrors(hist, 1000, evals)
     const early = walkEarlyBlend(evals, blend)
     const blended = (at: (i: number) => number | null): EventEval[] =>
@@ -399,12 +414,42 @@ describe('fitModel の序盤の差し替え', () => {
     expect(rm.tables['thin:80'][j]).toBeCloseTo(thinTable(latest.share, base)[j] as number, 4)
   })
 
+  it('これから始まる回の長さの表は、切り替え点より後だけ暦の倍率 r^0.5 をかけ、序盤の blend の部分はそのまま（休みの日の項）', () => {
+    const hist = historyOf(DURATIONS.map((hours) => ({ hours, f: byElapsed(hours) })))
+    const events = hist.map((h) => h.meta)
+    const shapes = hist.map((h) => h.shapes.get(1000) as Shape)
+    const now = events[events.length - 1].aggregateAt + 2 * H
+    const u = metaOf(900, now + 30 * H, 150)
+    const plain = fitModel(events, shapes, now).model.ranks['1000']
+    const withU = fitModel([...events, u], shapes, now).model.ranks['1000']
+    const switchAt = withU.earlyBlendUntil as number
+    expect(switchAt).toBeTypeOf('number')
+    expect(plain.earlyBlendUntil).toBe(switchAt)
+    const r = ratioOf(hist, 1000, u)
+    let scaled = 0
+    let kept = 0
+    withU.tables['150'].forEach((v, i) => {
+      const b = plain.tables['150'][i]
+      if (GRID[i] < switchAt - 1e-9) {
+        expect(v).toBe(b)
+        kept++
+      } else if (b != null && r[i] != null && i < GRID.length - 1) {
+        expect(v as number).toBeCloseTo((b as number) * (r[i] as number) ** 0.5, 4)
+        scaled++
+      }
+    })
+    expect(kept).toBeGreaterThan(0)
+    expect(scaled).toBeGreaterThan(0)
+    expect(withU.tables['150']).not.toEqual(plain.tables['150'])
+  })
+
   it('勝てない順位は表を現行のまま焼き込み、earlyBlendUntil を付けない', () => {
     // 形が経過の割合だけで決まる（p²）なら、経過時間・残り時間でそろえる blend は長さの違う回で外れ、現行（王者の表×率モデル）に勝てない
     const { model, summary, hist } = fitFrom(historyOf(DURATIONS.map((hours) => ({ hours, f: (p: number) => p * p }))))
     const rm = model.ranks['1000']
     expect(summary.ranks.find((r) => r.rank === 1000)?.earlyBlend?.switchAt).toBeNull()
     expect(rm.earlyBlendUntil).toBeUndefined()
+    // 標準の日程（元日の開始）の率モデルの表は休みの日の項なし（項ありだと、これからの回が無い長さの表すべてに正月の暦が焼かれる）
     const base = geoMean(candidateTable(rm.candidate, 150, hist, 1000), rateTableOf(hist, 1000, standardMeta(150)))
     expect(rm.tables['150']).toEqual(round5(base))
   })
@@ -561,7 +606,7 @@ describe('fitModel の予定の回（rate:長さ）', () => {
     expect(keys(model)).toEqual([])
   })
 
-  it('標本の無い長さの予定の回: 借り先（far_long / far_short / all）を、その日程の率モデルの表と幾何平均して rate:長さ に焼く', () => {
+  it('標本の無い長さの予定の回: 借り先（far_long / far_short / all）を、その日程の率モデルの表と幾何平均して rate:長さ に焼く（その日程の暦の倍率 r^0.5 つき）', () => {
     const { past, shapes, hist, now } = fixture()
     const u246 = upcoming(300, 246, 5, now)
     const u80 = upcoming(301, 80, 20, now)
@@ -574,10 +619,10 @@ describe('fitModel の予定の回（rate:長さ）', () => {
       const rm = model.ranks[String(rank)]
       const farLong = candidateTable('same_all', 198, hist, rank)
       const farShort = candidateTable('same_all', 150, hist, rank)
-      expect(rm.tables[rateKey(246)]).toEqual(round5(geoMean(farLong, rateTableOf(hist, rank, u246))))
-      expect(rm.tables[rateKey(80)]).toEqual(round5(geoMean(farShort, rateTableOf(hist, rank, u80))))
+      expect(rm.tables[rateKey(246)]).toEqual(round5(holidayScale(geoMean(farLong, rateTableOf(hist, rank, u246)), ratioOf(hist, rank, u246))))
+      expect(rm.tables[rateKey(80)]).toEqual(round5(holidayScale(geoMean(farShort, rateTableOf(hist, rank, u80)), ratioOf(hist, rank, u80))))
       // all は偏りの補正（debias）の入る王者の表で、補正に使う過去の誤差まで再現しないので、焼いた all（5桁）を借り先にして比べる
-      const viaAll = geoMean(plain.ranks[String(rank)].tables.all, rateTableOf(hist, rank, u174))
+      const viaAll = holidayScale(geoMean(plain.ranks[String(rank)].tables.all, rateTableOf(hist, rank, u174)), ratioOf(hist, rank, u174))
       rm.tables[rateKey(174)].forEach((v, i) => expect(v as number).toBeCloseTo(viaAll[i] as number, 4))
       // 借り先そのものは上書きしない（日程のわからない回のために、そのまま残す）
       for (const key of ['far_long', 'far_short', 'all', '150', '198', 'thin:102', 'thin:171']) expect(rm.tables[key]).toEqual(plain.ranks[String(rank)].tables[key])
@@ -610,7 +655,7 @@ describe('fitModel の予定の回（rate:長さ）', () => {
     expect(chooseTable(model, model.ranks['1000'], 150)?.extrapolatedFrom).toBeNull()
   })
 
-  it('標本1〜2件の長さ（102h）の予定の回: thin の表を、率モデルの表に直近の回を混ぜたものと幾何平均する。rate:102 は焼かない', () => {
+  it('標本1〜2件の長さ（102h）の予定の回: thin の表を、率モデルの表に直近の回を混ぜたものと幾何平均する（その日程の暦の倍率 r^0.5 つき）。rate:102 は焼かない', () => {
     const { past, shapes, hist, now } = fixture()
     const u102 = upcoming(300, 102, 5, now)
     const { model } = fitModel([...past, u102], shapes, now)
@@ -620,7 +665,7 @@ describe('fitModel の予定の回（rate:長さ）', () => {
       const latest = hist[9].shapes.get(rank) as Shape
       // 予定の回を渡さない版の thin（5桁に丸め済み。丸め誤差は 1e-5 未満）
       const thinBefore = plain.ranks[String(rank)].tables['thin:102']
-      const expected = geoMean(thinBefore, thinTable(latest.share, rateTableOf(hist, rank, u102), THIN_WEIGHT))
+      const expected = holidayScale(geoMean(thinBefore, thinTable(latest.share, rateTableOf(hist, rank, u102), THIN_WEIGHT)), ratioOf(hist, rank, u102))
       const got = model.ranks[String(rank)].tables['thin:102']
       got.forEach((v, i) => expect(v as number).toBeCloseTo(expected[i] as number, 4))
       // 率モデルの表が混ざって、混ぜる前とは違う表になっている
@@ -643,8 +688,8 @@ describe('fitModel の予定の回（rate:長さ）', () => {
     const { model } = fitModel([...past, late, earlyMeta], shapes, now)
     const rank = 1000
     const farLong = candidateTable('same_all', 198, hist, rank)
-    expect(model.ranks['1000'].tables[rateKey(246)]).toEqual(round5(geoMean(farLong, rateTableOf(hist, rank, earlyMeta))))
-    expect(model.ranks['1000'].tables[rateKey(246)]).not.toEqual(round5(geoMean(farLong, rateTableOf(hist, rank, late))))
+    expect(model.ranks['1000'].tables[rateKey(246)]).toEqual(round5(holidayScale(geoMean(farLong, rateTableOf(hist, rank, earlyMeta)), ratioOf(hist, rank, earlyMeta))))
+    expect(model.ranks['1000'].tables[rateKey(246)]).not.toEqual(round5(holidayScale(geoMean(farLong, rateTableOf(hist, rank, late)), ratioOf(hist, rank, late))))
   })
 
   it('終わった回（形が無くても）やマラソン以外のイベントは、予定の回として扱わない', () => {
@@ -706,7 +751,7 @@ describe('fitModel: みんなでライブ停止中の回（一覧）を学習か
     expect(included.model.ranks).not.toEqual(withoutShapes.model.ranks)
   })
 
-  it('一覧の回のうち日程のわかっている回に、その日程の率モデルの曲線（追い込みあり・なし）を焼く。日程の無い回は一覧にだけ載る', () => {
+  it('一覧の回のうち日程のわかっている回に、その日程の率モデル（休みの日の項あり）の曲線（追い込みあり・なし）を焼く。日程の無い回は一覧にだけ載る', () => {
     const { past, shapes, hist, now } = fixture()
     const u = marathon(300, now + 5 * DAY, 102)
     const { model } = fitModel([...past, u], shapes, now, { specialEvents: [300, 301] })
@@ -719,10 +764,14 @@ describe('fitModel: みんなでライブ停止中の回（一覧）を学習か
     expect(sp.curves.map((c) => c.eventId)).toEqual([300])
     expect(sp.curves[0]).toMatchObject({ startAt: u.startAt, aggregateAt: u.aggregateAt })
     for (const rank of RANKS) {
-      const fit = fitRate(hist, rank)
+      const fit = fitRate(hist, rank, { holiday: true })
       if (!fit) throw new Error('率モデルが当てはまらない')
       expect(sp.curves[0].ranks[String(rank)].spurt).toEqual(round5(rateShareTable(fit, u)))
       expect(sp.curves[0].ranks[String(rank)].flat).toEqual(round5(rateShareTable(fit, u, { remaining: false })))
+      // 項なしの曲線とは違う（その日程の暦が入っている）
+      const plainFit = fitRate(hist, rank)
+      if (!plainFit) throw new Error('率モデルが当てはまらない')
+      expect(sp.curves[0].ranks[String(rank)].spurt).not.toEqual(round5(rateShareTable(plainFit, u)))
     }
     // 予定の回なので、古い Worker 向けの thin:102（予定の日程の率モデル混ぜ）はこれまでどおり焼く（一覧に入れても表は1点も変わらない）
     expect(model.ranks).toEqual(fitModel([...past, u], shapes, now, { specialEvents: [] }).model.ranks)
@@ -778,5 +827,123 @@ describe('bakeSpecial: 曲線を焼けなかった回の理由（検分 G2）', 
 
   it('一覧が空なら special も理由も無い', () => {
     expect(bakeSpecial([...past, u], hist(RANKS), [])).toEqual({ special: undefined, missing: [] })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 休みの日の項（2026-11-26。holidays.ts・rate.ts の holiday）
+// ---------------------------------------------------------------------------
+describe('fitModel: 休みの日の項（これから始まる回の暦の倍率）', () => {
+  const DAY = 24 * H
+  /** 150h を5件、198h を3件、171h を1件、102h を1件。日程はどれも架空 */
+  const LENGTHS = [150, 198, 171, 150, 198, 150, 198, 150, 150, 102]
+  const marathon = (id: number, startAt: number, hours: number, type = 'marathon'): EventMeta => ({
+    id, name: `e${id}`, eventType: type, unit: 'none', startAt, aggregateAt: startAt + hours * H - 60_000,
+  })
+  function fixture() {
+    const past = LENGTHS.map((h, i) => marathon(200 + i, Date.UTC(2026, 0, 1) + i * 10 * DAY, h))
+    const shapes: Shape[] = past.flatMap((e, i) =>
+      RANKS.map((rank) => ({ eventId: e.id, rank, final: 1e7 * (1 + i / 20), share: GRID.map((p) => (durationHours(e) === 102 ? p ** 1.6 : p ** (1 + i / 50))) })),
+    )
+    const hist: HistoryEvent[] = past.map((meta) => ({ meta, shapes: new Map(shapes.filter((s) => s.eventId === meta.id).map((s) => [s.rank, s])) }))
+    const now = past[past.length - 1].aggregateAt + DAY
+    return { past, shapes, hist, now }
+  }
+
+  afterEach(() => vi.restoreAllMocks())
+
+  it('倍率の指数は 0.5（本番の幾何平均に入っている率モデルの表の強さ）', () => {
+    expect(HOLIDAY_WEIGHT).toBe(0.5)
+  })
+
+  it('holidayRatio は、項あり・なしの率モデルの、その日程の表の比（両端は null）', () => {
+    const { hist, now } = fixture()
+    const u = marathon(300, now + 5 * DAY, 150)
+    for (const rank of [50, 1000]) {
+      const r = holidayRatio(hist, rank, u) as (number | null)[]
+      expect(r[0]).toBeNull()
+      expect(r[GRID.length - 1]).toBe(1)
+      const expected = ratioOf(hist, rank, u)
+      r.forEach((v, i) => (expected[i] == null ? expect(v).toBeNull() : expect(v as number).toBeCloseTo(expected[i] as number, 12)))
+      // 暦が入っているので 1 ではない
+      expect(r.some((v) => v != null && Math.abs(v - 1) > 1e-4)).toBe(true)
+    }
+    // 率モデルが当てはまらない（学習の回が足りない）なら null
+    expect(holidayRatio(hist.slice(0, 2), 1000, u)).toBeNull()
+  })
+
+  it('holidayMixed は、過去の回の誤差を (1 + e) ÷ r^0.5 − 1 に直す。r はその回より前に終わった回で当てはめた、その回自身の日程の比', () => {
+    const { hist } = fixture()
+    const evals = rateMixed(hist, 1000, walkForward(hist, 1000).evals)
+    const mixed = holidayMixed(hist, 1000, evals)
+    expect(mixed.map((e) => e.eventId)).toEqual(evals.map((e) => e.eventId))
+    evals.forEach((ev, k) => {
+      const h = hist.find((x) => x.meta.id === ev.eventId) as HistoryEvent
+      const before = hist.filter((x) => x.meta.aggregateAt < h.meta.startAt)
+      const r = ratioOf(before, 1000, h.meta)
+      for (const c of CANDIDATES) {
+        ev.errors[c].forEach((e, j) => {
+          const got = mixed[k].errors[c][j]
+          if (e == null || r[j] == null) expect(got).toBe(e)
+          else expect(got as number).toBeCloseTo((1 + e) / (r[j] as number) ** 0.5 - 1, 12)
+        })
+      }
+      // 王者・採点は変えない
+      expect(mixed[k].champion).toBe(ev.champion)
+      expect(mixed[k].scores).toEqual(ev.scores)
+    })
+  })
+
+  it('これから始まる回の長さ（150h）の表は、その回の暦の倍率 r^0.5 をかけたもの。序盤の blend の部分と、ほかの長さの表は変えない', () => {
+    const { past, shapes, hist, now } = fixture()
+    const u = marathon(300, now + 5 * DAY, 150)
+    const withU = fitModel([...past, u], shapes, now).model
+    const plain = fitModel(past, shapes, now).model
+    for (const rank of RANKS) {
+      const a = withU.ranks[String(rank)]
+      const b = plain.ranks[String(rank)]
+      // 王者・切り替え点・帯は、これから始まる回が有っても無くても同じ（過去の回だけで決まる）
+      expect(a.candidate).toBe(b.candidate)
+      expect(a.earlyBlendUntil).toBe(b.earlyBlendUntil)
+      expect(a.band).toEqual(b.band)
+      const r = ratioOf(hist, rank, u)
+      const switchAt = a.earlyBlendUntil
+      const blend = blendTable(150, hist, rank)
+      a.tables['150'].forEach((v, i) => {
+        const inBlend = switchAt != null && GRID[i] < switchAt - 1e-9 && blend[i] != null
+        if (inBlend || r[i] == null || b.tables['150'][i] == null) expect(v).toBe(b.tables['150'][i])
+        else expect(v as number).toBeCloseTo((b.tables['150'][i] as number) * (r[i] as number) ** 0.5, 4)
+      })
+      expect(a.tables['150']).not.toEqual(b.tables['150'])
+      // これから始まる回の無い長さ（198h）・借り先・thin の表は同じ
+      for (const key of ['198', 'all', 'far_long', 'far_short', 'thin:102', 'thin:171']) expect(a.tables[key]).toEqual(b.tables[key])
+    }
+  })
+
+  it('祝日の一覧の最後の日を越える日程のこれから始まる回があれば、解析ジョブのログに警告を1回だけ出す（ジョブは止めない）', () => {
+    const { past, shapes, now } = fixture()
+    // 架空の日程。JST で 2027-12-31 23:59 に終わる回は一覧の内、2028-01-01 00:00 以降に終わる回は外
+    const inside = marathon(300, Date.parse('2027-12-26T06:00:00Z'), 150)
+    const insideEnd = { ...inside, aggregateAt: Date.parse('2027-12-31T14:59:00Z') }
+    const beyond = marathon(301, Date.parse('2027-12-27T06:00:00Z'), 150)
+    const beyondEnd = { ...beyond, aggregateAt: Date.parse('2027-12-31T15:00:00Z') }
+    expect(holidayListWarnings([...past, insideEnd], now)).toEqual([])
+    const ws = holidayListWarnings([...past, insideEnd, beyondEnd], now)
+    expect(ws).toHaveLength(1)
+    expect(ws[0]).toContain('301')
+    expect(ws[0]).toContain('2027-12-31')
+    // 終わった回・マラソンでない回は数えない
+    expect(holidayListWarnings([{ ...beyondEnd, eventType: 'cheerful_carnival' }], now)).toEqual([])
+    expect(holidayListWarnings([beyondEnd], beyondEnd.aggregateAt + 1)).toEqual([])
+
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const { model } = fitModel([...past, beyondEnd], shapes, now)
+    const warned = log.mock.calls.map((c) => String(c[0])).filter((s) => s.startsWith('::warning '))
+    expect(warned).toHaveLength(1)
+    expect(warned[0]).toContain('301')
+    expect(model.ranks['1000'].tables['150']).toBeDefined()
+    log.mockClear()
+    fitModel([...past, insideEnd], shapes, now)
+    expect(log.mock.calls.filter((c) => String(c[0]).startsWith('::warning '))).toEqual([])
   })
 })
