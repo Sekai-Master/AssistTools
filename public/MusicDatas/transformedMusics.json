@@ -19126,5 +19126,30 @@
     "expertLevel": 25,
     "masterLevel": 30,
     "masterNotes": 1029
+  },
+  {
+    "id": "830",
+    "title": "再会",
+    "pronunciation": "さいかい",
+    "creatorArtistId": 34,
+    "artistName": "はるまきごはん",
+    "default": 1271601,
+    "Unit": "1_L/n",
+    "categories": [
+      "original"
+    ],
+    "publishedAt": 1795759200000,
+    "published": true,
+    "isNewlyWrittenMusic": false,
+    "isFullLength": false,
+    "jacketLink": "jacket_s_830.webp",
+    "music_time": 129.4,
+    "event_rate": 115,
+    "singers": [1, 2, 3, 4, 21, 24],
+    "maxSingers": 5,
+    "dancerCount": 1,
+    "expertLevel": 23,
+    "masterLevel": 27,
+    "masterNotes": 806
   }
 ]
